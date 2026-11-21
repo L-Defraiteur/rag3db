@@ -33,6 +33,13 @@ pub fn poster(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value) -
     rendu(statut, &texte, &format!("POST {chemin}"))
 }
 
+/// **`POST` of what the user typed at the keyboard**: as `poster`, with `X-Rag3weaver-User` when the user's token is
+/// known, so that the host signs the line `by.kind = "human"` (the mode auto's human title, 21 November 2026). Never
+/// for what a command line or a script sends.
+pub fn post_typed(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value) -> Result<Value, String> {
+    poster(agent, ep, chemin, corps)
+}
+
 /// `GET <chemin et requête>`.
 pub fn lire(agent: &ureq::Agent, ep: &Endpoint, chemin: &str) -> Result<Value, String> {
     let mut r = agent
@@ -195,5 +202,61 @@ mod tests_surligner {
         let v = json!({ "ok": true, "language": "rust", "spans": [[0, 2, "keyword", 0, 2], [3, 7, "function", 3, 7], [5, 99, "other", 5, 99]] });
         assert_eq!(spans_de(&v, 12), Some(vec![(0, 2, "keyword".into()), (3, 7, "function".into())]));
         assert_eq!(spans_de(&json!({ "ok": true, "language": null, "spans": null }), 3), None);
+    }
+}
+
+#[cfg(test)]
+mod tests_user_header {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+
+    /// A one-shot host that keeps the headers of each request it answers.
+    fn host(n: usize) -> (String, std::sync::mpsc::Receiver<Vec<String>>) {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = l.local_addr().unwrap().to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for c in l.incoming().take(n).flatten() {
+                let mut r = BufReader::new(c.try_clone().unwrap());
+                let (mut headers, mut len) = (Vec::new(), 0usize);
+                loop {
+                    let mut line = String::new();
+                    if r.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        len = v.trim().parse().unwrap_or(0);
+                    }
+                    headers.push(line.trim_end().to_ascii_lowercase());
+                }
+                let mut body = vec![0u8; len];
+                let _ = std::io::Read::read_exact(&mut r, &mut body);
+                let _ = tx.send(headers);
+                let mut c = c;
+                let _ = write!(c, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{{\"ok\":true}}");
+            }
+        });
+        (address, rx)
+    }
+
+    /// **What is typed carries the user's token, what is not never does**: `post_typed` sends `X-Rag3weaver-User`
+    /// beside the host's `Bearer`; `poster` (a `--request` given on the command line) sends only the `Bearer`; without a
+    /// user's token, a typed line goes without the header.
+    #[test]
+    fn a_typed_line_carries_the_user_header_and_a_command_line_request_never_does() {
+        let (address, rx) = host(3);
+        let with = Endpoint { address: address.clone(), token: "t".into(), user_token: Some("u-123".into()) };
+        let without = Endpoint { user_token: None, ..with.clone() };
+        let a = agent();
+        post_typed(&a, &with, "/ide/teammate/mailbox", &serde_json::json!({})).unwrap();
+        let typed = rx.recv().unwrap();
+        poster(&a, &with, "/ide/teammate/mailbox", &serde_json::json!({})).unwrap();
+        let argument = rx.recv().unwrap();
+        post_typed(&a, &without, "/ide/teammate/mailbox", &serde_json::json!({})).unwrap();
+        let no_token = rx.recv().unwrap();
+        assert!(typed.iter().any(|h| h == "x-rag3weaver-user: u-123"), "{typed:?}");
+        assert!(typed.iter().any(|h| h == "authorization: bearer t"), "the host's token stays: {typed:?}");
+        assert!(!argument.iter().any(|h| h.starts_with("x-rag3weaver-user")), "{argument:?}");
+        assert!(!no_token.iter().any(|h| h.starts_with("x-rag3weaver-user")), "{no_token:?}");
     }
 }

@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 pub struct Endpoint {
     pub address: String,
     pub token: String,
+    /// **The user's token** (`user/user_token` beside `daemon.json`, the mode auto's human title, 21 November 2026):
+    /// sent as `X-Rag3weaver-User` only with what is typed at the keyboard. Absent, typed lines go without it.
+    pub user_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -23,7 +26,7 @@ impl Endpoint {
     /// Le contenu d'un `daemon.json`.
     pub fn depuis_json(octets: &[u8]) -> Result<Self, String> {
         let f: Fiche = serde_json::from_slice(octets).map_err(|e| format!("daemon.json illisible : {e}"))?;
-        Ok(Self { address: sans_schema(&f.address), token: f.token })
+        Ok(Self { address: sans_schema(&f.address), token: f.token, user_token: None })
     }
 
     pub fn depuis_fichier(chemin: &Path) -> Result<Self, String> {
@@ -49,6 +52,11 @@ impl Endpoint {
     /// (`RAG3WEAVER_DAEMON_DIR` l'emporte, comme chez l'hôte).
     pub fn par_defaut() -> Result<Self, String> {
         Self::depuis_fichier(&fichier_par_defaut()?)
+    }
+
+    /// The user's token read by a command (`--user-token-cmd`, for a host on another machine).
+    pub fn with_user_token_from_command(self, _command: &str) -> Result<Self, String> {
+        Ok(self)
     }
 
     /// Une autre adresse, même jeton : l'extrémité locale d'un tunnel.
@@ -88,8 +96,26 @@ mod tests {
     #[test]
     fn a_daemon_json_gives_address_and_token_and_a_tunnel_keeps_the_token() {
         let e = Endpoint::depuis_json(br#"{"address":"http://127.0.0.1:7970/","pid":1,"token":"t","build":"b"}"#).unwrap();
-        assert_eq!(e, Endpoint { address: "127.0.0.1:7970".into(), token: "t".into() });
+        assert_eq!(e, Endpoint { address: "127.0.0.1:7970".into(), token: "t".into(), user_token: None });
         assert_eq!(e.base(), "http://127.0.0.1:7970");
         assert_eq!(e.a_l_adresse("localhost:17970").address, "localhost:17970");
+    }
+
+    /// **The user's token is read beside `daemon.json`** (`user/user_token`, trimmed), and kept through a tunnel;
+    /// without the file, there is none and the host is still reached.
+    #[test]
+    fn the_user_token_is_read_beside_daemon_json_and_absent_without_its_file() {
+        let d = std::env::temp_dir().join(format!("tty-user-token-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("user")).unwrap();
+        std::fs::write(d.join("daemon.json"), r#"{"address":"127.0.0.1:7970","token":"t"}"#).unwrap();
+        assert_eq!(Endpoint::depuis_fichier(&d.join("daemon.json")).unwrap().user_token, None, "no file, no token");
+        std::fs::write(d.join("user").join("user_token"), "u-123\n").unwrap();
+        let e = Endpoint::depuis_fichier(&d.join("daemon.json")).unwrap();
+        assert_eq!(e.user_token.as_deref(), Some("u-123"));
+        assert_eq!(e.a_l_adresse("localhost:17970").user_token.as_deref(), Some("u-123"), "a tunnel keeps it");
+        let by_command = Endpoint::depuis_json(br#"{"address":"a:1","token":"t"}"#).unwrap().with_user_token_from_command("printf 'u-456\\n'").unwrap();
+        assert_eq!(by_command.user_token.as_deref(), Some("u-456"), "read by a command for a remote host");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
