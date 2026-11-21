@@ -1213,6 +1213,10 @@ fn queue(s: &str, max: usize) -> String {
     garde.into_iter().rev().collect()
 }
 
+/// The approval card's witnesses (lot 4 of the mode auto, 21 November 2026), in a file of their own.
+#[cfg(test)]
+mod card_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
