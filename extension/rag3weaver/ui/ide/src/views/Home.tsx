@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { displayName, type Backend, type HostState } from "@/lib/host";
 import { SearchBox } from "@/components/SearchBox";
+import { Agents } from "@/views/Agents";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -21,7 +22,7 @@ export function Home({ state }: { state: HostState }) {
       <>
       <OpenFolder />
       <div className="accueil-vide text-muted-foreground space-y-2 mt-4">
-        <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
+        <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Avancé : la plomberie du poste (hôtes, dépôts, vues ouvertes)</a></p>
         <p>L'hôte ne sert encore aucun dépôt.</p>
         <p>
           Pour commencer, ouvrez un dossier avec le champ « Ouvrir un dossier » ci-dessus : un dossier absent ou vide
@@ -36,7 +37,8 @@ export function Home({ state }: { state: HostState }) {
   return (
     <>
       <OpenFolder />
-      <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
+      <Agents state={state} />
+      <p className="mb-4 mt-6 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Avancé : la plomberie du poste (hôtes, dépôts, vues ouvertes)</a></p>
       <h1 className="text-xl font-semibold mb-4 mt-6">Dépôts</h1>
       <ul id="dossiers-ouverts" className="liste grid gap-3">
         {principals.map((b) => (
