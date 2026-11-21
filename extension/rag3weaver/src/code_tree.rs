@@ -472,15 +472,21 @@ pub fn register(address: &str, manifest: &Path) -> Result<Value, String> {
 /// nothing to a user): the same gesture as the IDE's, `POST /dossiers/ouvrir` — the folder created or found, attached,
 /// what is needed posed first. Gives the host's answer.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
-#[allow(unused_variables)]
 pub fn ouvrir(endpoint: &crate::daemon_client::Endpoint, dossier: &Path) -> Result<Value, String> {
-    Err("ouvrir : pas encore".into()) // RED STUB.
+    let chemin = std::path::absolute(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    let r = crate::daemon_client::appel_de_session(endpoint, "rag3weaver-backend ouvrir", "/dossiers/ouvrir", serde_json::json!({ "path": chemin }))?;
+    if r["ok"] != serde_json::json!(true) {
+        return Err(r["error"].as_str().map(str::to_string).unwrap_or_else(|| r.to_string()));
+    }
+    Ok(if r["result"].is_object() { r["result"].clone() } else { r })
 }
 
 /// What the command says of an opening, in the user's words (« dossier ouvert », « dépôt attaché »), never « atelier ».
-#[allow(unused_variables)]
 pub fn dire_l_ouverture(r: &Value) -> String {
-    String::new() // RED STUB.
+    let chemin = r["path"].as_str().unwrap_or_default();
+    let cree = if r["created"] == serde_json::json!(true) { " (créé, avec un dépôt git neuf, sans distant)" } else { "" };
+    let nom = Path::new(chemin).canonicalize().ok().and_then(|p| name_of_tree(&p).ok()).unwrap_or_else(|| chemin.to_string());
+    format!("dossier ouvert : {chemin}{cree}\ndépôt attaché : {nom} — l'IDE et les agents de code le voient")
 }
 
 /// **Fermer le backend de l'arbre à l'hôte** (`POST /backend/close`) : la
