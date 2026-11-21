@@ -7,7 +7,7 @@ use super::*;
 
 /// A local HTTP server for the witnesses of `fetch`: `/page` (HTML, a script and visible text), `/missing` (404),
 /// `/moved` (302 to `/page`). Returns its base address.
-fn web_server() -> String {
+pub(super) fn web_server() -> String {
     use std::io::{Read, Write};
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", l.local_addr().unwrap());
