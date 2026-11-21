@@ -9,7 +9,10 @@
 //! imports anything (a file, the network, a clock) is refused at its preparation, naming the import. **Bounded at each
 //! call**: a fresh instance, its memory under `memory_bytes`, its work under `fuel` (wasmi's deterministic count: the
 //! same module on the same input stops at the same point, whatever the machine's load).
-use super::{check_input, check_limits, check_output, Language, PreparedScript, ScriptEngine, ScriptError, ScriptErrorKind, ScriptLimits};
+use super::{check_limits, Language, PreparedScript, ScriptEngine, ScriptError, ScriptErrorKind, ScriptLimits};
+#[cfg(feature = "wasm-nodes")]
+use super::{check_input, check_output};
+#[cfg(feature = "wasm-nodes")]
 use serde_json::Value;
 use std::sync::Arc;
 
