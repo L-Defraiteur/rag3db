@@ -77,3 +77,55 @@ fn a_folder_opens_from_the_ide_and_is_listed() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// **The opening says « git » only for a git repository** (21 November 2026: the page said « dépôt git ouvert » for a
+/// folder that is not one, while the host answered `git: false`). A folder with files and no `.git` is « dossier
+/// ouvert », without the word git; a git repository stays « dépôt git ouvert ».
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn the_opening_says_git_only_for_a_git_repository() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(browser_binary) = navigateur_ou_saut("the_opening_says_git_only_for_a_git_repository") else {
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let workshop = atelier_d_espace(dir.path());
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(listener, None).unwrap();
+    let host = workshop.host.clone();
+    let thread = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(host, Some("j".to_string())));
+
+    let mut browser = Navigateur::lancer(&browser_binary);
+    browser.aller(&format!("{base}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    browser.attendre("document.querySelector('#ouvrir input[name=chemin]')", "the field « Ouvrir un dossier »");
+    let open = |browser: &mut Navigateur, path: &std::path::Path| -> String {
+        let before = browser.evaluer("document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? ''");
+        browser.evaluer("document.querySelector('#ouvrir input[name=chemin]').value = ''");
+        browser.evaluer("document.querySelector('#ouvrir input[name=chemin]').focus()");
+        browser.commande("Input.insertText", json!({ "text": path.to_string_lossy() }));
+        browser.evaluer("document.querySelector('#ouvrir').requestSubmit()");
+        browser.attendre(
+            &format!("(document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? '') !== '' && document.querySelector('#ouvrir .ouvrir-resultat').innerText !== {before}"),
+            "the result said under the field",
+        );
+        browser.evaluer("document.querySelector('#ouvrir .ouvrir-resultat').innerText").as_str().unwrap_or_default().to_string()
+    };
+
+    let plain = dir.path().join("photos");
+    std::fs::create_dir_all(&plain).unwrap();
+    std::fs::write(plain.join("notes.txt"), "à moi").unwrap();
+    let said = open(&mut browser, &plain);
+    assert!(said.contains("dossier ouvert") && !said.to_lowercase().contains("git"), "a folder that is not a repository: {said}");
+    assert!(!plain.join(".git").exists(), "a folder with files got git init");
+
+    let repository = crate::daemon_host::atelier_fichiers::tests::petit_depot(&dir.path().join("R"));
+    let said = open(&mut browser, &repository);
+    assert!(said.contains("dépôt git ouvert"), "a git repository: {said}");
+
+    drop(browser);
+    attendre_l_index(&workshop, &repository);
+    let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
+    assert_eq!(status, 200);
+    thread.join().unwrap();
+}
