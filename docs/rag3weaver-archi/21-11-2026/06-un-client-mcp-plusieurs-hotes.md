@@ -82,12 +82,47 @@ ses dépôts et ses vues, et le moment du dernier contact. L'hôte par défaut e
 
 ## Lots, si la page est retenue
 
-1. Le routage par la cible, avec le champ `host` dans chaque réponse et `daemon_status` par hôte. Petit.
+1. Le routage : `hosts`, `use_host`, l'ordre de résolution, le champ `host` dans chaque réponse et `daemon_status` par
+   hôte. Petit.
 2. Le jeton entre hôtes, qui remplace la lecture du `daemon.json` distant par ssh.
 3. Plus tard, et seulement sur un besoin : la recherche des deux côtés, fusionnée par rang.
 
-## À trancher par Lucie
+## Tranché par Lucie (21 novembre, vers 16 h)
 
-- Une seule entrée MCP qui voit les deux hôtes (cette page) ? Ou deux entrées, comme aujourd'hui, avec seulement le
-  champ `host` et `daemon_status` améliorés ?
-- L'hôte par défaut d'un client : toujours celui du poste, ou déclaré dans `hosts.json` ?
+- **Une seule entrée MCP, qui route.**
+- **L'hôte par défaut est déclaré** dans `hosts.json` : luciepc pour rag3db.
+- **Un aiguillage par session** : « un switch […] pour être tranquille ; comme ça un agent ne doit pas respécifier à
+  chaque appel d'outil, il liste les hôtes dispo et switch, je trouve bonne pratique générale ».
+
+### Les deux outils de l'aiguillage
+
+Sur le modèle de `views` et `use_view` :
+- `hosts` liste les hôtes déclarés : nom, poste, joignable ou non (et pourquoi), dépôts servis, et lequel est
+  l'hôte courant de la session ;
+- `use_host <nom>` pose l'hôte courant de la session. Un nom inconnu est refusé, avec la liste des hôtes connus ; un
+  hôte injoignable est refusé en le disant, et l'hôte courant ne change pas.
+
+### L'ordre de résolution d'un appel
+
+1. une cible explicite : une vue préfixée par son poste (`luciepc:archi/…`) ;
+2. sinon, l'hôte courant de la session (`use_host`) ;
+3. sinon, le défaut déclaré dans `hosts.json` ;
+4. sinon, l'hôte du poste.
+
+Le worktree ou le dépôt sans poste (point 2 et 3 du routage ci-dessus) ne servent plus qu'à **avertir** : un appel
+sans poste sur un chemin que seul un autre hôte suit répond depuis l'hôte résolu, et dit où ce chemin vit, au lieu de
+changer d'hôte en silence.
+
+### L'hôte courant et la session
+
+L'hôte courant vit dans la session MCP du client. À une reconnexion, il est repris, si le client peut le garder
+(il est tenu par le client, pas par un hôte). Sinon, le défaut reprend, et la première réponse le dit
+(« hôte courant perdu à la reconnexion : retour à luciepc »).
+
+Chaque réponse porte toujours `host`.
+
+### Le témoin, rouge d'abord
+
+Deux faux hôtes, chacun avec son nom dans sa réponse. `use_host luciepc`, puis un `search_code` sans cible : la
+réponse vient de luciepc et porte `host: "luciepc"`. Une vue préfixée `tablette:` l'emporte sur l'hôte courant. Un
+`use_host` sur un nom inconnu est refusé, et l'hôte courant reste.
