@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
+  comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
+  et n'écrit jamais une ligne sans ses morceaux.
 - 20 novembre 2026 — **Un nom tapé exactement rend sa déclaration, même courant.** Chercher `lib`, `result` ou
   `con` rendait des dizaines de lignes qui les citent, et pas la déclaration de ce nom : elle restait hors de la liste
   que la recherche classe. La recherche lit maintenant directement les déclarations dont le nom est la requête entière,
