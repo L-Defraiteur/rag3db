@@ -20,6 +20,9 @@ pub struct Grant {
     pub turn: Option<String>,
     /// `"user"`, `"judge"` or `"survivor"`.
     pub granted_by: String,
+    /// RED STUB: the mode comes with the green.
+    #[serde(default)]
+    pub mode: String,
 }
 
 /// The proof of a grant: the user's words, when, and in which turn.
@@ -103,6 +106,7 @@ impl DaemonHost {
             at: proof.at.unwrap_or_else(crate::catalog::retard::now_ms),
             turn: proof.turn,
             granted_by: by.to_string(),
+            mode: String::new(),
         };
         let mut accords = self.read_grants();
         accords.retain(|a| !(a.agent == accord.agent && a.root == accord.root));
