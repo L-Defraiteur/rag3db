@@ -287,6 +287,19 @@ impl Node for RunCommandNode {
             );
         }
 
+        // **A path outside the sandbox's roots becomes an open_root request** (RootGrants, lot B, 21 November 2026):
+        // before running, each word of the command that resolves (from its directory) to an existing path outside the
+        // roots the sandbox mounts stops it; the host turns the refusal into a request to the gate, with the command to
+        // replay once the root is granted.
+        if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned() {
+            if let Some(dehors) = path_outside_the_sandbox(&self.ligne, &racine, &bac) {
+                return Err(format!(
+                    "{OPEN_ROOT_MARKER}{}",
+                    serde_json::json!({ "class": "open_root", "refused": dehors, "replay": self.ligne })
+                ));
+            }
+        }
+
         if self.fond {
             return self.lancer_en_fond(ctx, &garde, &contexte, &verdict.parties, &racine);
         }
@@ -464,6 +477,40 @@ pub fn fin_en_fond(poignee: &str) -> Option<Fin> {
 /// reconnaît et pose la question dans sa boîte (`approval`). Une seule
 /// définition, lue des deux côtés.
 pub const EN_ATTENTE: &str = "**Commande en attente.**";
+
+/// The marker of a command stopped before running because it touches a path outside its sandbox's roots; a JSON
+/// object follows it (`{class: "open_root", refused, replay}`), which the host turns into a request to the gate.
+pub const OPEN_ROOT_MARKER: &str = "open_root: ";
+
+/// The first word of `ligne` that resolves (absolute, `~/`, or from `racine`) to an existing path outside the roots the
+/// sandbox mounts (its writes and its reads), canonical; `None` when every such word stays inside.
+fn path_outside_the_sandbox(ligne: &str, racine: &std::path::Path, bac: &crate::commande::BacASable) -> Option<std::path::PathBuf> {
+    let racines: Vec<std::path::PathBuf> =
+        bac.ecritures.iter().chain(bac.lectures.iter()).map(|r| r.canonicalize().unwrap_or_else(|_| r.clone())).collect();
+    let maison = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    for mot in ligne.split_whitespace() {
+        let mot = mot.trim_matches(|c| c == '\'' || c == '"');
+        let mot = mot.rsplit_once('=').map(|(_, v)| v).unwrap_or(mot);
+        if mot.is_empty() || mot.starts_with('-') {
+            continue;
+        }
+        let candidat = if let Some(reste) = mot.strip_prefix("~/") {
+            match &maison {
+                Some(h) => h.join(reste),
+                None => continue,
+            }
+        } else if mot.starts_with('/') {
+            std::path::PathBuf::from(mot)
+        } else {
+            racine.join(mot)
+        };
+        let Ok(reel) = candidat.canonicalize() else { continue };
+        if !racines.iter().any(|r| reel.starts_with(r)) {
+            return Some(reel);
+        }
+    }
+    None
+}
 
 fn rendre(ctx: &mut NodeContext, texte: String) -> Result<(), String> {
     ctx.set_output("result", PortValue::new(serde_json::Value::String(texte)));

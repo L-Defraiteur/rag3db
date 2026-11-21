@@ -162,6 +162,34 @@ impl DaemonHost {
         Some(dossier)
     }
 
+    /// The `open_root` request of a command the sandbox's check stopped (its error carries
+    /// [`crate::dataflow::run_nodes::OPEN_ROOT_MARKER`]): `{ok: false, error, open_root: {class, path, refused, replay}}`,
+    /// `path` the root proposed (`None` when none may be: then the error says so).
+    #[cfg(feature = "code")]
+    pub(super) fn open_root_request(&self, erreur: &str) -> Option<Value> {
+        let marqueur = crate::dataflow::run_nodes::OPEN_ROOT_MARKER;
+        let reste = &erreur[erreur.find(marqueur)? + marqueur.len()..];
+        let refus: Value = serde_json::Deserializer::from_str(reste).into_iter::<Value>().next()?.ok()?;
+        let refuse = PathBuf::from(refus["refused"].as_str()?);
+        let proposee = self.proposed_root(&refuse);
+        let message = match &proposee {
+            Some(r) => format!(
+                "la commande touche {} , hors des racines de l'agent : l'accès à {} se demande (open_root), puis la commande se rejoue",
+                refuse.display(),
+                r.display()
+            ),
+            None => format!(
+                "la commande touche {} , hors des racines de l'agent, et aucune racine ne peut s'y proposer (le dossier personnel, la racine du système ou un secret)",
+                refuse.display()
+            ),
+        };
+        Some(json!({
+            "ok": false,
+            "error": message,
+            "open_root": { "class": "open_root", "path": proposee, "refused": refuse, "replay": refus["replay"] },
+        }))
+    }
+
     /// `GET /ide/root-grants`: every grant.
     pub(super) fn root_grants_route(&self) -> Value {
         json!({ "ok": true, "grants": self.root_grants(None) })

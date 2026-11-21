@@ -2040,17 +2040,27 @@ impl DaemonHost {
             let vue = s.default_view.clone();
             // The agent writes in a view the host opened for it, on its branch (point 1 of tty's scenario 1).
             let en_ecriture = self.vue_en_ecriture_de(&s)?;
-            crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
+            // The roots granted to the agent of this backend (and to every agent): its sandbox mounts them.
+            let accordees: Vec<PathBuf> = self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default())).into_iter().map(|g| g.root).collect();
+            crate::backend::with_granted_roots(accordees, || crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
                 (Some(cell), false) => b.call_in(cell, name, arguments),
                 (Some(cell), true) => b.call_in_humain(cell, name, arguments),
                 (None, false) => b.call(name, arguments),
                 (None, true) => b.call_humain(name, arguments),
-            })))
+            }))))
             .and_then(|r| r)
             .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
+        // **A command stopped outside its roots becomes an open_root request** (RootGrants, lot B): the root to grant,
+        // proposed by the host, and the command to replay once it is granted.
+        #[cfg(feature = "code")]
+        if let Err(e) = &result {
+            if let Some(demande) = self.open_root_request(e) {
+                return demande;
+            }
+        }
         match result {
             // Une écriture rangée : un refus qui dit son rang, `queued: true`.
             Ok(v) if v.get("queued") == Some(&json!(true)) => v,
