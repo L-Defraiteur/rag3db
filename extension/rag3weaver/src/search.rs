@@ -299,8 +299,8 @@ pub enum BM25Mode {
     Regex,
     /// **The words of the query, built explicitly** (21 November 2026): one `contains` per word (with a letter or a
     /// digit) and per field, in `should` — BM25 term by term, no parser: no character of the query is an operator.
-    /// The query lucivy's `parse` built from a plain phrase; `parse` is still accepted as its former name.
-    #[serde(alias = "parse")]
+    /// The query lucivy's `parse` built from a plain phrase. Its former name `parse` is refused, as every alias of an
+    /// enumerated parameter (`enumerated_params_are_exact_lists_without_aliases`).
     Words,
     /// Exact symbol search: the query matches **separators included**, byte for byte.
     ///
