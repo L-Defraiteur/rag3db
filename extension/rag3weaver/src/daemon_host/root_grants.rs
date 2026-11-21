@@ -17,6 +17,8 @@ pub struct SandboxDefaults {
     pub writable_caches: Vec<PathBuf>,
     pub network: bool,
     pub judge_all: bool,
+    /// `"protected": "strict"`: a protected path is a hard refusal (off by default).
+    pub protected_strict: bool,
 }
 
 /// One grant: who (`agent:<clé>`, or `"*"` for every agent), which root (canonical), and its proof.
@@ -267,8 +269,18 @@ impl DaemonHost {
         let refus: Value = serde_json::Deserializer::from_str(reste).into_iter::<Value>().next()?.ok()?;
         let refuse = PathBuf::from(refus["refused"].as_str()?);
         let mode = refus["mode"].as_str().unwrap_or("read").to_string();
-        let proposee = self.proposed_root(&refuse);
+        let protege = refus["protected"] == json!(true);
+        // A protected path is proposed as it is (its folder), for one command on a human yes; any other, by proposed_root.
+        let proposee = if protege {
+            Some(if refuse.is_dir() { refuse.clone() } else { refuse.parent().map(Path::to_path_buf).unwrap_or_else(|| refuse.clone()) })
+        } else {
+            self.proposed_root(&refuse)
+        };
         let message = match &proposee {
+            Some(r) if protege => format!(
+                "la commande touche {} , sous un dossier protégé : il ne s'ouvre que pour cette commande, sur un oui humain (open_root, protected), jamais durablement",
+                r.display()
+            ),
             Some(r) if mode == "write" => format!(
                 "la commande écrit sous {} , une racine accordée en lecture seule : l'écriture dans {} se demande (open_root, mode write), puis la commande se rejoue",
                 refuse.display(),
@@ -287,7 +299,7 @@ impl DaemonHost {
         Some(json!({
             "ok": false,
             "error": message,
-            "open_root": { "class": "open_root", "mode": mode, "path": proposee, "refused": refuse, "replay": refus["replay"] },
+            "open_root": { "class": "open_root", "mode": mode, "protected": protege, "path": proposee, "refused": refuse, "replay": refus["replay"] },
         }))
     }
 
@@ -308,19 +320,32 @@ impl DaemonHost {
             roots.push((creation.clone(), "write".into()));
         }
         roots.extend(defauts.writable_caches.iter().filter(|c| c.is_dir()).map(|c| (c.clone(), "write".to_string())));
-        let roots = roots
+        let mut roots: Vec<(PathBuf, String)> = roots
             .into_iter()
             .filter_map(|(r, m)| r.canonicalize().ok().map(|r| (r, m)))
             .filter(|(r, _)| !self.holds_a_protected_folder(r))
             .collect();
-        crate::backend::CallSandbox { roots, network: Some(defauts.network), protected: self.protected_folders(), judge_all: defauts.judge_all }
+        // The grants for one command (a human yes on a protected folder): mounted for this call, then spent; the protected
+        // folder they open is not a refusal for this call.
+        let une_fois = self.take_grants_once(&self.agent_key_of_backend(backend_id).unwrap_or_default());
+        let protected: Vec<PathBuf> =
+            self.protected_folders().into_iter().filter(|p| !une_fois.iter().any(|g| g.root.starts_with(p))).collect();
+        roots.extend(une_fois.into_iter().map(|g| (g.root, g.mode)));
+        crate::backend::CallSandbox {
+            roots,
+            network: Some(defauts.network),
+            protected,
+            judge_all: defauts.judge_all,
+            protected_strict: defauts.protected_strict,
+        }
     }
 
     /// **The v1 defaults of the sandbox**, read at each call from `<config>/sandbox-defaults.json`, the code's defaults
     /// for what it does not say: `creation_root` (`~/git_workspaces/projets`: a root for new projects, without a card),
     /// `writable_caches` (the tools' caches by name: `~/.npm`, `~/.cargo`, `~/.rustup`, `~/.cache/pnpm`, `~/.cache/pip`,
     /// `~/.cache/yarn`, `~/.cache/node-gyp`, `~/.cache/sccache`, `~/.local/share/pnpm` — never the whole `~/.cache`,
-    /// which holds the build's scripts), `network` (open) and `judge_all` (on).
+    /// which holds the build's scripts), `network` (open), `judge_all` (on) and `protected` (`"strict"`: the hard refusal;
+    /// absent, a protected path asks a human for one command).
     pub fn sandbox_defaults(&self) -> SandboxDefaults {
         let lu: Value = self
             .racines_de_code()
@@ -357,13 +382,40 @@ impl DaemonHost {
             writable_caches,
             network: lu["network"].as_bool().unwrap_or(true),
             judge_all: lu["judge_all"].as_bool().unwrap_or(true),
+            protected_strict: lu["protected"].as_str() == Some("strict"),
         }
     }
 
-    /// **Open a protected folder for one command, on a human yes**: RED STUB.
-    #[allow(unused_variables)]
+    /// **Open a protected folder for one command, on a human yes** (Lucie, 21 November 2026, 20 h 05): the next call of
+    /// `agent` (or of any agent, for `"*"`) mounts `root`, in `mode`, and the grant is spent. Only a human opens it
+    /// (`by: "user"`), never the judge nor a survivor, and it is never durable: `grant_root` refuses a protected folder.
     pub fn grant_once(&self, agent: &str, root: &Path, proof: Proof, by: &str, mode: &str) -> Result<(), String> {
-        Err("grant_once : pas encore".into()) // RED STUB.
+        if by != "user" {
+            return Err(format!("ouvrir {} pour une commande : seul un oui humain l'ouvre, pas « {by} »", root.display()));
+        }
+        if !matches!(mode, "read" | "write") {
+            return Err(format!("ouvrir {} pour une commande : le mode « {mode} » n'est ni read ni write", root.display()));
+        }
+        let root = root.canonicalize().map_err(|e| format!("ouvrir {} pour une commande : {e}", root.display()))?;
+        let accord = Grant {
+            agent: agent.to_string(),
+            root,
+            quote: proof.quote,
+            at: proof.at.unwrap_or_else(crate::catalog::retard::now_ms),
+            turn: proof.turn,
+            granted_by: by.to_string(),
+            mode: mode.to_string(),
+        };
+        self.grants_once.lock().unwrap_or_else(|e| e.into_inner()).push(accord);
+        Ok(())
+    }
+
+    /// Takes the grants for one command of `agent` (its own and those of `"*"`): they are spent by this call.
+    fn take_grants_once(&self, agent: &str) -> Vec<Grant> {
+        let mut une_fois = self.grants_once.lock().unwrap_or_else(|e| e.into_inner());
+        let (pris, restent): (Vec<Grant>, Vec<Grant>) = une_fois.drain(..).partition(|g| g.agent == agent || g.agent == "*");
+        *une_fois = restent;
+        pris
     }
 
     /// `GET /ide/root-grants`: every grant.
