@@ -160,4 +160,6 @@ Lucie s'en sert dès qu'elle tourne. Chaque lot commence par son témoin rouge, 
 ## Suite
 
 Les idées venues après le gel, sans révision de la page :
-- *(vide pour l'instant)*
+- Le survivant est, pour l'instant, **Gemini 3.8 Flash**, pas Argon (des 429 en série, et un prix doublé au 1er
+  décembre ; Lucie, 21 novembre vers 20 h). Claude ne se branche pas avant le registre de dépenses et le plafond
+  d'ED. Le slug vit dans la config de la fabrique de classifieurs : changer de modèle n'est qu'une édition.
