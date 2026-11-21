@@ -8364,6 +8364,31 @@ mod tests {
         );
     }
 
+    /// **A search called without `options` answers with its defaults** (tty, scenario 1, 21 November 2026: `search_code`
+    /// without `options` was refused, the client quoting the whole schema). Every shipped search tool takes `options`
+    /// as optional, `{}` by default.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_search_without_options_answers_with_its_defaults() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let fichiers = vec![("depart.rs".to_string(), "pub fn depart() -> usize {\n    41 + 1\n}\n".to_string())];
+        backend.catalog.lock().unwrap().ingest_code(&crate::code::analyze("/banc", fichiers)).expect("l'ingestion");
+        let r = backend.call("search_code", json!({"query": "depart"})).unwrap_or_else(|e| panic!("search_code without options: {e}"));
+        assert!(r.to_string().contains("depart"), "{r}");
+        for gabarit in ["search_workspace.mmd", "atelier_search_code.mmd", "search_structured.mmd", "search_dense_related.mmd", "search_related_scoped.mmd"] {
+            let texte = std::fs::read_to_string(tools.join(gabarit)).unwrap();
+            assert!(!texte.contains("%% param: options json!"), "{gabarit} still requires options");
+        }
+    }
+
     /// **A short `variable` is not a vector candidate, and keeps its full text** (c7, 20 November 2026: since the content
     /// of a scope is bounded to its node's bytes, 57bfc142bf, a Python `variable` of one statement on a line `a;b;c`
     /// carries 18 characters, `s=index.read_text()`, and wins by the vector alone — luciepc's 88 %). Its chunks go;

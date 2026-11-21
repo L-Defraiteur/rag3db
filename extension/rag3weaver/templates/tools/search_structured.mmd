@@ -2,7 +2,7 @@
 %% description: Recherche structurée dans une entité : lucivy et dense local, filtres appliqués par chaque signal avant fusion et pagination.
 %% param: target string! -- Entité où chercher.
 %% param: query string! -- Description naturelle ou nom de carte.
-%% param: options json! -- SearchOptions : filter_condition, limit, offset, signals, consistency. Les restrictions collection/deck sont injectées ici avant l'exécution.
+%% param: options json = {} -- SearchOptions : filter_condition, limit, offset, signals, consistency. Les restrictions collection/deck sont injectées ici avant l'exécution.
 %% param: default_filter json = {} -- Un filtre que l'outil pose par défaut (sa liaison au manifeste) : il ne vaut que si options n'a pas de filter_condition ; un filter_condition explicite, même {}, le remplace.
 %% result: render.results
 
