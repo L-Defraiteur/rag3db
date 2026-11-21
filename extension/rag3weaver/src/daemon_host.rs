@@ -422,6 +422,8 @@ pub mod web_fetch;
 pub mod web_search;
 /// The agents of the machine, as a tree (`GET /ide/agents`).
 mod agents;
+/// A run as a tree, read-only (`GET /ide/run`).
+mod run_tree;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
