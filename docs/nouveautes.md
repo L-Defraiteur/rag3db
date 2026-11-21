@@ -5,6 +5,7 @@
   que son dossier : `cargo init`, `cargo build` ou `cargo test`, accordés, échouaient sur la configuration de rustup.
   L'atelier livré lit maintenant la chaîne Rust (rustup, les binaires, le registre et la configuration de cargo),
   comme le backend de code. Un atelier déjà posé se repose (`rag3weaver-backend atelier`) pour en profiter.
+- 21 novembre 2026 — **Une tâche sur un dépôt sans commit le dit clairement.** Après un `git init`, le dépôt s'inscrit, mais une tâche part d'un commit : au lieu de l'erreur de git sur `HEAD`, l'ouverture dit que le dépôt n'a encore aucun commit et donne la commande qui en crée un, sans laisser de branche derrière elle.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
