@@ -193,3 +193,21 @@ fn the_profile_of_anthropics_cli_is_protected() {
         assert!(host.grant_root("*", &profil, preuve(), "user", "read").is_err(), "the profile of Anthropic's CLI is granted");
     }
 }
+
+/// **The host's state folder is protected** (ED, 21 November 2026: the billing register will live under
+/// `~/.local/state/rag3weaver/usage/`, and an agent that rewrote it would erase its own spending; the folder also holds
+/// `hooks.log`, `canal/`, `vues/` and `daemon.log`): it is in the floor, where `$XDG_STATE_HOME` puts it, and granting it
+/// or a parent of it is refused.
+#[test]
+fn the_hosts_state_folder_is_protected() {
+    let d = tempfile::tempdir().unwrap();
+    let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    let host = crate::daemon_host::DaemonHost::new().with_racines_de_code(racines);
+    let etat = crate::daemon_lifecycle::log_path().parent().unwrap().to_path_buf();
+    let etat_c = etat.canonicalize().unwrap_or_else(|_| etat.clone());
+    assert!(host.protected_folders().iter().any(|p| p == &etat_c), "the host's state folder {} is not protected", etat.display());
+    if etat.is_dir() {
+        let preuve = Proof { quote: "oui".into(), at: None, turn: None };
+        assert!(host.grant_root("*", &etat, preuve, "user", "write").is_err(), "the host's state folder is granted");
+    }
+}
