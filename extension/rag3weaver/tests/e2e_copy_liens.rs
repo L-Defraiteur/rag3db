@@ -250,3 +250,96 @@ fn un_null_en_tete_d_un_lot_ne_fait_pas_tomber_le_lot() {
         "les trois liens posés, la ligne seulement où elle est connue"
     );
 }
+
+/// Runs each statement on the connection, failing with the statement's text.
+fn run(conn: &Rag3dbConnection, statements: &[&str]) {
+    use rag3weaver::connection::DbConnection;
+    for s in statements {
+        DbConnection::execute(conn, s).unwrap_or_else(|e| panic!("{s} : {e}"));
+    }
+}
+
+/// The edges of `R`, as `(from, to, k, v)`, sorted.
+fn parallel_edges(conn: &Rag3dbConnection) -> Vec<(String, String, i64, String)> {
+    use rag3weaver::connection::DbConnection;
+    let res = DbConnection::execute(conn, "MATCH (a:N)-[r:R]->(b:N) RETURN a.id, b.id, r.k, r.v").unwrap();
+    let mut out: Vec<(String, String, i64, String)> = res
+        .rows
+        .into_iter()
+        .map(|row| match row.as_slice() {
+            [CypherValue::String(a), CypherValue::String(b), CypherValue::Int(k), CypherValue::String(v)] => (a.clone(), b.clone(), *k, v.clone()),
+            other => panic!("unexpected row {other:?}"),
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+fn parallel_schema(conn: &Rag3dbConnection) {
+    run(
+        conn,
+        &[
+            "CREATE NODE TABLE N(id STRING, PRIMARY KEY(id))",
+            "CREATE REL TABLE R(FROM N TO N, k INT64, v STRING)",
+            "CREATE (:N {id: 'a'}), (:N {id: 'b'}), (:N {id: 'c'})",
+        ],
+    );
+}
+
+/// **The engine keeps several edges between the same two nodes, told apart by a key** (21 November 2026, lot of the
+/// keyed links, Lucie's choice for the occurrences). A `MERGE` whose pattern carries the key property: a key repeated
+/// non-adjacently in the same batch, with another edge created between the two, finds its edge and keeps the last
+/// `SET`; distinct keys make distinct edges.
+#[test]
+#[ignore]
+fn merge_with_a_key_keeps_parallel_edges_and_the_last_set() {
+    let conn = Rag3dbConnection::in_memory().expect("in-memory base");
+    parallel_schema(&conn);
+    run(
+        &conn,
+        &["UNWIND [{f: 'a', t: 'b', k: 1, v: 'x1'}, {f: 'a', t: 'c', k: 1, v: 'w5'}, {f: 'a', t: 'b', k: 2, v: 'y2'}, \
+           {f: 'a', t: 'b', k: 1, v: 'x1-bis'}, {f: 'a', t: 'c', k: 7, v: 'w7'}, {f: 'a', t: 'b', k: 2, v: 'y2-bis'}] AS item \
+           MATCH (a:N {id: item.f}) MATCH (b:N {id: item.t}) MERGE (a)-[r:R {k: item.k}]->(b) SET r.v = item.v"],
+    );
+    let expected = |rows: &[(&str, &str, i64, &str)]| -> Vec<(String, String, i64, String)> {
+        rows.iter().map(|(a, b, k, v)| (a.to_string(), b.to_string(), *k, v.to_string())).collect()
+    };
+    assert_eq!(
+        parallel_edges(&conn),
+        expected(&[("a", "b", 1, "x1-bis"), ("a", "b", 2, "y2-bis"), ("a", "c", 1, "w5"), ("a", "c", 7, "w7")]),
+        "one edge per (pair, key), with its last value"
+    );
+    // A second batch on a non-empty table: an existing key is found, a new key adds an edge.
+    run(
+        &conn,
+        &["UNWIND [{f: 'a', t: 'b', k: 3, v: 'z3'}, {f: 'a', t: 'b', k: 1, v: 'x1-ter'}] AS item \
+           MATCH (a:N {id: item.f}) MATCH (b:N {id: item.t}) MERGE (a)-[r:R {k: item.k}]->(b) SET r.v = item.v"],
+    );
+    assert_eq!(
+        parallel_edges(&conn),
+        expected(&[("a", "b", 1, "x1-ter"), ("a", "b", 2, "y2-bis"), ("a", "b", 3, "z3"), ("a", "c", 1, "w5"), ("a", "c", 7, "w7")]),
+        "the second batch finds key 1 and adds key 3"
+    );
+}
+
+/// **A COPY loads several edges between the same two nodes**, into an empty table and then into a table that has
+/// some: none is merged with another (21 November 2026, lot of the keyed links).
+#[test]
+#[ignore]
+fn copy_loads_parallel_edges_between_the_same_nodes() {
+    let conn = Rag3dbConnection::in_memory().expect("in-memory base");
+    parallel_schema(&conn);
+    let dir = tempfile::tempdir().unwrap();
+    let load = |name: &str, lines: &str| {
+        let path = dir.path().join(name);
+        std::fs::write(&path, lines).unwrap();
+        let path = rag3weaver::connection::cypher_path_literal(&path);
+        run(&conn, &[&format!("COPY R (k, v) FROM {path} (from='N', to='N', auto_detect=false)")]);
+    };
+    load("first.csv", "a,b,1,x\na,b,2,y\na,c,1,w\na,b,3,z\n");
+    load("second.csv", "a,b,4,t\na,b,1,x-again\n");
+    let edges = parallel_edges(&conn);
+    let ab: Vec<(i64, &str)> = edges.iter().filter(|e| e.1 == "b").map(|e| (e.2, e.3.as_str())).collect();
+    assert_eq!(ab, vec![(1, "x"), (1, "x-again"), (2, "y"), (3, "z"), (4, "t")], "five a→b edges, none merged");
+    assert_eq!(edges.len(), 6, "{edges:?}");
+}
