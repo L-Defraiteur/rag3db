@@ -1,6 +1,6 @@
 //! The witnesses of the lot `billing-ledger` (21 November 2026): the spending ledger and the monthly cap.
 use super::*;
-use crate::llm::{CallbackLlm, FinishReason, StringSink};
+use crate::llm::{CallbackLlm, StringSink};
 
 /// A ledger of its own, with `prices` as its `prices.json` (`None`: no file).
 fn ledger(prices: Option<&str>) -> (tempfile::TempDir, Arc<Ledger>) {
@@ -18,10 +18,9 @@ const PRICES: &str = r#"{"currency":"USD","monthly_cap":200,"prices":{"paid":[
 
 /// A model that answers with this usage.
 fn model(usage: Usage) -> Arc<dyn Llm> {
-    Arc::new(CallbackLlm::new(move |_t, _o, sink| {
-        let finish = Finish::new(FinishReason::MaxTokens, Vec::new());
-        sink.on_finish(&finish);
-        Ok((finish, usage))
+    Arc::new(CallbackLlm::new("model", 100_000, move |_t: &[Turn], _o: &GenOptions, sink: &mut dyn TokenSink| {
+        sink.on_finish(&Finish::eos());
+        Ok((Finish::eos(), usage))
     }))
 }
 

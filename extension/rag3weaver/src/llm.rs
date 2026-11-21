@@ -1340,7 +1340,7 @@ impl Llm for MockLlm {
                 ms: started.elapsed().as_millis() as u64,
                 // Un modèle local ne réessaie rien, et **ne met rien en
                 // cache côté fournisseur** : il n'y a pas de fournisseur.
-                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false },
+                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 },
         ))
     }
 
@@ -1580,7 +1580,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1844,7 +1844,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 
