@@ -1070,9 +1070,28 @@ impl DaemonHost {
     /// **Index on demand a folder attached without an index** (archi's page « un agent qui part neutre », arbre's part 2):
     /// its watches put back, its backend reopened, its first index launched.
     #[cfg(feature = "code")]
-    #[allow(unused_variables)]
     pub fn indexer_un_dossier(&self, chemin: &Path) -> Result<Value, String> {
-        Err("indexer un dossier : pas encore".into()) // RED STUB.
+        let dossier = chemin.canonicalize().map_err(|e| format!("indexer {} : {e}", chemin.display()))?;
+        let racines = self.racines_de_code()?;
+        let nom = crate::code_tree::name_of_tree(&dossier)?;
+        let manifeste = racines.manifest(&nom);
+        if !manifeste.is_file() {
+            return Err(format!("indexer {} : ce dossier n'est pas attaché ; ouvrez-le d'abord (POST /dossiers/ouvrir)", dossier.display()));
+        }
+        let manifeste = manifeste.canonicalize().unwrap_or(manifeste);
+        // Its watches back first; an open backend is closed so that it reopens with them.
+        let etait_sans_index = worktrees::remettre_les_montres(&manifeste)?;
+        if etait_sans_index {
+            if let Some(h) = self.hosted_existing(&manifeste) {
+                let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
+                self.close_slot(&h, &mut slot)?;
+            }
+        }
+        let h = self.hosted(&manifeste)?;
+        self.with_backend(&h, |_| ())?;
+        let index = worktrees::lancer_l_index(self, &h, &manifeste);
+        self.publier_l_etat_de_l_hote();
+        Ok(json!({ "path": dossier, "manifest": manifeste, "was_without_index": etait_sans_index, "index": index }))
     }
 
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
@@ -2974,6 +2993,18 @@ impl DaemonHost {
                         (statut(&r), r)
                     }
                     None => (400, json!({ "ok": false, "error": "« manifest » manque : le manifeste du dépôt à retirer" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
+            // **Index on demand a folder attached without an index** (archi's page « un agent qui part neutre »).
+            #[cfg(feature = "code")]
+            ("POST", "/dossiers/indexer") => match corps() {
+                Ok(v) => match v["path"].as_str() {
+                    Some(p) => {
+                        let r = op_response(self.indexer_un_dossier(Path::new(p)));
+                        (statut(&r), r)
+                    }
+                    None => (400, json!({ "ok": false, "error": "« path » manque : le dossier attaché à indexer" })),
                 },
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },

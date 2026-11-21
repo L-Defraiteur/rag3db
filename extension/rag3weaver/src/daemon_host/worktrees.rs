@@ -536,7 +536,23 @@ fn mettre_les_montres_de_cote(manifeste: &Path) -> Result<(), String> {
     std::fs::write(&fichier, serde_json::to_string_pretty(&note).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", fichier.display()))
 }
 
-fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
+/// Puts a tree's watches back in its manifest from `sans-index.json`, and removes the note (the index made on demand).
+/// `false` for a tree that was not attached without an index.
+pub(super) fn remettre_les_montres(manifeste: &Path) -> Result<bool, String> {
+    let Some(fichier) = fichier_sans_index(manifeste).filter(|f| f.is_file()) else { return Ok(false) };
+    let note: Value = serde_json::from_str(&std::fs::read_to_string(&fichier).map_err(|e| format!("{} : {e}", fichier.display()))?)
+        .map_err(|e| format!("{} : {e}", fichier.display()))?;
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?)
+        .map_err(|e| format!("{} : {e}", manifeste.display()))?;
+    if !note["watches"].is_null() {
+        m["watches"] = note["watches"].clone();
+    }
+    std::fs::write(manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifeste.display()))?;
+    std::fs::remove_file(&fichier).map_err(|e| format!("{} : {e}", fichier.display()))?;
+    Ok(true)
+}
+
+pub(super) fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
     // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
     let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(manifeste));
     match hote.with_backend(h, |b| lancer_sur(b, manifeste, suivi)) {
