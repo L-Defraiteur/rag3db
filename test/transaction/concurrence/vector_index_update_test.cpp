@@ -3352,16 +3352,21 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsDeletedInWaves) {
         for (int64_t wave = 0; wave < waves; ++wave) {
             // Blocks spread over the table: wave w takes the block starting at (2w + run % 2) * block.
             const auto low = (2 * wave + run % 2) * block;
+            const auto deleteStart = std::chrono::steady_clock::now();
             mustRun(stringFormat(
                 "MATCH (n:{}) WHERE n.id >= {} AND n.id < {} AND n.id % 3 <> 0 DELETE n;", table, low,
                 low + block));
+            const auto deleteMs = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - deleteStart)
+                                      .count();
             if (HasFatalFailure()) {
                 return;
             }
             const auto reach = lowerGraphReach(*conn, table, "doc_index", "vec");
-            const auto line = stringFormat("run {}, wave {} (ids {} to {}) : {} linked, {} "
-                                           "unreachable from every entry{}",
-                run, wave, low, low + block - 1, reach.linked, reach.unreachable,
+            const auto line = stringFormat("run {}, wave {} (ids {} to {}) : DELETE {} ms, {} linked, "
+                                           "{} unreachable from every entry{}",
+                run, wave, low, low + block - 1, static_cast<int64_t>(deleteMs), reach.linked,
+                reach.unreachable,
                 reach.error.empty() ? "" : " ; " + reach.error);
             std::cerr << "  [vagues] " << line << "\n";
             for (const auto offset : reach.lost) {
