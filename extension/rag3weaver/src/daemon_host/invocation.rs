@@ -453,6 +453,37 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// **One name for a repository, everywhere** (21 November 2026, tty's scenario 2: `code-tree add` said
+    /// « code-compteur », the terminal knew only « compteur », and its error did not say which to take): an attached
+    /// repository is found by its short name and by its full name, the same; an unknown name is refused listing the
+    /// attached ones in both forms.
+    #[test]
+    fn a_repository_is_found_by_its_short_and_its_full_name() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(d.path());
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let complet = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        // petit_depot's repository is « rag3db-essai »: its full name, « code-rag3db-essai ».
+        assert_eq!(complet, "code-rag3db-essai", "the full name the witness expects");
+        let court = a.host.resoudre_un_depot("rag3db-essai");
+        let long = a.host.resoudre_un_depot("code-rag3db-essai");
+        assert_eq!(court["ok"], json!(true), "the short name is not found: {court}");
+        assert_eq!(long["ok"], json!(true), "the full name is not found: {long}");
+        assert_eq!(court["id"], long["id"], "the two names find two repositories: {court} {long}");
+        assert_eq!((&court["repo"], &court["name"]), (&json!("rag3db-essai"), &json!("code-rag3db-essai")), "{court}");
+        // By its paths too (tty, 21 November): the repository's root, as given to code-tree add, and the manifest's folder.
+        let par_racine = a.host.resoudre_un_depot(&depot.to_string_lossy());
+        assert_eq!(par_racine["id"], court["id"], "the repository's root does not find it: {par_racine}");
+        let dossier = std::path::Path::new(court["manifest"].as_str().unwrap()).ancestors().find(|p| p.ends_with("templates")).and_then(|t| t.parent()).unwrap().to_path_buf();
+        let par_dossier = a.host.resoudre_un_depot(&dossier.to_string_lossy());
+        assert_eq!(par_dossier["id"], court["id"], "the manifest's folder does not find it: {par_dossier}");
+        let inconnu = a.host.resoudre_un_depot("autre");
+        let e = inconnu["error"].as_str().unwrap_or_default();
+        assert!(inconnu["ok"] == json!(false) && e.contains("rag3db-essai (code-rag3db-essai)"), "an unknown name does not list the attached ones in both forms: {inconnu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
