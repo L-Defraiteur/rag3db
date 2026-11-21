@@ -337,5 +337,7 @@ fn l_equipier_joue_une_demande_de_bout_en_bout_sur_faux_modele() {
     let fin_de_tache = boite.iter().find(|l| l["kind"] == "ended").expect("the task ended");
     assert!(!fin_de_tache["text"].as_str().unwrap_or_default().starts_with("failure"), "{fin_de_tache}");
     let t = host.tache(&id, "doc").expect("la tâche est ouverte");
-    assert!(t.arbre.join("DOC.md").is_file(), "DOC.md is in the task's tree");
+    // The code lives in the task's workspace (the code worktree), not in its declarations' tree.
+    let racine = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
+    assert!(racine.join("DOC.md").is_file(), "DOC.md is in the task's code tree: {}", racine.display());
 }
