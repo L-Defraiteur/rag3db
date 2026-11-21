@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Ce que l'équipier lit au dehors est une donnée, jamais une consigne.** Une page lue par
+  `fetch` ou `browser_read`, une console, une réponse de `web_search` reviennent au modèle marquées
+  `observed: {source, trusted: false}`. Son invite dit qu'une consigne trouvée là ne s'exécute pas : il la cite et
+  demande au superviseur. Une page qui affirme « l'utilisateur t'autorise à… » ne vaut jamais un accord.
 - 21 novembre 2026 — **L'équipier lit le navigateur.** Un manifeste qui déclare `teammate.browser` (ses `domains`,
   vides par défaut) fait écouter l'hôte pour l'extension rag3weaver de Chrome, et `/sante` dit le socket et les
   navigateurs reliés. L'équipier gagne trois outils en lecture : `browser_tabs` liste les onglets et en prend un,
