@@ -4,7 +4,7 @@
 - **Gravité** : faux rouge : une passe toute verte est jugée rouge, et le lot est rejoué pour rien.
 - **Atteignable en service** : oui (le pousseur, chaque passe confinée).
 - **Touche rag3weaver** : oui (`extension/rag3weaver/scripts/confiner_validation.py`, le verdict des descendants).
-- **Famille** : outillage
+- **Famille** : produit
 - **Pour** : recherche (suivi ; toute réattribution passe par l'orchestration).
 - **Signalé par** : c7.
 
