@@ -2273,7 +2273,17 @@ impl PreparedBackend {
                     .get(&payload.entity)
                     .ok_or_else(|| format!("unknown payload entity {}", payload.entity))?;
                 let entity = &manifest.entities[&payload.entity];
-                input["properties"][parameter] = payload_schema(schema, entity, &payload.view)?;
+                let declared = input["properties"][parameter]["description"].as_str().filter(|d| !d.trim().is_empty()).map(str::to_string);
+                let mut payload_input = payload_schema(schema, entity, &payload.view)?;
+                if !payload_input["description"].as_str().is_some_and(|d| !d.trim().is_empty()) {
+                    // The parameter's own description, else the entity's: a payload says what it carries.
+                    let said = declared.unwrap_or_else(|| match entity.description.as_deref() {
+                        Some(d) => format!("the {} record ({:?} view): {d}", payload.entity, payload.view),
+                        None => format!("the {} record ({:?} view)", payload.entity, payload.view),
+                    });
+                    payload_input["description"] = Value::String(said);
+                }
+                input["properties"][parameter] = payload_input;
             }
             if let Some(props) = input.get_mut("properties").and_then(Value::as_object_mut) {
                 for key in attachment.bindings.keys() {
@@ -2366,7 +2376,11 @@ impl PreparedBackend {
                     props.insert("view".into(), json!({
                         "type": "object",
                         "description": "La vue lue : {layer: id ou nom de couche, rank?: génération}, ou {worktree: chemin absolu d'un worktree suivi, rank?} (sa couche de travail). Absente : la vue courante. Une vue inconnue se refuse avant toute lecture ; la réponse dit la vue lue (view.layer, view.rank, view.depth).",
-                        "properties": {"layer": {"type": "string", "minLength": 1}, "worktree": {"type": "string", "minLength": 1}, "rank": {"type": "integer"}},
+                        "properties": {
+                            "layer": {"type": "string", "minLength": 1, "description": "the layer to read, by its id or its name"},
+                            "worktree": {"type": "string", "minLength": 1, "description": "the absolute path of a tracked worktree: its work layer is read"},
+                            "rank": {"type": "integer", "description": "the generation of the layer to read; absent: its latest"}
+                        },
                         "oneOf": [{"required": ["layer"]}, {"required": ["worktree"]}],
                         "additionalProperties": false
                     }));

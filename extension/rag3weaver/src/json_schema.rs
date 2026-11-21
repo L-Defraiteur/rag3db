@@ -208,11 +208,14 @@ pub fn filter_condition_schema() -> Value {
     // Une clé, ou must / should / must_not ensemble (la forme booléenne de
     // Qdrant ou d'Elasticsearch) ; le moteur refuse les autres mélanges.
     serde_json::json!({"type":"object","additionalProperties":false,"properties":{
-        "field":{"type":"object","additionalProperties":false,"required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}},
-        "must":{"type":"array","items":{"type":"object"}},
-        "should":{"type":"array","items":{"type":"object"}},
-        "must_not":{"type":"array","items":{"type":"object"}},
-        "path":{},"nested":{}
+        "field":{"type":"object","additionalProperties":false,"required":["key","value"],"description":"one condition on one field","properties":{
+            "key":{"type":"string","description":"the field's name (example: « state »)"},
+            "value":{"description":"the value to match, or a list of values (any of them)"}}},
+        "must":{"type":"array","items":{"type":"object"},"description":"conditions that all hold"},
+        "should":{"type":"array","items":{"type":"object"},"description":"conditions of which at least one holds"},
+        "must_not":{"type":"array","items":{"type":"object"},"description":"conditions that none may hold"},
+        "path":{"description":"the list field a nested condition reads"},
+        "nested":{"description":"the condition each element of path must meet"}
     }})
 }
 
@@ -302,9 +305,10 @@ pub fn search_options_schema(filter_description: &str) -> Value {
         "description":"Options : filter_condition (critères structurés sur les champs de l'entité — jamais dans le texte de la requête), limit, offset.",
         "properties":{
             "filter_condition":filtre,
-            "limit":{"type":"integer","minimum":1,"maximum":200},
-            "offset":{"type":"integer","minimum":0},
-            "signals":{},"consistency":{}
+            "limit":{"type":"integer","minimum":1,"maximum":200,"description":"the most results to return (1 to 200)"},
+            "offset":{"type":"integer","minimum":0,"description":"the results to skip first, for the next page (default: 0)"},
+            "signals":{"description":"the search signals to use: a list of « bm25 », « vector », « sparse »; absent: the entity's own"},
+            "consistency":{"description":"what must be indexed before searching: « immediate » (nothing), « eventual » (the pending writes, the default) or « strict » (the whole queue)"}
         }
     })
 }

@@ -898,7 +898,12 @@ impl NodeFactory for RelationBatchFactory {
             "Up to 512 pairs of endpoint identity objects, each with optional declared properties",
         );
         links.json_schema = Some(
-            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{"from":{"type":"object","additionalProperties":{"type":"string"}},"to":{"type":"object","additionalProperties":{"type":"string"}},"props":{"type":"object"},"from_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"properties":{"org":{"type":"string"},"project":{"type":"string"}}},"to_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"properties":{"org":{"type":"string"},"project":{"type":"string"}}}}}}),
+            json!({"type":"array","maxItems":512,"items":{"type":"object","required":["from","to"],"additionalProperties":false,"properties":{
+                "from":{"type":"object","additionalProperties":{"type":"string"},"description":"the source, by its identity fields (example: {\"name\": \"…\"})"},
+                "to":{"type":"object","additionalProperties":{"type":"string"},"description":"the target, by its identity fields"},
+                "props":{"type":"object","description":"the link's own properties, if the relation declares some"},
+                "from_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"description":"the source's cell, when it is not the call's","properties":{"org":{"type":"string","description":"its organisation"},"project":{"type":"string","description":"its project"}}},
+                "to_cell":{"type":"object","required":["org","project"],"additionalProperties":false,"description":"the target's cell, when it is not the call's","properties":{"org":{"type":"string","description":"its organisation"},"project":{"type":"string","description":"its project"}}}}}}),
         );
         NodeSchema{node_type:self.node_type().to_owned().into(),description:"Idempotent links between existing declared endpoints, named by their identity fields; validates the entire batch before writes".into(),inputs:vec![],outputs:vec![PortDef::value("report", PortType::Map, false)],config_params:vec![ConfigParam{choices:Some(Choices::relations_written()),..param("relation",ConfigParamType::String,true,"Declared relation")},links]}
     }
