@@ -11502,6 +11502,7 @@ mod tests {
     }
 
     /// The witness of the lot `exact-name-by-name`, in a file of its own (rule of 21 November 2026).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
     mod exact_name_by_name;
 }
 
