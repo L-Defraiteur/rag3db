@@ -109,8 +109,7 @@ fn lancer(o: Options) -> Result<(), String> {
     };
     let agent = client::agent();
     // Le dépôt se désigne par son nom ou son chemin ; son id ne sert qu'au JSON.
-    let etat = client::lire_brut(&agent, &ep, "/ide/etat")?;
-    let depot = client::resoudre_depot(&etat, &o.depot)?;
+    let depot = client::resoudre(&agent, &ep, &o.depot)?;
     // Le journal de séance : `--journal`, ou de lui-même sous mosh, qui ne garde
     // aucun historique au-delà de l'écran (lot tty-7). Un journal qui ne s'ouvre
     // pas de lui-même se dit, et la séance continue.
@@ -138,7 +137,7 @@ fn lancer(o: Options) -> Result<(), String> {
                 // redemander quoi que ce soit à l'équipier.
                 Ok(tui::Fin::Changer { depot: d, tache: t, journal: j, theme: th }) => {
                     if let Some(d) = d {
-                        match client::lire_brut(&agent, &ep, "/ide/etat").and_then(|etat| client::resoudre_depot(&etat, &d)) {
+                        match client::resoudre(&agent, &ep, &d) {
                             Ok(neuf) => depot = neuf,
                             Err(e) => eprintln!("[tty] /depot {d} : {e}"),
                         }

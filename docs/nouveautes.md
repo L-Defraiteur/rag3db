@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Le terminal reconnaît un dépôt sous tous ses noms.** `rag3weaver-tty --repo` accepte le nom que donne `code-tree add` (`code-compteur`), le nom court (`compteur`), le chemin du projet ou celui du manifeste : c'est l'hôte qui résout, comme pour les outils et l'IDE.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
