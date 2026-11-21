@@ -316,7 +316,7 @@ mod e2e_working_tree;
 fn suites_suivies() -> Vec<String> {
     let crate_ = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let par_git = std::process::Command::new("git")
-        .args(["ls-files", "tests/e2e_*.rs"])
+        .args(["ls-files", ":(glob)tests/e2e_*.rs"])
         .current_dir(crate_)
         .output()
         .ok()
