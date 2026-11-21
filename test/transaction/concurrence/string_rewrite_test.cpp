@@ -17,9 +17,19 @@
 #include <string>
 #include <thread>
 
+#include <unistd.h>
+
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
+#include "main/client_context.h"
 #include "main/connection.h"
+#include "storage/storage_manager.h"
+#include "storage/table/chunked_node_group.h"
+#include "storage/table/node_table.h"
+#include "storage/table/string_chunk_data.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -186,6 +196,64 @@ protected:
 };
 
 // Une réécriture, un ADD avec défaut, une seconde réécriture, puis le point de reprise.
+// La garde de relecture d'un dictionnaire de chaînes (ticket 2026-11-14-un-point-de-reprise-
+// automatique-meurt-dans-le-dictionnaire-d-une-colonne-de-chaines, pièce 2 du correctif). Le core
+// de C1 montre un dictionnaire relu au point de reprise dont les offsets dépassent les octets ; la
+// suite (appendString) déborde du tampon et tue le processus. Le témoin pose un tel segment par les
+// internes : 3 000 chaînes écrites et reprises, puis le numValues de l'enfant DATA du segment
+// persistant ramené à 16 octets. Une mise à jour, puis CHECKPOINT, relit ce segment
+// (Column::checkpointSegment → DictionaryColumn::scan) : la relecture doit refuser en nommant un
+// dictionnaire incohérent, et le processus vivre. Joué dans un fils (EXPECT_EXIT, style
+// threadsafe) : sans la garde, le fils meurt ou valide, et le témoin rougit sans tuer la suite.
+TEST_F(StringRewrite, AnInconsistentDictionaryIsRefusedByNameAtReadBack) {
+    ok("UNWIND range(0, 2999) AS i CREATE (:Chunk {_uuid: 'c-' + CAST(i AS STRING), _text: "
+       "'titre ' + CAST(i AS STRING), marker: 'm'});");
+    ok("CHECKPOINT;");
+    ok("BEGIN TRANSACTION READ ONLY;");
+    uint64_t bytesBefore = 0;
+    {
+        using namespace rag3db;
+        auto* context = conn->getClientContext();
+        auto* transaction = transaction::Transaction::Get(*context);
+        auto* entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, "Chunk");
+        auto& table = storage::StorageManager::Get(*context)
+                          ->getTable(entry->getTableID())
+                          ->cast<storage::NodeTable>();
+        const auto columnID = entry->getColumnID("_text");
+        auto* group = table.getNodeGroup(0)->getChunkedNodeGroup(0);
+        ASSERT_NE(group, nullptr) << "[check: setup] a checkpointed group";
+        auto segments = group->getColumnChunk(columnID).getSharedSegments();
+        ASSERT_FALSE(segments.empty()) << "[check: setup] a segment of _text";
+        auto& strings = segments[0]->cast<storage::StringChunkData>();
+        auto* data = strings.getDictionaryChunk().getStringDataChunk();
+        ASSERT_EQ(data->getResidencyState(), storage::ResidencyState::ON_DISK)
+            << "[check: setup] the dictionary's data child is on disk";
+        auto metadata = data->getMetadata();
+        bytesBefore = metadata.numValues;
+        metadata.numValues = 16;
+        data->setMetadata(metadata);
+    }
+    ok("COMMIT;");
+    ASSERT_GT(bytesBefore, 1000u) << "[check: setup] the data child held the strings";
+    ok("MATCH (n:Chunk {_uuid: 'c-7'}) SET n._text = 'changed';");
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    EXPECT_EXIT(
+        {
+            auto result = conn->query("CHECKPOINT;");
+            const auto message = result->isSuccess() ? std::string("CHECKPOINT succeeded") :
+                                                       result->getErrorMessage();
+            std::cerr << message << std::endl;
+            _exit(!result->isSuccess() &&
+                          message.find("Corrupted string dictionary") != std::string::npos ?
+                      0 :
+                      result->isSuccess() ? 2 : 3);
+        },
+        ::testing::ExitedWithCode(0), "Corrupted string dictionary")
+        << "[check: dictionary-read-back-refused-by-name] a dictionary whose offsets run past its "
+           "bytes ("
+        << bytesBefore << " bytes cut to 16) must be refused by name at read back";
+}
+
 TEST_F(StringRewriteAcrossAddColumn, RewriteThenAddThenCheckpoint) {
     load();
     rewrite(*conn, 0, NUM_ROWS / 2);
