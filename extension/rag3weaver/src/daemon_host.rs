@@ -2004,7 +2004,12 @@ impl DaemonHost {
             let en_ecriture = self.vue_en_ecriture_de(&s)?;
             // The roots granted to the agent of this backend (and to every agent): its sandbox mounts them.
             let accordees: Vec<(PathBuf, String)> =
-                self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default())).into_iter().map(|g| (g.root, g.mode)).collect();
+                self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default()))
+                    .into_iter()
+                    // A grant that holds a protected folder (written by hand) is never mounted.
+                    .filter(|g| !root_grants::holds_a_protected_folder(&g.root))
+                    .map(|g| (g.root, g.mode))
+                    .collect();
             crate::backend::with_granted_roots(accordees, || crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
