@@ -1016,6 +1016,7 @@ mod tests {
                 from: "A".to_string(),
                 to: "B".to_string(), // B doesn't exist
                 properties: None,
+                key: Vec::new(),
             },
         );
 
@@ -1071,6 +1072,7 @@ mod tests {
                 from: "Document".to_string(),
                 to: "Document".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
 
@@ -1158,6 +1160,7 @@ mod tests {
                 from: "Document".to_string(),
                 to: "Document".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
 
@@ -1220,6 +1223,7 @@ mod tests {
                 from: "Directory".to_string(),
                 to: "File".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
 

@@ -838,6 +838,7 @@ fn make_multi_entity_kb_config() -> CatalogConfig {
         from: "Document".into(),
         to: "Author".into(),
         properties: None,
+        key: Vec::new(),
     });
 
     let mut kbs = HashMap::new();

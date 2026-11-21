@@ -159,7 +159,7 @@ mod tests {
         let mut author = HashMap::new();
         author.insert("bio".to_string(), champ(None, Some(&["main"])));
         config.entities.insert("Author".into(), EntityDef { fields: author, hashsafe: None, derived_from: None });
-        config.relations.insert("WRITTEN_BY".into(), RelationDef { from: "Document".into(), to: "Author".into(), properties: None });
+        config.relations.insert("WRITTEN_BY".into(), RelationDef { from: "Document".into(), to: "Author".into(), properties: None, key: Vec::new() });
         config.knowledge_bases.insert("main".into(), KBConfig::default());
         config
     }

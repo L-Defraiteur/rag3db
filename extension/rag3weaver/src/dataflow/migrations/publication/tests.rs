@@ -242,6 +242,7 @@ pub(super) fn rich_input() -> DeclaredSchemaInput {
                 from: "DocumentContent".into(),
                 to: "Document".into(),
                 properties: None,
+                key: Vec::new(),
             },
             from_states: Some(vec!["open".into()]),
             to_states: None,

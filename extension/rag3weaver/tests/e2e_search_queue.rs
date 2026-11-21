@@ -90,6 +90,7 @@ fn make_config() -> CatalogConfig {
             from: "Directory".into(),
             to: "File".into(),
             properties: None,
+            key: Vec::new(),
         },
     );
 
