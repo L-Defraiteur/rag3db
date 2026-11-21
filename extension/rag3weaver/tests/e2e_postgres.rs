@@ -540,6 +540,69 @@ fn les_relations_tiennent() {
     assert!(paires.iter().all(|(p, _)| p == "Rust Book"), "{paires:?}");
 }
 
+/// The columns of the primary key of a table, sorted.
+fn primary_key_of(catalog: &Catalog, table: &str) -> Vec<String> {
+    let rows = catalog
+        .execute_raw(&format!(
+            "SELECT a.attname::text FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) \
+             WHERE i.indrelid = '{table}'::regclass AND i.indisprimary ORDER BY 1"
+        ))
+        .expect("the primary key")
+        .rows;
+    rows.iter().map(|r| r[0].as_str().unwrap_or("?").to_string()).collect()
+}
+
+/// **The keyed links on PostgreSQL** (21 November 2026, the keyed links): a relation that takes a key on an existing
+/// base moves its primary key from the pair to the pair and the key, and then holds several links per pair; a NULL
+/// key on an existing row refuses the move by name; a relation created with its key holds several links per pair
+/// from the start.
+#[test]
+#[ignore]
+fn keyed_links_hold_on_postgres_and_an_existing_relation_takes_its_key() {
+    let (_garde, mut catalog) = catalogue(8);
+    catalog.register_entity("Product", config_produit()).unwrap();
+    catalog.register_entity("Variant", config_variante()).unwrap();
+    let k = || -> HashMap<String, rag3weaver::config::FieldDef> {
+        HashMap::from([("k".to_string(), serde_json::from_value(serde_json::json!({"type": "int64"})).unwrap())])
+    };
+    let avec_k = |v: i64| BTreeMap::from([("k".to_string(), CypherValue::Int(v))]);
+    let livre = catalog.create("Product", produit("Rust Book", "Ownership and lifetimes.", 49.99)).unwrap();
+    let poche = catalog.create("Variant", variante("Rust Book — poche")).unwrap();
+
+    // An existing relation, without key, one link.
+    catalog.register_relation_with("CITES", "Product", "Variant", k()).unwrap();
+    catalog.link("CITES", livre.clone(), poche.clone(), avec_k(1)).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(primary_key_of(&catalog, "cites"), ["from_uuid", "to_uuid"]);
+    // It takes its key: the primary key moves, and a second link of the pair is added.
+    catalog.register_keyed_relation("CITES", "Product", "Variant", k(), vec!["k".into()]).expect("the existing relation takes its key");
+    assert_eq!(primary_key_of(&catalog, "cites"), ["from_uuid", "k", "to_uuid"]);
+    catalog.link("CITES", livre.clone(), poche.clone(), avec_k(2)).unwrap();
+    catalog.link("CITES", livre.clone(), poche.clone(), avec_k(1)).unwrap();
+    let vidage = catalog.drain();
+    assert_eq!(vidage.failed, 0, "{vidage:?}");
+    let n = catalog.execute_raw("SELECT count(*) FROM cites").unwrap().rows[0][0].as_i64().unwrap();
+    assert_eq!(n, 2, "two links of the same pair, keys 1 and 2");
+
+    // A NULL key on an existing row: the move is refused by name.
+    catalog.register_relation_with("NOTES", "Product", "Variant", k()).unwrap();
+    catalog.link("NOTES", livre.clone(), poche.clone(), BTreeMap::new()).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let refus = catalog.register_keyed_relation("NOTES", "Product", "Variant", k(), vec!["k".into()]).expect_err("a NULL key is refused");
+    let dit = refus.to_string();
+    assert!(dit.contains("NOTES") && dit.contains("nulle"), "{dit}");
+
+    // A relation created with its key.
+    catalog.register_keyed_relation("SITES", "Product", "Variant", k(), vec!["k".into()]).unwrap();
+    assert_eq!(primary_key_of(&catalog, "sites"), ["from_uuid", "k", "to_uuid"]);
+    for v in [1, 2, 3] {
+        catalog.link("SITES", livre.clone(), poche.clone(), avec_k(v)).unwrap();
+    }
+    assert_eq!(catalog.drain().failed, 0);
+    let n = catalog.execute_raw("SELECT count(*) FROM sites").unwrap().rows[0][0].as_i64().unwrap();
+    assert_eq!(n, 3);
+}
+
 // ═══ 7. Les cellules se séparent ═════════════════════════════════════════════
 
 #[test]
