@@ -2451,6 +2451,7 @@ fn read_threads() -> u64 {
                 properties: Some(HashMap::from([(crate::config::DerivedConfig::RENDER_HASH.to_string(), crate::config::FieldDef {
                     field_type: FieldType::Text, title_for: None, content_for: None, boost: None, default_value: None,
                 })])),
+                key: Vec::new(),
             };
             let name = crate::schema::derived_rel_name(entity_name);
             self.persist_relation(&name, &relation)?;
@@ -3240,6 +3241,7 @@ fn read_threads() -> u64 {
             from: from.to_string(),
             to: to.to_string(),
             properties: (!properties.is_empty()).then_some(properties),
+            key: Vec::new(),
         };
         self.persist_relation(rel_name, &rel_def)?;
         let (de, vers) = (rel_def.from.clone(), rel_def.to.clone());
@@ -12684,6 +12686,7 @@ mod tests {
                 from: "Document".to_string(),
                 to: "Document".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
 
@@ -14119,6 +14122,7 @@ mod tests {
                 from: "Note".to_string(),
                 to: "Document".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
         Catalog::new(

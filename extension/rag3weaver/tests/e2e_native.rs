@@ -72,6 +72,7 @@ fn make_basic_config() -> CatalogConfig {
             from: "Document".to_string(),
             to: "Author".to_string(),
             properties: None,
+            key: Vec::new(),
         },
     );
 

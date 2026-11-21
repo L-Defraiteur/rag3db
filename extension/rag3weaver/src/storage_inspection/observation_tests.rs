@@ -85,7 +85,7 @@ pub(super) fn schema_input() -> DeclaredSchemaInput {
     DeclaredSchemaInput {
         entities: Some(BTreeMap::from([("Document".into(),config()),("Collection".into(),config())])),
         relations: Some(BTreeMap::from([("CONTAINS".into(),BackendRelation {
-            def: RelationDef { from:"Collection".into(),to:"Document".into(),properties:None },
+            def: RelationDef { from:"Collection".into(),to:"Document".into(),properties:None, key: Vec::new() },
             from_states:None,to_states:None,description:Some("supplied policy".into()),
         })])),
         provider:ProviderFacts::Absent,index_signals:BTreeMap::new(),

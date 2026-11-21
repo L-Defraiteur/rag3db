@@ -327,6 +327,7 @@ mod tests {
                     from: "Document".to_string(),
                     to: "Paragraph".to_string(),
                     properties: None,
+                    key: Vec::new(),
                 },
             )]
             .into(),
@@ -450,6 +451,7 @@ mod tests {
                     from: "Document".to_string(),
                     to: "Section".to_string(),
                     properties: None,
+                    key: Vec::new(),
                 },
             )]
             .into(),

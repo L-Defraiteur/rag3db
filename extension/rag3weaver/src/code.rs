@@ -743,6 +743,7 @@ pub fn schema_configs(scope_chunking: ChunkingConfig) -> (BTreeMap<String, Entit
             from: from.to_string(),
             to: to.to_string(),
             properties: Some(code_relation_properties(name)),
+            key: Vec::new(),
         })
     }).collect();
     (entities, relations)
