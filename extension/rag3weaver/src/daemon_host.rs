@@ -1186,6 +1186,44 @@ impl DaemonHost {
         ouvertes.iter().find(|(_, c)| c == couche).map(|(n, _)| n.clone()).unwrap_or_else(|| couche.to_string())
     }
 
+    /// **The worktree a session writes in** (tty's scenario 1, 21 November 2026, its point 1): its active view, when it
+    /// is a view the host opened for this Claude Code session (`open_view`) — never a worktree named by hand, never the
+    /// main tree. Guards: the worktree still exists and is still on the branch `open_view` gave it; otherwise the call
+    /// is refused, saying why. `None` without such a view: the call writes as before (the main tree, refused to the agent
+    /// under `task_writes`).
+    fn vue_en_ecriture_de(&self, s: &Session) -> Result<Option<std::path::PathBuf>, String> {
+        let Some(couche) = s.default_view.as_ref().map(Self::nom_de_vue) else { return Ok(None) };
+        let Some(racine) = couche.strip_prefix("worktree:").map(std::path::PathBuf::from) else { return Ok(None) };
+        let Some(fichier) = s.claude_session.as_deref().and_then(|c| self.fichier_de_vue(c)) else { return Ok(None) };
+        let etat: Value = std::fs::read_to_string(&fichier).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        let ouverte = etat["ouvertes"].as_object().into_iter().flatten().map(|(_, o)| o).find(|o| {
+            o["layer"].as_str() == Some(couche.as_str())
+                || o["path"].as_str().and_then(|p| std::path::Path::new(p).canonicalize().ok()).is_some_and(|p| p == racine)
+        });
+        let Some(ouverte) = ouverte else { return Ok(None) };
+        if !racine.is_dir() {
+            return Err(format!("la vue « {} » n'a plus son worktree ({}) : rouvrez-la (open_view)", ouverte["name"].as_str().unwrap_or_default(), racine.display()));
+        }
+        let attendue = ouverte["branch"].as_str().unwrap_or_default();
+        let branche = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&racine)
+            .args(["symbolic-ref", "--short", "-q", "HEAD"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        if attendue.is_empty() || branche != attendue {
+            return Err(format!(
+                "la vue « {} » n'est plus sur sa branche « {attendue} » (son worktree est sur « {} ») : l'agent n'y écrit pas",
+                ouverte["name"].as_str().unwrap_or_default(),
+                if branche.is_empty() { "une tête détachée" } else { branche.as_str() }
+            ));
+        }
+        Ok(Some(racine))
+    }
+
     fn noms_des_vues(&self, manifest: &Path) -> Result<Vec<String>, String> {
         let hosted = self.hosted(manifest)?;
         self.with_backend(&hosted, |b| b.view_names())?
@@ -1868,14 +1906,16 @@ impl DaemonHost {
                 return Ok(rangee);
             }
             let vue = s.default_view.clone();
-            crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
+            // The agent writes in a view the host opened for it, on its branch (point 1 of tty's scenario 1).
+            let en_ecriture = self.vue_en_ecriture_de(&s)?;
+            crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
                 (Some(cell), false) => b.call_in(cell, name, arguments),
                 (Some(cell), true) => b.call_in_humain(cell, name, arguments),
                 (None, false) => b.call(name, arguments),
                 (None, true) => b.call_humain(name, arguments),
-            }))
+            })))
             .and_then(|r| r)
             .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
