@@ -1665,6 +1665,34 @@ impl DaemonHost {
     /// n'y a plus rien à faire (après un dernier pas qui rend compte), sur un
     /// arrêt, ou quand l'agent tourne en rond. Sans rien à faire mais des
     /// éléments qui attendent le superviseur, elle attend la boîte.
+    /// **Plays the verification gate** of a task: each command through the task backend's
+    /// `run_command` (the same gate and sandbox as the teammate's). The first red one, with what it
+    /// said; a command that is refused or waits for a grant counts as red.
+    fn verify_the_tree(&self, backend_id: &str, commandes: &[String]) -> Result<(), (String, String)> {
+        use crate::agent::ToolBox;
+        for (i, commande) in commandes.iter().enumerate() {
+            let call = ToolCall {
+                id: format!("verify-{i}"),
+                name: "run_command".into(),
+                arguments: json!({ "command": commande }).to_string(),
+                provider_extra: None,
+                at_ms: None,
+            };
+            let rendu = self
+                .with_backend_id(backend_id, |b| {
+                    let outils = crate::backend_tools::BackendTools { backend: b };
+                    let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
+                    super::chat::OutilsDuChat::de(b, &declares, true).call(&call).content
+                })
+                .map_err(|e| (commande.clone(), e))?;
+            let vert = rendu.contains("\ncode 0 ") && !rendu.contains("_Arrêt : cette commande a échoué._");
+            if !vert {
+                return Err((commande.clone(), rendu));
+            }
+        }
+        Ok(())
+    }
+
     pub fn run_teammate(&self, parent: &str, task: &str) -> Result<Outcome, String> {
         let files = self.teammate_files(parent, task)?;
         // **The pair mode**: the entry in the sessions registry lives as long as the teammate.
@@ -1724,6 +1752,8 @@ impl DaemonHost {
         let mut trace = false;
         let mut relancee: Option<usize> = None;
         let mut relance: Option<String> = None;
+        // The red verifications of this task (`teammate.verify`).
+        let mut rouges = 0usize;
         // What the last step did, carried to the next frontier (S2).
         let mut previous_step = String::new();
         // The last error of the scripted `Previous step`, said once until it changes.
@@ -2106,6 +2136,32 @@ impl DaemonHost {
                             publish(bus.as_ref(), task, &line);
                         }
                         ContentVerdict::NotAsked | ContentVerdict::Delivered | ContentVerdict::Action => {}
+                    }
+                    // **The verification gate** (the night replays of 21 Nov 2026): never « done »
+                    // on a tree the declared commands find red.
+                    if !policy.verify.is_empty() {
+                        match self.verify_the_tree(&t.id, &policy.verify) {
+                            Ok(()) => {
+                                let line = files.append("host", "report", None, &format!("verification green: {}", policy.verify.join(" ; ")))?;
+                                publish(bus.as_ref(), task, &line);
+                            }
+                            Err((commande, sortie)) => {
+                                rouges += 1;
+                                let tail: String = { let c: Vec<char> = sortie.chars().collect(); c[c.len().saturating_sub(3000)..].iter().collect() };
+                                if rouges <= policy.verify_relaunches {
+                                    let line = files.append("host", "report", None, &format!("verification red ({rouges}/{}): `{commande}` failed; the next step starts from its output", policy.verify_relaunches))?;
+                                    publish(bus.as_ref(), task, &line);
+                                    relance = Some(format!("Your step_done met the verification gate, and it is red: `{commande}` failed. Its output, the end of it:\n{tail}\nFix the tree so that it passes, play it yourself, then call step_done. Never say done on a red tree."));
+                                    encore = true;
+                                    continue;
+                                }
+                                let why = format!("failure: the verification stays red after {} relaunch(es): `{commande}`", policy.verify_relaunches);
+                                let line = files.append("host", "report", None, &format!("{why}\n{tail}"))?;
+                                publish(bus.as_ref(), task, &line);
+                                outcome.ended = why;
+                                return Ok(outcome);
+                            }
+                        }
                     }
                     outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                     return Ok(outcome);
