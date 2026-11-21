@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request "<texte>"]
-//!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--address hôte:port]
+//!                [--daemon-json <chemin> | --daemon-cmd "<commande>" [--user-token-cmd "<commande>"]] [--address hôte:port]
 //!                [--since <id>] [--log <fichier>]
 //! ```
 //!
@@ -19,6 +19,11 @@
 //!
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
 //! et `--address 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
+//!
+//! **Le titre d'humain** (mode auto, 21 novembre 2026) : ce que l'on tape au clavier (un message, une réponse, un
+//! arrêt, une commande `!`) part avec `X-Rag3weaver-User`, le jeton d'utilisateur lu dans `user/user_token` à côté de
+//! `daemon.json`, ou par `--user-token-cmd "ssh luciepc cat .local/share/rag3weaver/user/user_token"`. Une `--request`
+//! donnée en argument ne le porte jamais.
 
 use rag3weaver_tty::journal::{self, Journal};
 use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, theme::Theme, tui};
@@ -36,6 +41,8 @@ struct Options {
     demande: Option<String>,
     daemon_json: Option<String>,
     daemon_cmd: Option<String>,
+    /// The command that prints the user's token, for a host on another machine (`--user-token-cmd`).
+    user_token_cmd: Option<String>,
     adresse: Option<String>,
     depuis: Option<u64>,
     plain: bool,
@@ -51,7 +58,7 @@ fn options() -> Result<Options, String> {
 
 fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
+    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -65,6 +72,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
             "--steps" | "--etapes" => o.steps = true,
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
+            "--user-token-cmd" => o.user_token_cmd = Some(valeur()?),
             "--address" | "--adresse" => o.adresse = Some(valeur()?),
             "--since" | "--depuis" => o.depuis = Some(valeur()?.parse().map_err(|e| format!("--since : {e}"))?),
             "-h" | "--help" => return Err(String::new()),
@@ -77,7 +85,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
 
 fn main() {
     let o = match options() {
@@ -107,6 +115,14 @@ fn lancer(o: Options) -> Result<(), String> {
         Some(a) => ep.a_l_adresse(a),
         None => ep,
     };
+    let ep = match &o.user_token_cmd {
+        Some(c) => ep.with_user_token_from_command(c)?,
+        None => ep,
+    };
+    // Without the user's token, what is typed reaches the host without the human title: said once, nothing blocks.
+    if ep.user_token.is_none() {
+        eprintln!("[tty] pas de jeton d'utilisateur (user/user_token à côté de daemon.json, ou --user-token-cmd) : ce que vous tapez part sans le titre d'humain, et ne vaut pas accord en mode auto");
+    }
     let agent = client::agent();
     // Le dépôt se désigne par son nom ou son chemin ; son id ne sert qu'au JSON.
     let depot = client::resoudre(&agent, &ep, &o.depot)?;
