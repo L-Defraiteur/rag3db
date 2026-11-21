@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'IDE ne dit « dépôt git » que pour un dépôt git.** Un dossier ouvert qui n'en est pas un
+  est dit « dossier ouvert ».
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
