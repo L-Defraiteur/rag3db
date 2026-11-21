@@ -144,11 +144,13 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # La 4.3.13 (20 novembre 2026, tag v4.3.13, main a633e13) : un index qu'une lucivy plus récente a
 # marqué (`min_lucivy`, posé par la 4.4 sur un index à générations étiquetées) est refusé à l'ouverture,
 # en nommant les deux versions, avant tout écrivain et tout ramasse-miettes. Format inchangé.
-# La 4.4.0 (21 novembre 2026, tag v4.4.0, main 06ad8ae) : les générations étiquetées. Sur un index étiqueté, `commit()` est refusé ; les
+# La 4.4.0 (21 novembre 2026, tag v4.4.0, main 06ad8ae) : les générations étiquetées.
+# La 4.4.1 (21 novembre 2026, tag v4.4.1, main 31d6b3d) : une fusion finie après un commit étiqueté ne lui
+# efface plus sa génération, close la garde, commit_fast et commit_direct sont refusés sur un index étiqueté. Sur un index étiqueté, `commit()` est refusé ; les
 # commits de rag3weaver qui ne créent pas de version passent par `commit_keeping_generation()`.
-lucivy-core = "4.4.0"
+lucivy-core = "4.4.1"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.4.0", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.4.1", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
