@@ -237,6 +237,21 @@ class Montage(unittest.TestCase):
         self.assertEqual(verdict['verdict'], 'ROUGE')
         self.assertIn('descendants laissés après la commande', verdict['erreur'])
 
+    def test_a_descendant_that_closes_a_second_after_the_grace_is_not_a_leak(self):
+        # Three false reds of the night of 20 to 21 Nov. 2026 at luciepc (e2e_lectures 28/28, e2e_archiviste 48/48, on
+        # bare master too): « descendants laissés » with `restes: []`. A descendant still closing at the end of the
+        # grace, gone a second later without any signal, is not a leak: the verdict stays green and names it.
+        rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable, "-c", "import time; time.sleep(1.6)"])\nsys.exit(0)\n')
+        self.assertEqual(verdict['verdict'], 'VERT', verdict)
+        self.assertTrue(any('time.sleep(1.6)' in d['commande'] for d in verdict.get('fermes_tard', [])), verdict)
+
+    def test_a_left_descendant_is_named_in_the_verdict(self):
+        # A red for descendants left names them: their pid and their command, even when the cleaning then stops them
+        # (so `restes`, what survived the cleaning, is empty).
+        rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])\nsys.exit(0)\n')
+        self.assertEqual(verdict['verdict'], 'ROUGE')
+        self.assertTrue(any('time.sleep(30)' in d['commande'] for d in verdict.get('laisses', [])), verdict)
+
     def portee_jouet(self, oom_kill):
         # Une portée jouet sous un faux /sys/fs/cgroup : le plafond (100 Mio) sur le parent de la
         # portée du témoin, comme le MemoryMax de poste sur sa portée systemd-run.
