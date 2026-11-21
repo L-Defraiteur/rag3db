@@ -72,11 +72,32 @@ fn the_closing_line_says_who_decided() {
     };
     let by_user = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "user" }));
     assert!(by_user.ends_with("accordé par toi : browser_click tab_id=7 ref=e4"), "{by_user}");
-    let by_recall = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "recall", "authorization": { "quote": "clique où tu veux sur la doc", "at": "21 nov. 10 h 02" } }));
-    assert!(by_recall.contains("validé par ton autorisation du 21 nov. 10 h 02 : « clique où tu veux sur la doc »"), "{by_recall}");
+    let by_recall = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "recall", "authorization": { "quote": "clique où tu veux sur la doc", "at": 1_795_273_500_000u64 } }));
+    assert!(by_recall.contains("validé par ton autorisation, le ") && by_recall.contains(" : « clique où tu veux sur la doc »"), "{by_recall}");
     let by_appeal = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "appeal" }));
     assert!(by_appeal.contains("accordé sur l'appel de l'agent"), "{by_appeal}");
     let by_verifier = close(json!({ "reply_to": "a1/doc:1", "approved": false, "from": "verifier", "model": "gemini-3.8-flash", "reasons": "la page n'est pas dans la demande", "alternative": { "text": "lis la page d'abord", "class": "read" } }));
     assert!(by_verifier.contains("refusé par le vérificateur (gemini-3.8-flash) : la page n'est pas dans la demande"), "{by_verifier}");
     assert!(by_verifier.contains("il propose : lis la page d'abord"), "{by_verifier}");
+}
+
+/// **The date of an authorization** (archi: ms since the epoch, said in local time): « le 21 nov. à 16 h 05 ».
+#[test]
+fn an_authorization_date_is_said_in_local_words() {
+    assert_eq!(crate::boite::said_date(21, 10, 16, 5), "le 21 nov. à 16 h 05");
+    assert_eq!(crate::boite::said_date(1, 0, 9, 0), "le 1 janv. à 9 h 00");
+}
+
+/// **An answer after the card closed is said without effect** (archi: the host keeps it and writes « card … already
+/// closed by … »): the recall closed the card, the user's late answer leaves a line that says so.
+#[test]
+fn a_late_answer_is_said_without_effect() {
+    let mut v = Vue::new(200, true);
+    opened(&mut v);
+    v.ligne_de_boite(&line(2, "recall", "answer", json!({ "reply_to": "a1/doc:1", "approved": true, "authorization": { "quote": "vas-y" } })));
+    written(&mut v);
+    v.ligne_de_boite(&line(3, "user", "answer", json!({ "reply_to": "a1/doc:1", "approved": false, "text": "non" })));
+    v.ligne_de_boite(&line(4, "host", "report", json!({ "reply_to": "a1/doc:1", "late_from": "user", "late_approved": false, "text": "card a1/doc:1 already closed by recall: the closing of user is kept without effect" })));
+    let w = written(&mut v);
+    assert!(w.iter().any(|l| l.contains("sans effet") && l.contains("déjà close par ton autorisation rappelée")), "{w:?}");
 }
