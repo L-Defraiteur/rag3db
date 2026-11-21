@@ -1,6 +1,6 @@
 {
   "sha256": {
-    "app.js": "7f0cf9f996372bb79181d8b2e962d0d3a87f5432c635405b6a29798e799052c3",
+    "app.js": "22e66db263f0ca12c879bdc781aa453d62b6a4614648124195d5a625de0b59ca",
     "app.css": "5d3e937ac250146e96c0f95a42c0cc96b1100885268cef9dc1adbd341e26cc48",
     "flux-worker.js": "fa929d6e626fb13b4d22f1815156a9222da1afdbeff243021d429482c7f42dbf"
   },
@@ -22,5 +22,5 @@
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"
   },
-  "node": "v22.22.3"
+  "node": "v22.23.3"
 }

@@ -811,7 +811,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     <div className="chat grid md:grid-cols-[300px_1fr] flex-1 min-h-0">
       <aside className="hidden md:flex flex-col gap-1 border-r bg-sidebar text-sidebar-foreground p-4 min-h-0 overflow-auto">
         <div className="brand font-semibold tracking-tight text-lg">
-          rag3weaver <span className="block text-[11px] tracking-widest text-muted-foreground uppercase">atelier local</span>
+          rag3weaver <span className="block text-[11px] tracking-widest text-muted-foreground uppercase">{displayName(backend)}</span>
         </div>
         <nav id="sessions" className="flex flex-col mt-4">
           <ChatSidebar
