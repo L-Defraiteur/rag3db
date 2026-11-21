@@ -1960,33 +1960,6 @@ fn read_threads() -> u64 {
             let handle = crate::fts_handle::open_blob_snapshot(blob_store.as_ref(), &index_name)
                 .map_err(|e| Some(format!("lecture du plein texte {table} : {e}")))?;
             let handle = Arc::new(handle);
-        if let Some((g, d)) = revenir_a {
-            match handle.revert_to(g) {
-                Ok(()) => {
-                    for storage in files.borrow().iter() {
-                        if let Err(e) = storage.rewind_to(g) {
-                            return Err(Some(format!("plein texte {table} : revenu à la génération {g}, marque du dossier impossible ({e})")));
-                        }
-                    }
-                    eprintln!("[rag3weaver] plein texte {table} : génération du dossier {d}, de la base {g} — dossier revenu à la génération {g}, sans rebâti");
-                }
-                Err(e) => {
-                    // Le retour a échoué, tout ou rien : le dossier est resté où il était. Il est marqué à rebâtir, et
-                    // la prochaine ouverture le jette comme avant.
-                    eprintln!("[rag3weaver] plein texte {table} : retour à la génération {g} impossible ({e}) — marqué à rebâtir");
-                    if let Some(entite) = self.entity_of_fts_table(table) {
-                        let _ = self.mark_fts_pending(&[entite.as_str()]);
-                    }
-                    return Err(Some(format!("plein texte {table} : retour à la génération {g} impossible ({e}) — à rouvrir")));
-                }
-            }
-        }
-        // Ce qui reste d'une génération que la base a validée depuis : relâché.
-        if !self.lecture_seule && base_generation > 0 && handle.is_tagged() {
-            if let Err(e) = handle.release_below(base_generation) {
-                eprintln!("[rag3weaver] plein texte {table} : relâcher sous la génération {base_generation} : {e}");
-            }
-        }
             self.fts_handles.insert(table.to_string(), handle.clone());
             self.publish_read_view();
             return Ok(handle);
@@ -2020,7 +1993,40 @@ fn read_threads() -> u64 {
         };
 
         let handle = Arc::new(handle);
-        self.fts_files.extend(files.into_inner());
+        if let Some((g, d)) = revenir_a {
+            match handle.revert_to(g) {
+                Ok(()) => {
+                    if let Some(storage) = files.borrow().last() {
+                        if let Err(e) = storage.rewind_to(g) {
+                            return Err(Some(format!("plein texte {table} : revenu à la génération {g}, marque du dossier impossible ({e})")));
+                        }
+                    }
+                    eprintln!("[rag3weaver] plein texte {table} : génération du dossier {d}, de la base {g} — dossier revenu à la génération {g}, sans rebâti");
+                }
+                Err(e) => {
+                    // Le retour a échoué, tout ou rien : le dossier est resté où il était. Il est marqué à rebâtir, et
+                    // la prochaine ouverture le jette comme avant.
+                    eprintln!("[rag3weaver] plein texte {table} : retour à la génération {g} impossible ({e}) — marqué à rebâtir");
+                    if let Some(entite) = self.entity_of_fts_table(table) {
+                        let _ = self.mark_fts_pending(&[entite.as_str()]);
+                    }
+                    return Err(Some(format!("plein texte {table} : retour à la génération {g} impossible ({e}) — à rouvrir")));
+                }
+            }
+        }
+        // Ce qui reste d'une génération que la base a validée depuis : relâché.
+        if !self.lecture_seule && base_generation > 0 && handle.is_tagged() {
+            if let Err(e) = handle.release_below(base_generation) {
+                eprintln!("[rag3weaver] plein texte {table} : relâcher sous la génération {base_generation} : {e}");
+            }
+        }
+        // Un seul stockage par dossier : le dernier créé, celui de l'ouverture qui a réussi (une ouverture ratée puis
+        // une création en font deux). Deux compteurs de génération pour un dossier étiquetteraient deux fois la même.
+        if let Some(storage) = files.into_inner().pop() {
+            let key = storage.key();
+            self.fts_files.retain(|s| s.key() != key);
+            self.fts_files.push(storage);
+        }
         self.fts_handles.insert(table.to_string(), handle.clone());
         self.publish_read_view();
         Ok(handle)
