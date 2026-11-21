@@ -71,6 +71,11 @@ pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Opti
     v
 }
 
+/// **The time left before `until`** (ms since the epoch), as the card says it: « 9 min », « 45 s », « maintenant ».
+pub fn countdown(_until_ms: u64, _now_ms: u64) -> String {
+    String::new()
+}
+
 /// L'en-tête d'une ligne de boîte, en français : `[équipier · réponse] `
 /// (lot tty-8). Un genre ou un auteur inconnu s'écrit tel quel.
 pub fn en_tete(l: &Value) -> String {
