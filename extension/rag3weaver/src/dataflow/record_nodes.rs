@@ -2342,6 +2342,9 @@ pub(crate) fn poser_le_creux(
     Ok(())
 }
 
+/// The fingerprints looked up per query when reusing vectors (21 November 2026).
+const REUSE_PACKET: usize = 20_000;
+
 /// **Poser des vecteurs sur des lignes qui existent** — le seul endroit qui
 /// le fait. `items` : des maps `uuid`, `hash`, `emb`.
 ///
@@ -2904,13 +2907,11 @@ impl Node for EmbedNode {
             for (entity_name, hashes) in &wanted {
                 let (col, marker) = storage_for(entity_name);
                 let Some(cypher) = dialect.embed_find_by_hash(entity_name, &col, &marker) else { continue };
-                let items = CypherValue::List(
-                    hashes
-                        .iter()
-                        .map(|h| CypherValue::Map(BTreeMap::from([("hash".to_string(), CypherValue::String(h.clone()))])))
-                        .collect(),
-                );
-                if let Ok(result) = conn.execute_with_params(&cypher, &[QueryParam { name: "items".into(), value: items }]) {
+                // In packets : about a second per 20 000 fingerprints on 161 873 chunks.
+                let hashes: Vec<&String> = hashes.iter().collect();
+                for packet in hashes.chunks(REUSE_PACKET) {
+                    let list = CypherValue::List(packet.iter().map(|h| CypherValue::String((*h).clone())).collect());
+                    let Ok(result) = conn.execute_with_params(&cypher, &[QueryParam { name: "hashes".into(), value: list }]) else { continue };
                     for row in &result.rows {
                         let (Some(hash), Some(vector)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(as_vector)) else { continue };
                         if vector.len() == embedding_dim {
