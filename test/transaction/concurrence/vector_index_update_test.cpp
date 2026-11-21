@@ -3430,7 +3430,7 @@ offset_t lowerEntryPointOf(rag3db::main::Connection& connection, const std::stri
 // des-voisins-du-graphe ; vu sur code-lourd : quatre quasi-copies coupées par la suppression d'un
 // bloc lointain qui tenait leurs seules arêtes entrantes). Le graphe est posé à la main, par le
 // catalogue interne : un amas de 40 lignes autour de l'origine, D (id 40) au loin, X (41) et Y (42)
-// plus loin encore. Les seules arêtes vers X et Y : D → X, X → Y, Y → X ; D est joint par l'amas.
+// plus loin encore. Les seules arêtes vers X et Y : D → X, X → Y, Y → X ; D est joint par 0 → D.
 // Supprimer D : X est un ancien voisin de D, et Y pointe vers lui sans avoir rien perdu. Y ne prouve
 // pas que X est joignable — il n'est joint que par X. Les deux doivent rester joignables.
 TEST_F(VectorIndexUpdate, AnIslandOfFormerNeighboursStaysReachableAfterADelete) {
@@ -3473,9 +3473,10 @@ TEST_F(VectorIndexUpdate, AnIslandOfFormerNeighboursStaysReachableAfterADelete) 
     mustRun(stringFormat("MATCH (a:Island)-[r:{}]->(b:Island) WHERE a.id >= 40 OR b.id >= 40 "
                          "DELETE r;",
         upper));
-    mustRun(stringFormat("MATCH (a:Island {id: 0}), (d:Island {id: 40}) CREATE (a)-[:{}]->(d), "
-                         "(d)-[:{}]->(a);",
-        lower, lower));
+    // 0 → D only: a node that leads to D is not one D leads to, so the delete does not rewrite its
+    // edges (it would get D's neighbours in place of D, X among them).
+    mustRun(stringFormat("MATCH (a:Island {id: 0}), (d:Island {id: 40}) CREATE (a)-[:{}]->(d);",
+        lower));
     mustRun(stringFormat("MATCH (d:Island {id: 40}), (x:Island {id: 41}) CREATE (d)-[:{}]->(x);",
         lower));
     mustRun(stringFormat("MATCH (x:Island {id: 41}), (y:Island {id: 42}) CREATE (x)-[:{}]->(y), "
