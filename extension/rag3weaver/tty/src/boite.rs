@@ -180,8 +180,8 @@ pub fn countdown(until_ms: u64, now_ms: u64) -> String {
 
 /// A date in local words: « le 21 nov. à 16 h 05 » (`month0` from 0).
 pub fn said_date(day: u32, month0: u32, hour: u32, minute: u32) -> String {
-    const MOIS: [&str; 12] = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
-    format!("le {day} {} à {hour} h {minute:02}", MOIS[(month0 % 12) as usize])
+    const MONTHS: [&str; 12] = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+    format!("le {day} {} à {hour} h {minute:02}", MONTHS[(month0 % 12) as usize])
 }
 
 /// **An instant in ms since the epoch, in local words** (« le 21 nov. à 16 h 05 »): local time by `localtime_r`;
