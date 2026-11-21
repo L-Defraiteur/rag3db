@@ -852,6 +852,10 @@ fn code_tree(args: &[String]) -> Result<(), String> {
                 add_with_host(&roots, Path::new(&cible), &from, nom.as_deref(), &adresse(), keep_copies)?
             };
             println!("{} : manifeste {}", a.name, a.manifest.display());
+            // One name for a repository, everywhere (21 November 2026): both forms are accepted.
+            if let Some(court) = Path::new(&cible).canonicalize().ok().as_deref().and_then(std::path::Path::file_name).map(|n| n.to_string_lossy().to_string()) {
+                println!("les outils, le terminal et l'IDE l'acceptent sous « {court} » ou « {} »", a.name);
+            }
             // Les copies de `--from` qui différaient du livré : le livré est servi, la copie gardée à côté.
             if !a.copies_replaced.is_empty() {
                 println!(
