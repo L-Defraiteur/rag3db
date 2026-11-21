@@ -27,6 +27,10 @@ class Refus(RuntimeError):
 # How long the descendants of a finished command may take to end before they count as left behind: a bus session
 # closes after its command (20 Nov. 2026). A real leak lives far beyond.
 GRACE_DE_FERMETURE = 1.0
+# **A second reading** (21 Nov. 2026, three false reds of the night at luciepc): a descendant still alive at the end of
+# the grace is read again this long after, without any signal. Gone, it closed late (named in `fermes_tard`); still
+# there, it is left behind (named in `laisses`).
+SECOND_RELEVE = 1.0
 
 
 def processus():
@@ -240,6 +244,30 @@ class Descendants:
             time.sleep(.025)
         return self.vivants()
 
+    def nommer(self, pids):
+        """The pid and the command of each descendant, for the verdict (`laisses`, `fermes_tard`)."""
+        noms = []
+        for pid in pids:
+            try:
+                commande = (Path('/proc') / str(pid) / 'cmdline').read_bytes().replace(b'\0', b' ').decode(errors='replace').strip()
+            except OSError:
+                commande = ''
+            noms.append(dict(pid=pid, commande=commande or '?'))
+        return noms
+
+    def apres_la_grace(self, grace):
+        """`finir`, then a second reading: (left behind, closed late), each named."""
+        restants = self.finir(grace)
+        if not restants:
+            return [], []
+        noms = self.nommer(restants)
+        fin = time.monotonic() + SECOND_RELEVE
+        while self.vivants() and time.monotonic() < fin:
+            self.relever(processus())
+            time.sleep(.025)
+        encore = set(self.vivants())
+        return [n for n in noms if n['pid'] in encore], [n for n in noms if n['pid'] not in encore]
+
     def vivants(self):
         t = processus()
         return [pid for pid, debut in self.possedes.items() if pid in t and t[pid]['debut'] == debut]
@@ -323,6 +351,7 @@ def superviser(command, delai, preuves):
     code = 1
     ancien = {}
     releve = {}
+    laisses, fermes_tard = [], []
     def interrompre(sig, frame):
         try:
             releve['enveloppe'] = enveloppe(cg)
@@ -343,7 +372,8 @@ def superviser(command, delai, preuves):
             groupe.relever(processus())
             if enfant.poll() is not None:
                 code = enfant.returncode
-                if groupe.finir(GRACE_DE_FERMETURE):
+                laisses, fermes_tard = groupe.apres_la_grace(GRACE_DE_FERMETURE)
+                if laisses:
                     raise Refus('descendants laissés après la commande')
                 break
             # Réserver le nettoyage dans le délai global, pas après son échéance.
@@ -359,8 +389,11 @@ def superviser(command, delai, preuves):
                     groupe.relever(processus())
                 except (Refus, OSError) as e:
                     erreur = (erreur + '; ' if erreur else '') + str(e)
-                if code == 0 and not erreur and groupe.finir(GRACE_DE_FERMETURE):
-                    erreur = 'descendants laissés découverts au nettoyage'
+                if code == 0 and not erreur:
+                    encore, tard = groupe.apres_la_grace(GRACE_DE_FERMETURE)
+                    laisses, fermes_tard = laisses + encore, fermes_tard + tard
+                    if encore:
+                        erreur = 'descendants laissés découverts au nettoyage'
             restes = groupe.arreter() if groupe else []
         except (OSError, Refus) as e:
             erreur = (erreur + '; ' if erreur else '') + 'arrêt incomplet : ' + str(e)
@@ -387,6 +420,10 @@ def superviser(command, delai, preuves):
                 erreur = (erreur + '; ' if erreur else '') + 'nettoyage refusé : ' + str(e)
         verdict = dict(verdict='VERT' if code == 0 and not erreur and not restes else 'ROUGE',
                        code=code, erreur=erreur, restes=restes, prive=str(prive), nettoye=not prive.exists())
+        if laisses:
+            verdict['laisses'] = laisses
+        if fermes_tard:
+            verdict['fermes_tard'] = fermes_tard
         if 'enveloppe' in releve:
             verdict['enveloppe'] = releve['enveloppe']
         (evidence / 'verdict.json').write_text(json.dumps(verdict, indent=2))

@@ -373,6 +373,8 @@ class Montage(unittest.TestCase):
                 return [] if self.appels == 1 else [99999999]
             def finir(self, grace):
                 return self.vivants()
+            def apres_la_grace(self, grace):
+                return [dict(pid=p, commande='?') for p in self.vivants()], []
             def arreter(self):
                 return []  # Résidu simulé nettoyé, aucun vrai signal.
         with patch.object(v, 'Descendants', InventaireTardif):
