@@ -11506,6 +11506,7 @@ mod tests {
     mod exact_name_by_name;
 
     /// The witness of the lot `token-count-only-for-chunking`, in a file of its own.
+    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
     mod token_count_only_for_chunking;
 }
 
