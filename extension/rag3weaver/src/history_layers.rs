@@ -878,7 +878,9 @@ mod tests {
                 for p in &fichiers {
                     lot_de_fichiers.push((p.clone(), source.read(p).unwrap()));
                 }
-                crate::code_sync::reingest_files(&mut cat, &source, &lot_de_fichiers, crate::disponibilite::Disponibilites::TOUT).map(|_| ())
+                crate::code_sync::reingest_files(&mut cat, &source, &lot_de_fichiers, crate::disponibilite::Disponibilites::TOUT).map(|rapport| {
+                    println!("SONDE_RAPPORT {rapport:?}");
+                })
             }
             autre => panic!("mode inconnu : {autre}"),
         });
@@ -900,12 +902,15 @@ mod tests {
         let mentions = compte("MENTIONS");
         // L'écart de MENTIONS entre deux passes : chaque arête, triée, dans RAG3WEAVER_SONDE_DUMP.
         if let Ok(dump) = std::env::var("RAG3WEAVER_SONDE_DUMP") {
-            let r = cat
-                .execute_raw("MATCH (s:Scope)-[r:MENTIONS]->(y:Symbol) RETURN s.file_path, s.name, s._uuid, y.name, r.usage, r.line")
-                .expect("les MENTIONS");
-            let mut lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| format!("{v:?}")).collect::<Vec<_>>().join("\t")).collect();
-            lignes.sort();
-            std::fs::write(&dump, lignes.join("\n") + "\n").expect("le fichier des MENTIONS");
+            // Deux relevés : toutes les lignes de Scope (l'histoire comprise), puis les seules visibles au rang publié.
+            for (suffixe, filtre) in [("tout", String::new()), ("visible", cat.condition_visible("s").map(|c| format!(" WHERE {c}")).unwrap_or_default())] {
+                let r = cat
+                    .execute_raw(&format!("MATCH (s:Scope)-[r:MENTIONS]->(y:Symbol){filtre} RETURN s.file_path, s.name, s._uuid, s._depuis, s._jusqu_a, y.name, r.usage, r.line"))
+                    .expect("les MENTIONS");
+                let mut lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| format!("{v:?}")).collect::<Vec<_>>().join("\t")).collect();
+                lignes.sort();
+                std::fs::write(format!("{dump}.{suffixe}"), lignes.join("\n") + "\n").expect("le fichier des MENTIONS");
+            }
         }
         let consumes = compte("CONSUMES");
         println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "occurrences_en_file": crate::code::PROTO_OCCURRENCES.load(std::sync::atomic::Ordering::Relaxed), "OCCURS": format!("{occurs:?}"), "MENTIONS": format!("{mentions:?}"), "CONSUMES": format!("{consumes:?}"), "étapes": lourdes}));
