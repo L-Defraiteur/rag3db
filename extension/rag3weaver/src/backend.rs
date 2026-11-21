@@ -5695,10 +5695,22 @@ impl Backend {
         // refusent d'eux-mêmes.
         #[cfg(feature = "code")]
         {
-            if let Some(source) = &self.file_source {
+            // **A view of a worktree reads that worktree** (tty's scenario 1, 21 November 2026, its point 3): under a
+            // view `worktree:<path>`, the call's file source is that worktree's, built as the backend's (its
+            // read-only, its index gate), not the backend's own root.
+            let de_la_vue: Option<Arc<dyn crate::code_tools::FileSource>> = CALL_VIEW
+                .with(|v| v.borrow().clone())
+                .and_then(|r| r.layer.strip_prefix("worktree:").map(PathBuf::from))
+                .filter(|racine| racine.is_dir())
+                .and_then(|racine| {
+                    let mut w = prepared.manifest.workspace.clone()?;
+                    w.root = racine;
+                    crate::backend_code::build_source(&w, &prepared.directory, &prepared.manifest.name).ok()
+                });
+            if let Some(source) = de_la_vue.or_else(|| self.file_source.clone()) {
                 services.register::<Arc<dyn crate::code_tools::FileSource>>(
                     crate::code_tools::FILE_SOURCE_SERVICE,
-                    source.clone(),
+                    source,
                 );
                 if let Some(w) = &prepared.manifest.workspace {
                     services.register(
