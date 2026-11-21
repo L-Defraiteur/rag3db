@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Le terminal signe ce que l'on tape.** Un message, une réponse à une carte, un arrêt ou une
+  commande `!` tapés au clavier partent avec le jeton d'utilisateur (`X-Rag3weaver-User`), lu dans `user/user_token`
+  à côté de `daemon.json`, ou par `--user-token-cmd` pour un hôte distant. L'hôte peut ainsi reconnaître une ligne
+  d'humain, la seule qui vaille accord en mode auto. Une `--request` donnée en argument ne le porte jamais ; sans
+  jeton, le terminal le dit une fois et rien ne bloque.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
