@@ -376,6 +376,11 @@ pub struct DaemonHost {
     rangements_en_vol: Arc<Mutex<std::collections::HashSet<String>>>,
     /// One writer at a time for the mark files (`chats/<backend>.rangement.json`).
     rangement_verrou: Arc<Mutex<()>>,
+    /// The user's token, when the host knows it ([`DaemonHost::with_user_token`]): the title of a
+    /// human (`by.kind = "human"`).
+    user_token: Option<String>,
+    /// The IDE's one-use entry codes, with their deadline (ms).
+    entry_codes: Arc<Mutex<std::collections::HashMap<String, u128>>>,
     /// **A guest host** (the night of 20 Nov 2026): started by hand in the root of a live host, it
     /// takes over nothing of it — no task reread, no chat, no teammate resumed. Names the owner.
     invite: Option<String>,
@@ -437,6 +442,8 @@ pub mod observed;
 pub mod web_search;
 /// The agents of the machine, as a tree (`GET /ide/agents`).
 mod agents;
+/// The title of a human: the user token, the IDE's entry codes, `by` (21 Nov 2026).
+pub mod user_title;
 /// A run as a tree, read-only (`GET /ide/run`).
 mod run_tree;
 /// The approval card: one card, its states, one closing (the gate of the auto mode).
@@ -594,6 +601,8 @@ impl DaemonHost {
             rangeur: None,
             rangements_en_vol: Arc::new(Mutex::new(Default::default())),
             rangement_verrou: Arc::new(Mutex::new(())),
+            user_token: None,
+            entry_codes: Arc::new(Mutex::new(std::collections::HashMap::new())),
             invite: None,
             pair: std::sync::OnceLock::new(),
             browser_socket: None,
