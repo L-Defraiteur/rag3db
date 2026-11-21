@@ -360,6 +360,12 @@ impl DaemonHost {
         }
     }
 
+    /// **Open a protected folder for one command, on a human yes**: RED STUB.
+    #[allow(unused_variables)]
+    pub fn grant_once(&self, agent: &str, root: &Path, proof: Proof, by: &str, mode: &str) -> Result<(), String> {
+        Err("grant_once : pas encore".into()) // RED STUB.
+    }
+
     /// `GET /ide/root-grants`: every grant.
     pub(super) fn root_grants_route(&self) -> Value {
         json!({ "ok": true, "grants": self.root_grants(None) })
