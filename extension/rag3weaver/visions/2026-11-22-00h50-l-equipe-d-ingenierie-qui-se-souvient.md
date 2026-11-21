@@ -52,3 +52,18 @@ en une commande, un accueil qui explique, des défauts lisibles, des procédures
 
 Dans l'ordre : git et les dépôts locaux, quelques fournisseurs de modèles, MCP, GitHub et GitLab. Ensuite seulement
 Slack, Jira, Linear, Google Drive.
+
+## Le chemin vers les premiers clients (Lucie, 22 nov.)
+
+Rendre la forge installable par un inconnu demandera de l'investissement, ou bien **d'ouvrir d'abord une
+infrastructure minimale** :
+
+- **chez nous, l'inférence** : les hôtes qui servent les modèles (juges, embarquement, survivant) tournent sur nos
+  machines, mutualisés ;
+- **chez eux, le savoir** : le code, l'index, les mémoires et les accords restent sur leurs postes, sous leur
+  contrôle.
+
+Ce partage règle à la fois le coût d'entrée (pas de GPU à acheter pour essayer) et la confiance (leur code et leur
+mémoire ne quittent pas leur machine). Il suppose des hôtes d'inférence joignables à distance et sûrs (auth, quota par
+client, registre des dépenses par client), et que rien de leur savoir ne transite au-delà de ce qu'un appel de modèle
+demande.
