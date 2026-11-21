@@ -46,13 +46,15 @@ fn teammate(commands: Vec<&'static str>, seen: Arc<Mutex<Vec<String>>>) -> ChatM
             if let Some(r) = results.last() {
                 seen.lock().unwrap().push(r.clone());
             }
-            let decided = turns.iter().any(|t| t.content.contains("accordée") || t.content.contains("approved") || t.content.contains("refusée par") || t.content.contains("refused by"));
+            // The user's decision reaches the next step: an accept is retried once, a refuse ends.
+            let granted = turns.iter().any(|t| t.content.contains("accordée"));
+            let refused = turns.iter().any(|t| t.content.contains("refusée par l'utilisateur"));
             let n = results.len();
-            if decided && n == 0 {
+            if granted && n == 0 {
                 return answer(turns, opts, sink, "", calls(&[("run_command", json!({ "command": commands[commands.len() - 1] }))]));
             }
             match commands.get(n) {
-                Some(c) if !decided => answer(turns, opts, sink, "", calls(&[("run_command", json!({ "command": c }))])),
+                Some(c) if !granted && !refused => answer(turns, opts, sink, "", calls(&[("run_command", json!({ "command": c }))])),
                 _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))])),
             }
         })))
@@ -169,8 +171,9 @@ fn a_refused_card_does_not_run_its_command() {
     let card = v.wait("the card", &|b| b.iter().any(|l| l["kind"] == "approval"));
     let card = card.iter().find(|l| l["kind"] == "approval").unwrap().clone();
     v.host.post_to_teammate(&v.id, "doc", "lucie", "answer", None, "non", &json!({ "reply_to": card["id"], "approved": false, "by": { "kind": "human", "client": "tty" } })).expect("the refuse");
-    v.wait("the task ends", &ended);
+    let b = v.wait("the task ends", &ended);
     assert!(v.tree().join("vieux.txt").exists(), "the refused command did not run");
+    assert!(b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("refusée par l'utilisateur"))), "the refusal is said to the agent: {b:#?}");
 }
 
 /// 5. Showing a secret is refused, with its alternative, without a card and without the judge.
