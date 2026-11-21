@@ -1,0 +1,19 @@
+# Words that are French in an identifier here, although the English word list holds them too (or they are under four
+# letters). One word per line, accents allowed (compared without them). Read by scripts/french_identifiers.py.
+accord
+courant
+depot
+dossier
+etat
+fiche
+lire
+montre
+ouvert
+passe
+poser
+rejeu
+rejouer
+retirer
+rouge
+tache
+vue

@@ -9,6 +9,11 @@
   Memory. Un témoin rougit sur toute propriété sans description. Coût mesuré : la liste des 39 outils passe de
   82 164 à 96 755 octets, environ 3 650 jetons de plus par tour pour un client qui la reçoit entière.
 
+- 21 novembre 2026 — **Le pousseur avertit d'un identifiant neuf en français.** À son dépôt, un lot dont les lignes
+  ajoutées déclarent ou nomment un identifiant en français (fonction, type, route, clé JSON, nom de nœud, fichier,
+  sous-commande) reçoit un avertissement, sur la sortie, au journal et dans sa boîte. Le lot passe quand même. Les textes
+  ne comptent pas : commentaires, invites, messages, prose des gabarits. La détection est une fonction du crate
+  (`scripts/french_identifiers.py`), sur deux listes de mots MIT, française et anglaise.
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.

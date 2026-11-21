@@ -1,0 +1,2 @@
+# Words never reported, although the French list holds them and the English one does not: English words of code, or
+# abbreviations, missing from the English list. One word per line. Read by scripts/french_identifiers.py.
