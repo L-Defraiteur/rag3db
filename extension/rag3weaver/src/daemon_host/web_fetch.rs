@@ -175,7 +175,8 @@ pub fn fetch(policy: &FetchPolicy, args: &Value) -> Result<Value, String> {
     let mut current = url.to_string();
     let mut redirects = Vec::new();
     for _ in 0..=MAX_REDIRECTS {
-        check(policy, &current)?;
+        // The refusal names the address: two refusals of two addresses are two errors, not one repeated.
+        check(policy, &current).map_err(|e| format!("{e} — {current}"))?;
         let mut resp = agent.get(&current).call().map_err(|e| format!("fetch {current}: {e}"))?;
         let status = resp.status().as_u16();
         if (300..400).contains(&status) {
