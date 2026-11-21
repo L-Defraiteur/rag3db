@@ -3888,6 +3888,10 @@ fn parametres_de_requete(chemin: &str) -> std::collections::HashMap<String, Stri
 
 #[cfg(test)]
 mod tests {
+    // A lot's new witness goes in a file of its own, `daemon_host/tests/<lot>.rs` (c7, 21 November 2026).
+    #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
+    mod open_command;
+
     use super::*;
 
     /// **La branche d'un dépôt se lit sans processus** : dans un dépôt, la
