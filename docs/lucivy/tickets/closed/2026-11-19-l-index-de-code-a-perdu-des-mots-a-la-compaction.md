@@ -1,6 +1,6 @@
 # L'index de code a perdu des mots : la compaction du dictionnaire ne voit pas les documents en cours
 
-- **État** : en vérification (20 novembre 2026). La cause est trouvée et le correctif est dans lucivy 4.3.12 (PR #54), publiée et posée sur les hôtes. Le ticket passe dans `closed/` sur le verdict de la première nuit compaction rallumée (21 novembre au matin).
+- **État** : corrigé (21 novembre 2026). La cause est trouvée et le correctif est dans lucivy 4.3.12 (PR #54), publiée et posée sur les hôtes (puis la 4.3.13). La première nuit compaction rallumée est verte : la sonde des dictionnaires de 05:00, le 21 novembre, ne trouve **aucun mot perdu** sur 14 index des trois bases (code-rag3db-depot : 4 index ; code-lourd et code-principal : 10). Sur le dépôt, 425 ids cités tiennent par le sursis (File path 10, ScopeContent content 399, docstring 4, name 12) : c'est le filet de la 4.3.12, et la maintenance suivante doit les faire revenir. La sonde des nuits suivantes le dira ; s'ils ne reviennent pas, un ticket neuf.
 - **Gravité** : justesse. Un document dont un mot est perdu ne sort plus pour ce mot, en exact comme en flou. Rien
   ne le signale à la recherche.
 - **Atteignable en service** : oui. C'est mesuré sur une copie de l'index de code de la base du dépôt (tablette, le
