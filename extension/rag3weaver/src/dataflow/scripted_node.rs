@@ -451,6 +451,7 @@ pub fn read_declaration_avec(path: &std::path::Path, lecteur: &dyn crate::lecteu
             Some("ts") => "typescript".into(),
             Some("js") => "javascript".into(),
             Some("rhai") => "rhai".into(),
+            Some("wasm") => "wasm".into(),
             _ => {
                 return Err(format!(
                     "{shown}: no language declared, and none follows from '{}'",
@@ -463,9 +464,13 @@ pub fn read_declaration_avec(path: &std::path::Path, lecteur: &dyn crate::lecteu
         .parent()
         .unwrap_or(std::path::Path::new("."))
         .join(relative);
-    let source = lecteur
-        .lire_texte(&script_path)
-        .map_err(|e| format!("{shown}: script '{}': {e}", file.script))?;
+    // A WebAssembly module is binary: its bytes travel in hexadecimal (`crate::script::wasm`).
+    let source = if language == "wasm" {
+        lecteur.lire(&script_path).map(|b| crate::script::wasm::to_hex(&b))
+    } else {
+        lecteur.lire_texte(&script_path)
+    }
+    .map_err(|e| format!("{shown}: script '{}': {e}", file.script))?;
     let ports = |side: &str, map: Map<String, Value>| -> Result<Vec<DeclaredPort>, String> {
         map.into_iter()
             .map(|(name, value)| {

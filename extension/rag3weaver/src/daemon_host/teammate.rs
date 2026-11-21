@@ -2877,5 +2877,8 @@ mod carry_over_tests {
         let e = erreur.expect("the error is said");
         assert!(e.contains("previous_step.ts") && e.contains("cassé exprès") && e.contains("line"), "{e}");
     }
-}
 
+    /// The witness of the lot `wasm-node-trial`, in a file of its own.
+    #[cfg(feature = "wasm-nodes")]
+    mod wasm_previous_step;
+}

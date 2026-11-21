@@ -1,0 +1,86 @@
+{
+  "name": "PreviousStepWasm",
+  "description": "Le bloc « Previous step » de l'équipier, en WebAssembly (wasm/previous_step, bâti par scripts/build_wasm_nodes.sh) : la même sortie que le Rust et que previous_step.ts. L'essai du 21 novembre 2026 ; demande la feature wasm-nodes, et n'est donc pas livré dans un gabarit.",
+  "script": "previous_step.wasm",
+  "inputs": {
+    "work": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "number",
+          "read",
+          "wrote",
+          "last_text",
+          "budget"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "read": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wrote": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "command",
+                  "output"
+                ],
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  },
+                  "output": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "last_text": {
+            "type": "string"
+          },
+          "budget": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": true
+    }
+  },
+  "outputs": {
+    "block": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  },
+  "config": {
+    "style": {
+      "schema": {
+        "enum": [
+          "full",
+          "compact"
+        ]
+      },
+      "default": "full",
+      "description": "full : le bloc du Rust, à l'octet près ; compact : sans la fin de sortie de la dernière commande."
+    }
+  }
+}
