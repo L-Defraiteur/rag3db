@@ -113,3 +113,9 @@ Chaque lot commence par son témoin rouge, dans un fichier de tests à lui.
   sans git compte-t-il) ?
 - `create_github_repository` : privé par défaut ? Sur quel compte : celui de `gh auth status` au moment du geste, dit
   dans l'approbation, ou un compte déclaré par le manifeste ?
+
+Défauts **proposés par c7, en attente de Lucie** (ce ne sont pas ses décisions) : un dossier surtout Markdown compte
+comme projet de docs ; le dépôt GitHub se crée sur le compte connecté à `gh`, privé ; les deux sont montrés dans
+l'approbation, avant l'accord.
+
+Hors du périmètre : des sous-agents ouverts par un sous-agent (un troisième niveau) ne sont pas demandés.
