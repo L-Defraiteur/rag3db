@@ -2665,6 +2665,14 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
+    fn embed_find_by_hash(&self, table: &str, embedding_col: &str, marker: &str) -> Option<String> {
+        let (t, col, m) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
+        Some(format!(
+            "UNWIND $items AS item MATCH (n:{t}) WHERE n._text_hash = item.hash AND n.{m} = item.hash AND n.{col} IS NOT NULL \
+             RETURN item.hash, n.{col}"
+        ))
+    }
+
     fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String {
         let t = self.quote(table);
         format!(
