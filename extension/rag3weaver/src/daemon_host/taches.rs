@@ -1110,9 +1110,53 @@ impl DaemonHost {
 mod tests;
 
 
-/// **The name of a child**: `<session>-<name>`, unless it already carries its session.
+/// **The name of a child**: `<session>-<name>` as a task name (lowercase ASCII, digits, `-` and `_`,
+/// 64 at most), unless it already carries its session. A Claude session's name has spaces and
+/// accents (« rag3weaver archi », « Mémoire »): it is slugged here, and the task keeps the exact name
+/// in `parent_session` (recherche, 21 Nov 2026).
 pub fn nom_d_enfant(session: &str, nom: &str) -> String {
-    if nom.starts_with(&format!("{session}-")) { nom.to_string() } else { format!("{session}-{nom}") }
+    let (session, nom) = (slug(session), slug(nom));
+    if session.is_empty() || nom.starts_with(&format!("{session}-")) {
+        return nom.chars().take(64).collect();
+    }
+    // Within 64: the task's own name is kept whole, the session's slug is cut first.
+    let nom: String = nom.chars().take(62).collect();
+    let place = 64 - nom.len() - 1;
+    let session = session.chars().take(place).collect::<String>().trim_end_matches('-').to_string();
+    format!("{session}-{nom}")
+}
+
+/// A name as a task name: lowercase, a Latin accent dropped, any other character a single `-`, no
+/// `-` at either end.
+fn slug(texte: &str) -> String {
+    let mut out = String::new();
+    for c in texte.chars().flat_map(char::to_lowercase) {
+        let base = match c {
+            'à' | 'â' | 'ä' | 'á' | 'ã' | 'å' => "a",
+            'é' | 'è' | 'ê' | 'ë' => "e",
+            'î' | 'ï' | 'í' | 'ì' => "i",
+            'ô' | 'ö' | 'ó' | 'ò' | 'õ' => "o",
+            'ù' | 'û' | 'ü' | 'ú' => "u",
+            'ç' => "c",
+            'ñ' => "n",
+            'ÿ' => "y",
+            'œ' => "oe",
+            'æ' => "ae",
+            c if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' => {
+                out.push(c);
+                continue;
+            }
+            _ => "-",
+        };
+        if base == "-" {
+            if !out.is_empty() && !out.ends_with('-') {
+                out.push('-');
+            }
+        } else {
+            out.push_str(base);
+        }
+    }
+    out.trim_matches('-').to_string()
 }
 
 impl super::DaemonHost {
