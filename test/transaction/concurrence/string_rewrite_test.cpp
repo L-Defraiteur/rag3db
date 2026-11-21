@@ -211,6 +211,7 @@ TEST_F(StringRewrite, AnInconsistentDictionaryIsRefusedByNameAtReadBack) {
     ok("CHECKPOINT;");
     ok("BEGIN TRANSACTION READ ONLY;");
     uint64_t bytesBefore = 0;
+    rag3db::storage::ColumnChunkData* data = nullptr;
     {
         using namespace rag3db;
         auto* context = conn->getClientContext();
@@ -225,7 +226,7 @@ TEST_F(StringRewrite, AnInconsistentDictionaryIsRefusedByNameAtReadBack) {
         auto segments = group->getColumnChunk(columnID).getSharedSegments();
         ASSERT_FALSE(segments.empty()) << "[check: setup] a segment of _text";
         auto& strings = segments[0]->cast<storage::StringChunkData>();
-        auto* data = strings.getDictionaryChunk().getStringDataChunk();
+        data = strings.getDictionaryChunk().getStringDataChunk();
         ASSERT_EQ(data->getResidencyState(), storage::ResidencyState::ON_DISK)
             << "[check: setup] the dictionary's data child is on disk";
         auto metadata = data->getMetadata();
@@ -252,6 +253,10 @@ TEST_F(StringRewrite, AnInconsistentDictionaryIsRefusedByNameAtReadBack) {
         << "[check: dictionary-read-back-refused-by-name] a dictionary whose offsets run past its "
            "bytes ("
         << bytesBefore << " bytes cut to 16) must be refused by name at read back";
+    // The segment gets its own bytes back: the database closes (and checkpoints) on a sound one.
+    auto metadata = data->getMetadata();
+    metadata.numValues = bytesBefore;
+    data->setMetadata(metadata);
 }
 
 TEST_F(StringRewriteAcrossAddColumn, RewriteThenAddThenCheckpoint) {
