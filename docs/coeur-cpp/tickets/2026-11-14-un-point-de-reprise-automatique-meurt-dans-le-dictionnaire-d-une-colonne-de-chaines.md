@@ -280,3 +280,20 @@ dernier offset tient dans les octets.
 2. à la relecture (`DictionaryColumn::scan`), une garde qui refuse en le nommant un segment dont le dernier offset
    dépasse ses octets, au lieu de déborder en silence.
 
+## La trace de la publication (21 novembre, matin, cœur c++) : l'hypothèse s'affaiblit
+
+- `StringChunkData::flush` écrit l'index, puis le dictionnaire (`DictionaryChunk::flush` : les octets, puis les
+  offsets), sur le même fil, dans le même objet ; le segment neuf ne devient visible que par le remplacement du
+  segment entier (`Column::checkpointSegment` rend la liste des segments, l'ancien est retiré). Je n'y trouve pas de
+  chemin qui publie un enfant sans l'autre.
+- La scission d'un segment de chaînes (`ColumnChunkData::split`, le recul pour les chaînes) passe par `append` →
+  `appendString`, puis `truncate` et `finalize`, qui reconstruit le dictionnaire par `appendString` : tous vérifient
+  leur place.
+- **Un défaut sûr, en passant** : `DictionaryChunk::sanityCheck` (`dictionary_chunk.cpp:93-95`) rend
+  `offsetChunk->getNumValues() <= offsetChunk->getNumValues()`, toujours vrai. Il devait comparer le dernier offset aux
+  octets ; c'est la garde que le correctif doit rendre réelle (sa deuxième pièce).
+
+L'incohérence relue (8 831 offsets pour 4 991 octets) reste un fait du core, mais sa naissance n'est pas trouvée. La
+sonde de hotfixs (à la relecture, dans `DictionaryColumn::scan`, les métadonnées des deux enfants à l'abort) dira
+lequel des deux est en retard, et de combien. C'est elle qui départagera.
+
