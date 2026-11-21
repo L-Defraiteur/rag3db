@@ -2089,7 +2089,7 @@ impl DaemonHost {
                 self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default()))
                     .into_iter()
                     // A grant that holds a protected folder (written by hand) is never mounted.
-                    .filter(|g| !root_grants::holds_a_protected_folder(&g.root))
+                    .filter(|g| !self.holds_a_protected_folder(&g.root))
                     .map(|g| (g.root, g.mode))
                     .collect();
             crate::backend::with_granted_roots(accordees, || crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
