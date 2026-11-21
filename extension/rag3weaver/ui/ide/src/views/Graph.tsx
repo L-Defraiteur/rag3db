@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { call, shortName, type HostState } from "@/lib/host";
+import { displayName, call, type HostState } from "@/lib/host";
 import { fileLink, symbolLink } from "@/views/File";
 import { graphLink } from "@/views/Symbol";
 import { short } from "@/lib/graph";
@@ -21,7 +21,7 @@ export function GraphView({ id, name, state }: { id: string; name: string; state
     (call(backend.manifest, "impact", { name, depth: 3, format: "json" }) as Promise<Side>).catch(() => ({ starts: [], reached: [] })).then(setImp);
     (call(backend.manifest, "callees", { name, depth: 3, format: "json" }) as Promise<Side>).catch(() => ({ starts: [], reached: [] })).then(setApp);
   }, [backend?.manifest, name]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   if (!imp || !app) return <p className="note text-muted-foreground">Chargement…</p>;
   const L = 210, H = 34, W = 180, M = 24;
   const centres = [...(imp.starts ?? []), ...(app.starts ?? [])].filter((d, i, t) => t.findIndex((x) => x.uuid === d.uuid) === i);
@@ -48,7 +48,7 @@ export function GraphView({ id, name, state }: { id: string; name: string; state
   const total = (imp.reached ?? []).length + (app.reached ?? []).length;
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a> · <a href={symbolLink(id, name)} className="hover:underline">{name}</a> · graphe</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href={`/ide/code/${id}/arbre/`} className="hover:underline">{displayName(backend)}</a> · <a href={symbolLink(id, name)} className="hover:underline">{name}</a> · graphe</p>
       <h1 className="text-xl font-semibold mb-1">{name}</h1>
       <p className="note text-sm text-muted-foreground mb-3">{(imp.reached ?? []).length} en dépendent (à gauche), {(app.reached ?? []).length} appelés (à droite), sur trois niveaux. Un nom mène à son propre graphe, un lieu à son fichier ; un trait pointillé est un rattachement par le nom seul.</p>
       {total || centres.length ? (

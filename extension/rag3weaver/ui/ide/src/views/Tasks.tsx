@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GitBranch, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { shortName, type HostState } from "@/lib/host";
+import { displayName, type HostState } from "@/lib/host";
 
 // **Les tâches de l'agent** (page 08, vue 5) : la liste des tâches ouvertes (sa
 // branche, sa copie de base, ses vues), celles fermées (fusionnée, rejetée,
@@ -39,11 +39,11 @@ export function Tasks({ id, state, onChanged }: { id: string; state: HostState; 
     await onChanged();
     await load();
   };
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · tâches
+        <a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · tâches
       </p>
       <h1 className="text-xl font-semibold mb-1">Tâches de l'agent</h1>
       <p className="note text-sm text-muted-foreground mb-4">Une tâche : une branche à elle, un worktree, une copie de la base. L'agent y déclare ; on relit, puis on fusionne ou on rejette.</p>
@@ -59,7 +59,7 @@ export function Tasks({ id, state, onChanged }: { id: string; state: HostState; 
           {list.ouvertes.length ? (
             <table className="runs w-full text-sm" id="taches">
               <thead className="text-left text-xs text-muted-foreground">
-                <tr>{["tâche", "branche", "base", "backend"].map((t) => <th key={t} className="py-1 pr-3 font-medium">{t}</th>)}</tr>
+                <tr>{["tâche", "branche", "base", "worktree"].map((t) => <th key={t} className="py-1 pr-3 font-medium">{t}</th>)}</tr>
               </thead>
               <tbody>
                 {list.ouvertes.map((t) => (

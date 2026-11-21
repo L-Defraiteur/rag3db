@@ -3,7 +3,7 @@ import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { lineDiff } from "@/lib/diff";
 import { GraphDiffSection, type GraphDiff } from "@/lib/graph";
-import { onFlux, shortName, type FluxEvent, type HostState } from "@/lib/host";
+import { displayName, onFlux, type FluxEvent, type HostState } from "@/lib/host";
 
 // **Les propositions** (page 08, vue 7 ; page 08 des déclarations) : une
 // proposition est un état de l'hôte — la liste se relit à chaque changement
@@ -41,10 +41,10 @@ function List({ id, state }: { id: string; state: HostState }) {
   }, [id]);
   // Une proposition a changé : la liste se relit.
   useEffect(() => onFlux((d: FluxEvent) => { if (backend && d.sujet === "declarations" && d.backend === backend.manifest) load(); }), [backend?.manifest]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · propositions</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · propositions</p>
       <h1 className="text-xl font-semibold mb-1">Propositions</h1>
       <p className="note text-sm text-muted-foreground mb-3">Ce que l'agent (ou quelqu'un) propose de déclarer : validé sans être écrit, appliqué ou rejeté ici.</p>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
@@ -93,12 +93,12 @@ function Proposition({ id, pid, state }: { id: string; pid: number; state: HostS
     if (!x.ok) setNote(x.error);
     else await load();
   };
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const p = r?.proposition;
   const open = p?.etat === "proposee";
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · <a href={`/ide/code/${id}/propositions/`} className="hover:underline">{shortName(backend.manifest)}</a> · proposition #{pid}</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">dépôts</a> · <a href={`/ide/code/${id}/propositions/`} className="hover:underline">{displayName(backend)}</a> · proposition #{pid}</p>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       {r && p ? (
         <div className="proposition grid gap-3" data-etat={p.etat}>

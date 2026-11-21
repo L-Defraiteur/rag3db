@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { shortName, type HostState } from "@/lib/host";
+import { displayName, type HostState } from "@/lib/host";
 
 // **Les bilans** (page 08, vue 6 ; pages 04 et 05) : ce que le juge de session a
 // rangé dans la mémoire — par fiche de tâche, ses apports dans l'ordre et la
@@ -100,13 +100,13 @@ export function Bilans({ id, state }: { id: string; state: HostState }) {
       .then((x) => (x.ok ? setR(x.result) : setError(x.error)))
       .catch((e: Error) => setError(e.message));
   }, [id]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const fiches = r?.fiches.filter((f) => !f.outil) ?? [];
   const tools = r?.fiches.filter((f) => f.outil) ?? [];
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · bilans
+        <a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · bilans
       </p>
       <h1 className="text-xl font-semibold mb-1 inline-flex items-center gap-2"><Scale className="size-5" /> Bilans de session</h1>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { onFlux, shortName, stopRun, type FluxEvent, type HostState } from "@/lib/host";
+import { displayName, onFlux, stopRun, type FluxEvent, type HostState } from "@/lib/host";
 import { GraphSvg, type Graph } from "@/lib/graph";
 
 // **Le DAG vivant** (page 08, vue 7 ; C2) : la liste des graphes d'outils, puis le
@@ -27,10 +27,10 @@ function GraphList({ id, state }: { id: string; state: HostState }) {
       })
       .catch((e: Error) => setError(e.message));
   }, [backend?.manifest]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · graphes</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · graphes</p>
       <h1 className="text-xl font-semibold mb-1">Graphes des outils</h1>
       <p className="note text-sm text-muted-foreground mb-3">Un outil appelé pendant qu'on regarde son graphe s'y allume, nœud par nœud.</p>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
@@ -104,11 +104,11 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
       setStopNote((e as Error).message);
     }
   };
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const kind = genre === "tool" ? "Outil" : genre === "reaction" ? "Réaction" : "Composant";
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · <a href={`/ide/code/${id}/dag/`} className="hover:underline">{shortName(backend.manifest)}</a> · {genre} {name}</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">dépôts</a> · <a href={`/ide/code/${id}/dag/`} className="hover:underline">{displayName(backend)}</a> · {genre} {name}</p>
       <h1 className="text-xl font-semibold mb-1">{name}</h1>
       {/* A tool the host serves itself (propose, report…) has no declared graph: said so, not a host error (ED's
           review of slice 4: a detached window follows every tool of the turn). */}

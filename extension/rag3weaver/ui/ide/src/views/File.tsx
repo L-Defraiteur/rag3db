@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { call, onFlux, route, shortName, type FluxEvent, type HostState } from "@/lib/host";
+import { displayName, call, onFlux, route, type FluxEvent, type HostState } from "@/lib/host";
 import { Editor } from "@/views/Editor";
 
 // **La vue d'un fichier et sa marge** (page 08, vue 3) : le texte numéroté, chaque
@@ -161,13 +161,13 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
     return out;
   }, [read]);
 
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   if (editing) return <Editor manifest={backend.manifest} path={path} onClose={() => setEditing(false)} />;
   const parts = path.split("/").filter(Boolean);
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a>
+        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{displayName(backend)}</a>
         {parts.map((p, i) => {
           const sub = parts.slice(0, i + 1).join("/");
           const last = i === parts.length - 1;
