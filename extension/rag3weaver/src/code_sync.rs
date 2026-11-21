@@ -2542,6 +2542,9 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
             match r {
                 Ok(_) => {
                     catalog.publier_les_evenements_retenus();
+                    // Le COMMIT est durable (le journal du moteur synchronisé au COMMIT) : les générations du plein
+                    // texte sous celle que la base vient de valider partent (lucivy 4.4, (A)).
+                    catalog.relacher_les_generations_validees();
                     return Ok(());
                 }
                 Err(e) => {
