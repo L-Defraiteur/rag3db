@@ -67,6 +67,15 @@ pub struct TeammatePolicy {
     /// The text of that relaunch, after the cut's note (`cut_reply`).
     #[serde(default = "TeammatePolicy::cut_relaunch_text_default")]
     pub cut_relaunch_text: String,
+    /// **The verification gate** (the night replays of 21 Nov 2026: a fix said « implemented and
+    /// verified » on a tree that did not compile): commands played in the task's tree, through the
+    /// gate and the sandbox, before the teammate may end. A red one gives one more step with its
+    /// output; still red after `verify_relaunches`, the task ends as a failure. Empty: no gate.
+    #[serde(default)]
+    pub verify: Vec<String>,
+    /// How many more steps a red verification gives. Default: 2.
+    #[serde(default = "TeammatePolicy::verify_relaunches_default")]
+    pub verify_relaunches: usize,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -153,6 +162,9 @@ impl TeammatePolicy {
     fn cut_relaunches_per_step_default() -> usize {
         2
     }
+    fn verify_relaunches_default() -> usize {
+        2
+    }
     fn cut_relaunch_text_default() -> String {
         "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
     }
@@ -176,6 +188,8 @@ impl Default for TeammatePolicy {
             pair: false,
             cut_relaunches_per_step: Self::cut_relaunches_per_step_default(),
             cut_relaunch_text: Self::cut_relaunch_text_default(),
+            verify: Vec::new(),
+            verify_relaunches: Self::verify_relaunches_default(),
         }
     }
 }
