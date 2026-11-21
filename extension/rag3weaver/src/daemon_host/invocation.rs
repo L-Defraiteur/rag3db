@@ -837,4 +837,21 @@ mod tests {
         let depots = r["repositories"].as_array().cloned().unwrap_or_default();
         assert!(depots.iter().any(|x| x["repo"] == json!("rag3db-essai")), "the repository attached is not said: {r}");
     }
+
+    /// **One name for a view** (tty's scenario 1, 21 November 2026, its point 2): the name `open_view` gives is the one
+    /// `use_view` takes back, and the one `views` says active; the layer's own name still works.
+    #[test]
+    fn use_view_takes_the_name_open_view_gives() {
+        let v = une_vue_ouverte("nom");
+        let retour = v.a.host.use_view(Some(&v.s), &v.manifeste, "backend");
+        assert_eq!(retour["ok"], json!(true), "{retour}");
+        let r = v.a.host.use_view(Some(&v.s), &v.manifeste, &v.nom);
+        assert_eq!(r["ok"], json!(true), "use_view refuses the name open_view gave ({}): {r}", v.nom);
+        assert_eq!(r["active"]["name"], json!(v.nom), "{r}");
+        let vues = v.a.host.views(Some(&v.s), &v.manifeste);
+        assert_eq!(vues["active"]["name"], json!(v.nom), "{vues}");
+        assert!(vues["views"].as_array().unwrap().iter().any(|n| n["name"] == json!(v.nom)), "{vues}");
+        let par_couche = v.a.host.use_view(Some(&v.s), &v.manifeste, &v.couche);
+        assert_eq!(par_couche["ok"], json!(true), "{par_couche}");
+    }
 }
