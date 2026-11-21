@@ -3024,7 +3024,7 @@ mod tests {
         let source = appels.iter().find(|(n, _)| n == "put_source").expect("le L0").1["record"].clone();
         assert!(source["chemin"].as_str().unwrap().starts_with("sources/") && source["chemin"].as_str().unwrap().ends_with("-compaction-s1.md"), "{source}");
         assert_eq!((source["via"].as_str(), source.get("author").and_then(Value::as_str), source["origine"].as_str()), (Some("hook"), None, Some("filet")), "l'origine d'un L0 de crochet est « filet » (schéma Source : envoi, filet, migration ; page M9 du 18 octobre)");
-        let pour = |outil: &str| h.appels.lock().unwrap().iter().find(|(n, _)| n == outil).map(|(_, a)| a["agent"].clone()).unwrap_or(Value::Null);
+        let pour = |outil: &str| appels.iter().find(|(n, _)| n == outil).map(|(_, a)| a["agent"].clone()).unwrap_or(Value::Null);
         assert_eq!((pour("put_source"), pour("put_apport")), (json!("96"), json!("96")), "the host signs (writes.author): the hook says for whom it calls, never author in the record (M7)");
         assert!(source["contenu"].as_str().unwrap().contains("la session migrait la fiche."));
         let apport = appels.iter().find(|(n, _)| n == "put_apport").expect("le L1").1["record"].clone();
