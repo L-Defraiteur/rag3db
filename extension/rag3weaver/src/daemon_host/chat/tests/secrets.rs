@@ -42,3 +42,19 @@ fn a_secret_brought_out_by_a_tool_is_seen_by_no_one() {
     let state = host.chat_state(&id).expect("the chat's state");
     assert!(!state.to_string().contains(TOKEN), "the chat's state, what the IDE shows: {state}");
 }
+
+/// **The user's declared identity is not a secret** (Lucie, 21 November 2026, after a plugin blocked every e-mail
+/// address, her own git identity included: « à ne pas reproduire »): an author's name and address, as `git log` shows
+/// them, pass unmasked. A guard against a pattern that would reach them; nothing was masking them.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_users_git_identity_is_never_masked() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let (d, host, _manifeste, id) = banc(reads_the_secret(seen.clone()));
+    let author = "Author: Lucie Example <lucie@example.org>";
+    std::fs::write(d.path().join("code/secret.txt"), format!("commit 1a2b3c\n{author}\n\n    the message\n")).unwrap();
+    host.chat_turn(&id, "lis secret.txt").expect("the turn");
+    let seen = seen.lock().unwrap().clone();
+    assert!(seen.iter().any(|s| s.contains(author)), "the author's identity passes as it is: {seen:?}");
+    assert!(seen.iter().all(|s| !s.contains("[masked secret")), "nothing is masked: {seen:?}");
+}
