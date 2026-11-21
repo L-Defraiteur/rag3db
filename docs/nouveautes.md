@@ -4,6 +4,13 @@
   des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son
   nom et sa branche, comme l'accueil ; le tableau des tâches a une colonne « worktree ». « backend » n'y paraît plus.
 - 21 novembre 2026 — **Le terminal reconnaît un dépôt sous tous ses noms.** `rag3weaver-tty --repo` accepte le nom que donne `code-tree add` (`code-compteur`), le nom court (`compteur`), le chemin du projet ou celui du manifeste : c'est l'hôte qui résout, comme pour les outils et l'IDE.
+- 21 novembre 2026 — **L'équipier lit le web et y cherche.** `fetch {url, max_bytes?}` rend le texte lisible d'une
+  page (sans script, style ni balises), coupé à sa borne avec la coupe dite, son statut, son type, son adresse finale et
+  ses redirections ; une adresse locale est refusée par défaut (`teammate.fetch.allow_local`), et chaque refus nomme
+  l'adresse. `web_search {query}` passe par le grounding Google Search de Gemini sur Vertex : la réponse, les requêtes
+  jouées et les sources (titre, adresse, passages appuyés, provenance), bornées par `teammate.web_search.max_sources` ;
+  un modèle qui n'est pas Gemini est refusé avec la raison, sans rien envoyer.
+
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
