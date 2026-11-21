@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 
 #include "common/assert.h"
@@ -18,6 +20,8 @@
 #include "storage/storage_utils.h"
 #include "storage/table/column_chunk.h"
 #include "storage/table/column_chunk_data.h"
+#include "storage/table/dictionary_chunk.h"
+#include "storage/table/string_chunk_data.h"
 #include "storage/table/list_column.h"
 #include "storage/table/null_column.h"
 #include "storage/table/string_column.h"
@@ -415,6 +419,30 @@ std::vector<std::unique_ptr<ColumnChunkData>> Column::checkpointSegment(
         ColumnChunkFactory::createColumnChunkData(persistent.getMemoryManager(), dataType.copy(),
             enableCompression, numRows, ResidencyState::IN_MEMORY, persistent.hasNullData());
     scanSegment(chunkState, fresh.get(), 0, chunkState.metadata.numValues);
+    // SONDE C1 (branche c1-scan-probe) : entre la relecture et la première écriture, le dictionnaire
+    // du morceau neuf doit être cohérent. Sinon, son état sur stderr, puis abort.
+    if (fresh->getDataType().getPhysicalType() == PhysicalTypeID::STRING) {
+        const auto& dict = fresh->cast<StringChunkData>().getDictionaryChunk();
+        const auto* offsets = dict.getOffsetChunk();
+        const auto* bytes = dict.getStringDataChunk();
+        DictionaryChunk::string_offset_t previous = 0;
+        for (uint64_t i = 0; i < offsets->getNumValues(); i++) {
+            const auto offset = offsets->getValue<DictionaryChunk::string_offset_t>(i);
+            if (offset > bytes->getNumValues() || offset < previous) {
+                fprintf(stderr,
+                    "[sonde C1 avant write] dictionnaire du morceau neuf incohérent : offset[%lu] = %lu "
+                    "(précédent %lu), offsets %lu (capacité %lu), octets %lu (capacité %lu), valeurs du "
+                    "morceau %lu, segment relu %lu valeurs\n",
+                    (unsigned long)i, (unsigned long)offset, (unsigned long)previous,
+                    (unsigned long)offsets->getNumValues(), (unsigned long)offsets->getCapacity(),
+                    (unsigned long)bytes->getNumValues(), (unsigned long)bytes->getCapacity(),
+                    (unsigned long)fresh->getNumValues(), (unsigned long)chunkState.metadata.numValues);
+                fflush(stderr);
+                abort();
+            }
+            previous = offset;
+        }
+    }
     for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
         fresh->write(&segmentCheckpointState.chunkData, segmentCheckpointState.startRowInData,
             segmentCheckpointState.offsetInSegment, segmentCheckpointState.numRows);
