@@ -43,8 +43,54 @@ demandé.
   `Visibilite::clause_sur`, `compile_filter_for_vector_in` dans `read_view.rs`), allongé de deux sauts. Un résultat (un
   texte) se rend en ses morceaux visibles, puis en leurs lignes ; un même texte en deux endroits visibles rend deux
   résultats au même score.
-- **Le retrait d'une version** : ses morceaux partent avec leurs arêtes. Un texte qui n'a plus aucun morceau part avec
-  son vecteur, au même passage ou par un balayage à part.
+- **Le retrait d'une version, et les « usagers » d'un texte** (question de Lucie, 21 novembre : « si mon worktree et un
+  autre disent le même scope et que je retire le mien, il faut que l'autre reste ») :
+  - un texte a pour usagers les morceaux qui pointent vers lui (ses arêtes `HAS_TEXT`). Le retrait d'un morceau retire
+    son arête ; **un texte ne part que quand plus aucun morceau ne pointe vers lui**, et son vecteur part avec lui ;
+  - **la course** entre un retrait et une écriture qui reprendrait le même texte est tenue par **le seul écrivain de la
+    base** : le retrait comme l'écriture passent sous le verrou du catalogue de l'hôte, et ne se croisent pas ;
+  - **à une condition** : le retrait de l'orphelin se fait dans ce même chemin d'écriture, par un seul énoncé qui teste
+    l'absence d'arête et supprime (`MATCH (t:<Entité>_Text) WHERE NOT EXISTS { MATCH (t)<-[:HAS_TEXT]-() } … DELETE t`,
+    borné aux textes que le retrait a touchés). Jamais en deux temps (compter, puis supprimer), ni par un balayage hors
+    du verrou ;
+  - **les lecteurs** (une recherche pendant le retrait) voient un instantané : un texte encore lu n'est pas retiré sous
+    eux.
+  - **La course exacte** (Lucie, 21 novembre) : un écrivain trouve le texte et va lui ajouter un morceau ; entre-temps, le
+    retrait de son dernier propriétaire voit « plus de référence » et le supprime ; l'ajout arrive ensuite sur un texte
+    disparu. Le verrou de l'hôte sérialise les transactions, mais **la recherche du texte existant se fait dans la même
+    transaction que l'ajout de l'arête**, jamais avant, hors du verrou. Sinon, la décision « je reprends ce vecteur »
+    repose sur un état périmé. D'où deux règles :
+    1. **L'ajout, en un seul énoncé**, dans la transaction qui écrit le morceau : `MERGE` du texte par empreinte, puis
+       l'arête. Un texte absent est recréé ; son vecteur va alors à la file d'embarquement (calculé, ou repris par
+       empreinte) et n'est jamais laissé vide : le texte neuf compte comme un vecteur dû, comme un morceau neuf
+       aujourd'hui.
+    2. **Le retrait de l'orphelin, en un seul énoncé**, dans la transaction du retrait, comme dit plus haut.
+  - **Le moteur** : il accepte plusieurs écrivains par défaut depuis le 11 octobre, mais l'hôte n'ouvre qu'**une
+    connexion écrivaine par base**, et un second processus est refusé par le verrou de fichier (`F_WRLCK`). Ce qui
+    casserait avec un second écrivain dans le même processus : deux transactions concurrentes, l'une qui ajoute une
+    arête vers un texte, l'autre qui le voit sans arête dans son instantané et le supprime. Sans un conflit détecté au
+    commit (l'arête vers un nœud supprimé), l'arête pendrait vers rien. Le lot ne s'appuie donc que sur l'écrivain
+    unique, **par une garde, pas un commentaire** (c7) : l'écriture des textes partagés vérifie qu'elle passe par la
+    connexion écrivaine unique du backend, et refuse en le disant si un second écrivain apparaît dans le même processus.
+    Elle ne tente jamais sa chance. Celui qui ajoutera un second écrivain tombera sur ce refus, pas sur une arête qui
+    pend.
+  - **Aujourd'hui** (la reprise par empreinte, master 13d0e50333), la question ne se pose pas : le vecteur repris est
+    **copié** dans la ligne du nouveau morceau (`record_nodes.rs:2988` le clone, `:3006` l'écrit par `write_vectors`).
+    Retirer l'un ne touche pas l'autre.
+- **La vie d'une couche de worktree** (Lucie, 21 novembre : « on ne gardera pas h24 tous les worktrees passés, on les
+  virera une fois terminés, même en base ») :
+  - quand une vue est fermée ou son worktree retiré (`close_view`, retrait après fusion), sa couche de travail part de la
+    base : ses morceaux partent, puis les textes devenus orphelins, **dans la même écriture** ;
+  - **un worktree fusionné ne perd presque rien** : son contenu vit désormais dans la couche de master, qui garde les
+    textes. Seuls partent les textes propres à une branche abandonnée, et un texte qui revient plus tard se
+    ré-embarque, ce qui reste rare ;
+  - **ce qu'une branche d'un jour possède en propre**, mesuré sur la copie : sur les 7 156 morceaux neufs de l'écart d'un
+    jour, **1 366 (19 %) portent un texte que la base n'a pas**. C'est ce qui partirait, vecteurs compris, si la branche
+    était abandonnée ; le reste est à la base ;
+  - **un délai de grâce sur les orphelins** (garder N jours un texte sans usager) sera une option de configuration si les
+    chiffres le demandent un jour, pas maintenant ;
+  - **ce qui manque pour s'y brancher** : ce que `close_view` retire aujourd'hui en base (la couche, ses lignes, rien),
+    demandé à arbre.
 - **Plusieurs modèles** : une colonne et un index par modèle sur `<Entité>_Text`, comme aujourd'hui sur les morceaux.
 - **La migration des bases existantes** : une montée en versions par table de morceaux. Créer `<Entité>_Text` (un nœud par
   `_text_hash` distinct), y copier le vecteur d'un morceau au vecteur frais, poser les arêtes, bâtir l'index HNSW du texte,
@@ -72,7 +118,14 @@ ci-dessus : le chemin de la vue, le filtre dans la recherche, et ceci :
 1. Deux contenus différents qui partagent un morceau de même texte : **un seul vecteur écrit**, et chacun le trouve.
 2. **Une vue où les textes les plus proches sont invisibles rend quand même ses k résultats visibles** (le filtre dans la
    recherche).
-3. Le retrait de la dernière version qui porte un texte retire son vecteur ; un texte encore porté le garde.
+3. **La séquence de la course** : on trouve le texte, on retire son dernier propriétaire, puis on attache le nouveau
+   morceau. À la fin, le texte existe, l'arête aussi, le vecteur n'est pas vide (ou il est dû, et la file le
+   calcule), et aucune arête ne pend vers rien.
+4. **Un second écrivain est refusé** : l'écriture des textes partagés par une autre connexion que l'écrivaine du
+   backend rend une erreur qui le dit, et n'écrit rien.
+5. **Deux worktrees, le même scope** : le retrait de l'un laisse le vecteur de l'autre, et la recherche dans la vue de
+   l'autre le trouve ; puis le retrait du second retire le texte orphelin et son vecteur (le compte des textes baisse
+   de un).
 
 ## Le gain, mesuré à règles égales (21 novembre, luciepc, release)
 
@@ -88,6 +141,41 @@ l'arbre du 20 novembre à 22 h 30 (3e5279cef0), 278 fichiers d'écart avec l'arb
   47 000 vecteurs redondants (26 %)**.
 - **Ce que B changerait pour cette vue** : environ 1 366 vecteurs écrits au lieu de 7 156, soit de l'ordre de 10 s
   d'écriture au lieu de 53. La base, migrée, perdrait un quart de ses vecteurs et de son index HNSW.
+
+## La recherche dense de B, mesurée (21 novembre, luciepc, release)
+
+Sondes `probe_shared_text_search` et `probe_shared_text_search_filtered` (branche de sonde `sonde-partage-texte`, jamais
+sur master), sur un reflink de la copie en règles 13, lib 424ce93e56.
+
+**La construction de B sur la vraie base** : 134 763 textes pour 181 811 morceaux (26 % de vecteurs en moins), en 10 s ;
+181 811 arêtes en 4 s ; l'index HNSW des textes (cosinus, `mu` 30, `ml` 60, `efc` 200) en 70 s.
+
+**Sans filtre** (100 requêtes, des vecteurs de morceaux, rappel contre les 10 textes distincts exacts, par force brute) :
+
+| | Médiane | p95 | Rappel@10 | Textes distincts sur 10 |
+|---|---|---|---|---|
+| aujourd'hui (index des morceaux) | 206,9 ms | 431,5 ms | 0,748 | 7,5 |
+| **B (index des textes)** | **58,7 ms** | **98,0 ms** | **1,000** | 10 |
+
+**Avec un filtre** sur l'occurrence (30 requêtes, prises dans le filtre, chemin `extension/rag3weaver/src/dataflow/`,
+5 812 versions admises), projeté comme `vector_search_filtered` le fait : aujourd'hui morceau → version ← occurrence, B
+texte ← morceau → version ← occurrence ; puis les versions admises passées en liste, comme le masque des occurrences :
+
+| | Médiane | p95 | Rappel@10 | Textes distincts sur 10 |
+|---|---|---|---|---|
+| aujourd'hui, filtre par chemin | 365,2 ms | 479,2 ms | 0,757 | 7,6 |
+| **B, filtre par chemin** | **136,1 ms** | **172,3 ms** | **0,870** | 10 |
+| aujourd'hui, liste des versions | 458,3 ms | 496,4 ms | 0,757 | 7,6 |
+| **B, liste des versions** | **249,4 ms** | **281,3 ms** | **0,870** | 10 |
+
+- **Le troisième saut ne coûte rien de visible** : l'index plus petit d'un quart rend B plus rapide de 2 à 3 fois, avec
+  ou sans filtre.
+- **Le rappel est meilleur** : aujourd'hui, les doublons d'un même texte prennent des places (7,5 textes distincts sur
+  10). Sous filtre, B reste à 0,870 : c'est l'approximation de HNSW dans un graphe projeté, la même qu'aujourd'hui.
+- **La lecture des versions admises** coûte 51 ms. Le masque passé en liste coûte environ 110 ms de plus que le filtre
+  par chemin, pour les deux formes.
+- **Une variante sans le troisième saut** n'est pas utile : le saut ne coûte rien. Celle qui le supprimerait (copier la
+  version admise sur le texte) défairait le partage.
 
 ## Ce qui se mesure ensuite
 
