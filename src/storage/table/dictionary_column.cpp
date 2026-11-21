@@ -46,6 +46,11 @@ void DictionaryColumn::scan(const SegmentState& state, DictionaryChunk& dictChun
 
     auto& dataMetadata =
         StringColumn::getChildState(state, StringColumn::ChildStateIndex::DATA).metadata;
+    // SONDE C1 : les numValues de DATA et d'OFFSET avant l'agrandissement.
+    const auto probeDataBefore = dataMetadata.numValues;
+    const auto probeOffsetBefore =
+        StringColumn::getChildState(state, StringColumn::ChildStateIndex::OFFSET).metadata.numValues;
+    const auto probeDataCapacityBefore = stringDataChunk->getCapacity();
     // Make sure that the chunk is large enough
     if (stringDataChunk->getNumValues() + dataMetadata.numValues > stringDataChunk->getCapacity()) {
         stringDataChunk->resize(
@@ -54,6 +59,9 @@ void DictionaryColumn::scan(const SegmentState& state, DictionaryChunk& dictChun
     dataColumn->scanSegment(StringColumn::getChildState(state, StringColumn::ChildStateIndex::DATA),
         stringDataChunk, 0,
         StringColumn::getChildState(state, StringColumn::ChildStateIndex::DATA).metadata.numValues);
+    const auto probeDataAfterScan = dataMetadata.numValues;
+    const auto probeDataCapacityAfter = stringDataChunk->getCapacity();
+    const auto probeDataChunkAfterScan = stringDataChunk->getNumValues();
 
     auto& offsetMetadata =
         StringColumn::getChildState(state, StringColumn::ChildStateIndex::OFFSET).metadata;
@@ -92,6 +100,18 @@ void DictionaryColumn::scan(const SegmentState& state, DictionaryChunk& dictChun
                 (unsigned long)i, (unsigned long)offset, (unsigned long)previous,
                 (unsigned long)numBytes, (unsigned long)offsetChunk->getNumValues(),
                 (unsigned long)initialDictSize, (unsigned long)initialDictDataSize);
+            fprintf(stderr,
+                "[sonde C1 scan] DATA numValues avant l'agrandissement %lu, après le scanSegment %lu ; "
+                "OFFSET numValues avant %lu ; capacité des octets avant %lu, après %lu ; octets du "
+                "morceau après le scanSegment %lu ; numValuesPerPage de l'état DATA %lu, OFFSET %lu "
+                "(UINT64_MAX : métadonnées non copiées)\n",
+                (unsigned long)probeDataBefore, (unsigned long)probeDataAfterScan,
+                (unsigned long)probeOffsetBefore, (unsigned long)probeDataCapacityBefore,
+                (unsigned long)probeDataCapacityAfter, (unsigned long)probeDataChunkAfterScan,
+                (unsigned long)StringColumn::getChildState(state, StringColumn::ChildStateIndex::DATA)
+                    .numValuesPerPage,
+                (unsigned long)StringColumn::getChildState(state, StringColumn::ChildStateIndex::OFFSET)
+                    .numValuesPerPage);
             describe("DATA", dataMetadata);
             describe("OFFSET", offsetMetadata);
             const auto from = offsetChunk->getNumValues() > 4 ? offsetChunk->getNumValues() - 4 : 0;
