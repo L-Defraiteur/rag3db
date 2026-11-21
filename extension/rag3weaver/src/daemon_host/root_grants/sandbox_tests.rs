@@ -39,3 +39,40 @@ fn a_command_outside_its_roots_asks_for_the_root_and_runs_once_granted() {
     let sortie = r["result"]["result"].as_str().unwrap_or_default();
     assert!(sortie.contains("code 0") && sortie.contains("hors de la racine"), "the granted root is not mounted: {sortie}");
 }
+
+/// **A granted root is read only by default** (c7's word, 21 November 2026, on archi's point): a grant kept without a
+/// mode reads as "read"; a writing command into a root granted "read" is stopped as an `open_root` request in mode
+/// "write" (« lui permettre aussi d'écrire dans … ? »); once granted "write", the check lets it run.
+#[test]
+fn a_granted_root_is_read_only_unless_granted_write() {
+    let d = tempfile::tempdir().unwrap();
+    let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    let host = crate::daemon_host::DaemonHost::new().with_racines_de_code(racines.clone());
+    let jeux = d.path().join("jeux");
+    std::fs::create_dir_all(&jeux).unwrap();
+    // A grant kept before the mode existed (root-grants, landed without it): read.
+    std::fs::create_dir_all(&racines.data).unwrap();
+    let ancien = json!({ "grants": [{ "agent": "*", "root": jeux.canonicalize().unwrap(), "quote": "va voir", "at": 1, "turn": null, "granted_by": "user" }] });
+    std::fs::write(racines.data.join("root-grants.json"), ancien.to_string()).unwrap();
+    let g = host.root_grant_for("agent:k", &jeux).expect("the grant kept without a mode is read");
+    assert_eq!(g.mode, "read", "a grant kept without a mode is not read: {g:?}");
+
+    // The check before running: a writing command into a root granted "read" asks for "write".
+    let travail = d.path().join("travail");
+    std::fs::create_dir_all(&travail).unwrap();
+    let bac = crate::commande::BacASable::autour(&travail).lire_en_plus(jeux.canonicalize().unwrap());
+    let lecture = vec![(jeux.canonicalize().unwrap(), "read".to_string())];
+    let cible = jeux.join("nouveau.txt");
+    let demande = crate::dataflow::run_nodes::open_root_needed(&format!("touch {}", cible.display()), &travail, &bac, true, &lecture);
+    assert_eq!(demande.map(|(_, m)| m), Some("write".to_string()), "a write into a root granted read is not asked for write");
+    let lu = crate::dataflow::run_nodes::open_root_needed(&format!("cat {}", jeux.display()), &travail, &bac, false, &lecture);
+    assert_eq!(lu, None, "reading a root granted read is stopped");
+    let bac_w = crate::commande::BacASable::autour(&travail).ecrire_en_plus(jeux.canonicalize().unwrap());
+    let ecriture = vec![(jeux.canonicalize().unwrap(), "write".to_string())];
+    assert_eq!(crate::dataflow::run_nodes::open_root_needed(&format!("touch {}", cible.display()), &travail, &bac_w, true, &ecriture), None, "a root granted write still asks");
+    // Outside every root: a request in mode read.
+    let dehors = d.path().join("dehors");
+    std::fs::create_dir_all(&dehors).unwrap();
+    let r = crate::dataflow::run_nodes::open_root_needed(&format!("cat {}", dehors.display()), &travail, &bac, false, &lecture);
+    assert_eq!(r.map(|(_, m)| m), Some("read".to_string()));
+}
