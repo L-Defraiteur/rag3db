@@ -69,6 +69,9 @@ fn canonical(chemin: &Path) -> Option<PathBuf> {
 /// join this list the day that rule changes.
 fn default_protected_folders() -> Vec<PathBuf> {
     let mut dossiers: Vec<PathBuf> = crate::daemon_lifecycle::file_path().parent().map(Path::to_path_buf).into_iter().collect();
+    // The host's state folder (`$XDG_STATE_HOME/rag3weaver`, else `~/.local/state/rag3weaver`): the billing register,
+    // hooks.log, canal/, vues/, daemon.log (ED, 21 November 2026).
+    dossiers.extend(crate::daemon_lifecycle::log_path().parent().map(Path::to_path_buf));
     if let Some(maison) = std::env::var_os("HOME").map(PathBuf::from) {
         for relatif in [
             // The host's own configuration (the list of protected folders, the survivor's models, the templates): an
