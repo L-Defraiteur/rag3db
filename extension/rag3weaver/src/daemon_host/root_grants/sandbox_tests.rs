@@ -152,3 +152,22 @@ fn the_protected_folders_cover_credential_stores_extend_by_a_file_and_say_to_gra
     std::fs::create_dir_all(&libre).unwrap();
     assert!(host.grant_root("*", &libre, preuve(), "user", "read").is_ok());
 }
+
+/// **The host's own configuration folder is the floor of the list** (c7, 21 November 2026): an agent granted
+/// `<config>` in write could empty `protected-folders.txt` and reopen everything. `<config>` (`~/.config/rag3weaver` in
+/// service) is protected in the code, not in the file: a grant on it is refused, and an emptied list keeps it.
+#[test]
+fn the_hosts_configuration_folder_is_protected_in_the_code_and_an_empty_list_keeps_it() {
+    let d = tempfile::tempdir().unwrap();
+    let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    let host = crate::daemon_host::DaemonHost::new().with_racines_de_code(racines.clone());
+    std::fs::create_dir_all(&racines.config).unwrap();
+    std::fs::write(racines.config.join("protected-folders.txt"), "").unwrap();
+    let preuve = Proof { quote: "oui".into(), at: None, turn: None };
+    assert!(host.grant_root("*", &racines.config, preuve, "user", "write").is_err(), "the host's configuration folder is granted");
+    assert!(host.protected_folders().iter().any(|p| p == &racines.config.canonicalize().unwrap()), "an emptied list loses the configuration folder");
+    if let Some(maison) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
+        let service = maison.join(".config/rag3weaver");
+        assert!(host.protected_folders().iter().any(|p| p == &service.canonicalize().unwrap_or(service.clone())), "~/.config/rag3weaver is not in the floor");
+    }
+}
