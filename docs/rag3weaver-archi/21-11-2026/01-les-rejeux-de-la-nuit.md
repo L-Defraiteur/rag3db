@@ -63,15 +63,27 @@ défauts sérieux. Chacun a été pris en lot cette nuit, rouge d'abord :
 - **identite-git** (atterri, 86f6fbe8a7) : le bac à sable reçoit l'identité git de l'hôte. `git config user.*`,
   `git -c user.*=…` et `git config --global` sont refusés, accord humain compris. Avant ce lot,
   l'équipier avait fabriqué `Lucie <lucied@example.com>`.
-- **bac-commit-worktree** (déposé) : un commit passe depuis une tâche dans un worktree lié. Le bac écrit le gitdir
+- **bac-commit-worktree** (atterri) : un commit passe depuis une tâche dans un worktree lié. Le bac écrit le gitdir
   du worktree, `objects/`, et le dossier de la ref de sa branche et de son journal. Il n'écrit jamais
   `config`, `hooks/` ni `info/` du dépôt commun : un hook posé par l'agent serait exécuté par le git de
   Lucie, hors du bac.
-- **campagne-lanceur-7** (déposé) : le point 3 ci-dessus.
-- **raisonnement-borne-3** et **sous-agent-vues-3** : les reposes sur master des deux lots du soir.
+- **campagne-lanceur-7** (atterri) : le point 3 ci-dessus.
+- **raisonnement-borne-3** et **sous-agent-vues-3** (atterris, e48d58271a et 36f18c965f) : les reposes sur master des deux lots du soir.
   La première branche portait la pile de mémoire, en partie atterrie sous d'autres hashes ; la deuxième
   butait sur `nouveautes.md` et `teammate_tests.rs`, touchés par les atterrissages de la nuit.
-- **porte-verification-2** (en cours) : le point 1 ci-dessous, `teammate.verify`.
+- **porte-verification-2** (atterri, ab900f76d5) : le point 1 ci-dessus. Un manifeste déclare
+  `"teammate": {"verify": ["<commande>"]}` ; avant de finir, l'équipier voit ces commandes jouées dans l'arbre de la
+  tâche par la même garde et le même bac à sable que les siennes. Rouge : un pas de plus avec la sortie
+  (`verify_relaunches`, 2) ; encore rouge : la tâche finit en échec en nommant la commande.
+- **refus-repetes-2** (atterri) : vu au scénario 2 de tty. Un même chemin que le système refuse deux fois dans un pas
+  (« Permission denied » dans la sortie d'une commande ou l'erreur d'un outil) est dit dans la boîte, et le pas cesse
+  son travail au lieu de tourner autour de ses droits.
+
+Tous sont dans l'hôte du matin (bâti à 05 h 37 sur 78f2f2d885).
+
+Un rouge du pousseur a été départagé : `le_code_du_chat_se_lit_comme_du_code` a rougi une fois au créneau de
+bac-commit-worktree (la page du chat sans `app.js` en 20 s, sous la charge du créneau). Rejoué seul sur la tête du lot
+à la tablette, il est vert trois fois sur trois : ce n'était pas le lot.
 
 Les tickets ouverts par ces incidents : l'isolement des hôtes (une racine d'état unique, le point du
 `daemon.json` d'un autre), l'identité git, et le lanceur sans lib.
@@ -79,7 +91,7 @@ Les tickets ouverts par ces incidents : l'isolement des hôtes (une racine d'ét
 ## Ce qui vient
 
 Dans l'ordre que c7 a fixé :
-1. la règle « deux refus de droits sur le même chemin arrêtent le pas », vue au scénario de tty ;
+1. `claude_name` transmis par le hook à l'inscription, pour que la vue d'ensemble de l'IDE nomme les agents du poste ;
 2. le point 2 de l'isolement : jamais le retrait d'un `daemon.json` qui n'est pas le sien (pid et
    `procStart`).
 
