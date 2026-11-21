@@ -1079,7 +1079,7 @@ impl NodeFactory for BM25SearchNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("auto")),
                     description: "auto (une phrase se pèse en BM25, un identifiant se cherche contigu) | contains | contains_split | regex | parse | symbol (exact, séparateurs compris)".into(),
-                    choices: Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "parse", "symbol"])),
+                    choices: Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "words", "symbol"])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -1745,7 +1745,7 @@ mod tests {
         let modes = r.schema("BM25SearchNode").unwrap().config_params.into_iter().find(|p| p.name == "mode").unwrap();
         assert_eq!(
             modes.choices,
-            Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "parse", "symbol"]))
+            Some(Choices::fixed(["auto", "contains", "contains_split", "regex", "words", "symbol"]))
         );
         // **Le défaut annoncé doit être le vrai.** Il disait « contains » alors
         // que `BM25Mode::default()` valait `auto` depuis le correctif de
