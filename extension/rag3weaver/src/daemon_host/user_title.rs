@@ -20,22 +20,41 @@ impl DaemonHost {
     /// A one-use entry code for the IDE, asked with the user's token (`X-Rag3weaver-User`): an agent
     /// that has only the host's token gets none.
     pub fn issue_entry_code(&self, user_header: Option<&str>) -> Result<String, String> {
-        let _ = user_header;
-        Err("not yet".into())
+        if !self.is_user_token(user_header) {
+            return Err("an entry code is asked with the user's token (X-Rag3weaver-User): `rag3weaver-backend ide` reads it".into());
+        }
+        let code = crate::daemon_lifecycle::new_token()?;
+        let maintenant = now_ms();
+        let mut codes = self.entry_codes.lock().unwrap_or_else(|p| p.into_inner());
+        codes.retain(|_, fin| *fin > maintenant);
+        codes.insert(code.clone(), maintenant + ENTRY_CODE_TTL_MS);
+        Ok(code)
     }
 
     /// Redeems an entry code once: the user's token for the cookie, or `None` (unknown, used, expired).
     pub fn redeem_entry_code(&self, code: &str) -> Option<String> {
-        let _ = code;
-        None
+        let fin = self.entry_codes.lock().unwrap_or_else(|p| p.into_inner()).remove(code)?;
+        (fin > now_ms()).then(|| self.user_token.clone()).flatten()
+    }
+
+    /// Whether `given` is the user's token (compared as the host compares its own).
+    pub fn is_user_token(&self, given: Option<&str>) -> bool {
+        match (&self.user_token, given) {
+            (Some(u), Some(g)) => super::same_token(&format!("Bearer {g}"), &format!("Bearer {u}")),
+            _ => false,
+        }
     }
 
     /// **Who wrote a line**: `{kind: "human" | "agent", client}`, from the user cookie or the
     /// `X-Rag3weaver-User` header, never from the body.
     pub fn by_of(&self, user_cookie: Option<&str>, user_header: Option<&str>, client: &str) -> Value {
-        let _ = (user_cookie, user_header, &self.user_token, &self.entry_codes);
-        json!({ "kind": "agent", "client": client })
+        let humain = self.is_user_token(user_cookie) || self.is_user_token(user_header);
+        json!({ "kind": if humain { "human" } else { "agent" }, "client": client })
     }
+}
+
+fn now_ms() -> u128 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
 
 #[cfg(test)]

@@ -488,6 +488,14 @@ fn entete<'a>(request: &'a tiny_http::Request, nom: &'static str) -> Option<&'a 
 }
 
 /// Le jeton porté par le cookie de l'IDE, s'il y en a un.
+/// The user cookie (the title of a human), set by the entry with a one-use code.
+const COOKIE_USER: &str = "rag3weaver_user";
+
+/// A cookie of the request by its name.
+fn cookie(request: &tiny_http::Request, nom: &str) -> Option<String> {
+    entete(request, "Cookie")?.split(';').filter_map(|c| c.trim().split_once('=')).find(|(k, _)| *k == nom).map(|(_, v)| v.to_string())
+}
+
 fn jeton_du_cookie(request: &tiny_http::Request) -> Option<String> {
     entete(request, "Cookie")?
         .split(';')
@@ -547,6 +555,22 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
     let param = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
     let juste = |jeton: &str| attendu.is_none_or(|a| crate::daemon_host::same_token(&format!("Bearer {jeton}"), a));
 
+    // **The entry by a one-use code** (21 Nov 2026): the code that `rag3weaver-backend ide` asked with
+    // the user's token becomes the user cookie (the title of a human), and the URL loses it.
+    if method == "GET" && path == "/ide/entrer" && param("code").is_some() {
+        let r = match param("code").and_then(|c| host.redeem_entry_code(&c)) {
+            Some(u) => {
+                let cookie = format!("{COOKIE_USER}={u}; HttpOnly; SameSite=Strict; Path={PREFIX}");
+                tiny_http::Response::from_string(String::new())
+                    .with_status_code(303)
+                    .with_header(tiny_http::Header::from_bytes(&b"Location"[..], &b"/ide/"[..]).expect("en-tête littéral"))
+                    .with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], cookie.as_bytes()).expect("cookie ASCII"))
+            }
+            None => json_(403, &json!({ "ok": false, crate::daemon_host::BAD_TOKEN: true, "error": "entry code unknown, used or expired: ask a new URL of `rag3weaver-backend ide`" })),
+        };
+        let _ = request.respond(r);
+        return;
+    }
     // L'entrée : le jeton de l'URL devient le cookie, et l'URL le perd.
     if method == "GET" && path == "/ide/entrer" {
         let jeton = param("jeton").unwrap_or_default();
@@ -565,7 +589,8 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
 
     let porte = attendu.is_none()
         || entete(&request, "Authorization").is_some_and(|h| attendu.is_some_and(|a| crate::daemon_host::same_token(h, a)))
-        || jeton_du_cookie(&request).is_some_and(|j| juste(&j));
+        || jeton_du_cookie(&request).is_some_and(|j| juste(&j))
+        || host.is_user_token(cookie(&request, COOKIE_USER).as_deref());
     if !porte {
         let _ = request.respond(json_(
             403,
@@ -918,7 +943,19 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        // **An entry code for the IDE** (21 Nov 2026), asked with the user's token.
+        ("POST", "/ide/entry-code") => {
+            let v = match host.issue_entry_code(entete(&request, "X-Rag3weaver-User")) {
+                Ok(code) => json!({ "ok": true, "code": code, "expires_in_s": crate::daemon_host::user_title::ENTRY_CODE_TTL_MS / 1000 }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            };
+            let statut = if v["ok"] == true { 200 } else { 403 };
+            let _ = request.respond(json_(statut, &v));
+        }
         ("POST", "/ide/teammate/mailbox") => {
+            let utilisateur = entete(&request, "X-Rag3weaver-User").map(str::to_string);
+            let client = if utilisateur.is_some() { "tty" } else { "ide" };
+            let by = host.by_of(cookie(&request, COOKIE_USER).as_deref(), utilisateur.as_deref(), client);
             // **Écrire à l'équipier** : `{backend, task, kind, item?, text, from?}`.
             // Une `request` ouvre la tâche et lance l'équipier ; un `stop`
             // arrête le pas en cours tout de suite.
@@ -933,7 +970,8 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     c["item"].as_str(),
                     c["text"].as_str().unwrap_or_default(),
                     // L'adresse et la réponse (page 07-novembre-2026-everything-declarative/01, § 2).
-                    &json!({ "to": c["to"], "reply_to": c["reply_to"], "approved": c["approved"], "expects": c["expects"] }),
+                    // `by` is the host's, from who calls; a `by` of the body is never read.
+                    &json!({ "to": c["to"], "reply_to": c["reply_to"], "approved": c["approved"], "expects": c["expects"], "by": by }),
                 ) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
