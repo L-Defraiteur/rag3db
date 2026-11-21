@@ -1,0 +1,7 @@
+[Unit]
+Description=poste : une ligne de charge (CPU, mémoire, cartes, places lourdes) dans poste-load.tsv (21 nov. 2026)
+
+[Service]
+Type=oneshot
+Nice=19
+ExecStart=/usr/bin/python3 -I %h/.cache/rag3weaver-build/poste_load.py
