@@ -264,7 +264,15 @@ impl Node for RunCommandNode {
         // before the guard, which would only hold it for a human, each word of the command that resolves (from its
         // directory) to an existing path outside the roots the sandbox mounts stops it; the host turns the refusal into a
         // request to the gate, with the command to replay once the root is granted.
-        if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned() {
+        // **A protected path is a hard refusal** (the v1 defaults, 21 November 2026): the host's data, its state, its
+        // configuration, the credential stores; never an open_root request, which the judge would see.
+        if let Some(protege) = protected_path_in(&self.ligne, &racine, &crate::backend::call_protected_folders()) {
+            return Err(format!(
+                "chemin protégé : {} est sous un dossier que rien n'ouvre (les données ou l'état de l'hôte, un profil de navigateur, un magasin d'identifiants) ; aucun accord ne l'ouvre",
+                protege.display()
+            ));
+        }
+        if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned().filter(|_| crate::backend::call_judge_all()) {
             if let Some((dehors, mode)) = open_root_needed(&self.ligne, &racine, &bac, false, &crate::backend::granted_roots()) {
                 return Err(format!(
                     "{OPEN_ROOT_MARKER}{}",
@@ -536,6 +544,38 @@ pub fn open_root_needed(
         }
         if reel.exists() && !lectures.iter().any(|r| reel.starts_with(r)) {
             return Some((reel, "read".into()));
+        }
+    }
+    None
+}
+
+/// The first word of `ligne` that resolves (absolute, `~/`, or from `racine`) to a path under one of `protected`.
+fn protected_path_in(ligne: &str, racine: &std::path::Path, protected: &[std::path::PathBuf]) -> Option<std::path::PathBuf> {
+    if protected.is_empty() {
+        return None;
+    }
+    let canon = |r: &std::path::PathBuf| r.canonicalize().unwrap_or_else(|_| r.clone());
+    let proteges: Vec<std::path::PathBuf> = protected.iter().map(canon).collect();
+    let maison = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    for mot in ligne.split_whitespace() {
+        let mot = mot.trim_matches(|c| c == '\'' || c == '"');
+        let mot = mot.rsplit_once('=').map(|(_, v)| v).unwrap_or(mot);
+        if mot.is_empty() || mot.starts_with('-') {
+            continue;
+        }
+        let candidat = if let Some(reste) = mot.strip_prefix("~/") {
+            match &maison {
+                Some(h) => h.join(reste),
+                None => continue,
+            }
+        } else if mot.starts_with('/') {
+            std::path::PathBuf::from(mot)
+        } else {
+            racine.join(mot)
+        };
+        let Some(reel) = resolve_path(&candidat) else { continue };
+        if proteges.iter().any(|p| reel.starts_with(p)) {
+            return Some(reel);
         }
     }
     None
