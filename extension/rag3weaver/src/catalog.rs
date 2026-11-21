@@ -3221,6 +3221,9 @@ fn read_threads() -> u64 {
             }
         }
 
+        // The key becomes the identity of a row when the relation is created with it, or an existing one takes it.
+        let takes_its_key = !key.is_empty() && self.config.relations.get(rel_name).is_none_or(|r| r.key.is_empty());
+
         // If already registered, check consistency
         if let Some(existing) = self.config.relations.get(rel_name) {
             if existing.from != from || existing.to != to {
@@ -3267,6 +3270,18 @@ fn read_threads() -> u64 {
             let ddl = self.dialect.create_rel_table(&rel_name, from, to, &cols);
             self.conn.execute(&ddl)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        }
+
+        if takes_its_key {
+            let cles: Vec<&str> = key.iter().map(String::as_str).collect();
+            if let Some(ddl) = self.dialect.add_rel_key(rel_name, &cles) {
+                self.conn.execute(&ddl).map_err(|e| {
+                    CatalogError::SchemaError(format!(
+                        "la relation « {rel_name} » ne peut pas prendre la clé {} : une ligne existante l'a nulle, ou deux lignes ont la même paire et la même clé ({e})",
+                        key.join(", ")
+                    ))
+                })?;
+            }
         }
 
         // Persist + update in-memory
