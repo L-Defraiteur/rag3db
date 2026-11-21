@@ -1076,6 +1076,16 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(statut, &v));
         }
+        // **Open a folder** (Lucie's first step in the IDE, 21 November 2026): the field of the welcome page, on the
+        // host's `/dossiers/ouvrir` under the IDE's session — created and `git init`, or attached, or refused saying why.
+        ("POST", "/ide/ouvrir") => {
+            let mut corps = Vec::new();
+            let (statut, v) = match request.as_reader().read_to_end(&mut corps) {
+                Err(e) => (400, json!({ "ok": false, "error": format!("corps illisible : {e}") })),
+                Ok(_) => host.handle("POST", "/dossiers/ouvrir", Some(&host.ide_session()), &corps),
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);
             let _ = request.respond(json_(statut, &v));
