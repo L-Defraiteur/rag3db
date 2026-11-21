@@ -2821,8 +2821,7 @@ mod tests {
             ("cat", &["../backend.json"]),
             ("cat", &["/etc/hostname"]),
             ("ls", &["/"]),
-            ("cat", &["~/.ssh/id_ed25519"]),
-            ("cat", &["$HOME/.ssh/id_ed25519"]),
+            ("cat", &["~/.bashrc"]),
             ("grep", &["-r", "motif", ".."]),
             ("find", &["..", "-name", "z"]),
             ("git", &["-C", "..", "log"]),
@@ -2837,6 +2836,13 @@ mod tests {
                 args.join(" "),
                 v.motif
             );
+        }
+        // A private key shown is refused, not asked (page 07 of rag3weaver-archi, Lucie: showing a secret stays
+        // forbidden even after a yes).
+        for args in [&["~/.ssh/id_ed25519"][..], &["$HOME/.ssh/id_ed25519"][..]] {
+            let v = g.juger(&cmd("cat", args), &ctx);
+            assert_eq!(v.decision, Decision::Refuse, "`cat {}` : {}", args.join(" "), v.motif);
+            assert!(v.motif.contains("showing a secret"), "{}", v.motif);
         }
     }
 
