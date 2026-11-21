@@ -1196,7 +1196,7 @@ mod tests {
             }
             times.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let (m, p) = (times[times.len() / 2], times[(times.len() * 95 / 100).min(times.len() - 1)]);
-            println!("PROBE_TEXTF {label} : {} queries, median {m:.1} ms, p95 {p:.1} ms, recall@10 {:.3}, {:.1} distinct texts", queries.len(), hit as f64 / (10.0 * nq), distinct / nq);
+            println!("PROBE_TEXTF {label} : {} queries, median {m:.1} ms, p95 {p:.1} ms, recall@10 {:.3}, {:.1} distinct texts", queries.len(), hit as f64 / (10.0 * nq), distinct as f64 / nq);
         }
     }
 
