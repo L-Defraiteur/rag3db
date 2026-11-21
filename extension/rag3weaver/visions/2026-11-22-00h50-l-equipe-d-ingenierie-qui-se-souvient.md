@@ -67,3 +67,15 @@ Ce partage règle à la fois le coût d'entrée (pas de GPU à acheter pour essa
 mémoire ne quittent pas leur machine). Il suppose des hôtes d'inférence joignables à distance et sûrs (auth, quota par
 client, registre des dépenses par client), et que rien de leur savoir ne transite au-delà de ce qu'un appel de modèle
 demande.
+
+## Le modèle économique : une marge sur l'inférence (Lucie, 22 nov.)
+
+L'inférence passe par nous, et nous prenons une marge sur chaque fournisseur, au choix du client :
+
+- **Européen** pour ceux qui le veulent : Scaleway pour l'hébergement, Mistral pour les modèles ;
+- **beaucoup d'autres fournisseurs** pour ceux à qui c'est égal (Gemini, Anthropic, OpenAI…) ;
+- **Modal ou Hugging Face** seulement quand c'est indispensable : nos modèles ouverts qu'on ne trouve servis nulle
+  part ailleurs (juges, embarquement).
+
+Le registre des dépenses (prix datés, sources citées, plafonds) en est la base : il suffit d'y ajouter la marge et le
+client. Le choix du fournisseur reste une ligne de config, comme aujourd'hui `models.llm`.
