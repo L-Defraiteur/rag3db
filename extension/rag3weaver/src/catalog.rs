@@ -1642,6 +1642,15 @@ fn read_threads() -> u64 {
                     .unwrap_or_else(|e| serde_json::json!({"table": table, "error": e}))
             }).collect()
         };
+        // **La maintenance se clôt par sa propre génération** (lucivy 4.4, (A)) : elle ne crée pas de version de la base
+        // et commite sous la génération courante, que `release_below` ne relâche jamais. Sans génération à elle, la
+        // génération courante retiendrait l'ancien index entier (une compaction le réécrit) jusqu'au paquet suivant.
+        // La frontière étiquette la suivante, la valide en base hors transaction, et relâche en dessous.
+        if !self.in_transaction {
+            if let Err(e) = self.flush_blob_store("maintenance du plein texte") {
+                eprintln!("[rag3weaver] maintenance nocturne : la génération qui la clôt ne se pose pas ({e})");
+            }
+        }
         let note = serde_json::json!({
             "date": maintenant.date().to_string(),
             "at": quand,
@@ -1670,7 +1679,10 @@ fn read_threads() -> u64 {
         if self.in_transaction {
             return Err("une transaction est ouverte : la maintenance attend son COMMIT ou son ROLLBACK".into());
         }
-        crate::fts_maintenance::maintain(&self.fts_handle_nomme(table)?, demande)
+        let rendu = crate::fts_maintenance::maintain(&self.fts_handle_nomme(table)?, demande)?;
+        // Close par sa propre génération, comme la maintenance de la nuit (lucivy 4.4, (A)).
+        self.flush_blob_store("maintenance du plein texte").map_err(|e| format!("la génération qui clôt la maintenance : {e}"))?;
+        Ok(rendu)
     }
 
     /// Ouvre (ou crée) l'index FTS d'une table, en le mémorisant.
@@ -2011,6 +2023,24 @@ fn read_threads() -> u64 {
                         let _ = self.mark_fts_pending(&[entite.as_str()]);
                     }
                     return Err(Some(format!("plein texte {table} : retour à la génération {g} impossible ({e}) — à rouvrir")));
+                }
+            }
+        }
+        // **La génération de la base, étiquetée si l'index ne la garde pas** : la dernière marque d'un processus (sa
+        // fermeture) est posée après la fermeture de ses index, sans étiquette. Le dossier et la base sont d'accord sur
+        // elle : son état est celui du dossier, et l'étiqueter maintenant la rend disponible à un retour.
+        if !self.lecture_seule && base_generation > 0 && handle.is_tagged() && revenir_a.is_none() {
+            let dossier = files.borrow().last().map(|s| s.key());
+            if let Some(key) = dossier {
+                let dir = match &self.fts_storage {
+                    crate::fts_handle::FtsStorage::Files { base_path } => std::path::Path::new(base_path).join(&key),
+                    _ => std::path::PathBuf::new(),
+                };
+                let gardees = crate::fts_directory::FtsShardStorage::kept_generations(&dir);
+                if crate::fts_directory::generation_on_disk(&dir) == Some(base_generation) && !gardees.contains(&base_generation) {
+                    if let Err(e) = handle.commit_tagged(base_generation) {
+                        eprintln!("[rag3weaver] plein texte {table} : étiqueter la génération {base_generation} de la base : {e}");
+                    }
                 }
             }
         }
