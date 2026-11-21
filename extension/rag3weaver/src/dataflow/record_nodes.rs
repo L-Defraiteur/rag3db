@@ -1064,6 +1064,20 @@ fn paires_posees(
     Ok(paires)
 }
 
+/// **Say the links dropped for lack of an end** (21 November 2026, c7): they were dropped without a word — a
+/// rewrite of 419 files lost 26 544 `MENTIONS` while its report said `failed: 0`. The count goes to the catalogue
+/// (`Catalog::take_dangling_links`) and the drain's warnings say it, with one example.
+fn say_the_dangling_links(ctx: &mut NodeContext, rel_name: &str, n: usize, detail: &str, example: Option<(&str, &str)>) {
+    if n == 0 {
+        return;
+    }
+    if let Some(c) = ctx.service::<Arc<std::sync::atomic::AtomicUsize>>(DANGLING_LINKS_SERVICE) {
+        c.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+    }
+    let exemple = example.map(|(de, vers)| format!(" — exemple : {de} → {vers}")).unwrap_or_default();
+    ctx.warn(&format!("lien « {rel_name} » : {n} lien(s) sans bout écarté(s){detail}{exemple}"));
+}
+
 /// **Poser un lot d'arêtes par COPY.** Rend `Ok(Some(écrites))` si le lot est
 /// posé — les indices des paires réellement écrites, sans les doublons, les
 /// paires déjà là ni celles dont un bout manque —, `Ok(None)` si le moteur n'a
@@ -1199,6 +1213,8 @@ fn copier_les_liens(
     let t_existence = t0.elapsed();
     let t_csv0 = std::time::Instant::now();
     let mut absents = 0usize;
+    let (mut sans_depart, mut sans_arrivee) = (0usize, 0usize);
+    let mut exemple_sans_bout: Option<(String, String)> = None;
 
     // **La sémantique du chemin par lots** (ticket
     // `2026-10-18-les-relations-d-un-index-dependent-du-chemin-d-ecriture`) :
@@ -1239,6 +1255,15 @@ fn copier_les_liens(
             let paire = (rl.from_uuid.as_str(), rl.to_uuid.as_str());
             if !froms_presents.contains(paire.0) || !tos_presents.contains(paire.1) {
                 absents += 1;
+                if !froms_presents.contains(paire.0) {
+                    sans_depart += 1;
+                }
+                if !tos_presents.contains(paire.1) {
+                    sans_arrivee += 1;
+                }
+                if exemple_sans_bout.is_none() {
+                    exemple_sans_bout = Some((paire.0.to_string(), paire.1.to_string()));
+                }
                 continue;
             }
             let arrivee = identite_de(ri);
@@ -1287,6 +1312,13 @@ fn copier_les_liens(
     ctx.metric("already_linked", (indices.len() - ecrites - absents - a_merger.len()) as f64);
     ctx.metric("to_update_by_batch", a_merger.len() as f64);
     ctx.metric("dangling", absents as f64);
+    say_the_dangling_links(
+        ctx,
+        rel_name,
+        absents,
+        &format!(" ({sans_depart} sans départ dans {}, {sans_arrivee} sans arrivée dans {})", ends.0, ends.1),
+        exemple_sans_bout.as_ref().map(|(a, b)| (a.as_str(), b.as_str())),
+    );
     ctx.metric("proven_ends", bouts_prouves as f64);
     Ok(Some((ecrites_indices, a_merger)))
 }
@@ -1597,6 +1629,16 @@ impl Node for LinkRecordNode {
                         ((resolved[ri].from_uuid.as_str(), resolved[ri].to_uuid.as_str(), key_text(&key, |k| props.get(k))), key_values(&key, props))
                     })
                     .collect();
+                // A link of the batch that is not there after the MERGE found no end (its MATCH was empty).
+                let mut sans_bout = 0usize;
+                let mut exemple: Option<(&str, &str)> = None;
+                for (de, vers, texte) in de_la_tranche.keys() {
+                    if !apres.contains(&(de.to_string(), vers.to_string(), texte.clone())) {
+                        sans_bout += 1;
+                        exemple.get_or_insert((de, vers));
+                    }
+                }
+                say_the_dangling_links(ctx, rel_name, sans_bout, "", exemple);
                 for (de, vers, texte) in apres.difference(&avant) {
                     if let Some(valeurs) = de_la_tranche.get(&(de.as_str(), vers.as_str(), texte.clone())) {
                         if let Some(e) = &ecritures {
