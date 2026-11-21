@@ -1405,6 +1405,15 @@ impl DaemonHost {
         self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).get(layer).map(|f| f.turns.load(std::sync::atomic::Ordering::Relaxed))
     }
 
+    /// The rewrites of the view's layer by the thread that makes it follow its worktree: `(by a kernel event, by the
+    /// slow poll)`, `None` for a view that does not follow. The witness that a write is followed by the kernel's events,
+    /// without a bound in time that a loaded machine breaks. RED STUB.
+    #[cfg(feature = "code")]
+    #[allow(unused_variables)]
+    pub fn view_follower_rewrites(&self, layer: &str) -> Option<(usize, usize)> {
+        Some((0, 0)) // RED STUB.
+    }
+
     /// The view by default of a session, `None` without one.
     pub fn session_default_view(&self, session: &str) -> Option<Value> {
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).get(session).and_then(|s| s.default_view.clone())
