@@ -311,7 +311,7 @@ pub trait Hote {
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String>;
     /// **For an agent** (M7): the call made for `agent`, whose key the host puts in `author` (`writes.author`); the
     /// record never carries it. `None`: no agent, no author. By default, a plain call.
-    fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+    fn call_for(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
         let _ = agent;
         self.appeler(outil, arguments)
     }
@@ -534,9 +534,9 @@ impl Hote for ClientHote {
         Ok(v)
     }
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String> {
-        self.appeler_pour(None, outil, arguments)
+        self.call_for(None, outil, arguments)
     }
-    fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+    fn call_for(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
         let mut corps = json!({ "manifest": self.manifest, "name": outil, "arguments": arguments, "deadline_ms": Self::echeance(self.delai) });
         if let Some(a) = agent.filter(|a| !a.is_empty()) {
             corps["agent"] = json!(a);
@@ -846,7 +846,7 @@ fn premiere_ligne(texte: &str, max: usize) -> String {
 
 /// Un apport (L1) rangé sur sa fiche, `via: hook`, `author` = la clé.
 fn ecrire_un_apport(h: &dyn Hote, fiche: &str, source: &str, section: &str, texte: &str, author: &str) -> Result<(), String> {
-    h.appeler_pour(
+    h.call_for(
         Some(author).filter(|a| !a.is_empty()),
         "put_apport",
         json!({ "record": { "fiche": fiche, "source": source, "section": section, "texte": texte, "niveau": "L1", "state": "current", "via": "hook" } }),
@@ -1752,7 +1752,7 @@ fn ranger_la_compaction(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal:
     let chemin = format!("sources/{}-compaction-{id8}.md", quand.strftime("%Y-%m-%d-%Hh%M"));
     let titre = format!("Compaction du {} — session {id8}", quand.strftime("%Y-%m-%d %H:%M"));
     let contenu = format!("# {titre}\n\n{}\n", resume.trim());
-    if let Err(err) = h.appeler_pour(Some(cle.as_str()).filter(|c| !c.is_empty()), "put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "filet", "session": format!("session:{}", e.session_id), "via": "hook" } })) {
+    if let Err(err) = h.call_for(Some(cle.as_str()).filter(|c| !c.is_empty()), "put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "filet", "session": format!("session:{}", e.session_id), "via": "hook" } })) {
         journal.push(format!("L0 de la compaction non écrit : {err}"));
         return;
     }
@@ -2459,7 +2459,7 @@ mod tests {
             }
             Ok(self.reponses.get(outil).cloned().unwrap_or_else(recherche_vide))
         }
-        fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+        fn call_for(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
             let mut a = arguments;
             if let Some(agent) = agent {
                 a["agent"] = json!(agent);
