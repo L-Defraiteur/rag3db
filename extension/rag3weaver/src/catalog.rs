@@ -26,7 +26,7 @@ pub mod retard;
 /// The `_catalog_meta` key of the observed index rate, in milliseconds per file.
 const INDEX_RATE_KEY: &str = "index_rate_ms_per_file";
 mod synchronisation;
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 mod reuse_by_text_hash_tests;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
