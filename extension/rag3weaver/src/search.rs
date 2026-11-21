@@ -1760,6 +1760,11 @@ pub fn build_bm25_query(
     obj.to_string()
 }
 
+/// The witnesses of `contains_split`'s error budget (22 November 2026), in a file of their own.
+#[cfg(test)]
+#[path = "search_budget_tests.rs"]
+mod budget_tests;
+
 /// Build contains clause(s) for one value across fields.
 /// Single field → single contains object. Multiple fields → boolean should.
 fn build_contains_clauses(
