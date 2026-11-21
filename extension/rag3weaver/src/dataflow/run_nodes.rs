@@ -1125,20 +1125,25 @@ mod tests {
             let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(domaine.path()));
             services.register(FILE_SOURCE_SERVICE, source);
             let mut ctx = NodeContext::with_services(Arc::new(services));
-            RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
-            let sortie = texte(&mut ctx);
+            // Since RootGrants (lot B, 21 November 2026), a path outside the sandbox's roots stops the command before it
+            // runs, as an open_root request (OPEN_ROOT_MARKER): the line granted by a human still gives no kernel
+            // right, and the file is still not read; the refusal only comes earlier than the kernel's.
+            let arrete = |r: Result<(), String>| r.err().is_some_and(|e| e.starts_with(OPEN_ROOT_MARKER));
             if !lecture_declaree {
-                assert!(sortie.contains("Permission denied") && !sortie.contains("SCRIPT_EXTERIEUR_LU"), "refus réel observable : {sortie}");
-                assert!(!sortie.contains(EN_ATTENTE) && !sortie.contains("code 0"), "la garde a accordé, le noyau refuse : {sortie}");
+                let r = RunCommandNode::new("run", &ligne).execute(&mut ctx);
+                assert!(arrete(r.clone()), "a path outside the roots is not stopped as open_root: {r:?}");
+                let sortie = texte(&mut ctx);
+                assert!(!sortie.contains("SCRIPT_EXTERIEUR_LU") && !sortie.contains("code 0"), "the line granted by a human ran outside the domain: {sortie}");
             } else {
+                RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
+                let sortie = texte(&mut ctx);
                 assert!(sortie.contains("code 0") && sortie.contains("SCRIPT_EXTERIEUR_LU"), "seule différence : extra_read du fichier : {sortie}");
                 let variante = format!("{ligne} {}", frere.display());
-                RunCommandNode::new("run", &variante).execute(&mut ctx).unwrap();
-                assert!(texte(&mut ctx).contains(EN_ATTENTE), "pas d'accord implicite de variante");
+                assert!(arrete(RunCommandNode::new("run", &variante).execute(&mut ctx)), "pas d'accord implicite de variante");
                 garde.accorder_ligne(&variante, &contexte_accord).unwrap();
-                RunCommandNode::new("run", &variante).execute(&mut ctx).unwrap();
-                let sortie = texte(&mut ctx);
-                assert!(sortie.contains("Permission denied") && !sortie.contains("CONTENU_FRERE_NON_ACCORDE"), "extra_read ne donne pas le parent : {sortie}");
+                let r = RunCommandNode::new("run", &variante).execute(&mut ctx);
+                assert!(arrete(r.clone()), "extra_read ne donne pas le parent : {r:?}");
+                assert!(!texte(&mut ctx).contains("CONTENU_FRERE_NON_ACCORDE"), "extra_read ne donne pas le parent");
             }
         }
     }
