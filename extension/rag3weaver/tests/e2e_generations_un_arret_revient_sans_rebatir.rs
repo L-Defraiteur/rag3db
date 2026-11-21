@@ -28,7 +28,8 @@ fn a_kill_two_generations_ahead_comes_back_without_a_rebuild() {
     let (statut, sortie) = g::lancer("repreneur", &base, &[]);
     assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
     let ms = g::reprise_ms("repreneur", &sortie);
-    println!("▸ reprise en {ms} ms ; générations avant la reprise : {avant:?}");
+    let remise = sortie.lines().find_map(|l| l.strip_prefix("REMISE_MS repreneur ")).unwrap_or("?").trim().to_string();
+    println!("▸ remise en état du plein texte en {remise} ms ; reprise entière (resynchronisation comprise) en {ms} ms ; générations avant la reprise : {avant:?}");
     assert!(!sortie.contains(g::REBATI), "un dossier en avance revient à la génération de la base, sans rebâti :\n{sortie}");
     let apres = g::generations(&base);
     assert!(apres.iter().all(|(_, en_base, disque)| en_base == disque), "le dossier et la base d'accord après la reprise : {apres:?}");

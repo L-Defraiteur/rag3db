@@ -83,6 +83,11 @@ fn role_enfant() {
         assert!(catalog.must_reopen().is_some(), "le catalogue est empoisonné après le ROLLBACK : {erreur}");
         return;
     }
+    if role == "repreneur" {
+        // La remise en état du plein texte seule : l'ouverture des index, et le rebâti en ligne s'il y en a un.
+        catalog.verify_fts_files();
+        println!("REMISE_MS {role} {}", t.elapsed().as_millis());
+    }
     tx::synchroniser(&mut catalog, role == "repreneur");
     // La reprise : rouvrir, remettre le plein texte d'accord avec la base, finir la synchronisation.
     println!("REPRISE_MS {role} {}", t.elapsed().as_millis());
@@ -178,6 +183,7 @@ pub fn temoin(cas: &str) -> std::collections::BTreeMap<String, i64> {
     let (statut, sortie) = lancer("temoin", &d.join("base.rag3db"), &[]);
     assert!(statut.success(), "le témoin va au bout :\n{sortie}");
     let c = comptes("temoin", &sortie);
+    println!("▸ passe complète du témoin en {} ms", reprise_ms("temoin", &sortie));
     let _ = std::fs::remove_dir_all(&d);
     c
 }
