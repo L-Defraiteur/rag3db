@@ -39,6 +39,28 @@ pub struct Tache {
     pub task: String,
 }
 
+/// **What the view sends to the mailbox for an action**: the body, and whether it was typed at the keyboard (it then
+/// goes with the user's token, `client::post_typed`). `None` for an action that sends nothing to the mailbox.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Sending {
+    pub body: Value,
+    pub typed: bool,
+}
+
+pub(crate) fn sending_of(action: &Action, tache: &Tache) -> Option<Sending> {
+    match action {
+        Action::Envoyer(texte, kind) => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte }), typed: false }),
+        Action::Repondre { attente, texte, accord } => Some(Sending { body: crate::boite::reponse(&tache.depot.id, &tache.task, attente, texte, *accord), typed: false }),
+        Action::Arreter => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" }), typed: false }),
+        _ => None,
+    }
+}
+
+/// The request given on the command line (`--request`): never typed, so never with the user's token.
+pub(crate) fn request_sending(tache: &Tache, texte: &str) -> Sending {
+    Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "request", "text": texte }), typed: false }
+}
+
 /// **Ce qu'on apprend d'une tâche** : le manifeste de son worktree (le filtre du
 /// flux : une trame d'un autre worktree ne la regarde pas), son en-tête, et ce
 /// que chacun de ses outils a le droit de faire.
@@ -837,6 +859,20 @@ pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B
 
 #[cfg(test)]
 mod tests {
+
+    /// **A typed message or answer goes with the user's token; the command line's request never does** (the mode auto's
+    /// human title, 21 November 2026): only what the user typed may make an approval.
+    #[test]
+    fn typed_messages_and_answers_are_marked_typed_and_the_command_line_request_is_not() {
+        let tache = Tache { depot: Depot { id: "b".into(), manifest: "/d/m.json".into(), repo: "d".into(), branch: "t".into() }, task: "t".into() };
+        let typed = sending_of(&Action::Envoyer("fais ça".into(), "instruction"), &tache).expect("a message is sent");
+        assert!(typed.typed, "{typed:?}");
+        assert_eq!(typed.body["text"], "fais ça");
+        let attente = crate::boite::Attente { id: "L1".into(), kind: "approval".into(), text: "lancer cargo test".into(), command: Some("cargo test".into()) };
+        let answer = sending_of(&Action::Repondre { attente, texte: "oui".into(), accord: Some(true) }, &tache).expect("an answer is sent");
+        assert!(answer.typed, "{answer:?}");
+        assert!(!request_sending(&tache, "lance-toi").typed, "the --request of the command line is not typed");
+    }
     use super::*;
     use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
     use ratatui::buffer::Cell;
@@ -849,7 +885,7 @@ mod tests {
     #[test]
     fn partial_english_and_legacy_commands_collect_catalogue_before_completion() {
         let agent = client::agent();
-        let endpoint = Endpoint { address: "127.0.0.1:1".into(), token: "fake-test-token".into() };
+        let endpoint = Endpoint { address: "127.0.0.1:1".into(), token: "fake-test-token".into(), user_token: None };
         let task = Tache {
             depot: Depot { id: "faux".into(), manifest: "/fake/backend.json".into(), repo: "faux-depot".into(), branch: "main".into() },
             task: "mesure".into(),
