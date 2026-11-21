@@ -19,7 +19,7 @@ fn a_closed_task_keeps_its_folder_and_its_card_says_who_it_was() {
     let files = host.teammate_files(&h.id, "archi-lot").unwrap();
     files.append("supervisor", "request", None, "Fais-le.").unwrap();
     let plans: super::super::teammate::Plans = serde_json::from_value(json!({ "plans": [{ "number": 1, "request": "r", "proposal": "p", "state": "active",
-        "items": [{ "id": "lire", "text": "Lire", "status": "doing" }] }] })).unwrap();
+        "items": [{ "id": "read", "text": "Read", "status": "doing" }] }] })).unwrap();
     files.write_plans(&plans).unwrap();
     let tete = String::from_utf8(std::process::Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&t.arbre).output().unwrap().stdout).unwrap().trim().to_string();
     let dossier = t.arbre.parent().unwrap().to_path_buf();
@@ -34,7 +34,7 @@ fn a_closed_task_keeps_its_folder_and_its_card_says_who_it_was() {
     assert_eq!(fin["agent_key"], json!(t.agent_key));
     assert!(fin["agent_key"].as_str().is_some_and(|k| k.starts_with("agent:")), "{fin}");
     assert_eq!(fin["head"], json!(tete), "the branch's head, to find it again by the reflog");
-    assert_eq!(fin["plan"]["plans"][0]["items"][0]["id"], json!("lire"), "the final plan");
+    assert_eq!(fin["plan"]["plans"][0]["items"][0]["id"], json!("read"), "the final plan");
     let fermees = host.taches_fermees_de(&h.id);
     assert!(fermees.iter().any(|f| f["nom"] == "archi-lot" && f["archive"] == fin["archive"]), "the registry keeps the card: {fermees:#?}");
 }
