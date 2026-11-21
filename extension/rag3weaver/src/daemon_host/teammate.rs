@@ -517,6 +517,8 @@ pub struct Step {
     done: Mutex<Option<Value>>,
     /// The pair entry of the task, and its key (mode pair, lot 3).
     pair: Option<(Arc<super::pair::Pair>, String)>,
+    /// The task's background commands: their scope and their mailbox (they outlive the step).
+    background: Option<Arc<TaskBackground>>,
     /// The browser family (`teammate.browser`): its policy, and its tools or why the host does not listen.
     browser: Option<(crate::backend::BrowserPolicy, Result<super::browser_tools::BrowserTools, String>)>,
     /// The gate of the auto mode, when the task's backend is in it (page 07 of rag3weaver-archi).
@@ -691,6 +693,7 @@ impl Step {
             work: Mutex::new(StepWork::default()),
             turn_run: Mutex::new(None),
             pair: None,
+            background: None,
             browser: None,
             #[cfg(feature = "code")]
             gate: None,
@@ -714,6 +717,12 @@ impl Step {
     /// The browser family of the step (`teammate.browser`).
     pub fn with_browser(mut self, browser: Option<(crate::backend::BrowserPolicy, Result<super::browser_tools::BrowserTools, String>)>) -> Self {
         self.browser = browser;
+        self
+    }
+
+    /// The task's background commands (their scope and their mailbox).
+    pub fn with_background(mut self, background: Option<Arc<TaskBackground>>) -> Self {
+        self.background = background;
         self
     }
 
@@ -1262,6 +1271,16 @@ impl crate::agent::ToolBox for StepTools<'_> {
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call_in(call, run))))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
+        // **A background command belongs to the task, not to the step** (Lucie, 21 November 2026): its death goes to
+        // the task's scope, and its end to the task's mailbox, which wakes the teammate.
+        let task_inv;
+        let inv = match (&self.step.background, call.name.as_str()) {
+            (Some(bg), "run_command") if serde_json::from_str::<Value>(&call.arguments).is_ok_and(|a| a["background"] == true) => {
+                task_inv = crate::agent::ToolInvocation { handle: inv.handle.clone(), bus: Some(bg.bus.clone()), inbox: bg.inbox.clone(), scope: bg.scope.clone(), directory: inv.directory.clone() };
+                &task_inv
+            }
+            _ => inv,
+        };
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call_with(call, run, inv))))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
@@ -1361,6 +1380,66 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, requ
 pub struct Outcome {
     pub steps: Vec<Value>,
     pub ended: String,
+}
+
+/// **The background commands of a task** (Lucie, 21 November 2026): a bus and a mailbox of their own, on which their
+/// ends arrive, and a scope that outlives the teammate's steps (emptied when the task closes).
+pub struct TaskBackground {
+    pub bus: crate::events::EventBus,
+    pub inbox: String,
+    pub scope: Arc<crate::agent::RunScope>,
+}
+
+impl DaemonHost {
+    /// **The task's background**, made at its first use. Each end that arrives on its mailbox is posted to the task's
+    /// mailbox (`from: background`, a `message`), which wakes the teammate. `None` when the host does not know itself
+    /// (`se_connaitre`): a background command then stays tied to its step, as before.
+    pub(crate) fn task_background(&self, parent: &str, task: &str) -> Option<Arc<TaskBackground>> {
+        let soi = self.soi.get().cloned()?;
+        let key = format!("{parent}/{task}");
+        let mut all = self.task_backgrounds.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(b) = all.get(&key) {
+            return Some(b.clone());
+        }
+        let bus = crate::events::EventBus::new(64);
+        let inbox = format!("teammate-background:{key}");
+        let mut rx = bus.subscribe(&crate::events::inbox_topic(&inbox));
+        let (parent, task) = (parent.to_string(), task.to_string());
+        let spawned = std::thread::Builder::new().name(format!("fond:{key}")).spawn(move || loop {
+            match rx.try_recv() {
+                Ok(crate::events::Event::Message { content, .. }) => {
+                    let Some(h) = soi.upgrade() else { return };
+                    if let Err(e) = h.post_to_teammate(&parent, &task, "background", "message", None, &content, &Value::Null) {
+                        eprintln!("[fond] {parent}/{task} : la fin d'une commande de fond n'a pas rejoint la boîte : {e}");
+                    }
+                }
+                Ok(_) => {}
+                Err(async_broadcast::TryRecvError::Empty) => {
+                    if soi.strong_count() == 0 {
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+                // Ends lost to an overflow are said by `tail`; the thread keeps reading.
+                Err(async_broadcast::TryRecvError::Overflowed(_)) => {}
+                Err(async_broadcast::TryRecvError::Closed) => return,
+            }
+        });
+        if let Err(e) = spawned {
+            eprintln!("[fond] {key} : le fil des fins ne part pas ({e}) : les commandes de fond restent liées au pas");
+            return None;
+        }
+        let b = Arc::new(TaskBackground { bus, inbox, scope: Arc::new(crate::agent::RunScope::default()) });
+        all.insert(key, b.clone());
+        Some(b)
+    }
+
+    /// The task's background commands die with the task (closed, merged or rejected).
+    pub(crate) fn end_task_background(&self, parent: &str, task: &str) {
+        if let Some(b) = self.task_backgrounds.lock().unwrap_or_else(|p| p.into_inner()).remove(&format!("{parent}/{task}")) {
+            b.scope.vider();
+        }
+    }
 }
 
 impl DaemonHost {
@@ -2011,7 +2090,7 @@ impl DaemonHost {
             self.pair_statut(&format!("{parent}/{task}"), true);
             let cle = format!("{parent}/{task}");
             let tenue = self.pair.get().cloned().flatten().filter(|p| p.tient(&cle)).map(|p| (p, cle));
-            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_pair(tenue).with_browser(policy.browser.clone().map(|p| {
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_background(self.task_background(parent, task)).with_pair(tenue).with_browser(policy.browser.clone().map(|p| {
                 let tools = self.browser_listening().map(|ecoute| super::browser_tools::BrowserTools { policy: p.clone(), ecoute, session: format!("teammate:{parent}/{task}") });
                 (p, tools)
             }));
