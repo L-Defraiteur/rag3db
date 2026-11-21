@@ -2305,8 +2305,15 @@ impl SchemaDialect for Rag3dbDialect {
         // MERGE ne change rien (98 s dans les deux cas) — le coût n'est pas
         // la vérification d'existence, c'est l'insertion elle-même.
         let (from, to) = (self.quote(from), self.quote(to));
+        // PROTOTYPE de mesure (lot 2 de l'intra-scope, jamais déposé) : une occurrence est une arête par site, sa clé de
+        // MERGE porte ses octets — sans elle, deux sites d'un même couple fusionnent (46 % perdus, 21 novembre 2026).
+        let cle = if rel_table == "OCCURS" && prop_columns.contains(&"byte_start") && prop_columns.contains(&"byte_end") {
+            " {byte_start: item.byte_start, byte_end: item.byte_end}"
+        } else {
+            ""
+        };
         format!(
-            "{} MERGE (a)-[r:{}]->(b){prop_set}",
+            "{} MERGE (a)-[r:{}{cle}]->(b){prop_set}",
             unwind_par_cle("items", &[par_uuid("a", Some(&from), "from_uuid"), par_uuid("b", Some(&to), "to_uuid")], "MATCH"),
             self.quote(rel_table)
         )
