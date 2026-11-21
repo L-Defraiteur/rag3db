@@ -125,16 +125,39 @@ Chaque accord qu'il invoque est cité avec sa référence dans sa décision, et 
 `{reason, risk, alternative}`, et l'alternative arrive dans la boîte de l'agent. Ses modèles admis sont dans un fichier
 de l'utilisatrice ; chaque décision est journalisée pour relecture au retour.
 
-## Ce qui est fait, ce qui vient
+## L'ordre des lots
 
-Sur master ou en file : la ref qui tient la tête d'une tâche fermée, l'arbre des agents, `GET /ide/run` (la source des
-preuves par référence), les racines accordées et leur montage (arbre), le cœur de la carte (vert, à déposer), le titre
-d'humain (en cours).
+Lucie (21 novembre, vers 17 h) : « ok pour découper en une v1, pas ok pour ne pas aller tout de suite au bout
+ensuite ». Cette page est la conception gelée ; une idée neuve va dans la liste « suite » ci-dessous, sans réviser
+la page.
 
-Ensuite, dans l'ordre :
-1. le titre d'humain (`user-title`) et le dépôt de la carte ;
-2. la carte branchée à l'équipier, pour tout outil (l'accord générique, que tty attend pour son navigateur) ;
-3. les gardes dures de l'étage 0 : le refus d'afficher et `secret_store` (archi), le masquage (mémoire) ;
-4. la porte en graphe, avec ED : le hook, la collecte, la fabrique de classifieurs, d'abord sans modèle (les règles
-   seules), puis l'étiquetage, l'autorisation par la paire, l'appel, le survivant ;
-5. les allègements, classe par classe, sur les chiffres de banc (le scénario 2 de tty rejoué deux fois, archi).
+### v1 : la plus courte qui tourne pour de vrai
+
+Lucie s'en sert dès qu'elle tourne. Chaque lot commence par son témoin rouge, dans un fichier de tests à lui.
+
+| # | Lot | Qui | État |
+|---|---|---|---|
+| 1 | Les gardes dures : le bac, les racines accordées en lecture par défaut, le dossier de données masqué | arbre | sur master ou en file (sandbox-roots, mode read) |
+| 2 | Le titre d'humain : `user_token`, le code d'entrée de l'IDE, `by` signé par l'hôte sur chaque ligne de boîte | archi | écrit, à jouer (`user-title`) |
+| 3 | Le terminal envoie `X-Rag3weaver-User` après une frappe au clavier | tty | en parallèle de 2 |
+| 4 | La carte, pour tout outil : `{tool, args, class, scope}`, l'état, la fermeture unique ; branchée à l'équipier (ce qui remplace la carte propre à `run_command`) | archi (cœur : `card-2`, vert) ; l'écran au terminal : tty ; dans l'IDE : recherche | cœur à déposer, branchement à faire |
+| 5 | L'étage 0 des secrets : le refus d'afficher et `secret_store` (archi) ; le masquage au point unique de la boucle (mémoire) | archi, mémoire | à faire |
+| 6 | Un seul juge : le Qwen3.5-9B réglé par banc, le prompt P2 et les règles de portée, qui lit la paire et les seuls tours `by.kind == "human"` | archi (le branchement), banc (le modèle, le prompt, les chiffres) | à faire |
+| 7 | La carte et son délai de 30 s : sans réponse ni accord du juge, la carte reste à l'utilisateur | archi | à faire |
+| 8 | Les règles dans une config simple (`~/.config/rag3weaver/gate/rules.json`) : les classes par famille de commande, ce qui passe sans juge | archi | à faire |
+
+### v2 : aussitôt après, sans pause
+
+| # | Lot | Qui |
+|---|---|---|
+| 9 | Le graphe déclaré : `Hook`, `CollectTurns(by='human')`, `CollectPair`, `RecallGrants`, `Classify`, `Route`, la table de décision, chargés de `~/.config/rag3weaver/gate/` sous une politique de types fermée | ED (les types de nœuds), archi (la porte qui les joue) |
+| 10 | `postpone`, le planificateur, `cancel_prefix`, et le cron | ED |
+| 11 | L'appel de l'agent (`appeal`, preuves par référence, `in_reply_to` vers le même juge), par `GET /ide/run` | archi |
+| 12 | Le survivant : Argon, mesuré par banc ; ses outils de recherche d'accords en lecture seule ; le refus avec une alternative | archi, banc |
+| 13 | L'étiquetage des accords en quatre valeurs, à l'écriture, et l'entité `Authorization` (rangement, rappel, révocation) | mémoire |
+| 14 | Les allègements, classe par classe, sur les chiffres de banc (le scénario 2 de tty, rejoué deux fois) | banc, archi |
+
+## Suite
+
+Les idées venues après le gel, sans révision de la page :
+- *(vide pour l'instant)*
