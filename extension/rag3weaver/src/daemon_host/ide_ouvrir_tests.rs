@@ -64,9 +64,12 @@ fn a_folder_opens_from_the_ide_and_is_listed() {
     let plein = d.path().join("plein");
     std::fs::create_dir_all(&plein).unwrap();
     std::fs::write(plein.join("notes.txt"), "à moi").unwrap();
+    // A folder with files that is not a git repository opens as it is since Lucie's word of 21 November 2026 (9 h 5x,
+    // lot non-git-folder): no git init, no index. This witness expected the former refusal.
     let dit = ouvrir(&mut n, &plein);
-    assert!(dit.contains("pas un dépôt git"), "the page says why the folder is refused: {dit}");
+    assert!(dit.contains("Ouvert") && !dit.contains("pas un dépôt git"), "the page does not say the folder is opened: {dit}");
     assert!(!plein.join(".git").exists(), "a folder with files got git init");
+    n.attendre("[...document.querySelectorAll('#dossiers-ouverts .dossier')].some(e => e.innerText.includes('plein'))", "the folder with files among the open folders");
 
     drop(n);
     attendre_l_index(&a, &neuf);
