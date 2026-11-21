@@ -1089,6 +1089,30 @@ impl DaemonHost {
         v["layer"].as_str().map(str::to_string).or_else(|| v["worktree"].as_str().map(|w| format!("worktree:{w}"))).unwrap_or_default()
     }
 
+    /// **The views the host opened for a session, by the name `open_view` gave** (tty's scenario 1, its point 2):
+    /// `(name, layer)`, the layer being `worktree:<real path>`. Empty for a session without a Claude Code id.
+    fn vues_ouvertes_de(&self, claude: Option<&str>) -> Vec<(String, String)> {
+        let Some(chemin) = claude.and_then(|c| self.fichier_de_vue(c)) else { return Vec::new() };
+        let etat: Value = std::fs::read_to_string(&chemin).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        etat["ouvertes"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(nom, o)| {
+                let couche = o["layer"].as_str().map(str::to_string).or_else(|| {
+                    let p = std::path::Path::new(o["path"].as_str()?).canonicalize().ok()?;
+                    Some(format!("worktree:{}", p.display()))
+                })?;
+                Some((nom.clone(), couche))
+            })
+            .collect()
+    }
+
+    /// The name a session knows a layer by: the name `open_view` gave it, else the layer's own.
+    fn nom_pour_la_session(ouvertes: &[(String, String)], couche: &str) -> String {
+        ouvertes.iter().find(|(_, c)| c == couche).map(|(n, _)| n.clone()).unwrap_or_else(|| couche.to_string())
+    }
+
     fn noms_des_vues(&self, manifest: &Path) -> Result<Vec<String>, String> {
         let hosted = self.hosted(manifest)?;
         self.with_backend(&hosted, |b| b.view_names())?
@@ -1098,9 +1122,10 @@ impl DaemonHost {
     /// active one with its source (« session », or « défaut »).
     pub fn views(&self, session: Option<&str>, manifest: &Path) -> Value {
         let r = self.check_session(session).and_then(|s| {
-            let noms = self.noms_des_vues(manifest)?;
+            let ouvertes = self.vues_ouvertes_de(s.claude_session.as_deref());
+            let noms: Vec<String> = self.noms_des_vues(manifest)?.iter().map(|n| Self::nom_pour_la_session(&ouvertes, n)).collect();
             let active = match &s.default_view {
-                Some(v) => json!({ "name": Self::nom_de_vue(v), "source": "session" }),
+                Some(v) => json!({ "name": Self::nom_pour_la_session(&ouvertes, &Self::nom_de_vue(v)), "source": "session" }),
                 None => json!({ "name": crate::generations::COUCHE_DU_BACKEND, "source": "défaut" }),
             };
             Ok(json!({ "ok": true, "views": noms.iter().map(|n| json!({ "name": n })).collect::<Vec<_>>(), "active": active }))
@@ -1119,12 +1144,16 @@ impl DaemonHost {
                 .then(|| std::path::Path::new(name).canonicalize().ok())
                 .flatten()
                 .map(|p| format!("worktree:{}", p.display()));
-            let couche = [Some(name.to_string()), par_chemin].into_iter().flatten().find(|n| noms.contains(n)).ok_or_else(|| {
-                format!("vue « {name} » inconnue de ce backend ; vues connues : {}", noms.join(", "))
+            // A view the host opened, by the name open_view gave: its layer.
+            let ouvertes = self.vues_ouvertes_de(s.claude_session.as_deref());
+            let par_nom_ouvert = ouvertes.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+            let couche = [Some(name.to_string()), par_chemin, par_nom_ouvert].into_iter().flatten().find(|n| noms.contains(n)).ok_or_else(|| {
+                let connues: Vec<String> = noms.iter().map(|n| Self::nom_pour_la_session(&ouvertes, n)).collect();
+                format!("vue « {name} » inconnue de ce backend ; vues connues : {}", connues.join(", "))
             })?;
             let vue = json!({ "layer": couche });
             self.set_session_view(&s.id, Some(vue))?;
-            Ok(json!({ "ok": true, "active": { "name": couche, "source": "session" } }))
+            Ok(json!({ "ok": true, "active": { "name": Self::nom_pour_la_session(&ouvertes, &couche), "source": "session" } }))
         });
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
