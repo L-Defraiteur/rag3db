@@ -1702,6 +1702,16 @@ pub fn build_bm25_query(
     mode: BM25Mode,
     distance: u8,
 ) -> String {
+    // **A word starting with two dashes is a term** (21 November 2026): under `Auto` and `Parse`, lucivy's parser read
+    // `--daemon` as the negation of `-daemon`, and a query of negations only was refused — an agent looking for
+    // `--save-dev` lost the search by words. An explicit mode keeps the query as it is.
+    let dashes_as_terms;
+    let query = if matches!(mode, BM25Mode::Auto | BM25Mode::Parse) {
+        dashes_as_terms = double_dash_as_terms(query);
+        dashes_as_terms.as_str()
+    } else {
+        query
+    };
     // **Résolu ici, une fois.** C'est le seul point où un mode devient une
     // requête lucivy : le résoudre ailleurs laisserait un chemin par lequel
     // `Auto` passerait sans être traduit.
@@ -1758,6 +1768,19 @@ pub fn build_bm25_query(
     };
 
     obj.to_string()
+}
+
+/// The words of a query, each `--word` read as the term `word` (a command-line option, never a negation); a
+/// lone `--`, or `---word`, is left as it is.
+fn double_dash_as_terms(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(|w| match w.strip_prefix("--") {
+            Some(rest) if !rest.is_empty() && !rest.starts_with('-') => rest,
+            _ => w,
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The witnesses of a word starting with two dashes (21 November 2026), in a file of their own.
