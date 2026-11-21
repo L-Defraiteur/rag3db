@@ -714,7 +714,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // d'embarquement, 72,5 % des morceaux la dépassaient).
 // 15 (20 novembre 2026) : un nom intégré du langage (`print`, `len`, `console`, `JSON`) n'est pas une référence du
 // code de premier niveau relevé par le texte, et le suivi des imports ne le remet pas (codeparsers).
-pub const REGLES_DE_L_ANALYSE: u32 = 15;
+// 16 (21 novembre 2026) : une fermeture ou une compréhension repliée dans sa fonction (`fold_lambdas`) ne garde aucun
+// rendez-vous : ils partaient d'un scope jamais écrit et le drain les écartait sans un mot (26 544 liens sur une
+// réécriture de 419 fichiers). Le graphe ne change pas ; l'analyse, si.
+pub const REGLES_DE_L_ANALYSE: u32 = 16;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
