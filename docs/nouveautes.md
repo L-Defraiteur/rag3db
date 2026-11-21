@@ -16,6 +16,11 @@
   worktree en profite surtout : 74 % de ses morceaux ont un texte que la base embarque déjà. Un fichier copié ou déplacé
   aussi, et 18 % des vecteurs d'une base sont des textes répétés. Le journal de profil compte `dense_reused`. L'écriture
   du vecteur, elle, reste à faire.
+- 21 novembre 2026 — **Ce qu'un agent écrit en mémoire porte sa signature, posée par l'hôte.** Une fiche, une
+  Source, un Apport ou un tour écrit pour un agent porte `author = agent:<clé>`. C'est l'hôte qui le pose
+  (`writes.author`), jamais l'outil : un `author` dans l'appel est refusé, en disant de le retirer. Un équipier signe
+  ses tours, ses tranches et le L1 de ses plans de la clé de sa tâche, et le crochet Claude Code dit pour quelle clé il
+  appelle. Un appel sans agent derrière, un client MCP direct par exemple, n'a pas d'auteur : jamais une clé inventée.
 
 - 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
   comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
