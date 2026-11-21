@@ -38,22 +38,25 @@ Ce qui se lance, ce qu'on essaie au terminal et dans l'IDE, ce qu'on doit voir �
 
 - Une petite demande se fait en un pas, sans plan ; une demande en trois éléments ouvre un plan et le suit pas à pas ; une précision envoyée en route s'ajoute à la demande ; un « arrêt » coupe le pas.
 - Chaque pas voit ce que le pas d'avant a lu, écrit et lancé. Au troisième pas de suite sans élément réussi, l'équipier s'arrête et le dit.
-- **Sur master, pas encore dans l'hôte du matin** (lot `raisonnement-borne-3`, atterri après sa pose) : une réponse du modèle coupée à son plafond relancée, au plus deux fois par pas ; le modèle par défaut à `reasoning: low`, réglable par `"models": {"llm": {"reasoning": "medium"}}` dans un manifeste. **Sans ce lot**, un Gemini 3.x par défaut peut remplir sa sortie de raisonnement et couper sa réponse avant tout outil : le pas finit alors sans rien faire. `/model` liste déjà les modèles d'une tâche.
+- **Une réponse du modèle coupée à son plafond est relancée**, au plus deux fois par pas, et le modèle par défaut est à `reasoning: low`, réglable par `"models": {"llm": {"reasoning": "medium"}}` dans un manifeste (lot `raisonnement-borne-3`, dans l'hôte du matin). `/model` liste les modèles d'une tâche.
 
 ## 4. Ce qui manque encore, et comment contourner
 
 | Ce qui manque | Contourner |
 |---|---|
 | `use_view` refuse le nom que rend `open_view` | Rien à faire : `open_view` active la vue ; sinon le nom `worktree:/…` que liste `views` |
-| L'équipier peut dire « fini » sur un arbre qui ne compile pas (archi, rejeu de la nuit ; correctif en cours, `teammate.verify`) | Lui demander de jouer le test nommé et de coller sa dernière ligne |
 | Une tâche sur un dépôt sans commit ne s'ouvre pas | Un premier commit : le message le dit, avec la commande |
 | Une carte d'accord par commande, parfois en double | Répondre à la plus récente d'abord, `o` ou `n` |
 | `cargo check` peut rester long ou bloqué dans une tâche sous charge | Lui laisser le temps ; la boîte le dit (« the command is still running ») |
 | `search_code` sans `options` refuse | Passer `options: {}` |
-| Pas de `fetch` ni de recherche web, pas de cron, pas de navigateur pour l'équipier, pas encore de palette par familles, pas de `run` en fond ; le sous-agent à vues est sur master, pas encore dans l'hôte du matin (`sous-agent-vues-3`) | — (le navigateur est le prochain chantier de tty) |
+| Pas de `fetch` ni de recherche web, pas de cron, pas de navigateur pour l'équipier, pas encore de palette par familles, pas de `run` en fond | — (le navigateur est le prochain chantier de tty) |
 | Le mode pair existe, mais seulement avec `teammate.pair: true` | À n'allumer qu'en le voulant |
 
 ## Corrigé cette nuit
+
+- **Une tâche de correctif finit par sa vérification** (archi, `teammate.verify`) : l'équipier ne dit plus « fini » sur un arbre qui ne compile pas.
+- **Un chemin que le bac à sable refuse deux fois arrête le travail du pas** (archi) : l'équipier ne tourne plus en rond sur ses droits.
+- **Le sous-agent à vues** (archi, `sous-agent-vues-3`).
 
 - **`close_view` dit ce qu'il laisse** (arbre).
 
