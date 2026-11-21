@@ -899,6 +899,226 @@ mod tests {
         println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "étapes": lourdes}));
     }
 
+    /// **Where the derived vectors' writing goes** (ED, 21 November 2026, for c7): on a copy, the plan and the time of
+    /// the two queries of `write_vectors` (the rows already carrying a vector, then the SET), by batches of 64 chunks
+    /// without a vector; the indexes of the base; and the analysis versions the copy's files carry, against this binary's.
+    #[test]
+    #[ignore]
+    fn sonde_ecriture_des_vecteurs() {
+        let chemin = std::env::var("RAG3WEAVER_SONDE_BASE").expect("RAG3WEAVER_SONDE_BASE");
+        let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
+        let ext = crate::backend::vector_extension_of_this_process().expect("l'extension vector");
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{}'", ext.display())).expect("charger l'extension vecteur");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(768)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: 768,
+            ..Default::default()
+        });
+        cat.initialize().unwrap();
+        let chunking = crate::code::default_scope_chunking();
+        println!("SONDE_VECTEURS version du binaire : {}", crate::code::version_de_l_analyse(&chunking));
+        crate::code::register_code_schema(&mut cat, chunking).unwrap();
+        let lire = |cat: &Catalog, q: &str| cat.execute_raw(q).map(|r| r.rows).unwrap_or_else(|e| { println!("SONDE_VECTEURS illisible « {q} » : {e}"); Vec::new() });
+        for r in lire(&cat, "MATCH (f:File) RETURN f.analyse, count(*)") {
+            println!("SONDE_VECTEURS version notée sur File : {r:?}");
+        }
+        for r in lire(&cat, "CALL SHOW_INDEXES() RETURN *") {
+            println!("SONDE_VECTEURS index : {r:?}");
+        }
+        let colonnes: Vec<String> = lire(&cat, "CALL TABLE_INFO('ScopeContent_Chunk') RETURN *")
+            .iter()
+            .filter_map(|r| r.get(1).and_then(|v| v.as_str()).map(str::to_string))
+            .collect();
+        println!("SONDE_VECTEURS colonnes : {colonnes:?}");
+        let col = colonnes.iter().find(|c| c.starts_with("embedding")).cloned().expect("une colonne de vecteurs");
+        let marque = colonnes.iter().find(|c| c.starts_with("_embed_hash")).cloned().unwrap_or_else(|| "_embed_hash".into());
+        println!("SONDE_VECTEURS colonne {col}, marque {marque}");
+        let total = lire(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(*)");
+        let sans = lire(&cat, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.`{col}` IS NULL RETURN count(*)"));
+        println!("SONDE_VECTEURS morceaux : {total:?}, sans vecteur : {sans:?}");
+        let uuids: Vec<String> = lire(&cat, "MATCH (c:ScopeContent_Chunk) RETURN c._uuid LIMIT 1024")
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+            .collect();
+        let d = cat.dialect_arc();
+        let porte = d.embed_carrying_vector("ScopeContent_Chunk", &col).expect("la requête des porteurs");
+        let set = d.embed_set("ScopeContent_Chunk", &col, &marque);
+        let clear = d.embed_clear("ScopeContent_Chunk", &col, &marque);
+        println!("SONDE_VECTEURS requêtes :\n  {porte}\n  {set}\n  {clear}");
+        let paquet = |us: &[String], avec_vecteur: bool| {
+            CypherValue::List(
+                us.iter()
+                    .map(|u| {
+                        let mut m = std::collections::BTreeMap::from([("uuid".to_string(), CypherValue::String(u.clone()))]);
+                        if avec_vecteur {
+                            m.insert("hash".into(), CypherValue::String("sonde".into()));
+                            m.insert("emb".into(), CypherValue::List((0..768).map(|i| CypherValue::Float((i as f64).sin())).collect()));
+                        }
+                        CypherValue::Map(m)
+                    })
+                    .collect(),
+            )
+        };
+        for q in [&porte, &set] {
+            let plan = cat.execute_raw_with_params(&format!("EXPLAIN {q}"), &[QueryParam::new("items", paquet(&uuids[..2], true))]);
+            println!("SONDE_VECTEURS EXPLAIN de « {} » : {:?}", &q[..q.len().min(60)], plan.map(|r| r.rows));
+        }
+        // The rows first cleared (a chunk without vector), then the two queries timed, by batches of 64.
+        let mut t_porte = std::time::Duration::ZERO;
+        let mut t_set = std::time::Duration::ZERO;
+        let mut n = 0usize;
+        for lot in uuids.chunks(64) {
+            cat.execute_raw_with_params(&clear, &[QueryParam::new("items", paquet(lot, false))]).expect("vider");
+            let t = std::time::Instant::now();
+            cat.execute_raw_with_params(&porte, &[QueryParam::new("items", paquet(lot, false))]).expect("porteurs");
+            t_porte += t.elapsed();
+            let t = std::time::Instant::now();
+            cat.execute_raw_with_params(&set, &[QueryParam::new("items", paquet(lot, true))]).expect("set");
+            t_set += t.elapsed();
+            n += lot.len();
+        }
+        println!(
+            "SONDE_VECTEURS {n} vecteurs par paquets de 64 : porteurs {:?} ({:.2} ms/vecteur), SET {:?} ({:.2} ms/vecteur)",
+            t_porte,
+            t_porte.as_secs_f64() * 1000.0 / n as f64,
+            t_set,
+            t_set.as_secs_f64() * 1000.0 / n as f64
+        );
+    }
+
+    /// **How much a reuse by text hash could save** (ED, 21 November 2026, for embarquement): on a copy, the chunks
+    /// whose text hash several chunks carry with a vector of the same column, against all the chunks with a vector.
+    /// Played on the source copy and on the copy after a view's first pass, the difference is the reusable part.
+    #[test]
+    #[ignore]
+    fn probe_reuse_by_text_hash() {
+        let path = std::env::var("RAG3WEAVER_SONDE_BASE").expect("RAG3WEAVER_SONDE_BASE");
+        let conn = crate::Rag3dbConnection::new(&path).expect("the probe's base");
+        let ext = crate::backend::vector_extension_of_this_process().expect("the vector extension");
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{}'", ext.display())).expect("load the vector extension");
+        let read = |q: &str| crate::connection::DbConnection::execute(&conn, q).map(|r| r.rows).unwrap_or_else(|e| { println!("PROBE_REUSE unreadable « {q} » : {e}"); Vec::new() });
+        let columns: Vec<String> = read("CALL TABLE_INFO('ScopeContent_Chunk') RETURN *")
+            .iter()
+            .filter_map(|r| r.get(1).and_then(|v| v.as_str()).map(str::to_string))
+            .collect();
+        println!("PROBE_REUSE columns : {columns:?}");
+        let hash = columns.iter().find(|c| c.contains("text_hash")).cloned().expect("a text hash column");
+        for vector in columns.iter().filter(|c| c.starts_with("embedding")) {
+            let all = read(&format!("MATCH (c:ScopeContent_Chunk) WHERE c.`{vector}` IS NOT NULL RETURN count(*)"));
+            let dup = read(&format!(
+                "MATCH (c:ScopeContent_Chunk) WHERE c.`{vector}` IS NOT NULL WITH c.`{hash}` AS h, count(*) AS n WHERE n > 1 RETURN count(*), sum(n)"
+            ));
+            println!("PROBE_REUSE {vector} : chunks with a vector {all:?} ; text hashes carried by several of them (hashes, chunks) {dup:?}");
+        }
+        // The overlap of a view's chunks with the base's: the view's text hashes (its own column) already carried by a
+        // chunk of the base column. Read as two sets and crossed here: an IN over a long list costs N².
+        if let (Ok(view), Ok(base)) = (std::env::var("RAG3WEAVER_PROBE_VIEW_COLUMN"), std::env::var("RAG3WEAVER_PROBE_BASE_COLUMN")) {
+            let hashes = |col: &str| -> std::collections::HashMap<String, usize> {
+                let mut m = std::collections::HashMap::new();
+                for r in read(&format!("MATCH (c:ScopeContent_Chunk) WHERE c.`{col}` IS NOT NULL RETURN c.`{hash}`")) {
+                    if let Some(h) = r.first().and_then(|v| v.as_str()) {
+                        *m.entry(h.to_string()).or_insert(0) += 1;
+                    }
+                }
+                m
+            };
+            let (v, b) = (hashes(&view), hashes(&base));
+            let chunks: usize = v.values().sum();
+            let shared: usize = v.iter().filter(|(h, _)| b.contains_key(*h)).map(|(_, n)| n).sum();
+            println!(
+                "PROBE_REUSE overlap : {chunks} chunks of the view ({} distinct texts), {shared} of them with a text the base already embeds ({:.1} %)",
+                v.len(),
+                100.0 * shared as f64 / chunks.max(1) as f64
+            );
+        }
+    }
+
+    /// **The plan and the time of a lookup by text hash** (ED, 21 November 2026, for embarquement's reuse by hash): on a
+    /// copy, read only, three forms for N hashes taken from the table (20 000, then 200): (1) UNWIND and equality, (2) a
+    /// list parameter and IN, (3) one scan of (hash, uuid) joined here, then the vectors read by primary key.
+    #[test]
+    #[ignore]
+    fn probe_lookup_by_text_hash() {
+        let path = std::env::var("RAG3WEAVER_SONDE_BASE").expect("RAG3WEAVER_SONDE_BASE");
+        let conn = crate::Rag3dbConnection::new(&path).expect("the probe's base");
+        let ext = crate::backend::vector_extension_of_this_process().expect("the vector extension");
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{}'", ext.display())).expect("load the vector extension");
+        use crate::connection::DbConnection;
+        let (col, mark) = ("embedding__granite_278m", "_embed_hash");
+        let all: Vec<String> = conn
+            .execute("MATCH (c:ScopeContent_Chunk) RETURN c._text_hash")
+            .unwrap()
+            .rows
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+            .collect();
+        println!("PROBE_LOOKUP {} chunks in the table", all.len());
+        let unwind = format!(
+            "UNWIND $items AS item MATCH (n:`ScopeContent_Chunk`) WHERE n._text_hash = item.hash AND n.`{mark}` = item.hash AND n.`{col}` IS NOT NULL RETURN item.hash, n.`{col}`"
+        );
+        let in_list = format!("MATCH (n:`ScopeContent_Chunk`) WHERE n._text_hash IN $hashes AND n.`{col}` IS NOT NULL RETURN n._text_hash, n.`{col}`");
+        for n in [200usize, 20_000] {
+            let hashes: Vec<String> = all.iter().step_by((all.len() / n).max(1)).take(n).cloned().collect();
+            let items = CypherValue::List(hashes.iter().map(|h| CypherValue::Map(std::collections::BTreeMap::from([("hash".to_string(), CypherValue::String(h.clone()))]))).collect());
+            let list = CypherValue::List(hashes.iter().map(|h| CypherValue::String(h.clone())).collect());
+            if n == 200 {
+                for (name, q, p) in [("unwind", &unwind, QueryParam::new("items", items.clone())), ("in", &in_list, QueryParam::new("hashes", list.clone()))] {
+                    let plan = conn.execute_with_params(&format!("EXPLAIN {q}"), &[p]).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n"));
+                    println!("PROBE_LOOKUP EXPLAIN {name} :\n{}", plan.unwrap_or_else(|e| e.to_string()));
+                }
+            }
+            let t = std::time::Instant::now();
+            let r = conn.execute_with_params(&unwind, &[QueryParam::new("items", items)]).map(|r| r.rows.len());
+            println!("PROBE_LOOKUP n={n} (1) unwind : {:?} rows in {:?}", r, t.elapsed());
+            let t = std::time::Instant::now();
+            let r = conn.execute_with_params(&in_list, &[QueryParam::new("hashes", list)]).map(|r| r.rows.len());
+            println!("PROBE_LOOKUP n={n} (2) in : {:?} rows in {:?}", r, t.elapsed());
+            // (4) the form (2) with the mark of the model's storage equal to the text hash: a vector that still matches its text.
+            let columns: Vec<String> = conn
+                .execute("CALL TABLE_INFO('ScopeContent_Chunk') RETURN *")
+                .unwrap()
+                .rows
+                .iter()
+                .filter_map(|r| r.get(1).and_then(|v| v.as_str()).map(str::to_string))
+                .collect();
+            if n == 200 {
+                println!("PROBE_LOOKUP marks : {:?}", columns.iter().filter(|c| c.starts_with("_embed_hash")).collect::<Vec<_>>());
+            }
+            if let Some(model_mark) = columns.iter().find(|c| c.as_str() == "_embed_hash__granite_278m") {
+                let marked = format!(
+                    "MATCH (n:`ScopeContent_Chunk`) WHERE n._text_hash IN $hashes AND n.`{model_mark}` = n._text_hash AND n.`{col}` IS NOT NULL RETURN n._text_hash, n.`{col}`"
+                );
+                let list = CypherValue::List(hashes.iter().map(|h| CypherValue::String(h.clone())).collect());
+                if n == 200 {
+                    let plan = conn.execute_with_params(&format!("EXPLAIN {marked}"), &[QueryParam::new("hashes", list.clone())]).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n"));
+                    println!("PROBE_LOOKUP EXPLAIN marked :\n{}", plan.unwrap_or_else(|e| e.to_string()));
+                }
+                let t = std::time::Instant::now();
+                let r = conn.execute_with_params(&marked, &[QueryParam::new("hashes", list)]).map(|r| r.rows.len());
+                println!("PROBE_LOOKUP n={n} (4) in, mark = text hash : {:?} rows in {:?}", r, t.elapsed());
+            } else {
+                println!("PROBE_LOOKUP n={n} (4) : no column _embed_hash__granite_278m");
+            }
+            // (3) one scan of (hash, uuid) for the rows carrying a vector, joined here, then the vectors by primary key.
+            let t = std::time::Instant::now();
+            let wanted: std::collections::HashSet<&str> = hashes.iter().map(String::as_str).collect();
+            let scan = conn.execute(&format!("MATCH (n:`ScopeContent_Chunk`) WHERE n.`{col}` IS NOT NULL RETURN n._text_hash, n._uuid")).unwrap();
+            let mut first: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            for r in &scan.rows {
+                if let (Some(h), Some(u)) = (r.first().and_then(|v| v.as_str()), r.get(1).and_then(|v| v.as_str())) {
+                    if wanted.contains(h) {
+                        first.entry(h.to_string()).or_insert_with(|| u.to_string());
+                    }
+                }
+            }
+            let scanned = t.elapsed();
+            let uuids = CypherValue::List(first.values().map(|u| CypherValue::Map(std::collections::BTreeMap::from([("uuid".to_string(), CypherValue::String(u.clone()))]))).collect());
+            let by_pk = format!("UNWIND $items AS item MATCH (n:`ScopeContent_Chunk` {{_uuid: item.uuid}}) RETURN n._text_hash, n.`{col}`");
+            let r = conn.execute_with_params(&by_pk, &[QueryParam::new("items", uuids)]).map(|r| r.rows.len());
+            println!("PROBE_LOOKUP n={n} (3) scan then by key : scan {scanned:?}, {} hashes found, {:?} vectors read, total {:?}", first.len(), r, t.elapsed());
+        }
+    }
+
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
     /// first two are written, the third is refused naming the setting, and written again later neither; the two
     /// written ones are written again. The manifest accepts the key, and refuses an unknown one under `writes`.
