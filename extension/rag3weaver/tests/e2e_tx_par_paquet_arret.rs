@@ -840,7 +840,10 @@ fn en_fichiers_un_arret_entre_les_fichiers_et_la_validation_se_rebatit_aux_bons_
 
     let (statut, sortie) = lancer("repreneur", &base, false);
     assert!(statut.success(), "la base rouvre, et la reprise va au bout :\n{sortie}");
-    assert!(sortie.contains("dossier jeté, rebâti depuis les lignes"), "le dossier en avance est reconnu :\n{sortie}");
+    // Depuis lucivy 4.4 et la décision (A) du 21 novembre 2026 : le dossier en avance revient à la génération de la
+    // base, sans rebâti (`e2e_generations_*` le prouve à deux générations d'avance).
+    assert!(sortie.contains("dossier revenu à la génération"), "le dossier en avance revient à la génération de la base :\n{sortie}");
+    assert!(!sortie.contains("dossier jeté, rebâti depuis les lignes"), "sans rebâti :\n{sortie}");
     let repris = comptes_rendus("repreneur", &sortie);
 
     let temoin_dossier = dossier_sur_disque("fichiers-temoin");
@@ -887,7 +890,8 @@ fn en_fichiers_une_recherche_apres_un_arret_rebatit_avant_de_repondre() {
     assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet {PAQUET_TUE} :\n{sortie}");
     let (statut, sortie) = lancer("chercheur", &base, false);
     assert!(statut.success(), "{sortie}");
-    assert!(sortie.contains("rebâti depuis les lignes"), "la recherche rebâtit le dossier en avance :\n{sortie}");
+    // Depuis (A) : la recherche ramène le dossier en avance à la génération de la base, sans rebâti.
+    assert!(sortie.contains("dossier revenu à la génération"), "la recherche ramène le dossier en avance :\n{sortie}");
     let trouves: usize = sortie.lines().find_map(|l| l.strip_prefix("TROUVES ")).and_then(|n| n.trim().parse().ok()).unwrap_or(0);
     assert!(trouves > 0, "f010 est dans un paquet validé (paquets 0 et 1 : f000 à f063) : au moins un résultat :\n{sortie}");
     let _ = std::fs::remove_dir_all(&dossier);
@@ -912,6 +916,11 @@ fn en_fichiers_le_rebati_dit_son_etat_et_survit_a_son_interruption() {
     use std::os::unix::process::ExitStatusExt;
     let (statut, sortie) = lancer("ecrivain", &base, true);
     assert_eq!(statut.signal(), Some(9), "{sortie}");
+    // Depuis (A), un dossier en avance qui garde la génération de la base y revient sans rebâti. Ce cas éprouve le
+    // rebâti : les dossiers perdent leurs générations gardées, et le rebâti reste le seul chemin, comme avant.
+    for index in std::fs::read_dir(format!("{}.fts", base.display())).unwrap().flatten() {
+        let _ = std::fs::remove_file(index.path().join("_generations.json"));
+    }
 
     // À rebâtir, vu d'un lecteur seul.
     let (statut, sortie) = lancer("lecteur-fts", &base, false);
@@ -1027,7 +1036,8 @@ fn la_garde_retire_un_document_sans_ligne(fichiers: bool) {
         let handle = catalog.fts_handle(&index_du_code(&catalog)).unwrap();
         let texte = "pub ".repeat(200) + "fantomatique";
         rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), texte)], 9_000_000).unwrap();
-        handle.commit().unwrap();
+        // Un document hors de toute version : sur un plein texte étiqueté (lucivy 4.4), sous la génération courante.
+        handle.commit_keeping_generation().unwrap();
     }
     assert_eq!(documents_et_lignes(&catalog).0 as i64, lignes + 1, "le fantôme compte");
     let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
@@ -1122,7 +1132,7 @@ fn une_marque_qui_echoue_ne_laisse_jamais_un_index_sans_marque() {
         let code = index_du_code(&catalog);
         let handle = catalog.fts_handle(&code).unwrap();
         rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], 9_000_000).unwrap();
-        handle.commit().unwrap();
+        handle.commit_keeping_generation().unwrap();
         drop(handle);
         // La garde, base empoisonnée : erreur dite, index gardé.
         catalog.poison("test : la base refuse toute écriture");
