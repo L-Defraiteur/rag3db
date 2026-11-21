@@ -2232,6 +2232,13 @@ impl DaemonHost {
         }
     }
 
+    /// **The machine at a glance** (21 November 2026, recherche's scenario 1: the IDE's overview had neither the agents nor
+    /// their folders): the sessions with their Claude name and active view, the table of the folders with the worktrees
+    /// found under each, the views opened, the repositories attached, those available, and the tasks.
+    pub fn poste(&self) -> Value {
+        json!({ "ok": false, "error": "le poste : pas encore" }) // RED STUB.
+    }
+
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
         let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
@@ -2607,6 +2614,10 @@ impl DaemonHost {
                     "gabarits": self.templates_health(),
                 }),
             ),
+            ("GET", "/poste") => {
+                let r = self.poste();
+                (if r["ok"] == json!(false) { 422 } else { 200 }, r)
+            }
             ("GET", "/etat") => {
                 let mut etat = self.state();
                 etat["build"] = json!(crate::daemon_lifecycle::build_id());
