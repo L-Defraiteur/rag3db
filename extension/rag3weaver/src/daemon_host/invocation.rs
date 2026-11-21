@@ -472,6 +472,12 @@ mod tests {
         assert_eq!(long["ok"], json!(true), "the full name is not found: {long}");
         assert_eq!(court["id"], long["id"], "the two names find two repositories: {court} {long}");
         assert_eq!((&court["repo"], &court["name"]), (&json!("compteur"), &json!("code-compteur")), "{court}");
+        // By its paths too (tty, 21 November): the repository's root, as given to code-tree add, and the manifest's folder.
+        let par_racine = a.host.resoudre_un_depot(&depot.to_string_lossy());
+        assert_eq!(par_racine["id"], court["id"], "the repository's root does not find it: {par_racine}");
+        let dossier = std::path::Path::new(court["manifest"].as_str().unwrap()).ancestors().find(|p| p.ends_with("templates")).and_then(|t| t.parent()).unwrap().to_path_buf();
+        let par_dossier = a.host.resoudre_un_depot(&dossier.to_string_lossy());
+        assert_eq!(par_dossier["id"], court["id"], "the manifest's folder does not find it: {par_dossier}");
         let inconnu = a.host.resoudre_un_depot("autre");
         let e = inconnu["error"].as_str().unwrap_or_default();
         assert!(inconnu["ok"] == json!(false) && e.contains("compteur (code-compteur)"), "an unknown name does not list the attached ones in both forms: {inconnu}");
