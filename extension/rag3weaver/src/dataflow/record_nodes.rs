@@ -1039,6 +1039,11 @@ fn paires_posees(
     Ok(paires)
 }
 
+/// SONDE (branche de mesure) : les liens écartés faute de départ, faute d'arrivée.
+pub static SONDE_DEPARTS_ABSENTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub static SONDE_ARRIVEES_ABSENTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub static SONDE_EXEMPLES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 /// **Poser un lot d'arêtes par COPY.** Rend `Ok(Some(écrites))` si le lot est
 /// posé — les indices des paires réellement écrites, sans les doublons, les
 /// paires déjà là ni celles dont un bout manque —, `Ok(None)` si le moteur n'a
@@ -1203,6 +1208,16 @@ fn copier_les_liens(
             let paire = (rl.from_uuid.as_str(), rl.to_uuid.as_str());
             if !froms_presents.contains(paire.0) || !tos_presents.contains(paire.1) {
                 absents += 1;
+                // SONDE (branche de mesure) : quel bout manque, et quelques exemples.
+                if profil {
+                    let (de_manque, vers_manque) = (!froms_presents.contains(paire.0), !tos_presents.contains(paire.1));
+                    if absents <= 6 {
+                        eprintln!("[link-dangling] {rel_name} : départ {} {} / arrivée {} {} / {:?}", ends.0, if de_manque { "ABSENT" } else { "là" }, ends.1, if vers_manque { "ABSENT" } else { "là" }, items[rl.index].properties.get("line"));
+                        SONDE_EXEMPLES.lock().unwrap_or_else(|e| e.into_inner()).extend([paire.0.to_string(), paire.1.to_string()]);
+                    }
+                    if de_manque { SONDE_DEPARTS_ABSENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
+                    if vers_manque { SONDE_ARRIVEES_ABSENTES.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
+                }
                 continue;
             }
             if !vues.insert(paire) || deja.get(paire.0).is_some_and(|tos| tos.contains(paire.1)) {

@@ -898,6 +898,16 @@ mod tests {
         let compte = |rel: &str| cat.execute_raw(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)")).ok().and_then(|v| v.rows.first().and_then(|l| l.first().cloned()));
         let build_id = cat.execute_raw("CALL BUILD_ID() RETURN *").ok().and_then(|v| v.rows.first().and_then(|l| l.first().cloned()));
         println!("SONDE_BUILD_ID {build_id:?}");
+        println!("SONDE_ABSENTS départs {} arrivées {}", crate::dataflow::record_nodes::SONDE_DEPARTS_ABSENTS.load(std::sync::atomic::Ordering::Relaxed), crate::dataflow::record_nodes::SONDE_ARRIVEES_ABSENTES.load(std::sync::atomic::Ordering::Relaxed));
+        // Les exemples d'uuid écartés : leur ligne en base, s'il y en a une (Scope, toutes générations ; Symbol).
+        {
+            let exemples = crate::dataflow::record_nodes::SONDE_EXEMPLES.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            for u in exemples.iter().take(24) {
+                let sc = cat.execute_raw(&format!("MATCH (s:Scope) WHERE s._uuid = '{u}' RETURN s.file_path, s.name, s._depuis, s._jusqu_a")).map(|r| format!("{:?}", r.rows)).unwrap_or_default();
+                let sy = cat.execute_raw(&format!("MATCH (y:Symbol) WHERE y._uuid = '{u}' RETURN y.name")).map(|r| format!("{:?}", r.rows)).unwrap_or_default();
+                println!("SONDE_UUID {u} scope {sc} symbole {sy}");
+            }
+        }
         let occurs = compte("OCCURS");
         let mentions = compte("MENTIONS");
         // L'écart de MENTIONS entre deux passes : chaque arête, triée, dans RAG3WEAVER_SONDE_DUMP.
