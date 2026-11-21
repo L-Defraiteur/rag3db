@@ -29,6 +29,8 @@ pub const DEFAULT_CURRENCY: &str = "USD";
 pub const DEFAULT_MONTHLY_CAP: f64 = 200.0;
 /// A line stays under `PIPE_BUF` (4 096 bytes on Linux): one `write` in `O_APPEND`, never mixed with another writer's.
 const LINE_MAX: usize = 3_800;
+/// The prices shipped with the crate.
+pub const DEFAULT_PRICES: &str = include_str!("../templates/prices.json");
 
 /// One tariff of a slug, in force from `from` (`YYYY-MM-DD`, UTC), per million tokens.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -51,6 +53,13 @@ pub struct Tariff {
     /// When given, it must be the file's currency: there is never an implicit conversion.
     #[serde(default)]
     pub currency: Option<String>,
+    /// Where the price was read, the day it was read, and what is to know about it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_on: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// `prices.json`: the currency, the monthly cap, the alerts, and the tariffs per slug.
@@ -60,18 +69,19 @@ pub struct Prices {
     pub monthly_cap: f64,
     #[serde(default = "default_alerts")]
     pub alerts: Vec<f64>,
-    /// A model served at a loopback or private address (a llama-server on this machine or the next) costs nothing.
-    #[serde(default = "yes")]
+    /// A model served at a loopback or private address (a llama-server on this machine or the next) costs nothing:
+    /// only when the file says so (c7, 21 November 2026), never by default. The file the ledger writes says so.
+    #[serde(default)]
     pub free_private_hosts: bool,
+    /// What the file says of itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
     #[serde(default)]
     pub prices: BTreeMap<String, Vec<Tariff>>,
 }
 
 fn default_alerts() -> Vec<f64> {
     vec![0.5, 0.8]
-}
-fn yes() -> bool {
-    true
 }
 
 fn is_day(d: &str) -> bool {
@@ -80,6 +90,13 @@ fn is_day(d: &str) -> bool {
 }
 
 impl Prices {
+    /// The file the ledger writes when there is none (`templates/prices.json`, shipped with the crate): the cap of
+    /// 200 USD a month, models at a private address free, and the prices read on the providers' official pages, each
+    /// with its source, the day it was read, and its date of effect. A model it does not price is refused.
+    pub fn default_file() -> Prices {
+        serde_json::from_str(DEFAULT_PRICES).expect("templates/prices.json parses: its witness says so")
+    }
+
     /// Reads and checks `prices.json`. Every refusal names the file and what is wrong.
     pub fn load(path: &Path) -> Result<Prices, String> {
         let text = std::fs::read_to_string(path).map_err(|e| {
@@ -406,11 +423,10 @@ impl Ledger {
         batch: bool,
     ) -> Result<Reservation, String> {
         let month = day[..7].to_string();
+        self.write_default_prices();
         let prices = Prices::load(&self.prices_path);
-        let free = match &prices {
-            Ok(p) => private && p.free_private_hosts,
-            Err(_) => private,
-        };
+        // Free only by what the file says: a file that cannot be read frees nothing.
+        let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
         let _lock = self.lock(&month)?;
         if !free {
             let prices = prices.map_err(|e| format!("spending cap: {e}; a paid call is refused while the prices cannot be read"))?;
@@ -447,6 +463,29 @@ impl Ledger {
         };
         self.append(&month, &line)?;
         Ok(Reservation { line })
+    }
+
+    /// Writes the default `prices.json` when there is none (never over a file, even an unreadable one), and says so.
+    fn write_default_prices(&self) {
+        if self.prices_path.exists() {
+            return;
+        }
+        if let Some(parent) = self.prices_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let text = DEFAULT_PRICES.trim_end();
+        // `create_new`: two processes at once, one writes.
+        let written = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&self.prices_path)
+            .and_then(|mut f| f.write_all(format!("{text}\n").as_bytes()));
+        if written.is_ok() {
+            eprintln!(
+                "[usage] {} written: a cap of {DEFAULT_MONTHLY_CAP} {DEFAULT_CURRENCY} a month, private addresses free, no price: a paid model is refused until its price is written there",
+                self.prices_path.display()
+            );
+        }
     }
 
     /// Settles a reservation with what the provider reported (`None`: nothing, and the bound stands).
