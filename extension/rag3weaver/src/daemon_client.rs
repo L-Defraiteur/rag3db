@@ -503,9 +503,14 @@ impl From<Envoi> for OpError {
 /// that process's entry in Claude Code's registry (`~/.claude/sessions/<pid>.json`: `sessionId`, `name`), else the
 /// card the hook wrote (`mail::fiche_du_pid`). `None` outside a Claude Code session.
 fn claude_de_l_appelant() -> Option<Value> {
-    let (pid, _) = crate::mail::ancetre_claude(std::process::id())?;
-    let registre = std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".claude/sessions"))?;
-    claude_du_registre(&registre, pid).or_else(|| crate::mail::fiche_du_pid(pid).map(|f| json!({ "session_id": f.session_id, "pid": pid })))
+    let maison = std::path::PathBuf::from(std::env::var_os("HOME")?);
+    claude_de(std::process::id(), &maison)
+}
+
+/// [`claude_de_l_appelant`] from the process `depuis`, under the home `maison`.
+pub(crate) fn claude_de(depuis: u32, maison: &Path) -> Option<Value> {
+    let (pid, _) = crate::mail::ancetre_claude(depuis)?;
+    claude_du_registre(&maison.join(".claude/sessions"), pid).or_else(|| crate::mail::fiche_du_pid(pid).map(|f| json!({ "session_id": f.session_id, "pid": pid })))
 }
 
 /// A Claude Code process's entry in the registry `dir`: `{session_id, name, pid}`, or `None` without a `sessionId`.
@@ -1129,6 +1134,11 @@ impl Hote for McpClient {
         }
     }
 }
+
+/// The guard of `claude_name` (recherche, 21 Nov 2026), in a file of its own.
+#[cfg(all(test, target_os = "linux"))]
+#[path = "daemon_client_claude_tests.rs"]
+mod claude_tests;
 
 #[cfg(test)]
 mod tests {
