@@ -898,6 +898,16 @@ impl DaemonHost {
                         let reel_m = reel_f.clone();
                         let _observateur = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                             let Ok(ev) = res else { return };
+                            // Only a change of the tree: a read (an access, an open, a close without writing) is not one —
+                            // the signature and the layer's writing read the worktree, and would wake the thread again.
+                            use notify::EventKind;
+                            match ev.kind {
+                                EventKind::Create(_) | EventKind::Remove(_) => {}
+                                EventKind::Modify(notify::event::ModifyKind::Metadata(notify::event::MetadataKind::AccessTime)) => return,
+                                EventKind::Modify(_) => {}
+                                EventKind::Access(notify::event::AccessKind::Close(notify::event::AccessMode::Write)) => {}
+                                _ => return,
+                            }
                             // Git's own bookkeeping is not a change of the tree.
                             if ev.paths.iter().all(|p| p.strip_prefix(&reel_m).is_ok_and(|r| r.starts_with(".git"))) {
                                 return;
