@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
+  comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
+  et n'écrit jamais une ligne sans ses morceaux.
 - 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
   en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.

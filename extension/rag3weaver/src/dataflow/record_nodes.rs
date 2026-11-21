@@ -1944,6 +1944,21 @@ impl Node for ChunkRecordNode {
         let chunker_cache = ctx.service::<Arc<HashMap<ChunkerConfig, Chunker>>>("chunker_cache").cloned()
             .ok_or("ChunkRecordNode: 'chunker_cache' service not registered")?;
 
+        // **A row to chunk without its chunker is refused, never written without its chunks** (c7, 21 November 2026):
+        // the cache leaves out a chunking bounded in tokens whose counter this build lacks; the refusal says why.
+        for rec in &items {
+            let Some(ec) = entity_configs.get(&rec.entity_name) else { continue };
+            if ec.content_fields().is_empty() || ec.chunking.excludes_chunks(&rec.data) {
+                continue;
+            }
+            if !chunker_cache.contains_key(&ChunkerConfig::from(&ec.chunking)) {
+                return Err(match &ec.chunking.token_bound {
+                    Some(b) => crate::tokens::counter(&b.model).err().unwrap_or_else(|| format!("{} : pas de découpeur", rec.entity_name)),
+                    None => format!("ChunkRecordNode : pas de découpeur pour {}", rec.entity_name),
+                });
+            }
+        }
+
         // Parallel chunking via rayon
         let all_results: Vec<(Vec<EntityRecord>, Vec<RelationRecord>)> = items
             .par_iter()
