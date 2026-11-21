@@ -85,6 +85,7 @@ mod tests {
     // A lot's new witness goes in a file of its own, `invocation/tests/<lot>.rs` (c7, 21 November 2026): lots that
     // all appended to this module met here, one rebase after another.
     mod atelier_pose;
+    mod dossier_sans_git;
     mod ecrire_la_vue;
     mod fermer_tout;
     mod run_dans_la_vue;
@@ -553,8 +554,9 @@ mod tests {
         attendre_l_index(&a, &depot);
     }
 
-    /// **Opening a folder refuses**, saying why: Lucie's tree, another session's folder, a folder with files that is not
-    /// a git repository; nothing is created.
+    /// **Opening a folder refuses**, saying why: Lucie's tree, another session's folder; nothing is created. (A folder
+    /// with files that is not a git repository opens as it is since Lucie's word of 21 November 2026, 9 h 5x: see
+    /// `invocation/tests/dossier_sans_git.rs`.)
     #[test]
     fn opening_a_folder_refuses_lucies_tree_another_sessions_folder_and_a_non_repository() {
         let d = tempfile::tempdir().unwrap();
@@ -563,11 +565,7 @@ mod tests {
         assert!(refus(&espace.join("rag3db")).contains("l'arbre de Lucie"));
         assert!(refus(&espace.join("rag3db/sous")).contains("l'arbre de Lucie"));
         assert!(refus(&espace.join("archi/un-lot")).contains("rag3weaver archi"), "another session's folder is opened");
-        let plein = d.path().join("plein");
-        std::fs::create_dir_all(&plein).unwrap();
-        std::fs::write(plein.join("notes.txt"), "à moi").unwrap();
-        assert!(refus(&plein).contains("pas un dépôt git"), "a folder with files gets git init");
-        assert!(!plein.join(".git").exists() && !espace.join("archi/un-lot").exists());
+        assert!(!espace.join("archi/un-lot").exists());
     }
 
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
