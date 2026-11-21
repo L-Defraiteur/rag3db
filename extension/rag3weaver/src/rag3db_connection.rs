@@ -55,6 +55,8 @@ pub struct Rag3dbConnection {
     first_refusal: std::sync::Mutex<Option<String>>,
     /// Le chemin de la base sur disque ; `None` en mémoire.
     path: Option<std::path::PathBuf>,
+    /// A reader ([`DbConnection::read_connection`]) : not counted among the writers.
+    reader: bool,
 }
 
 /// **`RAG3WEAVER_TRACE_CYPHER=1`** : chaque instruction sur la sortie
@@ -120,6 +122,10 @@ struct ReopenState {
     /// **La marque de l'écrivain** (`crate::marque_d_ecrivain`), tenue tant
     /// qu'une connexion de la base vit ; elle tombe avec la dernière.
     marque: std::sync::Mutex<Option<crate::marque_d_ecrivain::Garde>>,
+    /// **The writing connections of this database** alive in this process : every
+    /// connection but a reader ([`DbConnection::read_connection`]). The shared texts
+    /// require one ([`DbConnection::sole_writer`]).
+    writers: std::sync::atomic::AtomicUsize,
 }
 
 /// **La dernière connexion d'une base au tampon plein la ferme sans point de
@@ -128,6 +134,9 @@ struct ReopenState {
 /// côté rag3weaver refusant tout le reste.
 impl Drop for Rag3dbConnection {
     fn drop(&mut self) {
+        if !self.reader {
+            self.reopen.writers.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        }
         if self.reopen.close_without_checkpoint.load(std::sync::atomic::Ordering::SeqCst) && Arc::strong_count(&self.db) == 1 {
             let _ = self.conn.query("ROLLBACK");
             let _ = self.conn.query("CALL force_checkpoint_on_close=false");
@@ -467,6 +476,7 @@ impl Rag3dbConnection {
             }
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
+        reopen.writers.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(Self {
             conn,
             db,
@@ -478,6 +488,7 @@ impl Rag3dbConnection {
             #[cfg(test)]
             schema_refusals: Default::default(),
             explicit_transaction: Default::default(),
+            reader: false,
         })
     }
 
@@ -716,6 +727,8 @@ impl DbConnection for Rag3dbConnection {
         // lui est propre, ses fils sont bornés (le pool est partagé, une
         // lecture n'affame pas l'écrivain — le cœur, 12 octobre 2026).
         let mut c = Self::connect(self.db.clone(), self.reopen.clone()).ok()?;
+        c.reader = true;
+        c.reopen.writers.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         c.conn.set_max_num_threads_for_exec(threads.max(1));
         c.buffer_pool = self.buffer_pool;
         c.path = self.path.clone();
@@ -759,6 +772,16 @@ impl DbConnection for Rag3dbConnection {
         // The engine sets its query's flag and the running operators read it; an error here is a connection
         // already gone, with nothing left to interrupt.
         let _ = self.conn.interrupt();
+    }
+
+    fn sole_writer(&self) -> Result<(), String> {
+        match self.reopen.writers.load(std::sync::atomic::Ordering::SeqCst) {
+            n if n <= 1 => Ok(()),
+            n => Err(format!(
+                "{n} connexions écrivaines ouvertes sur cette base dans ce processus : les textes partagés exigent un écrivain unique \
+                 (le retrait d'un texte orphelin et le rattachement d'un morceau à ce texte ne doivent pas se croiser)"
+            )),
+        }
     }
 
     fn database_path(&self) -> Option<std::path::PathBuf> {

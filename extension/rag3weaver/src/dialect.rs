@@ -1203,6 +1203,19 @@ pub trait SchemaDialect: Send + Sync {
     fn count_non_null(&self, table: &str, column: &str) -> String;
     /// The edges of a chunk-to-text rel, as one count ; `None` without a rel.
     fn count_has_text_edges(&self, rel: &str) -> Option<String>;
+    /// **Attach chunks to their texts** (lot L2a) : `$items` (`uuid`, `hash`) ; the text is
+    /// merged by its fingerprint, and the edge from the chunk in the same statement.
+    fn attach_chunks_to_texts(&self, chunk_table: &str, text_table: &str, rel: &str) -> String;
+    /// The texts among `$hashes` that carry a vector in `column` : (hash, vector) ; `None`
+    /// when the engine does not read vectors back.
+    fn text_vectors_by_hash(&self, text_table: &str, column: &str) -> Option<String>;
+    /// `$items` (`hash`, `emb`) : the vector on its text, where the text has none.
+    fn set_text_vectors(&self, text_table: &str, column: &str) -> String;
+    /// The distinct `_text_hash` of the chunks whose `_parent_uuid` is in `$uuids`.
+    fn hashes_of_chunks_by_parent(&self, chunk_table: &str) -> String;
+    /// **The texts among `$hashes` that no chunk points to any more, removed** : one
+    /// statement.
+    fn delete_orphan_texts(&self, chunk_table: &str, text_table: &str, rel: &str) -> String;
 
     /// **The vector already computed for a text, by its fingerprint** (21 November
     /// 2026) : for the fingerprints of `$hashes` (a list of strings), the rows of `table`
@@ -2802,6 +2815,37 @@ impl SchemaDialect for Rag3dbDialect {
         Some(format!("MATCH ()-[e:{}]->() RETURN count(e)", self.quote(rel)))
     }
 
+    fn attach_chunks_to_texts(&self, chunk_table: &str, text_table: &str, rel: &str) -> String {
+        format!(
+            "UNWIND $items AS item MATCH (c:{} {{_uuid: item.uuid}}) MERGE (t:{} {{_text_hash: item.hash}}) MERGE (c)-[:{}]->(t)",
+            self.quote(chunk_table),
+            self.quote(text_table),
+            self.quote(rel)
+        )
+    }
+
+    fn text_vectors_by_hash(&self, text_table: &str, column: &str) -> Option<String> {
+        let col = self.quote(column);
+        Some(format!("MATCH (t:{}) WHERE t._text_hash IN $hashes AND t.{col} IS NOT NULL RETURN t._text_hash, t.{col}", self.quote(text_table)))
+    }
+
+    fn set_text_vectors(&self, text_table: &str, column: &str) -> String {
+        let col = self.quote(column);
+        format!("UNWIND $items AS item MATCH (t:{} {{_text_hash: item.hash}}) WHERE t.{col} IS NULL SET t.{col} = item.emb", self.quote(text_table))
+    }
+
+    fn hashes_of_chunks_by_parent(&self, chunk_table: &str) -> String {
+        format!("MATCH (c:{}) WHERE c._parent_uuid IN $uuids RETURN DISTINCT c._text_hash", self.quote(chunk_table))
+    }
+
+    fn delete_orphan_texts(&self, _chunk_table: &str, text_table: &str, rel: &str) -> String {
+        format!(
+            "MATCH (t:{}) WHERE t._text_hash IN $hashes AND NOT EXISTS {{ MATCH (t)<-[:{}]-() }} DELETE t",
+            self.quote(text_table),
+            self.quote(rel)
+        )
+    }
+
     fn embed_find_by_hash(&self, table: &str, embedding_col: &str, marker: &str) -> Option<String> {
         let (t, col, m) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
         // One scan with the filter : an `UNWIND … MATCH … WHERE n.x = item.y` is planned as a
@@ -4364,6 +4408,35 @@ impl SchemaDialect for PostgresDialect {
 
     fn count_has_text_edges(&self, _rel: &str) -> Option<String> {
         None
+    }
+
+    fn attach_chunks_to_texts(&self, _chunk_table: &str, text_table: &str, _rel: &str) -> String {
+        format!(
+            "INSERT INTO {} (_text_hash) SELECT DISTINCT v.hash FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, hash TEXT) \
+             WHERE v.hash IS NOT NULL AND v.hash <> '' ON CONFLICT DO NOTHING",
+            self.quote(text_table)
+        )
+    }
+
+    fn text_vectors_by_hash(&self, _text_table: &str, _column: &str) -> Option<String> {
+        None
+    }
+
+    fn set_text_vectors(&self, text_table: &str, column: &str) -> String {
+        let (t, col) = (self.quote(text_table), self.quote(column));
+        format!(
+            "UPDATE {t} SET {col} = v.emb FROM jsonb_to_recordset($items::text::jsonb) AS v(hash TEXT, emb vector) \
+             WHERE {t}._text_hash = v.hash AND {t}.{col} IS NULL"
+        )
+    }
+
+    fn hashes_of_chunks_by_parent(&self, chunk_table: &str) -> String {
+        format!("SELECT DISTINCT _text_hash FROM {} WHERE _parent_uuid = ANY($uuids)", self.quote(chunk_table))
+    }
+
+    fn delete_orphan_texts(&self, chunk_table: &str, text_table: &str, _rel: &str) -> String {
+        let (c, t) = (self.quote(chunk_table), self.quote(text_table));
+        format!("DELETE FROM {t} WHERE _text_hash = ANY($hashes) AND NOT EXISTS (SELECT 1 FROM {c} WHERE {c}._text_hash = {t}._text_hash)")
     }
 
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String {

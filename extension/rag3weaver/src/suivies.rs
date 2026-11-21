@@ -821,10 +821,25 @@ pub fn purge_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str) ->
     let Some(id) = layer_id_by_name(&lire, depot, nom)? else { return Ok(false) };
     let tables: Vec<String> = catalog.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
     let p = || vec![QueryParam::new("id", CypherValue::String(id.clone()))];
+    // A chunk table that shares its texts (lot L2a) : the fingerprints of the layer's chunks
+    // are read before they go, and the texts they leave orphan go after.
+    let shared = catalog.shared_text_tables();
     for t in tables {
+        let hashes: Vec<String> = if shared.contains(&t) {
+            catalog
+                .execute_raw_with_params(&format!("MATCH (s:`{t}`) WHERE s.{} = $id RETURN DISTINCT s._text_hash", crate::generations::COUCHE), &p())
+                .map_err(|e| format!("purger {nom} dans {t} : {e}"))?
+                .rows
+                .iter()
+                .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
+                .collect()
+        } else {
+            Vec::new()
+        };
         catalog
             .execute_raw_with_params(&format!("MATCH (s:`{t}`) WHERE s.{} = $id DETACH DELETE s", crate::generations::COUCHE), &p())
             .map_err(|e| format!("purger {nom} dans {t} : {e}"))?;
+        catalog.remove_orphan_texts_of(&t, &hashes).map_err(|e| format!("purger {nom} dans {t} : {e}"))?;
     }
     catalog
         .execute_raw_with_params(&format!("MATCH (g:{}) WHERE g.couche = $id DETACH DELETE g", crate::generations::TABLE), &p())
