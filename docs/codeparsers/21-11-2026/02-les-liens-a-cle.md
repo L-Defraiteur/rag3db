@@ -45,6 +45,14 @@ plusieurs liens entre deux mêmes nœuds. Chaque clé est une propriété décla
 - **Une clé retirée**, sur les deux moteurs : l'enregistrement refuse par son nom (« la relation R portait la clé k ;
   la retirer n'est pas pris en charge »), même sans aucune paire multiple. La vraie migration inverse a son ticket.
 
+## Sans effet sur l'analyse
+
+Le lot touche `extension/rag3weaver/src/code.rs` seulement pour faire passer la clé déclarée d'une relation :
+`register_relation_with` devient `register_keyed_relation(…, relation.key)`. Aucune relation du schéma du code ne
+déclare encore de clé (`schema_configs`), donc le texte, le découpage, la candidature et les arêtes d'un scope ne
+changent pas. `REGLES_DE_L_ANALYSE` ne monte pas. Il montera avec le lot des occurrences, où `OCCURS` déclarera sa
+clé.
+
 ## L'ordre des commits
 
 1. `RelationDef.key`, sans comportement (72ecf5d595).
