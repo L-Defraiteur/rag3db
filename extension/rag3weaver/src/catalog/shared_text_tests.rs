@@ -71,30 +71,32 @@ fn an_existing_base_gets_one_text_per_distinct_chunk_text_with_its_vector() {
     let body = "fn shared() { let the_same_code = 42; }\n".repeat(3);
     catalog.ingest_entities("Document", vec![document("first", &body), document("second", &body), document("third", "fn other() { 7 }")]).unwrap();
     let count = |catalog: &Catalog, q: &str| catalog.conn.execute(q).unwrap().rows[0][0].as_i64().unwrap() as usize;
-    let chunks = count(&catalog, "MATCH (c:Document_Chunk) RETURN count(*)");
-    let distinct = count(&catalog, "MATCH (c:Document_Chunk) RETURN count(DISTINCT c._text_hash)");
+    let table = catalog.vector_tables().into_iter().find(|t| count(&catalog, &format!("MATCH (c:`{t}`) RETURN count(*)")) > 0).expect("a chunk table with rows");
+    let (text, rel) = (crate::shared_text::text_table_of(&table), crate::shared_text::has_text_rel_of(&table));
+    let chunks = count(&catalog, &format!("MATCH (c:`{table}`) RETURN count(*)"));
+    let distinct = count(&catalog, &format!("MATCH (c:`{table}`) RETURN count(DISTINCT c._text_hash)"));
     assert!(distinct < chunks, "the fixture shares a text : {distinct} distinct for {chunks} chunks");
 
     catalog.config.shared_text_vectors = true;
     let reports = catalog.ensure_shared_text_storage().unwrap();
-    let report = reports.iter().find(|r| r.chunk_table == "Document_Chunk").expect("the chunk table migrated");
+    let report = reports.iter().find(|r| r.chunk_table == table).expect("the chunk table migrated");
     assert_eq!((report.texts, report.edges), (distinct, Some(chunks)), "{report:?}");
     assert_eq!(report.vectors.first().map(|v| v.1), Some(distinct), "every text has a vector : {report:?}");
 
     let entry = catalog.current_embedding_entry().expect("the model");
-    let (chunk_col, shared) = (crate::embedding_storage::VectorStorage::resolve("Document_Chunk", &entry).column, crate::shared_text::text_storage("Document_Chunk", &entry));
-    let pairs = catalog.conn.execute(&format!("MATCH (c:Document_Chunk)-[:Document_HAS_TEXT]->(t:Document_Text) RETURN c.`{chunk_col}`, t.`{}`, c._text_hash", shared.column)).unwrap().rows;
+    let (chunk_col, shared) = (crate::embedding_storage::VectorStorage::resolve(&table, &entry).column, crate::shared_text::text_storage(&table, &entry));
+    let pairs = catalog.conn.execute(&format!("MATCH (c:`{table}`)-[:`{rel}`]->(t:`{text}`) RETURN c.`{chunk_col}`, t.`{}`, c._text_hash", shared.column)).unwrap().rows;
     assert_eq!(pairs.len(), chunks);
     assert!(pairs.iter().all(|r| floats(&r[0]) == floats(&r[1]) && !floats(&r[0]).is_empty()), "each text carries its chunks' vector");
 
     let (vector, hash) = (pairs[0][0].clone(), pairs[0][2].as_str().unwrap().to_string());
     let hit = catalog
         .conn
-        .execute_with_params(&format!("CALL QUERY_VECTOR_INDEX('Document_Text', '{}', $q, 1) RETURN node._text_hash", shared.index), &[QueryParam::new("q", vector)])
+        .execute_with_params(&format!("CALL QUERY_VECTOR_INDEX('{text}', '{}', $q, 1) RETURN node._text_hash", shared.index), &[QueryParam::new("q", vector)])
         .unwrap()
         .rows;
     assert_eq!(hit.first().and_then(|r| r[0].as_str()), Some(hash.as_str()), "the text index answers");
 
-    let again = crate::shared_text::migrate_to_shared_text(catalog.conn.as_ref(), catalog.dialect.as_ref(), "Document_Chunk", &[entry], &|_, _, _| Ok(())).unwrap();
+    let again = crate::shared_text::migrate_to_shared_text(catalog.conn.as_ref(), catalog.dialect.as_ref(), &table, &[entry], &|_, _, _| Ok(())).unwrap();
     assert_eq!((again.texts, again.edges), (distinct, Some(chunks)), "played again, nothing is added");
 }
