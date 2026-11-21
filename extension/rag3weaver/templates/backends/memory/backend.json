@@ -66,13 +66,15 @@
           "role",
           "tool_name",
           "status",
-          "section"
+          "section",
+          "author"
         ],
         "signals": [
           "bm25"
         ]
       },
       "writes": {
+        "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision",
@@ -531,7 +533,8 @@
           "run",
           "from_turn",
           "to_turn",
-          "template"
+          "template",
+          "author"
         ],
         "signals": [
           "bm25",

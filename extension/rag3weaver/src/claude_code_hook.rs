@@ -309,6 +309,12 @@ pub trait Hote {
     /// Le nom du backend ouvert (ce que `/open` a rendu).
     fn nom(&self) -> &str;
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String>;
+    /// **For an agent** (M7): the call made for `agent`, whose key the host puts in `author` (`writes.author`); the
+    /// record never carries it. `None`: no agent, no author. By default, a plain call.
+    fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+        let _ = agent;
+        self.appeler(outil, arguments)
+    }
     /// Le même, sous un délai à lui (le rappel des fiches) ; par défaut le délai
     /// commun.
     fn appeler_borne(&self, outil: &str, arguments: Value, _delai: Duration) -> Result<Value, String> {
@@ -528,7 +534,14 @@ impl Hote for ClientHote {
         Ok(v)
     }
     fn appeler(&self, outil: &str, arguments: Value) -> Result<Value, String> {
-        let v = self.poster("/call", json!({ "manifest": self.manifest, "name": outil, "arguments": arguments, "deadline_ms": Self::echeance(self.delai) }), true)?;
+        self.appeler_pour(None, outil, arguments)
+    }
+    fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+        let mut corps = json!({ "manifest": self.manifest, "name": outil, "arguments": arguments, "deadline_ms": Self::echeance(self.delai) });
+        if let Some(a) = agent.filter(|a| !a.is_empty()) {
+            corps["agent"] = json!(a);
+        }
+        let v = self.poster("/call", corps, true)?;
         if v["ok"] == json!(false) {
             return Err(format!("{outil} : {}", v["error"].as_str().unwrap_or("?")));
         }
@@ -833,9 +846,10 @@ fn premiere_ligne(texte: &str, max: usize) -> String {
 
 /// Un apport (L1) rangé sur sa fiche, `via: hook`, `author` = la clé.
 fn ecrire_un_apport(h: &dyn Hote, fiche: &str, source: &str, section: &str, texte: &str, author: &str) -> Result<(), String> {
-    h.appeler(
+    h.appeler_pour(
+        Some(author).filter(|a| !a.is_empty()),
         "put_apport",
-        json!({ "record": { "fiche": fiche, "source": source, "section": section, "texte": texte, "niveau": "L1", "state": "current", "via": "hook", "author": author } }),
+        json!({ "record": { "fiche": fiche, "source": source, "section": section, "texte": texte, "niveau": "L1", "state": "current", "via": "hook" } }),
     )?;
     h.appeler("relier_apport", json!({ "links": [{ "from": { "name": fiche }, "to": { "fiche": fiche, "source": source, "section": section } }] }))?;
     Ok(())
@@ -1738,7 +1752,7 @@ fn ranger_la_compaction(e: &Evenement, reglage: &Reglage, h: &dyn Hote, journal:
     let chemin = format!("sources/{}-compaction-{id8}.md", quand.strftime("%Y-%m-%d-%Hh%M"));
     let titre = format!("Compaction du {} — session {id8}", quand.strftime("%Y-%m-%d %H:%M"));
     let contenu = format!("# {titre}\n\n{}\n", resume.trim());
-    if let Err(err) = h.appeler("put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "filet", "session": format!("session:{}", e.session_id), "via": "hook", "author": cle } })) {
+    if let Err(err) = h.appeler_pour(Some(cle.as_str()).filter(|c| !c.is_empty()), "put_source", json!({ "record": { "chemin": chemin, "titre": titre, "contenu": contenu, "origine": "filet", "session": format!("session:{}", e.session_id), "via": "hook" } })) {
         journal.push(format!("L0 de la compaction non écrit : {err}"));
         return;
     }
@@ -2444,6 +2458,13 @@ mod tests {
                 return Ok(self.reponses.get(cle).cloned().unwrap_or_else(recherche_vide));
             }
             Ok(self.reponses.get(outil).cloned().unwrap_or_else(recherche_vide))
+        }
+        fn appeler_pour(&self, agent: Option<&str>, outil: &str, arguments: Value) -> Result<Value, String> {
+            let mut a = arguments;
+            if let Some(agent) = agent {
+                a["agent"] = json!(agent);
+            }
+            self.appeler(outil, a)
         }
     }
     fn recherche_vide() -> Value {

@@ -2391,7 +2391,8 @@ impl DaemonHost {
         let cible = self.hote_par_id(&t.id)?;
         let Some(memoire_manifeste) = self.memoire_declaree(&cible)? else { return Ok(None) };
         let memoire = self.hosted(&memoire_manifeste)?;
-        let appeler = |outil: &str, args: Value| -> Result<Value, String> { self.with_backend(&memoire, |b| b.call(outil, args)).and_then(|r| r) };
+        // Made for the task's agent (M7): `writes.author` signs the fiche, the Source and the Apport with its key.
+        let appeler = |outil: &str, args: Value| -> Result<Value, String> { crate::backend::as_agent(t.agent_key.as_deref(), || self.with_backend(&memoire, |b| b.call(outil, args))).and_then(|r| r) };
         // La fiche de la tâche, sous son nom court : celle où le juge range les bilans
         // de ses pas (`juge::nom_de_fiche_de_tache`).
         let _ = request;

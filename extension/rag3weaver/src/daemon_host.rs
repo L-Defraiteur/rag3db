@@ -138,6 +138,9 @@ struct EcritureEnFile {
     /// L'heure de réception (un horodatage), d'où l'âge au rejeu.
     recue: String,
     max_age_s: u64,
+    /// The agent the write was made for (M7): replayed under the same key.
+    #[serde(default)]
+    agent: Option<String>,
 }
 
 /// **La file des écritures d'un backend** : celles qui attendent, ce que le dernier rejeu a fait.
@@ -2112,6 +2115,7 @@ impl DaemonHost {
             session: s.id.clone(),
             recue: jiff::Timestamp::now().to_string(),
             max_age_s: fermeture.as_ref().map_or(QUEUE_MAX_AGE, |f| f.max_age_s),
+            agent: crate::backend::current_agent(),
         });
         let rang = file.attente.len();
         persister_la_fermeture(hosted, &file);
@@ -2159,12 +2163,12 @@ impl DaemonHost {
                 cellule.and_then(|cell| {
                     let _appelant = crate::host_log::enter_call(&ecriture.client, &ecriture.session, &hosted.id);
                     let (name, args) = (ecriture.outil.as_str(), ecriture.arguments.clone());
-                    self.with_backend(hosted, |b| match (&cell, ecriture.humain) {
+                    crate::backend::as_agent(ecriture.agent.as_deref(), || self.with_backend(hosted, |b| match (&cell, ecriture.humain) {
                         (Some(cell), false) => b.call_in(cell, name, args),
                         (Some(cell), true) => b.call_in_humain(cell, name, args),
                         (None, false) => b.call(name, args),
                         (None, true) => b.call_humain(name, args),
-                    })
+                    }))
                     .and_then(|r| r)
                     .and_then(|r| if r["ok"] == json!(false) { Err(r["error"].as_str().unwrap_or("refusé").to_string()) } else { Ok(r) })
                 })
@@ -3164,7 +3168,11 @@ impl DaemonHost {
                     "/backend/close" => self.close_avec(session, &m, v["reason"].as_str(), v["until"].as_str(), v["queue_max_age_s"].as_u64()),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
-                        Some(name) => self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64()),
+                        // `agent`: the agent the client calls for (the Claude Code hook, M7); outside the tool's
+                        // arguments, so a tool's caller never reaches it. Absent, the rows carry no author.
+                        Some(name) => crate::backend::as_agent(v["agent"].as_str().filter(|a| !a.is_empty()), || {
+                            self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64())
+                        }),
                         None => json!({ "ok": false, "error": "« name » manque : l'outil à appeler" }),
                     },
                 };
