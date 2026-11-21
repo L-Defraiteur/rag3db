@@ -573,6 +573,25 @@ impl Vue {
         if l["kind"] == "approval_state" {
             return;
         }
+        // **A closing that came too late** (archi, 21 November 2026): the host keeps it without effect and says who had
+        // closed the card; the terminal says it, whatever the steps shown.
+        if l["from"] == "host" && l["kind"] == "report" && l.get("late_from").is_some() {
+            let texte = l["text"].as_str().unwrap_or_default();
+            let par = match texte.split("already closed by ").nth(1).and_then(|r| r.split(':').next()).unwrap_or("?") {
+                "recall" => "ton autorisation rappelée",
+                "appeal" => "l'appel de l'agent",
+                "verifier" => "le vérificateur",
+                "user" | "supervisor" => "toi",
+                autre => autre,
+            };
+            let qui = match l["late_from"].as_str().unwrap_or_default() {
+                "user" | "supervisor" => "ta réponse".to_string(),
+                autre => format!("la décision tardive ({autre})"),
+            };
+            self.clore();
+            self.valider_avec_tete(Genre::Boite, "› ", &format!("{qui} est sans effet : la carte était déjà close par {par}"));
+            return;
+        }
         if let Some(n) = l["name"].as_str().filter(|n| !n.trim().is_empty() && l["from"] == "teammate") {
             self.nom_agent = Some(n.to_string());
         }
@@ -958,7 +977,7 @@ impl Vue {
                 return match a.kind.as_str() {
                     "approval" => {
                         let etat = a.state_said(crate::boite::now_ms()).map(|s| format!(" · {s}")).unwrap_or_default();
-                        format!("{c} attend ton accord : {}{etat}  {}  ← → Entrée, ou o / n{reste}", a.what(), self.boutons())
+                        format!("{c} attend ton accord : {}{etat}  {}  ← → Entrée, ou o / n{reste}", a.asked(), self.boutons())
                     }
                     _ => format!("{c} attend ta réponse : {}{reste}", a.text.lines().next().unwrap_or_default()),
                 };
