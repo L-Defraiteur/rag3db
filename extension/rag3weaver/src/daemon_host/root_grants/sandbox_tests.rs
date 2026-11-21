@@ -171,3 +171,25 @@ fn the_hosts_configuration_folder_is_protected_in_the_code_and_an_empty_list_kee
         assert!(host.protected_folders().iter().any(|p| p == &service.canonicalize().unwrap_or(service.clone())), "~/.config/rag3weaver is not in the floor");
     }
 }
+
+/// **The profile of Anthropic's CLI is protected** (c7, 21 November 2026: Lucie logs in by `ant auth login`, its tokens
+/// under `~/.config/anthropic/`): it is in the floor of the protected folders beside `~/.config/gh`, so neither it nor
+/// `~/.config` is granted, and the sandbox never mounts it.
+#[test]
+fn the_profile_of_anthropics_cli_is_protected() {
+    let d = tempfile::tempdir().unwrap();
+    let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    let host = crate::daemon_host::DaemonHost::new().with_racines_de_code(racines);
+    let maison = std::path::PathBuf::from(std::env::var_os("HOME").unwrap());
+    let profil = maison.join(".config/anthropic");
+    let protegees = host.protected_folders();
+    assert!(protegees.iter().any(|p| p.ends_with(".config/anthropic")), "~/.config/anthropic is not protected: {protegees:?}");
+    assert!(protegees.iter().any(|p| p.ends_with(".config/gh")), "~/.config/gh is not protected: {protegees:?}");
+    let preuve = || Proof { quote: "oui".into(), at: None, turn: None };
+    if maison.join(".config").is_dir() {
+        assert!(host.grant_root("*", &maison.join(".config"), preuve(), "user", "read").is_err(), "~/.config is granted");
+    }
+    if profil.is_dir() {
+        assert!(host.grant_root("*", &profil, preuve(), "user", "read").is_err(), "the profile of Anthropic's CLI is granted");
+    }
+}
