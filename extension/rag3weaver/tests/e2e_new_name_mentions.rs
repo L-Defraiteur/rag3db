@@ -75,3 +75,23 @@ fn a_rewrite_keeps_the_mentions_of_a_name_never_seen() {
         assert_eq!(mentions_of(&catalog, "f"), ["brand_new_call@3", "known_call@4", "other_new_call@2"], "{path}: after the batch");
     }
 }
+
+/// **A mention made inside a closure belongs to the scope that holds it** (ticket
+/// `docs/codeparsers/tickets/2026-11-21-une-reecriture-perd-les-mentions-d-un-nom-neuf.md`, its cause): a closure or a
+/// Python comprehension is folded into the named scope around it (`fold_lambdas`), and so must the names it calls
+/// that no file defines — the rendezvous (`pending`). Before, they kept the closure's key, a scope never written:
+/// their `MENTIONS` left from nowhere and the drain dropped them without a word (26 544 on a rewrite of 419 files of
+/// rag3weaver, 21 November 2026).
+#[test]
+#[ignore]
+fn a_mention_inside_a_closure_belongs_to_the_scope_that_holds_it() {
+    for (path, threshold) in [("batches", usize::MAX), ("copy", 1)] {
+        let python = "def main(items):\n    return [helper(x) for x in items]\n";
+        let rust = "pub fn f(v: Vec<u32>) -> Vec<u32> {\n    v.into_iter().map(|x| unknown_fn(x)).collect()\n}\n";
+        let snapshot = Snapshot::new("demo", [("a.py".to_string(), python.to_string()), ("b.rs".to_string(), rust.to_string())]);
+        let mut catalog = catalogue(threshold);
+        catalog.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+        assert!(mentions_of(&catalog, "main").contains(&"helper@2".to_string()), "{path}: main mentions helper, {:?}", mentions_of(&catalog, "main"));
+        assert!(mentions_of(&catalog, "f").contains(&"unknown_fn@2".to_string()), "{path}: f mentions unknown_fn, {:?}", mentions_of(&catalog, "f"));
+    }
+}
