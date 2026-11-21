@@ -865,7 +865,12 @@ mod tests {
         )
         .unwrap();
         let tete = git(&lot, &["rev-parse", "HEAD"]);
-        let fichiers: Vec<String> = git(&lot, &["diff", "--name-only", &racine, &tete]).lines().map(str::to_string).collect();
+        // RAG3WEAVER_SONDE_TOUT : tout l'arbre du lot, ce qu'une synchronisation réécrit après une montée des règles.
+        let fichiers: Vec<String> = if std::env::var_os("RAG3WEAVER_SONDE_TOUT").is_some() {
+            git(&lot, &["ls-tree", "-r", "--name-only", &tete]).lines().map(str::to_string).collect()
+        } else {
+            git(&lot, &["diff", "--name-only", &racine, &tete]).lines().map(str::to_string).collect()
+        };
         let debut = std::time::Instant::now();
         let (r, etapes) = crate::ingest_profile::record(|| match mode.as_str() {
             "couche" => {
