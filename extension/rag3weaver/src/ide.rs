@@ -725,6 +725,11 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         }
         // Les tâches de l'agent (page 09) : la liste, la relecture d'une tâche,
         // l'ouvrir, la fusionner, la rejeter. La page est une personne.
+        // **The agents of the machine, as a tree** (21 Nov 2026): roots (Claude Code sessions by
+        // name), their open tasks, and the tasks without a parent session.
+        ("GET", "/ide/agents") => {
+            let _ = request.respond(json_(200, &json!({ "ok": true, "result": host.agents() })));
+        }
         ("GET", "/ide/taches") => {
             let (statut, v) = match (param("backend"), param("nom")) {
                 (None, _) => (400, json!({ "ok": false, "error": "tâches : il faut backend=<id>" })),
