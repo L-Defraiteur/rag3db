@@ -5840,14 +5840,18 @@ impl Backend {
             if let Some(garde) = &self.garde {
                 services.register(crate::dataflow::run_nodes::GARDE_SERVICE, garde.clone());
                 if let Some(w) = &prepared.manifest.workspace {
-                    let racine = if w.root.is_absolute() {
+                    let racine_du_backend = if w.root.is_absolute() {
                         w.root.clone()
                     } else {
                         prepared.directory.join(&w.root)
                     };
-                    let jetons = jetons_du_bac(prepared, &racine);
+                    let jetons = jetons_du_bac(prepared, &racine_du_backend);
+                    // **Under a writable view, the commands run in its worktree** (ticket of 21 November 2026, « sous une
+                    // vue, les commandes tournent dans le bac du backend »): the agent compiles and tests the tree it
+                    // edits; the git of the shared repository is read from the backend's tree, as for a task.
+                    let racine = WRITABLE_VIEW.with(|c| c.borrow().clone()).filter(|r| r.is_dir()).unwrap_or_else(|| racine_du_backend.clone());
                     if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine, &jetons) {
-                        let principale = prepared.surcharges.racine_principale.as_deref().unwrap_or(&racine);
+                        let principale = prepared.surcharges.racine_principale.as_deref().unwrap_or(&racine_du_backend);
                         let bac = crate::backend_code::avec_lecture_git(bac, &racine, principale);
                         services.register(
                             crate::dataflow::run_nodes::BAC_A_SABLE_SERVICE,
