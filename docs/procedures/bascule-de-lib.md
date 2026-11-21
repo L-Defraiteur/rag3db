@@ -24,9 +24,9 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
 
 ## Les étapes
 
-1. **Bâtir hors de `courant`** (`scripts/batir-lib.sh <commit>`, à luciepc, sous `poste lourd`,
+1. **Bâtir hors de `courant`** (`scripts/batir-lib.sh <commit>`, à luciepc, sous `poste cpu`,
    `-j 8`). Worktree à soi, détaché ; jamais l'arbre de Lucie. La publication est toujours
-   `--sans-courant`. La borne de durée se met **dans** le lourd (`poste lourd timeout 1h cmake …`),
+   `--sans-courant`. La borne de durée se met **dans** le lourd (`poste cpu timeout 1h cmake …`),
    jamais devant : depuis le 7 novembre les lourds font la file, et un `timeout` posé devant
    compterait l'attente.
 2. **Lire le nom que le magasin a donné.** Le magasin nomme une lib par **son dernier commit
@@ -102,9 +102,9 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    **Un « aucun écart » est plus faible qu'il n'y paraît** (14 novembre, relevé d'hotfixs) : l'outil tire ses bouts
    d'une seule lecture non ancrée, jouée dans un seul sens, et ce que cette lecture perd n'est relu par aucun sens.
    Ticket fermé par a34fe130a (bouts ancrés par tranches, quatre comptes par table) : `docs/tickets/closed/2026-11-14-check-rel-directions-tire-ses-bouts-d-une-seule-lecture-non-ancree.md`.
-   **L'outil tourne sous `poste lourd`** (14 novembre, relevé d'ED) : il prend 250 à 370 % de CPU pendant 15 à
+   **L'outil tourne sous `poste cpu`** (14 novembre, relevé d'ED) : il prend 250 à 370 % de CPU pendant 15 à
    30 minutes par base de code. Lancé hors du verrou, il a faussé une mesure d'ED à luciepc et échappé au compte
-   des lourds. Le script l'appelle par `~/.cache/rag3weaver-build/poste lourd`, la borne dans le lourd. Aucun
+   des lourds. Le script l'appelle par `~/.cache/rag3weaver-build/poste lourd` (alias de `cpu`), la borne dans la place. Aucun
    écart ne prouve pas qu'une table est saine : le contrôle juge la cohérence des deux rangements, pas la
    complétude (14 novembre, hotfixs : une relation vraie perdue par un relevé non ancré lu dans un seul sens,
    « égales » au contrôle). Un relevé qui sert à reconstruire se fait par tranches d'offsets ancrées sur chaque

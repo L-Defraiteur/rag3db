@@ -29,7 +29,7 @@ The docs are in French; the rag3weaver README is in English.
 - **A known defect that is not fixed gets a ticket**, under `docs/<session>/tickets/`, not a line
   in a message.
 - **Heavy builds and test runs** go through the machine lock (`~/.cache/rag3weaver-build/poste
-  lourd …`), and never with `-j$(nproc)`: leave two cores free.
+  cpu …` for cores, `poste gpu <GiB> …` for graphics memory; `poste lourd` is an alias of `cpu`), and never with `-j$(nproc)`: leave two cores free.
 
 ## The MCP tools at hand
 
