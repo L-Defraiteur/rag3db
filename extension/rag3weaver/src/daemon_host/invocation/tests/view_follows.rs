@@ -21,3 +21,14 @@ fn a_write_in_a_views_worktree_is_seen_under_the_view_within_two_seconds() {
     }
     panic!("a write in the view's worktree is not seen under the view within 2 s: {vu}");
 }
+
+/// **A view at rest computes no signature** (c7, 21 November 2026): opened, then left five seconds without a write, its
+/// follower runs no `git status` — none, or one if the slow poll of 30 s falls in. A poll each second would run five.
+#[test]
+fn a_view_at_rest_runs_no_signature() {
+    let v = une_vue_ouverte("repos");
+    let avant = v.a.host.view_follower_turns(&v.couche).expect("the view does not follow its worktree");
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    let tours = v.a.host.view_follower_turns(&v.couche).unwrap() - avant;
+    assert!(tours <= 1, "a view at rest ran {tours} signatures in 5 s");
+}
