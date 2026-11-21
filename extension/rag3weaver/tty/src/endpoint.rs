@@ -31,21 +31,16 @@ impl Endpoint {
 
     pub fn depuis_fichier(chemin: &Path) -> Result<Self, String> {
         let octets = std::fs::read(chemin).map_err(|e| format!("{} : {e} (l'hôte tourne-t-il ?)", chemin.display()))?;
-        Self::depuis_json(&octets)
+        let mut ep = Self::depuis_json(&octets)?;
+        // The user's token lives beside daemon.json, in `user/` (0700, hidden from the agents under the sandbox).
+        ep.user_token = chemin.parent().and_then(|d| std::fs::read_to_string(d.join("user").join("user_token")).ok()).map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        Ok(ep)
     }
 
     /// La sortie d'une commande qui imprime un `daemon.json` (par exemple
     /// `ssh luciepc cat .local/share/rag3weaver/daemon.json`).
     pub fn depuis_commande(commande: &str) -> Result<Self, String> {
-        #[cfg(windows)]
-        let sortie = std::process::Command::new("cmd").args(["/C", commande]).output();
-        #[cfg(not(windows))]
-        let sortie = std::process::Command::new("sh").args(["-c", commande]).output();
-        let sortie = sortie.map_err(|e| format!("« {commande} » ne se lance pas : {e}"))?;
-        if !sortie.status.success() {
-            return Err(format!("« {commande} » : {} — {}", sortie.status, String::from_utf8_lossy(&sortie.stderr).trim()));
-        }
-        Self::depuis_json(&sortie.stdout)
+        Self::depuis_json(&run(commande)?)
     }
 
     /// Le `daemon.json` de cet utilisateur, au même endroit que l'hôte l'écrit
@@ -55,7 +50,9 @@ impl Endpoint {
     }
 
     /// The user's token read by a command (`--user-token-cmd`, for a host on another machine).
-    pub fn with_user_token_from_command(self, _command: &str) -> Result<Self, String> {
+    pub fn with_user_token_from_command(mut self, command: &str) -> Result<Self, String> {
+        let t = String::from_utf8_lossy(&run(command)?).trim().to_string();
+        self.user_token = (!t.is_empty()).then_some(t);
         Ok(self)
     }
 
@@ -69,6 +66,19 @@ impl Endpoint {
     pub fn base(&self) -> String {
         format!("http://{}", self.address)
     }
+}
+
+/// What `commande` prints, or why it fails.
+fn run(commande: &str) -> Result<Vec<u8>, String> {
+    #[cfg(windows)]
+    let sortie = std::process::Command::new("cmd").args(["/C", commande]).output();
+    #[cfg(not(windows))]
+    let sortie = std::process::Command::new("sh").args(["-c", commande]).output();
+    let sortie = sortie.map_err(|e| format!("« {commande} » ne se lance pas : {e}"))?;
+    if !sortie.status.success() {
+        return Err(format!("« {commande} » : {} — {}", sortie.status, String::from_utf8_lossy(&sortie.stderr).trim()));
+    }
+    Ok(sortie.stdout)
 }
 
 fn sans_schema(a: &str) -> String {
