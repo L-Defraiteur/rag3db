@@ -379,21 +379,6 @@ fn racine_des_temoins() -> Option<PathBuf> {
 #[cfg(test)]
 fn refuser_le_reel(base: &Path, reel: Option<&Path>) -> Result<(), String> {
 
-    /// **The delivered workshop lets cargo read its chain** (scenario 2 of the night of 20 November 2026, ticket
-    /// `docs/tickets/closed/2026-11-21-cargo-ne-peut-rien-dans-le-bac-a-sable-de-l-atelier.md`). In the workshop's chat,
-    /// `cargo init --lib` failed: « accès refusé sur le fichier de configuration local de rustup ». The sandbox only opens
-    /// the workshop's folder, and the delivered workshop declared no extra read; the delivered code backend declares the
-    /// Rust chain (rustup, cargo's bin, registry, git and config). The workshop declares the same.
-    #[test]
-    fn the_delivered_workshop_lets_cargo_read_its_chain() {
-        let lire = |nom: &str| -> serde_json::Value { serde_json::from_slice(get(nom).expect(nom)).expect(nom) };
-        let atelier = lire("backends/atelier/backend.json");
-        let code = lire("backends/code/backend.json");
-        let chaine = &code["workspace"]["sandbox"]["extra_read"];
-        assert!(chaine.as_array().is_some_and(|a| a.iter().any(|p| p == "~/.rustup")), "the code backend's chain: {chaine}");
-        assert_eq!(&atelier["workspace"]["sandbox"]["extra_read"], chaine, "the workshop's sandbox reads the Rust chain too");
-    }
-
     match reel {
         Some(r) if base.starts_with(r) => Err(format!(
             "un témoin écrirait dans le dossier d'état réel ({}) : posez RAG3WEAVER_STATE_DIR sur un dossier temporaire",
@@ -585,6 +570,21 @@ pub fn refresh(manifest: &Path) -> Result<Refresh, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The delivered workshop lets cargo read its chain** (scenario 2 of the night of 20 November 2026, ticket
+    /// `docs/tickets/closed/2026-11-21-cargo-ne-peut-rien-dans-le-bac-a-sable-de-l-atelier.md`). In the workshop's chat,
+    /// `cargo init --lib` failed: « accès refusé sur le fichier de configuration local de rustup ». The sandbox only opens
+    /// the workshop's folder, and the delivered workshop declared no extra read; the delivered code backend declares the
+    /// Rust chain (rustup, cargo's bin, registry, git and config). The workshop declares the same.
+    #[test]
+    fn the_delivered_workshop_lets_cargo_read_its_chain() {
+        let lire = |nom: &str| -> serde_json::Value { serde_json::from_slice(get(nom).expect(nom)).expect(nom) };
+        let atelier = lire("backends/atelier/backend.json");
+        let code = lire("backends/code/backend.json");
+        let chaine = &code["workspace"]["sandbox"]["extra_read"];
+        assert!(chaine.as_array().is_some_and(|a| a.iter().any(|p| p == "~/.rustup")), "the code backend's chain: {chaine}");
+        assert_eq!(&atelier["workspace"]["sandbox"]["extra_read"], chaine, "the workshop's sandbox reads the Rust chain too");
+    }
     use serde_json::json;
 
     #[test]
