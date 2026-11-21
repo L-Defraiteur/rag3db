@@ -36,6 +36,17 @@ Une famille « navigateur » de la palette, déclarée au gabarit, moins de dix 
 
 Le JavaScript arbitraire (`exec`) reste fermé, comme les passe-partout : il n'entre pas dans cette famille.
 
+**La forme, accordée avec archi le 21 novembre** (chaque paramètre a sa phrase de description, que le témoin `every_parameter_of_the_teammates_tools_is_described` exige) :
+- `browser_tabs {claim?: tab_id}` → `[{tab_id, url, title, claimed_by}]` ;
+- `browser_read {tab_id, mode: "aria" | "text" | "url", max_chars?}` → `{url, title, content, truncated, masked_fields}` ;
+- `browser_console {tab_id, since?}` → `[{at, level, text}]` ;
+- `browser_open {url, tab_id?}`, `browser_click {tab_id, ref}`, `browser_fill {tab_id, ref, value}` → `{ok, url_after, navigated, …}`. `ref` est la référence ARIA rendue par `browser_read`, jamais un sélecteur CSS libre ;
+- `browser_handoff {tab_id, reason}` → une ligne `handoff` dans la boîte ; le pas attend sa réponse.
+
+**La palette** : une famille « browser » à part, déclarée au gabarit, et allumée par `teammate.browser`. Absente si le manifeste ne la déclare pas, comme `web_fetch` et `web_search` de mémoire.
+
+**L'écoute** : une fois pour tout l'hôte, ouverte au premier manifeste qui déclare `teammate.browser`, et dite à `/sante` (le socket, les onglets réclamés). L'extension ne connaît qu'une adresse. Les domaines restent par manifeste, donc la garde par tâche.
+
 ## Les gardes
 
 1. **Jamais d'identifiants.**
@@ -46,7 +57,7 @@ Le JavaScript arbitraire (`exec`) reste fermé, comme les passe-partout : il n'e
 2. **Jamais hors d'un domaine déclaré.**
    - `teammate.browser.domains` au manifeste (vide par défaut, donc rien n'est permis) ; `browser_open` et tout geste sur une page hors de cette liste sont refusés sans envoi.
    - Une redirection hors liste (l'événement `tab_navigated`) suspend l'onglet jusqu'à un accord.
-3. **L'humain pour tout envoi.**
+3. **L'humain pour tout envoi.** (Il n'y a pas aujourd'hui de voie d'accord générique : celle de `run_command` lit `args.command`, et son « oui » vaut pour toute la tâche. Le lot « l'accord d'un outil » l'ouvre : une ligne `approval {tool, args, scope: "once" | "task"}`, posée pour tout outil d'écriture déclaré `needs_approval`, et un « oui » qui rejoue l'appel exact une fois quand `scope` vaut `once`. `browser_click` et `browser_fill` sont toujours `once`.)
    - Lire est libre dans les domaines déclarés.
    - Tout geste d'écriture (`browser_open`, `browser_click`, `browser_fill`) passe par une carte d'accord, comme une commande : dans la boîte, au terminal (o / n) et dans la page de la tâche.
    - Un clic qui soumet un formulaire, ou dont la cible est un bouton d'envoi, ne s'accorde jamais pour toute la tâche : un accord par envoi.
@@ -66,14 +77,14 @@ La qualification sur le vrai Chrome du portable vient après, avec Lucie (l'exte
 
 ## La taille
 
-Trois lots, chacun avec ses témoins et son attestation :
+Trois lots, chacun avec ses témoins et son attestation, plus le lot de l'accord, avant le lot 2 :
 1. **L'hôte ouvre l'écoute, et la lecture** : `browser_tabs`, `browser_read`, `browser_console` ; garde des domaines et masquage des identifiants. Environ 400 lignes.
+- **L'accord d'un outil** (`approval {tool, args, scope}`, `needs_approval`, le « oui » qui rejoue l'appel une fois) : archi le propose, avant le lot 2.
 2. **Les gestes d'écriture et leurs accords** : `browser_open`, `browser_click`, `browser_fill` ; refus des identifiants, un accord par envoi. Environ 400 lignes.
 3. **Le passage de main comme pas du run**, et la carte « à toi » au terminal et dans l'IDE. Environ 300 lignes.
 
 ## Questions
 
-- **À archi** : la forme des outils (noms, paramètres, sorties), leur place dans la palette par familles, et le geste « accord » pour un outil autre que `run_command`.
 - **À Lucie** (aucune ne bloque le lot 1) :
   - l'installation de l'extension sur le Chrome du portable, et l'écriture du manifeste Native Messaging : ce sont ses gestes ;
   - les domaines à déclarer pour le premier essai ;
