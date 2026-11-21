@@ -1177,20 +1177,23 @@ mod tests {
             (rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect(), t.elapsed().as_secs_f64() * 1000.0)
         };
         let exact = format!("MATCH (c:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} AND c.{col} IS NOT NULL WITH DISTINCT c._text_hash AS h, c.{col} AS e RETURN h ORDER BY array_cosine_similarity(e, CAST($q, '{typ}')) DESC LIMIT 10");
-        let mut rows: Vec<(&str, Vec<f64>, usize, f64)> = Vec::new();
+        let t0 = std::time::Instant::now();
+        let truths: Vec<std::collections::BTreeSet<String>> = queries.iter().map(|q| {
+            let r = conn.execute_with_params(&exact, &[QueryParam::new("q", list(q))]);
+            if let Err(e) = &r { println!("PROBE_TEXTF exact : {e}"); }
+            r.map(|r| r.rows).unwrap_or_default().iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
+        }).collect();
+        println!("PROBE_TEXTF the exact truths : {} in {:.1} s", truths.len(), t0.elapsed().as_secs_f64());
+        let nq = queries.len().max(1) as f64;
         for (label, filter, table, index) in [("today, path", &today_filter, chunk, cidx), ("shared, path", &shared_filter, text, tidx), ("today, version list", &today_list, chunk, cidx), ("shared, version list", &shared_list, text, tidx)] {
             let (mut times, mut hit, mut distinct) = (Vec::new(), 0usize, 0usize);
-            for q in &queries {
-                let truth: std::collections::BTreeSet<String> = conn.execute_with_params(&exact, &[QueryParam::new("q", list(q))]).map(|r| r.rows).unwrap_or_default().iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+            for (i, q) in queries.iter().enumerate() {
                 let (got, ms) = search(filter, table, index, q);
+                if i < 3 { println!("PROBE_TEXTF {label} query {i} : {ms:.1} ms, {} texts", got.len()); }
                 times.push(ms);
                 distinct += got.len();
-                hit += got.intersection(&truth).count();
+                hit += got.intersection(&truths[i]).count();
             }
-            rows.push((label, times, hit, distinct as f64));
-        }
-        let nq = queries.len().max(1) as f64;
-        for (label, mut times, hit, distinct) in rows {
             times.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let (m, p) = (times[times.len() / 2], times[(times.len() * 95 / 100).min(times.len() - 1)]);
             println!("PROBE_TEXTF {label} : {} queries, median {m:.1} ms, p95 {p:.1} ms, recall@10 {:.3}, {:.1} distinct texts", queries.len(), hit as f64 / (10.0 * nq), distinct / nq);
