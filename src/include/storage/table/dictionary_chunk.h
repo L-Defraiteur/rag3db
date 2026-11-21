@@ -40,7 +40,16 @@ public:
 
     void resetNumValuesFromMetadata();
 
+    // True when every offset lies within the string data and none decreases.
     bool sanityCheck() const;
+    // The first offset, from `from` on, that decreases (from `floor`, then from the one before) or
+    // runs past the string data; INVALID_ROW_IDX when there is none.
+    common::row_idx_t firstInconsistentOffset(common::row_idx_t from = 0,
+        string_offset_t floor = 0) const;
+    // Refuses, naming `columnName`, a dictionary whose offsets and data do not describe the same
+    // strings, instead of letting a later read run past its buffer.
+    void throwIfInconsistent(std::string_view what, std::string_view columnName,
+        common::row_idx_t from = 0, string_offset_t floor = 0) const;
 
     uint64_t getEstimatedMemoryUsage() const;
 
