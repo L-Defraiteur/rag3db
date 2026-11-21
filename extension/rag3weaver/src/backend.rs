@@ -3581,6 +3581,8 @@ const SEARCH_NODES: &[&str] = &[
     "BM25SearchNode",
     "VectorSearchNode",
     "SparseSearchNode",
+    // The rows named by the whole query, read by the name: a read under the query's filter, nothing written.
+    "ExactNameNode",
     "RelatedResultsNode",
     "IntersectResultsNode",
     "LabelResultsNode",
@@ -7516,7 +7518,9 @@ mod tests {
             // Le relais est admis sous code sans conférer read_files : une lecture
             // pure en base reste possible ; les effets de la cible sont revérifiés.
             // Collect (lot B1, 19 nov. 2026) : rassembler dans un ordre déclaré, pur comme RhaiNode.
-            45 + usize::from(cfg!(feature = "code"))
+            // ExactNameNode (20 November 2026): the rows named by the whole query, read by the name under the
+            // query's filter.
+            46 + usize::from(cfg!(feature = "code"))
                 // SlowReadNode, in the test builds only (`backend::lecture_lente`): the slow read on the call's
                 // snapshot that the host-path witness of the interruption stops. Never in the product.
                 + usize::from(cfg!(test)),
@@ -11570,6 +11574,10 @@ mod tests {
         assert!(validator.is_valid(&json!({"record":{"key":"one"}})));
         assert!(!validator.is_valid(&json!({"record":{"key":""}})));
     }
+
+    /// The witness of the lot `exact-name-by-name`, in a file of its own (rule of 21 November 2026).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    mod exact_name_by_name;
 }
 
 #[cfg(test)]
