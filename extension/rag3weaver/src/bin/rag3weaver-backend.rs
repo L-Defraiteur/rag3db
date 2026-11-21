@@ -435,7 +435,18 @@ fn gabarits_livres(args: &[String]) -> Result<(), String> {
 fn entrer_dans_l_ide() -> Result<(), String> {
     let hote = rag3weaver::daemon_lifecycle::read()
         .ok_or("aucun hôte ne tourne (daemon.json absent) : lancer `rag3weaver-backend daemon`, ou ouvrir un client MCP qui le lance")?;
-    println!("http://{}/ide/entrer?jeton={}", hote.address, hote.token);
+    // A one-use code, asked with the user's token: the URL never carries a lasting secret.
+    let utilisateur = rag3weaver::daemon_lifecycle::user_token()?;
+    let reponse = ureq::post(format!("http://{}/ide/entry-code", hote.address))
+        .header("Authorization", format!("Bearer {}", hote.token))
+        .header("X-Rag3weaver-User", utilisateur)
+        .send_empty()
+        .map_err(|e| format!("le code d'entrée de l'IDE : {e}"))?;
+    let texte = reponse.into_body().read_to_string().map_err(|e| format!("le code d'entrée de l'IDE : {e}"))?;
+    let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| format!("le code d'entrée de l'IDE : {e}"))?;
+    let code = v["code"].as_str().ok_or_else(|| format!("le code d'entrée de l'IDE : {v}"))?;
+    println!("http://{}/ide/entrer?code={code}", hote.address);
+    eprintln!("(valable {} s, une seule fois)", v["expires_in_s"]);
     Ok(())
 }
 
@@ -585,6 +596,14 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     // **A guest host** (the night of 20 Nov 2026): started by hand in the root of a live host, it
     // rereads none of its tasks or chats, and resumes none of its teammates.
     let hote = rag3weaver::daemon_host::DaemonHost::new();
+    // The title of a human (21 Nov 2026): made once, under the data folder that the sandbox masks.
+    let hote = match rag3weaver::daemon_lifecycle::user_token() {
+        Ok(t) => hote.with_user_token(t),
+        Err(e) => {
+            eprintln!("[démon] pas de jeton d'utilisateur ({e}) : aucune ligne ne sera dite humaine");
+            hote
+        }
+    };
     let hote = match &autre {
         Some(a) => {
             eprintln!(
