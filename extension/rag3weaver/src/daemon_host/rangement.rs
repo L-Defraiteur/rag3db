@@ -195,6 +195,8 @@ pub(super) struct Rangement {
     pub rangeur: Arc<dyn Rangeur>,
     pub chemin: PathBuf,
     pub verrou: Arc<std::sync::Mutex<()>>,
+    /// The agent this conversation is a context of (a teammate's key, M7): the memory writes are made for it.
+    pub agent: Option<String>,
 }
 
 /// Whether a slice report says « filed »: the mark reaches `to_turn` and there is no error (the
@@ -229,7 +231,7 @@ impl Rangement {
             if etat.written_through.is_some_and(|w| (tour, seq) <= w) {
                 continue;
             }
-            if let Err(e) = self.rangeur.put_turn(&self.memoire, &ligne_du_message(run, tour, seq, t, &appels)) {
+            if let Err(e) = crate::backend::as_agent(self.agent.as_deref(), || self.rangeur.put_turn(&self.memoire, &ligne_du_message(run, tour, seq, t, &appels))) {
                 let e = format!("put_turn {tour}.{seq}: {e}");
                 self.changer(|s| s.last_error = Some(e.clone()));
                 return Err(e);
@@ -252,7 +254,7 @@ impl Rangement {
     /// The slice `de..=jusqu_a` to the archivist, waiting; the mark, the Source and the error
     /// written from the answer. `Ok` only when the slice is filed.
     pub fn ranger(&self, run: &str, de: usize, jusqu_a: usize) -> Result<(), String> {
-        let reponse = self.rangeur.archive_slice(&self.memoire, &json!({ "run": run, "from_turn": de, "to_turn": jusqu_a, "context": "" }));
+        let reponse = crate::backend::as_agent(self.agent.as_deref(), || self.rangeur.archive_slice(&self.memoire, &json!({ "run": run, "from_turn": de, "to_turn": jusqu_a, "context": "" })));
         let mut resultat = Ok(());
         self.changer(|etat| match &reponse {
             Ok(r) if tranche_rangee(r, jusqu_a) => {
@@ -296,7 +298,7 @@ impl DaemonHost {
         }
         let memoire = if bilans.memoire.is_absolute() { bilans.memoire.clone() } else { hosted.manifest.parent().map(|p| p.join(&bilans.memoire)).unwrap_or(bilans.memoire.clone()) };
         let rangeur = self.rangeur.clone().or_else(|| self.soi.get().map(|w| Arc::new(RangeurDeLHote { hote: w.clone() }) as Arc<dyn Rangeur>))?;
-        Some(Rangement { reglage, memoire, rangeur, chemin: chemin_de_l_etat(&self.chats_root, backend_id), verrou: self.rangement_verrou.clone() })
+        Some(Rangement { reglage, memoire, rangeur, chemin: chemin_de_l_etat(&self.chats_root, backend_id), verrou: self.rangement_verrou.clone(), agent: self.agent_key_of_backend(backend_id) })
     }
 
     /// **At the end of a turn**: the messages not yet written go to the memory; past

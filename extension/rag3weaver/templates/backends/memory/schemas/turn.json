@@ -62,6 +62,7 @@
       "type": "string",
       "description": "role tool: its result, secrets masked, bounded at 8000 characters (« … (<n> characters) » says the original size)."
     },
+    "author": {"type": "string", "description": "The key of the agent the turn was said for (agent:<key>), set by the host (writes.author, M7); absent for a call with no agent."},
     "status": {
       "type": "string",
       "enum": ["ok", "error", "refused", "interrupted"]

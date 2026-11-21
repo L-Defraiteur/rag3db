@@ -4024,6 +4024,11 @@ thread_local! {
     static AGENT_OF_CALL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
+/// The agent the call in this thread is made for (`as_agent`), if any: what a queued write keeps to be replayed under.
+pub fn current_agent() -> Option<String> {
+    AGENT_OF_CALL.with(|c| c.borrow().clone())
+}
+
 /// The service under which a call's agent key reaches the write nodes (`writes.author`).
 pub const AGENT_SERVICE: &str = "backend_agent";
 
