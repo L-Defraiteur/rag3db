@@ -144,9 +144,11 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # La 4.3.13 (20 novembre 2026, tag v4.3.13, main a633e13) : un index qu'une lucivy plus récente a
 # marqué (`min_lucivy`, posé par la 4.4 sur un index à générations étiquetées) est refusé à l'ouverture,
 # en nommant les deux versions, avant tout écrivain et tout ramasse-miettes. Format inchangé.
-lucivy-core = "4.3.13"
+# La 4.4.0 (21 novembre 2026) : les générations étiquetées. Sur un index étiqueté, `commit()` est refusé ; les
+# commits de rag3weaver qui ne créent pas de version passent par `commit_keeping_generation()`.
+lucivy-core = "4.4.0"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.13", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.4.0", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
@@ -516,6 +518,12 @@ debug = false
 # `cubecl_common::Device` ne sont pas le même trait. Les trois forks sont au
 # tag exact du lock ; tout le reste est identique à crates.io.
 [patch.crates-io]
+# TEMPORAIRE, à retirer avant le dépôt : lucivy 4.4.0 avant sa publication, à la tête de la PR de version
+# (L-Defraiteur/lucivy#61). Le lot se dépose quand le crate est sur le registre, sans ce patch.
+ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "8ba20991171820ade2257bebfa804c23bdcdf874" }
+lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "8ba20991171820ade2257bebfa804c23bdcdf874" }
+luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "8ba20991171820ade2257bebfa804c23bdcdf874" }
+lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "8ba20991171820ade2257bebfa804c23bdcdf874" }
 burn = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-autodiff = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-backend = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }

@@ -8644,6 +8644,62 @@ mod tests {
         assert!(refus.to_string().contains("80") && refus.to_string().contains("50"), "the refusal names both thresholds: {refus}");
     }
 
+    /// **lucivy 4.4.0 : un plein texte étiqueté reçoit encore les écritures et le geste** (21 novembre 2026). Sur un
+    /// index qui a reçu un `commit_tagged`, lucivy refuse `commit()` ; les commits de rag3weaver qui ne créent pas de
+    /// version (le tampon d'écriture, le nœud de flush, le geste des non-candidats, les rebâtis) passent par
+    /// `commit_keeping_generation()`, et la génération reste celle qu'ils ont trouvée.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_tagged_full_text_index_keeps_taking_the_writes_and_the_gesture() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        for i in 0..12 {
+            std::fs::write(dir.path().join(format!("sources/h{i}.h")), format!("#pragma once\n\nnamespace zorg {{\nclass Thing{i} {{\n  int a{i};\n}};\n}}\n")).unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let regle = backend.catalog.lock().unwrap().entity_config(crate::code::SCOPE_CONTENT).and_then(|c| c.chunking.not_candidate.first().cloned()).expect("the rule is declared");
+        let source = backend.file_source.clone().unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, None);
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the first index");
+            // The caller's database names generation 1: every full-text index is tagged.
+            for (entity, h) in cat.fts_handles() {
+                h.commit_tagged(1).unwrap_or_else(|e| panic!("commit_tagged(1) on {entity}: {e}"));
+            }
+        }
+        let tagged: Vec<String> = backend.catalog.lock().unwrap().fts_handles().keys().cloned().collect();
+        assert!(!tagged.is_empty(), "the first index opened full-text indexes");
+        // The writes: a file changes, the next index writes and commits its full text.
+        std::fs::write(dir.path().join("sources/h0.h"), "#pragma once\n\nnamespace zorg {\nclass Changed0 {\n  int b0;\n};\n}\n").unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("an index of a changed file, on tagged full-text indexes");
+        }
+        let r = backend.call("search_code", json!({"query": "Changed0", "options": {"signals": ["bm25"], "limit": 5, "format": "json"}})).expect("search_code");
+        assert!(r["result"].as_array().is_some_and(|a| !a.is_empty()), "the changed file is found: {r}");
+        // The gesture: under the rule, the next index sets the folded containers aside and commits.
+        let ecartees = {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, Some(regle));
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the gesture on tagged full-text indexes").non_candidates_set_aside
+        };
+        assert!(ecartees >= 10, "the gesture sets the folded containers aside: {ecartees}");
+        // No commit made a new generation: each index is where the caller tagged it.
+        let cat = backend.catalog.lock().unwrap();
+        for (entity, h) in cat.fts_handles() {
+            if tagged.contains(entity) {
+                assert_eq!(h.tagged_generations().unwrap_or_else(|e| panic!("{entity}: {e}")), (vec![1], 1), "{entity} stays at generation 1");
+            }
+        }
+    }
+
     /// **Témoin 1 de la vue : aucune projection n'écrit de liste** (2a′-2, page 05, § 5). Une recherche
     /// dense filtrée par chemin, sur une base à générations, projette un Cypher court : moins de 4 Kio,
     /// quelle que soit la taille de la base. Aujourd'hui, le masque des versions y est écrit en clair.
