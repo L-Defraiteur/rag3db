@@ -42,3 +42,13 @@
 4. Ticket du disque (docs/optimiseur/tickets/2026-11-21-un-disque-presque-plein-ne-retient-aucune-passe.md) : le
    correctif dans poste et le relevé.
 5. Demain : la page de charge (poste-load.tsv), places pleines + attente + CPU < 70 %, la mémoire de luciepc.
+
+## Après la reprise (22 nov., 00 h 3x)
+
+- Les outils de pose d'hôte, perdus avec le scratchpad au redémarrage, sont rapatriés et durables à la tablette :
+  `~/.cache/rag3weaver-build/notes-G/outils/` (preparer-binaire.sh réécrit, essai-hote-nouveau.sh, pose-hote.sh,
+  bascule-pose.sh, bascule-reveil.sh, hostcall.py, bati-lucie-luciepc.sh).
+- Lib 2c4bddcd3c (fsm-finalize-lock de hotfixs) : bâtie, verdict e2e_code et e2e_lectures VERTS, e2e_demon_hote rouge à
+  l'identique sous 424ce93e56 (lucivy 4.4, commit_tagged : lot (A) de lucivy) ; courant aux deux postes ;
+  pin-lib-2c4bddcd3c au rang 1.
+- Hôte du matin : bâti vers 5 h 15 sur master (dangling-links compris s'il a atterri), pose vers 6 h aux deux postes.
