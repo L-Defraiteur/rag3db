@@ -89,6 +89,7 @@ mod tests {
     mod ecrire_la_vue;
     mod fermer_tout;
     mod run_dans_la_vue;
+    mod view_close_purge;
     mod view_diff_tests;
     mod view_follows;
     mod view_freshness;
