@@ -211,3 +211,47 @@ fn the_hosts_state_folder_is_protected() {
         assert!(host.grant_root("*", &etat, preuve, "user", "write").is_err(), "the host's state folder is granted");
     }
 }
+
+/// An atelier with a small repository attached, a session, and the repository's backend: the bench of the v1 defaults.
+fn banc_des_defauts(d: &std::path::Path) -> (crate::daemon_host::atelier_fichiers::tests::Atelier, std::path::PathBuf, String, String) {
+    let a = atelier(d);
+    let depot = petit_depot(&d.join("B"));
+    a.appeler("attach_worktree", json!({"path": depot})).unwrap();
+    attendre_l_index(&a, &depot);
+    let racines = a.host.racines_de_code().unwrap();
+    let nom = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+    let manifeste = racines.manifest(&nom).canonicalize().unwrap();
+    let id = a.host.hosted(&manifeste).unwrap().id.clone();
+    let (_, r) = a.host.handle("POST", "/session", None, json!({"client": "mcp (pid 1)"}).to_string().as_bytes());
+    let s = r["session"].as_str().unwrap().to_string();
+    (a, manifeste, s, id)
+}
+
+/// **The v1 defaults** (Lucie, 21 November 2026): the creation root of the configuration is granted in write to every
+/// agent without a card, so a command in it runs; the outbound network is open by default; a path under a protected
+/// folder is a hard refusal, never an open_root request the judge would see.
+#[test]
+fn the_v1_defaults_grant_the_creation_root_open_the_network_and_refuse_a_protected_path_hard() {
+    let d = tempfile::tempdir().unwrap();
+    let (a, manifeste, s, id) = banc_des_defauts(d.path());
+    let config = a.host.racines_de_code().unwrap().config;
+    std::fs::create_dir_all(&config).unwrap();
+    let projets = d.path().join("projets");
+    std::fs::create_dir_all(projets.join("neuf")).unwrap();
+    std::fs::write(config.join("sandbox-defaults.json"), json!({ "creation_root": projets }).to_string()).unwrap();
+    let coffre = d.path().join("coffre");
+    std::fs::create_dir_all(&coffre).unwrap();
+    std::fs::write(coffre.join("cle"), "non").unwrap();
+    std::fs::write(config.join("protected-folders.txt"), format!("{}\n", coffre.display())).unwrap();
+
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": format!("ls {}", projets.display())}));
+    assert!(r["open_root"].is_null() && r["ok"] == json!(true), "a command in the creation root asks for it: {r}");
+    let sortie = r["result"]["result"].as_str().unwrap_or_default();
+    assert!(sortie.contains("code 0") && sortie.contains("neuf"), "the creation root is not mounted: {sortie}");
+
+    assert_eq!(a.host.call_sandbox_for(&id).network, Some(true), "the outbound network is not open by default");
+
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": format!("cat {}", coffre.join("cle").display())}));
+    assert!(r["open_root"].is_null(), "a protected path becomes an open_root request the judge would see: {r}");
+    assert!(r.to_string().contains("protégé") && r["ok"] != json!(true), "a protected path is not refused hard: {r}");
+}
