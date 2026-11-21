@@ -618,6 +618,14 @@ pub trait SchemaDialect: Send + Sync {
         self.untranslated("batch_link_keyed")
     }
 
+    /// **The key of a relation's table** (21 November 2026, the keyed links): the statement that makes the pair and
+    /// the `key` the identity of a row, run when a relation is created with a key or an existing one takes it. `None`:
+    /// the engine has no constraint on links (rag3db, where the keyed `MERGE` is the identity).
+    fn add_rel_key(&self, rel_table: &str, key: &[&str]) -> Option<String> {
+        let _ = (rel_table, key);
+        None
+    }
+
     /// [`Self::batch_delete_relation`] **for a keyed relation**: `$items` also carries the values of `key`, and only the
     /// link that holds them is removed. Without key, every link of the pair, as before.
     fn batch_delete_keyed_relation(&self, rel_table: &str, key: &[&str]) -> String {
@@ -3967,6 +3975,21 @@ impl SchemaDialect for PostgresDialect {
              USING jsonb_to_recordset($items::text::jsonb) AS v(\"from\" TEXT, \"to\" TEXT) \
              WHERE {rel_table}.from_uuid = v.\"from\" AND {rel_table}.to_uuid = v.\"to\""
         )
+    }
+
+    /// The primary key moves from the pair to the pair and the key, in one statement (a `DO` block runs as one
+    /// transaction): the rows unique by pair stay unique by pair and key. A NULL key on a row makes PostgreSQL refuse
+    /// the new primary key; the catalogue names the refusal.
+    fn add_rel_key(&self, rel_table: &str, key: &[&str]) -> Option<String> {
+        let q = self.quote(rel_table);
+        let colonnes: Vec<String> = ["from_uuid".to_string(), "to_uuid".to_string()].into_iter().chain(key.iter().map(|k| self.quote(k))).collect();
+        Some(format!(
+            "DO $$ DECLARE c text; BEGIN \
+             SELECT conname INTO c FROM pg_constraint WHERE conrelid = '{q}'::regclass AND contype = 'p'; \
+             IF c IS NOT NULL THEN EXECUTE format('ALTER TABLE {q} DROP CONSTRAINT %I', c); END IF; \
+             ALTER TABLE {q} ADD PRIMARY KEY ({}); END $$",
+            colonnes.join(", ")
+        ))
     }
 
     /// The key values are compared as JSON (`to_jsonb` of the column against the item's value): the column types are
