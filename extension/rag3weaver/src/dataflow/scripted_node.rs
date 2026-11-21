@@ -49,6 +49,9 @@ pub struct ScriptedNodeDecl {
     pub inputs: Vec<DeclaredPort>,
     pub outputs: Vec<DeclaredPort>,
     pub config: Vec<DeclaredParam>,
+    /// **The script's file, when the declaration was read from one** (21 November 2026): an error of the node names it,
+    /// with the line the engine gives. `None` for a declaration built in memory.
+    pub script_file: Option<std::path::PathBuf>,
 }
 
 struct Checked {
@@ -113,7 +116,10 @@ impl ScriptedNodeFactory {
             });
         }
         let script = crate::script::prepare(&decl.language, &decl.source, &limits)
-            .map_err(|e| at(format!("script: {e}")))?;
+            .map_err(|e| at(match &decl.script_file {
+                Some(f) => format!("script {}: {e}", f.display()),
+                None => format!("script: {e}"),
+            }))?;
         Ok(Self {
             declared: Arc::new(Declared {
                 decl,
@@ -327,7 +333,10 @@ impl Node for ScriptedNode {
         let output = declared
             .script
             .call(&argument, &declared.limits)
-            .map_err(|e| format!("{kind}: {e}"))?;
+            .map_err(|e| match &declared.decl.script_file {
+                Some(f) => format!("{kind}: {}: {e}", f.display()),
+                None => format!("{kind}: {e}"),
+            })?;
         // Un nombre JSON a une seule forme : rhai rend `125.0` là où
         // JavaScript rend `125` ; la sortie d'un nœud ne dépend pas du langage.
         let Value::Object(output) = canonical_numbers(output) else {
@@ -493,6 +502,7 @@ pub fn read_declaration_avec(path: &std::path::Path, lecteur: &dyn crate::lecteu
         inputs: ports("input", file.inputs)?,
         outputs: ports("output", file.outputs)?,
         config,
+        script_file: Some(script_path.clone()),
     })
 }
 

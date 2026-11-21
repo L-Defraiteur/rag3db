@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
+  JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
+  seul nom du nœud.
 - 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
   comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
   demande à lancer… ».
