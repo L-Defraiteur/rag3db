@@ -3789,6 +3789,9 @@ mod ide_poste_tests;
 /// « Atelier » quitte l'écran (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sans_atelier_tests;
+/// The search of a worktree's view, uncommitted work included (21 November 2026), its witnesses in their file.
+#[cfg(all(test, unix, feature = "code"))]
+mod view_search_tests;
 
 /// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
 /// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
