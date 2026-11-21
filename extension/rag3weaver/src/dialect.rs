@@ -1159,6 +1159,15 @@ pub trait SchemaDialect: Send + Sync {
     /// et chacun juge la fraîcheur par le sien (7 septembre 2026).
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String;
 
+    /// **The vector already computed for a text, by its fingerprint** (21 November
+    /// 2026) : for each `item.hash`, the rows of `table` whose `_text_hash` is that hash
+    /// and whose vector is valid for the model (its marker equals its `_text_hash`),
+    /// as `(hash, vector)`. `None` : this engine does not reuse, every text goes to the
+    /// model.
+    fn embed_find_by_hash(&self, _table: &str, _embedding_col: &str, _marker: &str) -> Option<String> {
+        None
+    }
+
     /// SET la colonne de vecteurs **et** son marqueur, sur les lignes citées.
     /// Les deux viennent du même `VectorStorage` : ils vont ensemble ou pas du
     /// tout — poser un vecteur sans son marqueur, c'est un chunk réputé en
