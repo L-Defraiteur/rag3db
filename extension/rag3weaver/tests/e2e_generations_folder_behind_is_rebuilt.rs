@@ -3,7 +3,7 @@
 //! case_dir d'une autre passe) n'a rien vers quoi avancer : il est jeté et rebâti depuis les lignes, comme avant 4.4.
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use crate::e2e_generations_commun as g;
+use crate::e2e_generations_common as g;
 
 fn copy_dir(de: &std::path::Path, vers: &std::path::Path) {
     let statut = std::process::Command::new("cp").args(["-a"]).arg(de).arg(vers).status().expect("cp");
