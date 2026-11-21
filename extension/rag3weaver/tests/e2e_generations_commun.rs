@@ -52,6 +52,20 @@ fn role_enfant() {
     }
     let t = std::time::Instant::now();
     let mut catalog = tx::catalogue_en(&base, false);
+    if role == "mainteneur" {
+        // La maintenance de la nuit, avec compaction, sur une base déjà indexée : la taille du plein texte avant et
+        // après, et la génération que la base nomme.
+        catalog.open_fts_files();
+        let fts = std::path::PathBuf::from(format!("{}.fts", base.display()));
+        let avant = taille(&fts);
+        let maintenant = jiff::civil::date(2026, 11, 21).at(3, 30, 0, 0);
+        let note = catalog.fts_maintenance_nocturne(maintenant, 0.5, true).expect("une maintenance du plein texte");
+        assert!(!note.to_string().contains("\"error\""), "la maintenance passe : {note}");
+        // Le ramasse-miettes passe au commit suivant d'un index : une écriture de plus le fait passer partout.
+        tx::synchroniser(&mut catalog, false);
+        println!("TAILLE avant={avant} apres={}", taille(&fts));
+        return;
+    }
     if role == "echoueur" {
         let options = rag3weaver::code_sync::SourceSyncOptions {
             batch_files: tx::paquet(),
@@ -70,6 +84,16 @@ fn role_enfant() {
     // La reprise : rouvrir, remettre le plein texte d'accord avec la base, finir la synchronisation.
     println!("REPRISE_MS {role} {}", t.elapsed().as_millis());
     println!("COMPTES {role} {}", serde_json::to_string(&tx::comptes(&catalog)).unwrap());
+}
+
+/// La taille d'un dossier, sous-dossiers compris.
+pub fn taille(p: &Path) -> u64 {
+    let mut t = 0;
+    for e in std::fs::read_dir(p).into_iter().flatten().flatten() {
+        let Ok(m) = e.metadata() else { continue };
+        t += if m.is_dir() { taille(&e.path()) } else { m.len() };
+    }
+    t
 }
 
 /// Lance un enfant `role` sur `base`, avec les pièges `pieges` ; rend son statut et sa sortie.

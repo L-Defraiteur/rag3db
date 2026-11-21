@@ -152,6 +152,8 @@ mod e2e_generations_un_arret_revient_sans_rebatir;
 mod e2e_generations_un_dossier_en_retard_se_rebatit;
 #[path = "../e2e_generations_un_rollback_revient_sans_rebatir.rs"]
 mod e2e_generations_un_rollback_revient_sans_rebatir;
+#[path = "../e2e_generations_une_compaction_se_clot_par_sa_generation.rs"]
+mod e2e_generations_une_compaction_se_clot_par_sa_generation;
 #[path = "../e2e_generic_search.rs"]
 mod e2e_generic_search;
 #[path = "../e2e_graph_tool.rs"]
