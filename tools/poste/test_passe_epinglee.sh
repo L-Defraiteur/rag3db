@@ -42,7 +42,13 @@ if [ "$dernier" = filtre ]; then
   [ -n "${FAUX_TEMOIN_MUET:-}" ] && { echo "test result: ok. 0 passed; 0 failed; 1 ignored"; exit 0; }
   echo "test tests::filtre_du_lot${FAUX_SP:+ - should panic} ... ok"
 fi
-echo "test result: ok. 1 passed; 0 failed"
+# FAUX_SAUTE=<suite>:<n> : n tests qui écrivent « SAUTÉ … » (FAUX_SAUTE_MOT : un autre mot, SKIPPED) et rendent la main,
+# puis la ligne de résumé de run_e2e.sh (« SAUTÉ(S) », à ne pas compter deux fois) ; FAUX_PASSES : le nombre de passés.
+if [ -n "${FAUX_SAUTE:-}" ] && [ "${FAUX_SAUTE%%:*}" = "$s" ]; then
+  for i in $(seq 1 "${FAUX_SAUTE#*:}"); do echo "${FAUX_SAUTE_MOT:-SAUTÉ} $s : pas de modèle (GEMINI_API_KEY absente)"; done
+  echo "  $s                             INCOMPLÈTE — ${FAUX_SAUTE#*:} test(s) SAUTÉ(S), le fournisseur n'a pas répondu"
+fi
+echo "test result: ok. ${FAUX_PASSES:-1} passed; 0 failed"
 F
 cat > $W/scripts/check_features.sh <<'F'
 #!/bin/bash
@@ -162,7 +168,8 @@ passe VERT "SUITE_DU_TEMOIN=lib" SUITE_DU_TEMOIN=lib
 # **Un test non jugé n'est pas un test passé** (18 novembre 2026, ticket de c7) : un test qui dit « non jugé : … » et rend
 # la main compte parmi les passés de cargo. Le résumé les liste à part, et un non-jugé du témoin ou d'une suite exigée
 # rend la passe rouge.
-passe VERT "un non-jugé dans e2e_code, suite non exigée" FAUX_NON_JUGE=e2e_code
+# Trois passés dont un non jugé : depuis le 21 novembre, une suite dont tous les cas sont non jugés est rouge.
+passe VERT "un non-jugé dans e2e_code, suite non exigée" FAUX_NON_JUGE=e2e_code FAUX_PASSES=3
 grep -q "^non jugés dans e2e_code : 1 — non jugé : la lib n'a pas la colonne state" $R && grep -q '^tests non jugés : 1$' $R \
   && echo "vert   un non-jugé est listé à part au résumé, avec sa raison, et compté" \
   || { echo "ROUGE  non-jugé d'e2e_code : résumé « $(grep -iE 'non jug' $R | tr '\n' ' ') »"; rouge=1; }
@@ -247,4 +254,17 @@ passe "ROUGE suite à faute injectée" "FAUTE_INJECTEE=1, la suite à faute roug
 passe VERT "FAUTE_INJECTEE=1 sous une session graphique : sautée, non jugée" SUITES=- FAUTE_INJECTEE=1 FAUX_FAUTE=saute
 head -1 $R | grep -q '^NON JUGÉE : la suite à faute injectée du confineur — SKIP : session 3 (wayland)' && grep -q '^tests non jugés : 1$' $R \
   && echo "vert   le saut dit en première ligne et compté non jugé" || { echo "ROUGE  saut : première ligne « $(head -1 $R) », compteur « $(grep '^tests non jugés' $R) »"; rouge=1; }
+# **Un test sauté n'est pas un test passé** (21 novembre 2026, c7 : e2e_equipier rendait « 2 passed » en 0,00 s, ses deux
+# cas sur le vrai Gemini écrivant « SAUTÉ … » sans identifiants). Une ligne SAUTÉ (ou SKIPPED) compte non jugée, jamais
+# passée ; la première ligne du résumé le dit ; une suite dont tous les cas sont non jugés est rouge (une suite non jouée
+# est rouge) ; la ligne de résumé « SAUTÉ(S) » de run_e2e.sh n'est pas comptée deux fois.
+passe "ROUGE e2e_x : tous ses cas sont non jugés" "une suite dont l'unique test écrit SAUTÉ et rend la main est rouge" SUITES_EN_PLUS=e2e_x FAUX_SAUTE=e2e_x:1
+passe "ROUGE e2e_x : tous ses cas sont non jugés" "deux SAUTÉ pour deux passés : rouge" SUITES_EN_PLUS=e2e_x FAUX_SAUTE=e2e_x:2 FAUX_PASSES=2
+passe "ROUGE e2e_x : tous ses cas sont non jugés" "SKIPPED compte comme SAUTÉ" SUITES_EN_PLUS=e2e_x FAUX_SAUTE=e2e_x:1 FAUX_SAUTE_MOT=SKIPPED
+passe VERT "un SAUTÉ sur trois passés, suite non exigée : verte, et dite" SUITES_EN_PLUS=e2e_x FAUX_SAUTE=e2e_x:1 FAUX_PASSES=3
+head -1 $R | grep -q '^NON JUGÉS : 1 — e2e_x : SAUTÉ e2e_x : pas de modèle' && grep -q '^tests non jugés : 1$' $R \
+  && sed -n 2p $R | grep -q '^commit ' \
+  && echo "vert   un SAUTÉ compté une fois, dit en première ligne, la ligne du commit juste dessous" \
+  || { echo "ROUGE  SAUTÉ au résumé : première ligne « $(head -1 $R) », compteur « $(grep '^tests non jugés' $R) »"; rouge=1; }
+passe "ROUGE témoin : 1 test non jugé" "un SAUTÉ dans le témoin rend la passe rouge" FAUX_SAUTE=e2e_lectures:1 FAUX_PASSES=3
 exit $rouge
