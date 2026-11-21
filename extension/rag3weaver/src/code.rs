@@ -2436,6 +2436,28 @@ fn fold_lambdas(a: &mut CodeAnalysis) {
         kept.push(r);
     }
     a.relations = kept;
+    drop_rendezvous_of_folded_closures(a, &|k: &str| to_parent.contains_key(k));
+}
+
+/// **A folded closure makes no rendezvous** (21 November 2026, ticket
+/// `docs/codeparsers/tickets/2026-11-21-une-reecriture-perd-les-mentions-d-un-nom-neuf.md`). The names a scope calls
+/// that no file defines wait by name (`pending` and its companions), keyed by the scope. A closure folded into its
+/// scope disappears from the entities, and its rendezvous kept its key, a scope never written: their `MENTIONS` left
+/// from nowhere and the drain dropped them without a word — 26 544 on a rewrite of 419 files of rag3weaver. Measured
+/// on that rewrite, 17 991 of them were names the holding scope already mentions; the 8 553 others were its own
+/// locals read inside a comprehension, and the closure's link to its parent. Moving them to the scope would add false
+/// links; they are dropped, as the closure's hierarchy is.
+fn drop_rendezvous_of_folded_closures(a: &mut CodeAnalysis, folded: &dyn Fn(&str) -> bool) {
+    a.pending.retain(|p| !folded(&p.0));
+    a.pending_defaults.retain(|p| !folded(&p.0));
+    a.pending_sites.retain(|p| !folded(&p.0));
+    a.pending_qualifier_types.retain(|p| !folded(&p.0));
+    a.pending_import_modules.retain(|p| !folded(&p.0));
+    a.pending_self_types.retain(|p| !folded(&p.0));
+    a.pending_deferred.retain(|p| !folded(&p.0));
+    a.pending_untyped.retain(|p| !folded(&p.0));
+    a.pending_reexport.retain(|p| !folded(&p.0));
+    a.pending_locks.retain(|p| !folded(&p.0));
 }
 
 fn dedupe_relations(a: &mut CodeAnalysis) {
