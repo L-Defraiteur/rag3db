@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Chaque paramètre du serveur de mémoire se décrit.** Une phrase courte par paramètre, à toute
+  profondeur : la vue lue (`layer`, `worktree`, `rank`), la condition de filtre, les options de recherche (`limit`,
+  `offset`, `signals`, `consistency`), les liens d'une relation, le `record` d'un payload, l'état et la nature d'une
+  Memory. Un témoin rougit sur toute propriété sans description. Coût mesuré : la liste des 39 outils passe de
+  82 164 à 96 755 octets, environ 3 650 jetons de plus par tour pour un client qui la reçoit entière.
+
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.
