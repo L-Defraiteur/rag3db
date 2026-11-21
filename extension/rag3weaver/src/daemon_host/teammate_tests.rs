@@ -50,6 +50,9 @@ fn answer(turns: &[Turn], opts: &crate::llm::GenOptions, sink: &mut dyn crate::l
 /// a new witness goes where no other lot in flight writes (page 03 of ED, 21 November 2026).
 mod web;
 
+/// The witnesses of the agent's key (21 November 2026), in a module of their own.
+mod agent_key;
+
 /// Ce que le faux modèle a vu : les frontières, pas par pas, et les refus.
 #[derive(Default)]
 struct Seen {
