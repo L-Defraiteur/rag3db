@@ -415,17 +415,35 @@ file_des_lourds() {
 # card0 (les écrans de luciepc) : jamais comme carte du poste. Un travail la demande par --card card0, la nuit seulement
 # (01:00 à 08:00), sans session sur seat1, déclaré jetable (--disposable : un banc, une mesure, une sonde), sa durée
 # bornée par un timeout en tête qui finit avant 08:00 ; sa réserve est sa VRAM utilisée à l'instant, plus 1 Gio.
+# setting <nom> : la valeur d'un fichier de réglage du dossier des verrous (21 novembre 2026, c7 : une réserve illisible
+# retombait à 0 en silence). Les commentaires « # » et les lignes vides sont ôtés ; il doit rester un seul mot. Rend 1 si
+# le fichier manque ; sinon le mot sur la sortie. Le contrôle de forme (un nombre, une carte) est celui de l'appelant.
+setting() {
+  [ -e "$V/$1" ] || return 1
+  { sed 's/#.*//' "$V/$1" | tr -s ' \t\n' ' ' | sed 's/^ //; s/ $//'; } 2>/dev/null
+}
+# setting_illisible <nom> <motif> : rien si le réglage manque ou se lit selon le motif (grep -E) ; sinon la raison.
+setting_illisible() {
+  _v=$(setting "$1") || return 0
+  echo "$_v" | grep -qxE "$2" && return 0
+  echo "$1 illisible : $(head -c 80 "$V/$1" 2>/dev/null | tr '\n' ' ')"
+}
+# ── Le disque (21 novembre 2026, c7 : la tablette à 4,6 Go libres, l'écran de Lucie gelé) : sous `disk-min-free-gib` Gio
+# libres (50 par défaut) sur le disque du cache, une passe neuve est refusée avant la file. POSTE_DF : un autre df.
+disque_libre_gib() { ${POSTE_DF:-df} -Pk "$D" 2>/dev/null | awk 'NR == 2 {print int($4 / 1048576)}'; }
+disque_seuil_gib() { _s=$(setting disk-min-free-gib) || _s=50; echo "$_s"; }
 TG="$V/file-gpu"
 GPU_SYS="${POSTE_GPU_SYS:-/sys}"
 GPU_MEMINFO="${POSTE_GPU_MEMINFO:-/proc/meminfo}"
 gpu_now() { echo "${POSTE_GPU_NOW:-$(date +%s)}"; }
-gpu_machine_card() { { tr -d ' \n' < "$V/gpu-card"; } 2>/dev/null; }
+gpu_machine_card() { setting gpu-card; }
 gpu_card() { if [ -n "$GPU_CARD_ASKED" ]; then echo "$GPU_CARD_ASKED"; else gpu_machine_card; fi; }
 gpu_mib_of() { _o=$(cat "$GPU_SYS/class/drm/$1/device/$2" 2>/dev/null); case "$_o" in ''|*[!0-9]*) echo "" ;; *) echo $((_o / 1048576)) ;; esac; }
 gpu_meminfo_mib() { awk -v k="$1:" '$1 == k {print int($2 / 1024)}' "$GPU_MEMINFO" 2>/dev/null; }
 gpu_reserve_mib() {
-  _r=$({ tr -d ' \n' < "$V/gpu-reserve-gib"; } 2>/dev/null)
-  case "$_r" in ''|*[!0-9]*) if [ -n "$(gpu_machine_card)" ]; then _r=0; else _r=30; fi ;; esac
+  # Absente : 0 sur une carte nommée, 30 en mémoire unifiée ; illisible, gpu_refusal_now refuse avant d'en arriver ici.
+  _r=$(setting gpu-reserve-gib) || { if [ -n "$(gpu_machine_card)" ]; then _r=0; else _r=30; fi; }
+  case "$_r" in ''|*[!0-9]*) _r=0 ;; esac
   echo $((_r * 1024))
 }
 # gpu_open : 0 si le calendrier admet un gpu maintenant ; sinon la raison sur la sortie.
@@ -457,6 +475,9 @@ gpu_declared_mib() {
 }
 # gpu_refusal_now : un refus qui ne se résout pas en attendant (« <code> <raison> » : 2 ou 77), ou rien.
 gpu_refusal_now() {
+  for _x in "gpu-card card[0-9]+" "gpu-reserve-gib [0-9]+"; do
+    _i=$(setting_illisible ${_x% *} "${_x#* }"); [ -n "$_i" ] && { echo "2 poste gpu : $_i — la place n'est pas prise"; return 0; }
+  done
   _c=$(gpu_card)
   if [ "$(gpu_machine_card)" = card0 ]; then echo "2 poste gpu : gpu-card = card0, la carte des écrans : jamais comme carte du poste"; return 0; fi
   _ferme=$(gpu_open) || { echo "77 $_ferme"; return 0; }
@@ -537,9 +558,11 @@ if [ "$mode" = "--qui" ]; then
   else
     _m="mémoire unifiée : $(( $(gpu_meminfo_mib MemAvailable) / 1024 )) Gio disponibles, réserve $(( $(gpu_reserve_mib) / 1024 )) Gio"
   fi
+  _i=$(setting_illisible gpu-reserve-gib '[0-9]+'; setting_illisible gpu-card 'card[0-9]+'); [ -n "$_i" ] && _m="$_m ; RÉGLAGE ILLISIBLE : $_i"
   _fg=$(gpu_queue | tr '\n' ' ')
   echo "gpu : $_o ; $_gt tenu(s), $_gd Gio déclarés ; $_m${_fg:+ ; en file : pid $_fg}"
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
+  echo "disque : $(disque_libre_gib) Gio libres sous $D, seuil des passes neuves $(disque_seuil_gib) Gio$(setting_illisible disk-min-free-gib '[0-9]+' | sed 's/^/ ; RÉGLAGE ILLISIBLE : /')"
   if [ -s "$V/lourds-max.retour" ]; then
     read -r _avant _quand < "$V/lourds-max.retour"
     echo "places réglées à $(cat "$V/lourds-max" 2>/dev/null) jusqu'au $(date -d "@$_quand" '+%d/%m %H:%M') (puis $_avant)"
@@ -645,6 +668,14 @@ if tenant=$(ancetre_tenant); then
     *) echo "poste: un ancêtre tient déjà la place ($(cut -d' ' -f1-2 "$F/$tenant" 2>/dev/null), pid $tenant) : ce $mode passe sans verrou" >&2
        exec "$@" ;;
   esac
+fi
+# Le disque : une passe neuve refusée sous le seuil, avant la file (un poste sous un ancêtre tenant est déjà passé plus haut).
+_i=$(setting_illisible disk-min-free-gib '[0-9]+')
+[ -n "$_i" ] && { echo "poste : $_i — aucune passe n'est prise" >&2; exit 2; }
+_libre=$(disque_libre_gib); _seuil=$(disque_seuil_gib)
+if [ -n "$_libre" ] && [ "$_libre" -lt "$_seuil" ]; then
+  echo "poste : refusé avant la file : $_libre Gio libres sous $D, sous le seuil de $_seuil Gio (disk-min-free-gib) — libérer de la place (targets, instantanés) avant toute passe neuve" >&2
+  exit 2
 fi
 # Le timeout en tête de la commande d'un gpu (card0 l'exige), en secondes ; puis les refus qui n'attendent pas.
 GPU_TIMEOUT_S=""

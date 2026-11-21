@@ -577,4 +577,45 @@ if command -v sccache > /dev/null 2>&1 && systemd-run --user --scope -q -- true 
   rm -rf -- "${R:?}"
 else cas 1 "sccache ou systemd-run absent : le cas du serveur sccache ne se juge pas ici (un cas non joué est rouge)"; fi
 
+# ── 61. Un réglage gpu illisible refuse la place, et le dit (21 novembre 2026, c7 : « 19 » suivi d'une ligne de commentaire
+# donnait une réserve de 0 en silence, la pire retombée sur la réserve des services de card2). Un commentaire en fin de
+# ligne est lu.
+G="$ICI/gpu61"; mkdir -p "$G/sys/class/drm/card2/device"
+echo $((32 * 1073741824)) > "$G/sys/class/drm/card2/device/mem_info_vram_total"; echo $((15 * 1073741824)) > "$G/sys/class/drm/card2/device/mem_info_vram_used"
+export POSTE_GPU_SYS="$G/sys" POSTE_GPU_NOW=$(date -d '2026-11-21 12:00' +%s)
+echo card2 > "$POSTE_LOCK_DIR/gpu-card"
+printf '19\n# la VRAM gardée aux services\n' > "$POSTE_LOCK_DIR/gpu-reserve-gib"
+qui=$("$POSTE" --qui 2>&1)
+echo "$qui" | grep -q 'réserve des services 19 Gio'
+cas $? "gpu-reserve-gib « 19 », puis une ligne de commentaire : lu 19 ($(echo "$qui" | grep '^gpu :' | cut -c1-90))"
+echo '19   # la VRAM gardée aux services' > "$POSTE_LOCK_DIR/gpu-reserve-gib"
+qui=$("$POSTE" --qui 2>&1)
+echo "$qui" | grep -q 'réserve des services 19 Gio'
+cas $? "gpu-reserve-gib « 19 # commentaire » : lu 19 ($(echo "$qui" | grep '^gpu :' | cut -c1-90))"
+echo 'dix-neuf' > "$POSTE_LOCK_DIR/gpu-reserve-gib"; "$POSTE" gpu 4 -- true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'gpu-reserve-gib illisible : dix-neuf' "$G/sortie"
+cas $? "gpu-reserve-gib « dix-neuf » : refusé, le contenu cité (rc $rc)"
+echo 'card 2' > "$POSTE_LOCK_DIR/gpu-card"; "$POSTE" gpu 4 -- true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'gpu-card illisible' "$G/sortie"
+cas $? "gpu-card « card 2 » : refusé, dit illisible (rc $rc)"
+rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib"; unset POSTE_GPU_SYS POSTE_GPU_NOW
+# ── 62. Un disque presque plein ne prend plus de passe neuve (21 novembre 2026, c7 : la tablette à 4,6 Go libres, l'écran de
+# Lucie gelé). Sous `disk-min-free-gib` Gio libres (50 par défaut) sur le disque du cache, poste cpu, gpu et mesure refusent
+# avant la file, code 2, en disant l'espace et le seuil. Un faux df (POSTE_DF) dit l'espace.
+printf '#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted on"\necho "/dev/x 1000000000 900000000 %s 90%% /home"\n' $((40 * 1048576)) > "$ICI/df-40"
+printf '#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted on"\necho "/dev/x 1000000000 500000000 %s 50%% /home"\n' $((300 * 1048576)) > "$ICI/df-300"
+chmod +x "$ICI/df-40" "$ICI/df-300"
+ok=0; for m in "cpu --" "mesure"; do POSTE_DF="$ICI/df-40" "$POSTE" $m true > "$ICI/sortie-df" 2>&1; rc=$?; { [ "$rc" = 2 ] && grep -q '40 Gio libres' "$ICI/sortie-df" && grep -q '50' "$ICI/sortie-df"; } || ok=1; done
+cas $ok "40 Gio libres sous un seuil de 50 : poste cpu et mesure refusent, l'espace et le seuil dits ($(head -1 "$ICI/sortie-df" | cut -c1-90))"
+POSTE_DF="$ICI/df-300" "$POSTE" cpu -- true > /dev/null 2>&1
+cas $? "300 Gio libres : poste cpu admis"
+echo '30 # la tablette a 1 To' > "$POSTE_LOCK_DIR/disk-min-free-gib"; POSTE_DF="$ICI/df-40" "$POSTE" cpu -- true > /dev/null 2>&1; rc=$?
+cas $rc "disk-min-free-gib à 30 (avec commentaire) : 40 Gio libres admis"
+echo 'beaucoup' > "$POSTE_LOCK_DIR/disk-min-free-gib"; POSTE_DF="$ICI/df-300" "$POSTE" cpu -- true > "$ICI/sortie-df" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'disk-min-free-gib illisible' "$ICI/sortie-df"
+cas $? "disk-min-free-gib illisible : refusé, dit (rc $rc)"
+rm -f "$POSTE_LOCK_DIR/disk-min-free-gib"
+"$POSTE" --qui 2>&1 | grep -q '^disque : '
+cas $? "poste --qui dit l'espace libre du disque et son seuil"
+
 exit $echec

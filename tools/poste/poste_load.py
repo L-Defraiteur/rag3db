@@ -23,6 +23,8 @@ Run by poste-load.timer (a systemd user unit, every 2 min). Appends one line to 
   gpu_held          poste gpu jobs holding (« tient gpu… », 21 Nov. 2026: the classes)
   gpu_waiting       poste gpu jobs waiting
   gpu_declared_gib  Σ of the needs the holding gpu jobs declared
+  disk_free_gib     free space of the disk that holds this file (~/.cache), GiB (21 Nov. 2026: a full disk froze the
+                    tablet, and nothing had said it)
 A file written under other columns is moved aside (poste-load.tsv.before-<time>) and a new one starts.
 
 The file keeps 14 days: older lines are dropped. A missing source writes « - » in its column, never a crash.
@@ -43,7 +45,8 @@ SYS = os.environ.get("POSTE_LOAD_SYS", "/sys")
 POSTE = os.environ.get("POSTE_LOAD_POSTE") or os.path.join(HOME, ".cache", "rag3weaver-build", "poste")
 COLUMNS = ["time", "cpu_busy_pct", "load1", "cores", "ram_used_gib", "ram_available_gib", "swap_used_gib",
            "swap_total_gib", "psi_mem_some10", "psi_mem_full10", "psi_cpu_some10", "heavy_held", "heavy_places",
-           "heavy_waiting", "heavy_cores", "gpus", "gpu_held", "gpu_waiting", "gpu_declared_gib"]
+           "heavy_waiting", "heavy_cores", "gpus", "gpu_held", "gpu_waiting", "gpu_declared_gib",
+           "disk_free_gib"]
 KEEP_DAYS = 14
 GIB = 1024 ** 3
 
@@ -165,6 +168,14 @@ def gpu_jobs(out):
     return str(held), str(waiting), str(declared)
 
 
+def disk_free(path):
+    try:
+        import shutil
+        return gib(shutil.disk_usage(path).free)
+    except OSError:
+        return "-"
+
+
 def gpus():
     out = []
     for card in sorted(glob.glob(os.path.join(SYS, "class", "drm", "card[0-9]*"))):
@@ -213,7 +224,7 @@ def main():
            gib(total - avail if total is not None and avail is not None else None), gib(avail),
            gib(st - sf if st is not None and sf is not None else None), gib(st),
            pressure("memory", "some"), pressure("memory", "full"), pressure("cpu", "some"),
-           *heavy(n, qui), gpus(), *gpu_jobs(qui)]
+           *heavy(n, qui), gpus(), *gpu_jobs(qui), disk_free(DIR)]
     # Columns changed since the file began: the old file is kept aside, a new one starts.
     try:
         with open(path, encoding="utf-8") as f:
