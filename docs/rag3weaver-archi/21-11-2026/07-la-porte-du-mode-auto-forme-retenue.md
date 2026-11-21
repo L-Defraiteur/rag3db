@@ -163,3 +163,8 @@ Les idées venues après le gel, sans révision de la page :
 - Le survivant est, pour l'instant, **Gemini 3.8 Flash**, pas Argon (des 429 en série, et un prix doublé au 1er
   décembre ; Lucie, 21 novembre vers 20 h). Claude ne se branche pas avant le registre de dépenses et le plafond
   d'ED. Le slug vit dans la config de la fabrique de classifieurs : changer de modèle n'est qu'une édition.
+- **Explorer avant de demander** (Lucie, 21 novembre au soir, pas maintenant) : l'agent a un `cd` avec un répertoire
+  courant virtuel, tenu par l'hôte, et un outil de listing intégré qui explore n'importe où sans racine accordée (noms
+  et tailles, jamais le contenu ; les dossiers protégés restent cachés). La demande d'accès à une racine ne naît
+  qu'au moment où l'agent fait plus que lister (lire un contenu, écrire, exécuter) dans un chemin non accordé : il
+  explore d'abord, et formule la carte au bon moment, avec le chemin exact.
