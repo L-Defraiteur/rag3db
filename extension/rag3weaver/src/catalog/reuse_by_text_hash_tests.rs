@@ -59,7 +59,6 @@ fn document(title: &str, body: &str) -> BTreeMap<String, CypherValue> {
 
 /// **A chunk whose text is already embedded takes its vector without the model** ; a
 /// text changed by one character goes to the model ; every chunk carries its vector.
-#[cfg(feature = "rag3db-native")]
 #[test]
 fn a_chunk_whose_text_is_already_embedded_reuses_the_vector_without_the_model() {
     let seen = Arc::new(Mutex::new(Vec::new()));
