@@ -249,9 +249,10 @@ mod tests {
         let chemin = std::path::PathBuf::from(r["path"].as_str().unwrap()).canonicalize().unwrap();
         let couche = format!("worktree:{}", chemin.display());
         assert_eq!(r["layer"], json!(couche), "the view opened has no layer on a base without tracked: {r}");
+        // One name for a view (tty's scenario 1, point 2): `views` says the view opened by the name open_view gave it.
         let v = a.host.views(Some(&s), &manifeste);
-        assert!(v["views"].as_array().is_some_and(|l| l.iter().any(|x| x["name"] == json!(couche))), "the view opened is not among the views: {v}");
-        assert_eq!(v["active"], json!({"name": couche, "source": "session"}), "the view opened is not active: {v}");
+        assert!(v["views"].as_array().is_some_and(|l| l.iter().any(|x| x["name"] == r["name"])), "the view opened is not among the views: {v}");
+        assert_eq!(v["active"], json!({"name": r["name"], "source": "session"}), "the view opened is not active: {v}");
         let lu = a.host.call(Some(&s), &manifeste, "usages", json!({"name": "un"}));
         assert_eq!((&lu["ok"], &lu["result"]["view"]["source"]), (&json!(true), &json!("session")), "a call without view does not read under the view opened: {lu}");
     }
