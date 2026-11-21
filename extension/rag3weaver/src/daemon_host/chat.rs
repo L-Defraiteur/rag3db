@@ -125,15 +125,14 @@ pub(super) fn default_chat_model() -> ChatModel {
             // a bounded reasoning even on a bare host (page 19-11-2026/06 of rag3weaver-archi).
             let reglages = prepared.manifest.models.defaut_de_l_hote();
             crate::regime::modele_agentique_nomme("ide-chat")
-                .map(|(llm, _)| {
+                .map(|(llm, nom)| {
                     let effort = crate::regime::raisonnement_du_defaut(reglages.and_then(|r| r.reasoning), |k| std::env::var(k).ok());
                     let mut llm = llm.with_reasoning_default(effort);
                     if let Some(n) = reglages.and_then(|r| r.context_tokens) {
                         llm = llm.with_context_len(n);
                     }
-                    llm
+                    crate::regime::metered(llm, &nom)
                 })
-                .map(|llm| Arc::new(llm) as Arc<dyn crate::llm::Llm>)
                 .ok_or_else(|| {
                     "pas de modèle : ni `models.llm` au manifeste, ni Vertex (GOOGLE_CLOUD_PROJECT et des \
                      identifiants par GOOGLE_APPLICATION_CREDENTIALS)"

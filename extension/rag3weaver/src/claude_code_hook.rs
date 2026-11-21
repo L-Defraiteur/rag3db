@@ -1404,7 +1404,7 @@ pub fn juger(llm: &dyn crate::llm::Llm, prompt: &str, candidats: &[Value], soi: 
 fn modele_du_juge() -> Option<std::sync::Arc<dyn crate::llm::Llm>> {
     #[cfg(feature = "openai-llm")]
     {
-        crate::regime::modele_agentique_nomme("juge du rappel").map(|(llm, _)| std::sync::Arc::new(llm) as std::sync::Arc<dyn crate::llm::Llm>)
+        crate::regime::modele_agentique_nomme("juge du rappel").map(|(llm, nom)| crate::regime::metered(llm, &nom))
     }
     #[cfg(not(feature = "openai-llm"))]
     {
