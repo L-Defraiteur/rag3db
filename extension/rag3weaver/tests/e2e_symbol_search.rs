@@ -257,7 +257,7 @@ fn parse_boolean_syntax_keeps_highlights_and_attributes_chunks() {
         "kb",
         "value AND foo",
         SearchOptions {
-            bm25_mode: BM25Mode::Parse,
+            bm25_mode: BM25Mode::Words,
             consistency: Consistency::Immediate,
             signals: Some(SearchSignals::BM25),
             diagnostics: true,
@@ -309,7 +309,7 @@ fn parse_malformed_boolean_is_refused_explicitly() {
         ("value AND", "expected a term"),
         ("(value AND foo", "unbalanced"),
     ] {
-        let err = Catalog::rechercher(&catalog, "kb", query, options(BM25Mode::Parse))
+        let err = Catalog::rechercher(&catalog, "kb", query, options(BM25Mode::Words))
             .expect_err(&format!("{query:?} must be refused"));
         let msg = err.to_string();
         eprintln!("[parse-refuse] {query:?} -> {msg}");
@@ -324,7 +324,7 @@ fn parse_malformed_boolean_is_refused_explicitly() {
 fn parse_simple_value_keeps_highlights() {
     let catalog = Arc::new(Mutex::new(setup()));
 
-    let response = Catalog::rechercher(&catalog, "kb", "compiled", options(BM25Mode::Parse)).unwrap();
+    let response = Catalog::rechercher(&catalog, "kb", "compiled", options(BM25Mode::Words)).unwrap();
 
     eprintln!(
         "[parse-simple] hits={} warnings={:?}",

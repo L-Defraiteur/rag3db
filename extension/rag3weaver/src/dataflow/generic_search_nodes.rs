@@ -1597,7 +1597,7 @@ impl Node for BM25SearchNode {
                 let fil = plusieurs_mots.then(|| {
                     s.spawn(|| {
                         let mut avert = Vec::new();
-                        let r = cherche(&requete_mots, BM25Mode::Parse, distance, None, &mut avert);
+                        let r = cherche(&requete_mots, BM25Mode::Words, distance, None, &mut avert);
                         (r, avert)
                     })
                 });
