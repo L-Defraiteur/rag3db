@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
+  `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
+  en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.
 - 21 novembre 2026 — **Une commande longue n'est plus dite en attente d'un index.** Quand `run_command` ou `wait_output` dure, la boîte de l'équipier dit que la commande tourne encore ; l'index reste la cause supposée pour les autres outils.
 - 21 novembre 2026 — **Les pages d'un dépôt parlent git.** Dans l'IDE, le fil d'Ariane des tâches, des propositions,
   des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son

@@ -1,6 +1,6 @@
 # La suite à faute injectée du confineur n'a pas de juge
 
-- **État** : ouvert (21 novembre 2026, session recherche, à la demande de c7).
+- **État** : corrigé (21 novembre 2026) — branche rag3db `passe-faute-injectee`, une étape de `passe_epinglee` à la demande (`FAUTE_INJECTEE=1`), témoin `tools/poste/test_passe_epinglee.sh`
 - **Gravité** : un témoin qui ne se joue jamais : la vraie portée crevée (`test_vraie_portee_systemd_crevee_dit_l_enveloppe`)
   ne vit plus que dans `scripts/test_confiner_faute_injectee.py`, que rien ne lance.
 - **Atteignable en service** : non (outillage des passes).
