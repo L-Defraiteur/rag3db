@@ -63,7 +63,7 @@ fn canonical(chemin: &Path) -> Option<PathBuf> {
 /// **The folders no grant reopens, by default** (archi via c7, 21 November 2026): the host's data folder (its token,
 /// `daemon.token`, and `user/`: a command that read them could call the host as the IDE's page), the browsers' profiles
 /// (the IDE's cookie), and the credential stores (`~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.local/share/keyrings`,
-/// `~/.config/gh`, `~/.aws`, `~/.kube`, `~/.docker`). Each keeps its parents from being granted too: neither `~` nor
+/// `~/.config/gh`, `~/.config/anthropic`, `~/.aws`, `~/.kube`, `~/.docker`). Each keeps its parents from being granted too: neither `~` nor
 /// `~/.local/share` is granted whole. The credential files at the root of `~` (`.npmrc`, `.netrc`,
 /// `.cargo/credentials.toml`, `.git-credentials`) are exposed only if `~` is granted, which is refused already; they would
 /// join this list the day that rule changes.
@@ -84,6 +84,8 @@ fn default_protected_folders() -> Vec<PathBuf> {
             ".password-store",
             ".local/share/keyrings",
             ".config/gh",
+            // Anthropic's CLI (`ant auth login`): its profile and tokens (c7, 21 November 2026).
+            ".config/anthropic",
             ".aws",
             ".kube",
             ".docker",
