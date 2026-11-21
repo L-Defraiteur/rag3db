@@ -1381,6 +1381,9 @@ pub struct ReingestReport {
     pub scopes_deleted: usize,
     pub relations: usize,
     pub failed: usize,
+    /// **The links dropped for lack of an end** by the ingestion (21 November 2026), beside `failed`.
+    #[serde(default)]
+    pub dangling_links: usize,
     /// Les scopes disparus du fichier ne sont pas retirés ici : une
     /// synchronisation de la source entière tient le périmètre, et c'est à sa
     /// fin qu'ils partent. Le refus qui le dit.
