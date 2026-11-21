@@ -36,3 +36,43 @@ sonde jamais commitée :
   paquet (décision (A) du 21 novembre), la fenêtre se compte en secondes, et un paquet ordinaire ajoute quelques Mo.
 - La compaction est le pire cas. Elle est rare : maintenance nocturne, ou explicite. À la faire tourner, il faut garder
   de la place pour un index de plus, le temps d'une génération.
+
+## Les deux questions de Lucie, après la mesure
+
+### « Les lucids pourraient pas aider à ça ? »
+
+Les « lucids », ce sont LUCID et LUCIDS, les formats de delta incrémental de lucivy : l'export des seuls segments
+changés d'un shard (LUCID), ou des seuls shards changés (LUCIDS), pour synchroniser une copie distante (client et
+serveur, WASM hors ligne). Ici, ils n'aident pas : ils réduisent ce qu'on **transfère**, pas ce qu'on **garde** sur le
+disque local. Une compaction réécrit tous les segments : son delta est l'index entier. Et une génération gardée est déjà
+un delta, au sens où elle ne retient que les segments que les suivantes ont remplacés.
+
+### « Rien à faire, généralement, pour qu'une compaction évite les doublons ? »
+
+**Ce que fait lucivy aujourd'hui.** `compact(max_docs)` passe shard par shard, fusionne les segments de chacun par
+tours jusqu'à n'en garder qu'un (au plus `compact_max_docs` documents, 10 millions par défaut, donc tout), puis
+compacte le dictionnaire de chaque shard. Il commite une seule fois, à la fin. Sans génération gardée, le surcoût est
+celui d'une fusion à la fois : chaque fusion achevée retire les segments qu'elle remplace. Avec une génération gardée,
+tout reste jusqu'au relâchement, d'où les +993 Mo.
+
+**Un point à corriger dans (A), trouvé en écrivant ceci.** Une compaction ne crée pas de version de la base : elle
+commite sous la génération courante (`commit_keeping_generation`). Or `release_below(g)` ne relâche jamais `g`
+elle-même. Après la maintenance de la nuit, l'ancien index entier resterait donc retenu par `meta.<g>.json` jusqu'au
+paquet suivant d'une synchronisation, qui étiquette `g+1` puis relâche `g`. Le remède : clore une compaction par une
+génération à elle, `commit_tagged(g+1)` et la marque `fts_generation = g+1` validée en base, puis `release_below(g+1)`.
+Le lot de (A) doit le faire, avec un témoin : après une maintenance avec compaction, la place revient sans attendre une
+synchronisation.
+
+**Une compaction par étapes (la piste de c7), confirmée.** Clore chaque étape par sa génération et son relâchement
+borne la place en plus à l'étape, au lieu de l'index entier :
+- **par shard** : compacter un shard, étiqueter, valider la marque, relâcher, puis le suivant. La borne est d'un shard
+  et de son dictionnaire, environ un quart de l'index (~250 Mo ici, à mesurer). C'est le plus simple, car lucivy
+  compacte déjà shard par shard : il faut un `compact_shard(i)`, ou un filtre de shards ;
+- **plus fin** : quelques segments à la fois dans un shard, chaque tour clos par sa génération. La borne est d'une
+  fusion, mais le dictionnaire de shard se réécrit d'un bloc : sa compaction n'est pas découpable aujourd'hui, et il
+  devient la borne ;
+- **le coût** : les mêmes fusions, donc à peu près la même durée (31 s ici pour l'index entier), plus un commit
+  étiqueté et une validation de la marque en base par étape (quelques dizaines de ms chacune). L'étiquette reste à
+  l'appelant, parce que `g` vient de la base : lucivy donne `compact_shard(i)`, et rag3weaver enchaîne les étapes.
+
+Rien n'est codé : à relire d'abord.
