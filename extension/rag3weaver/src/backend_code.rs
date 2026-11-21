@@ -1243,7 +1243,13 @@ mod tests {
             let sortie = crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap();
             assert!(!sortie.a_reussi(), "lecture interdite : {chemin:?}");
         }
-        assert_eq!(bac.ecritures, crate::commande::BacASable::autour(&lie).ecritures);
+        // Besides the tree, only what a commit of this worktree writes (the night of 21 Nov 2026):
+        // its gitdir, objects/, its branch's ref folder and its log — never the common config nor
+        // a neighbour's gitdir (checked by the kernel below).
+        let commun = principal.join(".git").canonicalize().unwrap();
+        let mut attendu = crate::commande::BacASable::autour(&lie).ecritures;
+        attendu.extend([commun.join("worktrees/lie-avec-espace"), commun.join("objects"), commun.join("refs/heads"), commun.join("logs/refs/heads")]);
+        assert_eq!(bac.ecritures, attendu);
         // Test du noyau seul : aucun accord de l'agent n'est simulé.
         use std::os::unix::process::CommandExt;
         for (destination, permis) in [(lie.join("copie"), true), (secret.clone(), false), (principal.join(".git/config"), false), (voisin_admin.clone(), false)] {
