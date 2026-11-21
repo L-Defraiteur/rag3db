@@ -1438,7 +1438,8 @@ fn read_threads() -> u64 {
 
     /// **The noted counts, refreshed by a maintenance reading** (ticket of 15 November 2026: the state never
     /// saw orphans born after the last full index). For every entity whose full-text table was read without
-    /// error: the documents left after the purge, the graph rows, the orphans still there, and the date.
+    /// error: the documents left after the purge, the candidate rows (`candidate_rows_of`, as the end-of-index guard),
+    /// the orphans still there, and the date.
     /// The other entities keep their noted counts.
     fn refresh_noted_counts_from_maintenance(&self, readings: &[serde_json::Value]) -> Result<(), CatalogError> {
         let at = crate::catalog::retard::now_ms();
@@ -1447,7 +1448,7 @@ fn read_threads() -> u64 {
             _ => serde_json::Map::new(),
         };
         for reading in readings {
-            let (Some(table), Some(live), Some(rows), Some(found)) = (
+            let (Some(table), Some(live), Some(_all_rows), Some(found)) = (
                 reading["table"].as_str(),
                 reading["live_docs"].as_u64(),
                 reading["graph_docs"].as_u64(),
@@ -1459,9 +1460,12 @@ fn read_threads() -> u64 {
             let table = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
             for entity in self.entity_configs.keys() {
                 if self.resolve_search_target(entity).is_ok_and(|t| t.parent_table == table) {
+                    // The rows that carry a document, as the end-of-index guard counts them: `graph_docs` is every row of
+                    // the table, and the rows a rule of non-candidates sets aside have no document by design (ticket of
+                    // 21 November 2026: 11 327 of them on the repository's base, said as lost writes every morning).
                     noted.insert(entity.clone(), serde_json::json!({
                         "documents": live.saturating_sub(purged),
-                        "rows": rows,
+                        "rows": self.candidate_rows_of(table),
                         "orphans": found.saturating_sub(purged),
                         "measured_at_ms": at,
                     }));
