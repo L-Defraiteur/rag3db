@@ -4060,6 +4060,23 @@ thread_local! {
     static GRANTED_ROOTS: std::cell::RefCell<Vec<(PathBuf, String)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// **The sandbox of a call, as the host sets it** (the v1 defaults, Lucie, 21 November 2026): the roots granted to the
+/// calling agent with the default ones (the creation root, the tools' caches), the outbound network, the protected
+/// folders (a hard refusal, never an open_root request), and whether a path outside the roots goes to the judge
+/// (`judge_all`). RED STUB: only the roots are applied.
+#[derive(Debug, Clone, Default)]
+pub struct CallSandbox {
+    pub roots: Vec<(PathBuf, String)>,
+    pub network: Option<bool>,
+    pub protected: Vec<PathBuf>,
+    pub judge_all: bool,
+}
+
+/// Runs `f` under the sandbox of a call (see [`CallSandbox`]).
+pub fn with_call_sandbox<T>(sandbox: CallSandbox, f: impl FnOnce() -> T) -> T {
+    with_granted_roots(sandbox.roots, f)
+}
+
 /// The roots granted to the agent that calls, with their mode (see [`with_granted_roots`]).
 pub fn granted_roots() -> Vec<(PathBuf, String)> {
     GRANTED_ROOTS.with(|c| c.borrow().clone())
