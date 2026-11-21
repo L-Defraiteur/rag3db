@@ -116,7 +116,9 @@ fn the_opening_says_git_only_for_a_git_repository() {
     std::fs::create_dir_all(&plain).unwrap();
     std::fs::write(plain.join("notes.txt"), "à moi").unwrap();
     let said = open(&mut browser, &plain);
-    assert!(said.contains("dossier ouvert") && !said.to_lowercase().contains("git"), "a folder that is not a repository: {said}");
+    // The word git is judged without the path: a temporary folder can be named « .tmpAg3GiT » (the pusher, 18 h 52).
+    let without_path = said.replace(&*plain.to_string_lossy(), "");
+    assert!(said.contains("dossier ouvert") && !without_path.to_lowercase().contains("git"), "a folder that is not a repository: {said}");
     assert!(!plain.join(".git").exists(), "a folder with files got git init");
 
     let repository = crate::daemon_host::atelier_fichiers::tests::petit_depot(&dir.path().join("R"));
