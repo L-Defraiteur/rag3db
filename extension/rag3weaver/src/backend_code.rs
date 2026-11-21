@@ -711,7 +711,7 @@ pub fn avec_lecture_git(
     let Some((_, principal_commun)) = administration(principale) else { return bac };
     if commun != principal_commun { return bac; }
     if admin != commun {
-        bac = bac.lire_en_plus(admin);
+        bac = bac.lire_en_plus(admin.clone());
     }
     // Ne pas accorder le dossier commun entier : il contient les autres
     // worktrees. Aucun alias, même interne, ne nomme une racine nouvelle.
