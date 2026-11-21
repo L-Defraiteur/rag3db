@@ -5724,8 +5724,47 @@ impl Backend {
     /// (`writing`) sans retarder l'appel.
     fn dire_la_fraicheur(&self, response: &mut Value) {
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
+        // **Under the view of a worktree, the freshness says that worktree** (recherche's ticket of 21 November 2026):
+        // its root, its commit, its branch and the view, read from git, without the catalog; the backend's noted tree is
+        // the main one's, which misled. The view asked by the call (its name, `worktree:<path>`); the answer's
+        // `view.layer` is the stack's id.
+        let couche = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| r.layer.clone()));
+        let de_la_vue = couche.as_deref().and_then(|c| c.strip_prefix("worktree:")).map(|racine| {
+            let racine = std::path::Path::new(racine).canonicalize().unwrap_or_else(|_| PathBuf::from(racine));
+            let git = |args: &[&str]| -> Option<String> {
+                let out = std::process::Command::new("git").arg("-C").arg(&racine).args(args).output().ok()?;
+                out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            };
+            json!({
+                "root": racine.display().to_string(),
+                "commit": git(&["rev-parse", "--short", "HEAD"]),
+                "branch": git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD"),
+                "dirty": git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|t| !t.is_empty()),
+                "view": couche,
+            })
+        });
+        let poser = |response: &mut Value, fraicheur: Value, ligne: &str| {
+            response["freshness"] = fraicheur;
+            for cle in ["result", "presentation"] {
+                if let Some(texte) = response.get(cle).and_then(Value::as_str) {
+                    if !texte.starts_with("> ") {
+                        response[cle] = Value::String(format!("> {ligne}\n\n{texte}"));
+                    }
+                }
+            }
+        };
         let Ok(cat) = self.catalog.try_lock() else {
-            response["freshness"] = json!({ "writing": true });
+            // A writer holds the catalog: the answer says so without waiting; under a view, its worktree all the same.
+            match de_la_vue {
+                Some(mut vue) => {
+                    vue["writing"] = json!(true);
+                    let ligne = crate::catalog::indexed_tree_line_of(&vue, crate::catalog::retard::now_ms())
+                        .map(|l| l.replace(", indexé à l'instant", ", catalogue en écriture"))
+                        .unwrap_or_default();
+                    poser(response, vue, &ligne);
+                }
+                None => response["freshness"] = json!({ "writing": true }),
+            }
             return;
         };
         let cell = cell.unwrap_or_else(|| cat.scope().clone());
@@ -5737,43 +5776,19 @@ impl Backend {
         };
         let arbre = cat.indexed_tree(&cell);
         drop(cat);
-        // **Under the view of a worktree, the freshness says that worktree** (recherche's ticket of 21 November 2026):
-        // its root, its commit, its branch and the view; the backend's noted tree is the main one's, which misled.
-        // The view asked by the call (its name, `worktree:<path>`); the answer's `view.layer` is the stack's id.
-        let couche = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| r.layer.clone()));
-        if let (Some(racine), Some(mut arbre)) = (couche.as_deref().and_then(|c| c.strip_prefix("worktree:")), arbre) {
-            let racine = std::path::Path::new(racine).canonicalize().unwrap_or_else(|_| PathBuf::from(racine));
-            let git = |args: &[&str]| -> Option<String> {
-                let out = std::process::Command::new("git").arg("-C").arg(&racine).args(args).output().ok()?;
-                out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
-            };
+        if let (Some(vue), Some(mut arbre)) = (de_la_vue, arbre) {
             let now = crate::catalog::retard::now_ms();
             let avant = crate::catalog::indexed_tree_line_of(&arbre, now);
-            let racine_txt = racine.display().to_string();
-            let commit = git(&["rev-parse", "--short", "HEAD"]);
-            let branche = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
-            let sale = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|t| !t.is_empty());
-            arbre["root"] = json!(racine_txt);
-            arbre["commit"] = json!(commit);
-            arbre["branch"] = json!(branche);
-            arbre["dirty"] = json!(sale);
+            for cle in ["root", "commit", "branch", "dirty"] {
+                arbre[cle] = vue[cle].clone();
+                fraicheur[cle] = vue[cle].clone();
+            }
+            fraicheur["view"] = vue["view"].clone();
             if let (Some(avant), Some(apres)) = (avant, crate::catalog::indexed_tree_line_of(&arbre, now)) {
                 ligne = ligne.replacen(&avant, &apres, 1);
             }
-            fraicheur["root"] = json!(racine_txt);
-            fraicheur["commit"] = json!(commit);
-            fraicheur["branch"] = json!(branche);
-            fraicheur["dirty"] = json!(sale);
-            fraicheur["view"] = json!(couche);
         }
-        response["freshness"] = fraicheur;
-        for cle in ["result", "presentation"] {
-            if let Some(texte) = response.get(cle).and_then(Value::as_str) {
-                if !texte.starts_with("> ") {
-                    response[cle] = Value::String(format!("> {ligne}\n\n{texte}"));
-                }
-            }
-        }
+        poser(response, fraicheur, &ligne);
     }
 
     /// **Le crochet après outil** : monte son graphe avec les mêmes arguments
