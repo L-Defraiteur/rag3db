@@ -2784,3 +2784,16 @@ fn every_parameter_of_the_teammates_tools_is_described() {
     }
     assert!(manquent.is_empty(), "parameters without a description: {manquent:#?}");
 }
+
+/// **A command that runs long is not said to wait for an index** (the night's essays, 21 Nov. 2026: `cargo check` in a
+/// task was said « an index is probably holding the write » eight minutes long). For `run_command` and `wait_output`,
+/// the line says the command is still running; for the other tools, the index stays the likely cause.
+#[test]
+fn a_long_command_is_not_said_to_wait_for_an_index() {
+    for tool in ["run_command", "wait_output"] {
+        let l = super::teammate_tools::the_waiting_line(tool, 20);
+        assert!(l.contains("the command is still running") && !l.contains("index"), "{l}");
+        assert!(l.starts_with(&format!("\"{tool}\" has been waiting for 20 s")) && l.ends_with("the call goes on, nothing is abandoned"), "{l}");
+    }
+    assert!(super::teammate_tools::the_waiting_line("read_file", 20).contains("an index is probably holding the write"));
+}
