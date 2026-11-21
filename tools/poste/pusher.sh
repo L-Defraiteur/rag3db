@@ -242,8 +242,9 @@ enqueue() {
         }' "$Q" > "$Q.new" && mv "$Q.new" "$Q"
     fi ) 9> "$D/queue.lock"
   log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
-  echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"
+  # The warnings first, « déposé » last: the scripts read it with tail -1 (21 Nov., c7).
   french_identifiers "$id" "$full" "$parent" "$9"
+  echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"
   return 0
 }
 

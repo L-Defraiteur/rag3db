@@ -70,8 +70,8 @@ git -C $W merge-base HEAD origin/master > $J/base 2>/dev/null || rm -f $J/base
 echo "commit $(git -C $W rev-parse --short HEAD) — $(date '+%d/%m %H:%M') — lib ${RAG3DB_LIB:13:9}" > $R
 # Les non-jugés des suites, dits en première ligne du résumé (21 novembre 2026, c7) : la garde lit le commit testé sur la
 # première ligne qui ne commence pas par « NON JUG ».
-dire_non_juges() { [ "${NJ_SUITES:-0}" -gt 0 ] && sed -i "1i NON JUGÉS : $NON_JUGES — $PREMIER_NJ" $R; return 0; }
-rouge() { dire_non_juges; echo "ROUGE $1" >> $R; exit 1; }
+say_unjudged() { [ "${NJ_SUITES:-0}" -gt 0 ] && sed -i "1i NON JUGÉS : $NON_JUGES — $PREMIER_NJ" $R; return 0; }
+rouge() { say_unjudged; echo "ROUGE $1" >> $R; exit 1; }
 # La règle 7 : un C++ du lot plus neuf que la lib épinglée se joue sous RAG3WEAVER_MOTEUR_ANCIEN=1, dit ici.
 [ -n "${RAG3WEAVER_MOTEUR_ANCIEN:-}" ] && echo "RAG3WEAVER_MOTEUR_ANCIEN=$RAG3WEAVER_MOTEUR_ANCIEN : le C++ du lot est plus neuf que la lib ${RAG3DB_LIB:13:9}" >> $R
 
@@ -104,7 +104,7 @@ non_juges() { # <journal> <nom> : ajoute au résumé les non-jugés du journal, 
   return "$n"
 }
 # Les passés d'un journal de cargo (la somme des « test result: ok. N passed »).
-passes_de() { grep -oP '^test result: (ok|FAILED)\. \K[0-9]+(?= passed)' "$1" 2>/dev/null | awk '{s += $1} END {print s + 0}'; }
+passed_in() { grep -oP '^test result: (ok|FAILED)\. \K[0-9]+(?= passed)' "$1" 2>/dev/null | awk '{s += $1} END {print s + 0}'; }
 # **Les rouges connus** (19 novembre 2026, forme de c7) : tools/poste/known_red_e2e.txt, dans l'arbre, une ligne par cas,
 # `suite<TAB>cas<TAB>chemin du ticket`. La suite se joue entière ; au verdict, un cas rouge qui a sa ligne compte « rouge
 # connu (ticket) », un cas listé qui passe est dit « à lever », tout autre rouge juge. Une ligne dont le ticket est absent,
@@ -244,7 +244,7 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   grep -q 'NON JOUÉES' $J/$suite.log && rouge "$suite : des suites non jouées faute de feature"
   non_juges $J/$suite.log $suite; nj=$?
   # Une suite dont tous les cas sont non jugés n'a pas été jouée : rouge, exigée ou non (une suite non jouée est rouge).
-  [ "$nj" -gt 0 ] && [ "$nj" -ge "$(passes_de $J/$suite.log)" ] && rouge "$suite : tous ses cas sont non jugés ($nj sur $(passes_de $J/$suite.log) passés) — une suite non jouée est rouge"
+  [ "$nj" -gt 0 ] && [ "$nj" -ge "$(passed_in $J/$suite.log)" ] && rouge "$suite : tous ses cas sont non jugés ($nj sur $(passed_in $J/$suite.log) passés) — une suite non jouée est rouge"
   if [ "$nj" -gt 0 ] && echo " $EXIGEES_NOMS " | grep -q " $suite "; then
     rouge "$suite : suite exigée par le lot, et un de ses tests est non jugé"
   fi
@@ -300,5 +300,5 @@ if [ -n "${FAUTE_INJECTEE:-}" ] && [ -f scripts/test_confiner_faute_injectee.py 
 fi
 echo "suites jouées :${JOUEES:- aucune}" >> $R
 echo "tests non jugés : $NON_JUGES" >> $R
-dire_non_juges
+say_unjudged
 echo VERT >> $R

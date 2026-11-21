@@ -129,6 +129,16 @@ with tempfile.TemporaryDirectory() as t:
     case("une route française déjà dans la base, citée par le lot : non signalée", r is not None and "/dossiers/ouvrir" not in out, out)
     case("une route française que le lot crée : signalée", r is not None and "/dossiers/fermer" in out, out)
 
+    # c7 (21 Nov.): the strings of test files are data (test_*, tests/, a Rust file's mod tests); the names of their
+    # functions and tests are still judged.
+    r, out = report(repo, {"tests/e2e_x.rs": 'fn ouvrir_le_tiroir() { call("/tiroirs/ouvrir"); let k = json!({"tiroir": 1}); }\n',
+                           "tools/test_y.py": 'def test_rangement():\n    route("/rangements/fermer")\n',
+                           "src/m.rs": 'pub fn open() { route("/coffres/a", get(h)); }\n#[cfg(test)]\nmod tests {\n    fn t() { call("/placards/fermer"); }\n    fn fermer_le_placard() {}\n}\n'})
+    for quiet in ("/tiroirs/ouvrir", "  tiroir  ", "/rangements/fermer", "/placards/fermer"):
+        case(f"chaîne d'un fichier ou d'un module de test « {quiet.strip()} » : non signalée", r is not None and quiet not in out, out)
+    for loud in ("ouvrir_le_tiroir", "test_rangement", "fermer_le_placard", "/coffres/a"):
+        case(f"« {loud} » (nom de test, ou chaîne hors du module de test) : signalé", r is not None and loud in out, out)
+
     # Each identifier once, with its file and line.
     r, out = report(repo, {"src/twice.rs": "fn fermer_x() {}\nfn other() { fermer_x(); }\nmod m { fn fermer_x() {} }\n"})
     case("un identifiant dit une fois, avec fichier:ligne", r is not None and out.count("fermer_x") == 1 and "src/twice.rs:1" in out, out)
