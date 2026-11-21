@@ -290,6 +290,21 @@ fn renew_token_dans(dossier: &Path) -> Result<String, String> {
 }
 
 /// Un fichier secret du dossier de l'hôte : 0600 sous Unix, un temporaire renommé.
+/// **The user's token** (21 Nov 2026): the title of a human at the host, distinct from the host's
+/// token that every local client reads in `daemon.json`. In `<dir>/user/user_token` (folder 0700,
+/// file 0600), made once and kept; the sandbox masks the whole data folder, so an agent under it
+/// cannot read it. A process of the user outside the sandbox can: it proves a human by convention,
+/// not against a hostile process of the same user.
+pub fn user_token() -> Result<String, String> {
+    user_token_in(&racine(Dossier::Donnees)?)
+}
+
+/// [`user_token`] under the data folder `dossier`.
+pub fn user_token_in(dossier: &Path) -> Result<String, String> {
+    let _ = dossier;
+    Err("not yet".into())
+}
+
 fn ecrire_secret(dossier: &Path, nom: &str, contenu: &[u8]) -> Result<(), String> {
     std::fs::create_dir_all(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
     let provisoire = dossier.join(format!("{nom}.{}", std::process::id()));
