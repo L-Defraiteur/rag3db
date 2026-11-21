@@ -316,6 +316,7 @@ fn reingest_file_retenu(
             scopes_deleted: ecriture.disparues,
             relations: report.relations,
             failed: report.failed,
+            dangling_links: report.dangling_links,
             deferred_to: None,
         });
     }
@@ -356,6 +357,7 @@ fn reingest_file_retenu(
         scopes_deleted: deleted,
         relations: report.relations,
         failed: report.failed,
+        dangling_links: report.dangling_links,
         deferred_to,
     })
 }
@@ -1036,6 +1038,7 @@ fn reingest_files_retenu(
         rapport.scopes_upserted = r.scopes;
         rapport.relations = r.relations;
         rapport.failed = r.failed;
+        rapport.dangling_links = r.dangling_links;
     }
     // Les lignes `File` des supprimés — sauf si une indexation entière tient
     // la source : sa fin les retirera.
@@ -1119,6 +1122,7 @@ fn reingest_files_par_generations(
         rapport.scopes_upserted = r.scopes;
         rapport.relations = r.relations;
         rapport.failed = r.failed;
+        rapport.dangling_links = r.dangling_links;
     }
     catalog.naissances.clear();
     noms_retires.sort();
