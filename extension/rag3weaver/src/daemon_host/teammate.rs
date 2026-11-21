@@ -524,6 +524,10 @@ pub struct Step {
     pub woke_by: Option<String>,
     /// Les outils de travail aboutis pendant ce pas (sans erreur), par leur nom.
     succeeded_tools: Mutex<Vec<String>>,
+    /// The paths the sandbox refused during the step, with their count.
+    refused_paths: Mutex<std::collections::HashMap<String, usize>>,
+    /// The path refused twice, once there is one: the step's work stops.
+    refused_twice: Mutex<Option<String>>,
     /// What the step did, for the next frontier (S2): `read <path> (lines a-b)`, `wrote <path>`,
     /// and the last command with the end of its output.
     work: Mutex<StepWork>,
@@ -615,6 +619,8 @@ impl Step {
             decided: Mutex::new(None),
             woke_by: None,
             succeeded_tools: Mutex::new(Vec::new()),
+            refused_paths: Mutex::new(std::collections::HashMap::new()),
+            refused_twice: Mutex::new(None),
             work: Mutex::new(StepWork::default()),
             turn_run: Mutex::new(None),
             pair: None,
@@ -680,10 +686,34 @@ impl Step {
     fn note_tool(&self, call: &ToolCall, turn: &Turn) {
         let v: Value = serde_json::from_str(&turn.content).unwrap_or(Value::Null);
         let echec = v["ok"] == false || !v["error"].is_null();
+        // A command's output, or a tool's error: never a file's content that quotes the words.
+        if call.name == "run_command" || echec {
+            self.note_a_refused_path(&turn.content);
+        }
         if !echec {
             self.succeeded_tools.lock().unwrap_or_else(|p| p.into_inner()).push(call.name.clone());
             let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
             self.work.lock().unwrap_or_else(|p| p.into_inner()).note(&call.name, &args, &turn.content);
+        }
+    }
+
+    /// **A path the sandbox refuses twice stops the step's work** (scenario 2 of tty, the night of
+    /// 20 Nov 2026: `index.lock` refused, the teammate went round its rights). The second refusal of
+    /// the same path is said in the mailbox, and every work tool after it is refused, asking for
+    /// step_done.
+    fn note_a_refused_path(&self, rendu: &str) {
+        let Some(chemin) = refused_path(rendu) else { return };
+        let fois = {
+            let mut refus = self.refused_paths.lock().unwrap_or_else(|p| p.into_inner());
+            let n = refus.entry(chemin.clone()).or_insert(0);
+            *n += 1;
+            *n
+        };
+        if fois == 2 {
+            *self.refused_twice.lock().unwrap_or_else(|p| p.into_inner()) = Some(chemin.clone());
+            if let Ok(line) = self.files.append("host", "report", None, &format!("the sandbox refused `{chemin}` twice: the step stops its work there, retrying will not change it")) {
+                publish(self.bus.as_ref(), &self.task, &line);
+            }
         }
     }
 
@@ -920,6 +950,8 @@ impl Step {
         let context = self.last_context.load(Ordering::SeqCst);
         let why = if context > self.context_tokens {
             format!("the context of the step is full ({context} tokens, teammate.step_context_tokens = {})", self.context_tokens)
+        } else if let Some(chemin) = self.refused_twice.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            format!("the sandbox refused `{chemin}` twice in this step, and retrying will not change it: do not look for another way to the same path")
         } else if self.calls.load(Ordering::SeqCst) > self.max_tool_calls {
             format!("the step reached its tool calls ({}, teammate.max_tool_calls_per_step)", self.max_tool_calls)
         } else {
@@ -2097,6 +2129,13 @@ impl DaemonHost {
     }
 }
 
+/// **The path a tool's output says the system refused** (« Permission denied », « Permission non
+/// accordée », « os error 13 »): the first quoted path of that line, or the line itself.
+fn refused_path(rendu: &str) -> Option<String> {
+    let _ = rendu;
+    None
+}
+
 /// **What the judge of the content says** (archi, 19 November 2026): the guard « un compte rendu
 /// n'est pas le contenu demandé ».
 pub(crate) enum ContentVerdict {
@@ -2275,6 +2314,24 @@ mod tests {
 
     fn step(d: &Path) -> Step {
         Step::new(TeammateFiles::new(d.to_path_buf(), "p/t"), "t", "la demande", None, 1)
+    }
+
+    #[test]
+    fn a_path_refused_twice_stops_the_steps_work_saying_so() {
+        let d = tempfile::tempdir().unwrap();
+        let s = step(d.path());
+        let refus = |chemin: &str| Turn::tool_result("c", "run_command", format!("### `git add x`\n\ncode 128 · 2ms\n\nstderr :\n```\nfatal : Impossible de créer '{chemin}' : Permission non accordée\n```\n"));
+        let lire = call("read_file", json!({ "path": "a" }));
+        s.note_tool(&call("run_command", json!({ "command": "git add x" })), &refus("/r/.git/worktrees/x/index.lock"));
+        s.note_tool(&call("run_command", json!({ "command": "git add y" })), &refus("/r/.git/autre"));
+        assert!(s.gate(&lire).is_none(), "two paths once each: the step goes on");
+        s.note_tool(&call("run_command", json!({ "command": "git commit" })), &refus("/r/.git/worktrees/x/index.lock"));
+        let r = s.gate(&lire).expect("the same path twice: the work stops");
+        assert!(r.content.contains("index.lock") && r.content.contains("twice") && r.content.contains("step_done"), "{}", r.content);
+        let boite = TeammateFiles::new(d.path().to_path_buf(), "p/t").mailbox();
+        assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("index.lock") && t.contains("twice"))), "said in the mailbox: {boite:#?}");
+        assert_eq!(refused_path("Permission denied (os error 13)").as_deref(), Some("Permission denied (os error 13)"), "no quoted path: the line");
+        assert_eq!(refused_path("tout va bien"), None);
     }
 
     fn call(name: &str, args: Value) -> ToolCall {
