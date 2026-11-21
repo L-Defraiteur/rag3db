@@ -7848,7 +7848,7 @@ mod tests {
 
     /// [`fixture_code`], plus un patch libre du manifeste.
     #[cfg(feature = "code")]
-    fn fixture_code_avec(
+    pub(super) fn fixture_code_avec(
         source: &str,
         read_only: bool,
         outils: Value,
@@ -8137,7 +8137,7 @@ mod tests {
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
-    fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
+    pub(super) fn backend_de_code(dir: &Path, prepared: PreparedBackend) -> Backend {
         backend_de_code_avec(dir, prepared, Box::new(crate::embedder::HashEmbedder::new(8)))
     }
 
@@ -11594,6 +11594,10 @@ mod opening_tests;
 #[cfg(test)]
 #[path = "backend_reactions_tests.rs"]
 mod reactions_tests;
+
+#[cfg(all(test, feature = "code", feature = "rag3db-native"))]
+#[path = "backend_noted_counts_tests.rs"]
+mod noted_counts_tests;
 
 /// **Où chercher l'extension vectorielle, dans l'ordre.** D'abord **à côté de
 /// la lib** (`RAG3DB_LIBRARY_DIR`) : sous le magasin de libs, le dossier d'un
