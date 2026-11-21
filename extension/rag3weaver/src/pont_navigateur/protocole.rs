@@ -51,6 +51,9 @@ pub struct Commande {
     /// L'`ActSpec` de l'amont, tel quel : l'extension le résout et le joue.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub act: Option<Value>,
+    /// `console` : the paging of the read (`{afterSequence, limit}`), as the extension takes it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_read: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
     /// L'échéance en millisecondes depuis l'époque Unix, posée par le pont.
