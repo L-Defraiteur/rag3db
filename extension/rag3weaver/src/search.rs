@@ -297,9 +297,11 @@ pub enum BM25Mode {
     ContainsSplit,
     /// NgramContainsQuery regex — trigram-accelerated regex + optional fuzzy hybrid.
     Regex,
-    /// Native Lucivy QueryParser — standard BM25 term-by-term search.
-    /// Each word is tokenized independently, docs matching more terms score higher.
-    Parse,
+    /// **The words of the query, built explicitly** (21 November 2026): one `contains` per word (with a letter or a
+    /// digit) and per field, in `should` — BM25 term by term, no parser: no character of the query is an operator.
+    /// The query lucivy's `parse` built from a plain phrase; `parse` is still accepted as its former name.
+    #[serde(alias = "parse")]
+    Words,
     /// Exact symbol search: the query matches **separators included**, byte for byte.
     ///
     /// `foo->bar` matches only `foo->bar` — never `foo_bar`, `foo::bar` or `foo bar`,
@@ -332,7 +334,7 @@ impl BM25Mode {
     /// seul, sur des textes qui contiennent littéralement les mots cherchés —
     /// 0/3 en `Contains`.
     ///
-    /// **Pourquoi `Parse` et pas `ContainsSplit`.** Les deux découpent la
+    /// **Pourquoi `Words` et pas `ContainsSplit`.** Les deux découpent la
     /// phrase ; un seul pondère. `ContainsSplit` combine des clauses
     /// « contient » en booléen : sans IDF, « des », « avec » et « un » comptent
     /// autant que « prix », et une clause non satisfaite coûte une pénalité
@@ -342,7 +344,7 @@ impl BM25Mode {
     /// sur « les scores négatifs de lucivy » : ils viennent de là, pas d'une
     /// normalisation fautive chez nous.)
     ///
-    /// `Parse` est du vrai BM25 terme à terme : l'IDF écarte les mots vides
+    /// `Words` est du vrai BM25 terme à terme : l'IDF écarte les mots vides
     /// tout seul, parce qu'ils sont partout. Mêmes questions, même corpus :
     /// **3/3**, scores 3,85 / 7,23 / 7,30.
     ///
@@ -352,7 +354,7 @@ impl BM25Mode {
         match self {
             Self::Auto => {
                 if query.split_whitespace().take(2).count() > 1 {
-                    Self::Parse
+                    Self::Words
                 } else {
                     Self::Contains
                 }
@@ -721,7 +723,7 @@ pub struct BM25HitDiagnostic {
     /// Why this hit got no chunk. `None` when it did.
     ///
     /// Distinguishing these matters: `NoHighlights` is the documented, expected
-    /// outcome of lucivy's QueryParser branch, while `NoOverlap` means spans
+    /// outcome of a query branch without highlights, while `NoOverlap` means spans
     /// *were* produced and matched nothing — a chunking bug. Folding them
     /// together would hide the second behind the first.
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -925,7 +927,7 @@ pub struct SearchMeta {
     pub search_time_ms: u64,
     /// Honest warnings about this search, populated **regardless** of the
     /// `diagnostics` flag: what lucivy reported before running the query
-    /// (QueryParser semantics and no highlights, regex without a literal, fuzzy
+    /// (no highlights, regex without a literal, fuzzy
     /// too loose...) plus our own chunk-attribution anomalies.
     ///
     /// `SearchDiagnostics::engine_warnings` carries the same engine lines, but
@@ -1692,8 +1694,7 @@ pub fn project_occurrence_results(
 /// - **ContainsSplit**: splits query into words, each word becomes a contains clause
 ///   combined with boolean should — "Rust safety" matches docs with both words anywhere.
 /// - **Regex**: like Contains but adds `"regex":true`
-/// - **Parse**: `{"type":"parse","fields":["f1","f2"],"value":"query"}` — native Lucivy
-///   QueryParser, standard BM25 term-by-term search.
+/// - **Words**: per field, per word with a letter or a digit, a `contains`, in `should` — built here, never parsed.
 ///
 /// Multiple fields → wraps in `{"type":"boolean","should":[...]}`
 pub fn build_bm25_query(
@@ -1702,45 +1703,15 @@ pub fn build_bm25_query(
     mode: BM25Mode,
     distance: u8,
 ) -> String {
-    // **A word starting with two dashes is a term** (21 November 2026): under `Auto` and `Parse`, lucivy's parser read
-    // `--daemon` as the negation of `-daemon`, and a query of negations only was refused — an agent looking for
-    // `--save-dev` lost the search by words. An explicit mode keeps the query as it is.
-    let dashes_as_terms;
-    let query = if matches!(mode, BM25Mode::Auto | BM25Mode::Parse) {
-        dashes_as_terms = double_dash_as_terms(query);
-        dashes_as_terms.as_str()
-    } else {
-        query
-    };
     // **Résolu ici, une fois.** C'est le seul point où un mode devient une
     // requête lucivy : le résoudre ailleurs laisserait un chemin par lequel
     // `Auto` passerait sans être traduit.
     let mode = mode.resolve(query);
     let obj = match mode {
         BM25Mode::Auto => unreachable!("résolu à la ligne précédente"),
-        BM25Mode::Parse => {
-            // lucivy v3 choisit lui-même la branche selon la valeur (0d70904) :
-            // syntaxe booléenne (AND/OR/NOT, guillemets, +/-) -> vrai QueryParser,
-            // termes entiers, multi-`fields`, sans highlights ; valeur simple ->
-            // OU de contains par mot et par champ, avec highlights.
-            //
-            // On lui passe donc le JSON tel quel, `fields` pluriel compris. Le
-            // contournement qu'on avait écrit ici (expansion manuelle en OU) est
-            // devenu redondant et a été retiré.
-            if fields.len() == 1 {
-                serde_json::json!({
-                    "type": "parse",
-                    "field": &fields[0],
-                    "value": query,
-                })
-            } else {
-                serde_json::json!({
-                    "type": "parse",
-                    "fields": fields,
-                    "value": query,
-                })
-            }
-        }
+        // **No parser** (21 November 2026): the words, built explicitly — the query lucivy's `parse` built from a
+        // plain phrase (`expand_parse_simple`), without its reading of `-`, `+`, quotes, AND/OR and parentheses.
+        BM25Mode::Words => words_query(query, fields),
         BM25Mode::ContainsSplit => {
             let words: Vec<&str> = query.split_whitespace().collect();
             if words.len() <= 1 {
@@ -1770,28 +1741,31 @@ pub fn build_bm25_query(
     obj.to_string()
 }
 
-/// The words of a query, each `--word` read as the term `word` (a command-line option, never a negation); a
-/// lone `--`, or `---word`, is left as it is.
-fn double_dash_as_terms(query: &str) -> String {
-    query
-        .split_whitespace()
-        .map(|w| match w.strip_prefix("--") {
-            Some(rest) if !rest.is_empty() && !rest.starts_with('-') => rest,
-            _ => w,
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+/// **The words of a query, built**: for each field and each word with a letter or a digit, a `contains` of the word, in
+/// a `should`; a single clause alone; a query with no such word searched whole. The exact query lucivy built from a
+/// plain phrase (`expand_parse_simple`), so the same results and scores, without any operator read in the text.
+fn words_query(query: &str, fields: &[String]) -> serde_json::Value {
+    let words: Vec<&str> = query.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).collect();
+    let mut should = Vec::new();
+    for field in fields {
+        if words.is_empty() {
+            should.push(serde_json::json!({ "type": "contains", "field": field, "value": query }));
+            continue;
+        }
+        for w in &words {
+            should.push(serde_json::json!({ "type": "contains", "field": field, "value": w }));
+        }
+    }
+    if should.len() == 1 {
+        return should.pop().unwrap();
+    }
+    serde_json::json!({ "type": "boolean", "should": should })
 }
 
 /// The witnesses of a query that is text only (21 November 2026), in a file of their own.
 #[cfg(test)]
 #[path = "search_words_tests.rs"]
 mod words_tests;
-
-/// The witnesses of a word starting with two dashes (21 November 2026), in a file of their own.
-#[cfg(test)]
-#[path = "search_double_dash_tests.rs"]
-mod double_dash_tests;
 
 /// Build contains clause(s) for one value across fields.
 /// Single field → single contains object. Multiple fields → boolean should.
@@ -2462,8 +2436,8 @@ fn finish_bm25_chunked(
         let mut matched_chunks: Vec<(usize, &ChunkRecord)> = Vec::new();
         let mut diag_overlaps: Vec<ChunkOverlapDiag> = Vec::new();
         // Did any span actually get compared against a chunk? Without this we
-        // cannot tell "the engine produced no spans" (normal on the QueryParser
-        // branch) from "spans existed and matched nothing" (a chunking bug).
+        // cannot tell "the engine produced no spans" (normal on a branch without
+        // highlights) from "spans existed and matched nothing" (a chunking bug).
         let mut content_spans_considered = false;
         for chunk in &parent.chunks {
             let mut overlap = 0usize;
@@ -2505,7 +2479,7 @@ fn finish_bm25_chunked(
         }
 
         // Classify a miss before recording it. lucivy guarantees "absent, never
-        // wrong": the QueryParser branch leaves the sink untouched rather than
+        // wrong": a branch without highlights leaves the sink untouched rather than
         // emitting stale spans (their doc 16). So an empty map is expected, and
         // only spans-that-match-nothing points at our own chunking.
         let unattributed = if !matched_chunks.is_empty() {
@@ -3240,9 +3214,9 @@ mod tests {
         // Une phrase : une clause par mot.
         assert_eq!(
             BM25Mode::Auto.resolve("de quoi savoir qui est connecté sur mon site"),
-            BM25Mode::Parse
+            BM25Mode::Words
         );
-        assert_eq!(BM25Mode::Auto.resolve("deux mots"), BM25Mode::Parse);
+        assert_eq!(BM25Mode::Auto.resolve("deux mots"), BM25Mode::Words);
 
         // Les espaces de tête et de queue ne font pas une phrase.
         assert_eq!(BM25Mode::Auto.resolve("  seul  "), BM25Mode::Contains);
@@ -3256,7 +3230,7 @@ mod tests {
             BM25Mode::Contains,
             BM25Mode::ContainsSplit,
             BM25Mode::Regex,
-            BM25Mode::Parse,
+            BM25Mode::Words,
             BM25Mode::Symbol,
         ] {
             assert_eq!(mode.resolve("une phrase de plusieurs mots"), mode);
@@ -3274,7 +3248,7 @@ mod tests {
         assert_eq!(une, build_bm25_query("identifiant", &fields, BM25Mode::Contains, 1));
         assert_eq!(
             phrase,
-            build_bm25_query("deux mots ici", &fields, BM25Mode::Parse, 1)
+            build_bm25_query("deux mots ici", &fields, BM25Mode::Words, 1)
         );
         assert_ne!(une, phrase, "les deux formes ne produisent pas la même requête");
     }

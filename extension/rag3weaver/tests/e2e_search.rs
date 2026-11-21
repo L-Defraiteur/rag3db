@@ -811,7 +811,7 @@ fn phase1_bm25_parse_multi_term() {
         "main",
         "Rust safety",
         SearchOptions {
-            bm25_mode: BM25Mode::Parse,
+            bm25_mode: BM25Mode::Words,
             consistency: Consistency::Immediate,
             ..Default::default()
         },
