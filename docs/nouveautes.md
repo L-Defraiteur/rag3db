@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'équipier lit le web et y cherche.** `fetch {url, max_bytes?}` rend le texte lisible d'une
+  page (sans script, style ni balises), coupé à sa borne avec la coupe dite, son statut, son type, son adresse finale et
+  ses redirections ; une adresse locale est refusée par défaut (`teammate.fetch.allow_local`), et chaque refus nomme
+  l'adresse. `web_search {query}` passe par le grounding Google Search de Gemini sur Vertex : la réponse, les requêtes
+  jouées et les sources (titre, adresse, passages appuyés, provenance), bornées par `teammate.web_search.max_sources` ;
+  un modèle qui n'est pas Gemini est refusé avec la raison, sans rien envoyer.
+
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
   morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
