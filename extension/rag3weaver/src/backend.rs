@@ -3416,6 +3416,8 @@ impl PreparedBackend {
             watches: Mutex::new(Vec::new()),
             #[cfg(feature = "code")]
             layer_sync: Mutex::new(None),
+            nodes_seen: Mutex::new(None),
+            auto_reloads: std::sync::atomic::AtomicUsize::new(0),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -4099,6 +4101,12 @@ pub struct Backend {
     /// The sync of the tracked layers (2a′-3, lot 5b-2), when `tracked.writes.every_ms` is declared.
     #[cfg(feature = "code")]
     layer_sync: Mutex<Option<crate::history_layers::LayerSyncHandle>>,
+    /// **The `nodes/` folder as the last call saw it** (21 November 2026): each file's name, size and modification
+    /// time, read without opening a file. A call that finds it changed reloads the backend first; `None` until the
+    /// first call.
+    nodes_seen: Mutex<Option<Vec<(String, u64, u128)>>>,
+    /// How many times an edit of `nodes/` reloaded this backend by itself.
+    auto_reloads: std::sync::atomic::AtomicUsize,
     /// La montre des composants, montée par l'aperçu de l'IDE
     /// ([`Backend::watch_components`]).
     components_watch: Mutex<Option<crate::components::a_chaud::ComponentsWatch>>,
@@ -4193,6 +4201,24 @@ struct RetenteEmbarqueur {
     revenu: bool,
     /// La raison du dernier échec, dite par l'avertissement.
     raison: String,
+}
+
+/// The files of a `nodes/` folder as names, sizes and modification times, sorted, no file opened.
+fn nodes_signature(dir: &Path) -> Vec<(String, u64, u128)> {
+    let mut signature: Vec<(String, u64, u128)> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|e| {
+                    let m = e.metadata().ok().filter(|m| m.is_file())?;
+                    let at = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+                    Some((e.file_name().to_string_lossy().into_owned(), m.len(), at))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    signature.sort();
+    signature
 }
 
 impl Backend {
@@ -4854,7 +4880,11 @@ impl Backend {
     /// l'ancienne reste en service et l'erreur dit quoi corriger. Un appel en
     /// cours finit sur la version qu'il a prise à son départ.
     pub fn reload(&self) -> Result<Reloaded, String> {
-        Ok(self.apply_reload(self.check_reload()?))
+        // The `nodes/` folder as this reload reads it: an edit made after it, before the next call, is seen by that call.
+        let seen = nodes_signature(&self.prepared().directory.join("nodes"));
+        let reloaded = self.apply_reload(self.check_reload()?);
+        *self.nodes_seen.lock().unwrap_or_else(|p| p.into_inner()) = Some(seen);
+        Ok(reloaded)
     }
 
     /// **Le premier temps : vérifier, sans rien toucher.** Un refus ici
@@ -5108,7 +5138,40 @@ impl Backend {
             || self.call_in_on(prepared, &authority.scope, operation, arguments))
     }
 
+    /// How many times an edit of `nodes/` reloaded this backend by itself.
+    pub fn automatic_reloads(&self) -> usize {
+        self.auto_reloads.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// **The declared nodes follow their files** (Lucie, 21 November 2026: « que le code devienne un peu de la pâte à
+    /// modeler »). Before a call, the `nodes/` folder is read for its files' names, sizes and modification times, no
+    /// file opened; when it changed since the last call, the backend reloads, and the call runs on the new version. A
+    /// refused reload keeps the version before, and says why in the journal; the same folder is not tried again until
+    /// it changes once more.
+    fn reload_if_nodes_changed(&self) {
+        let dir = self.prepared().directory.join("nodes");
+        let signature = nodes_signature(&dir);
+        {
+            let mut seen = self.nodes_seen.lock().unwrap_or_else(|p| p.into_inner());
+            match seen.as_ref() {
+                None => {
+                    *seen = Some(signature);
+                    return;
+                }
+                Some(s) if *s == signature => return,
+                Some(_) => *seen = Some(signature),
+            }
+        }
+        match self.reload() {
+            Ok(_) => {
+                self.auto_reloads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+            Err(e) => eprintln!("[nodes] {} : {e}", dir.display()),
+        }
+    }
+
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
+        self.reload_if_nodes_changed();
         self.call_on(&self.prepared(), name, args)
     }
 
@@ -7814,6 +7877,8 @@ mod tests {
             watches: Mutex::new(Vec::new()),
             #[cfg(feature = "code")]
             layer_sync: Mutex::new(None),
+            nodes_seen: Mutex::new(None),
+            auto_reloads: std::sync::atomic::AtomicUsize::new(0),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -8379,6 +8444,8 @@ mod tests {
             watches: Mutex::new(Vec::new()),
             #[cfg(feature = "code")]
             layer_sync: Mutex::new(None),
+            nodes_seen: Mutex::new(None),
+            auto_reloads: std::sync::atomic::AtomicUsize::new(0),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),

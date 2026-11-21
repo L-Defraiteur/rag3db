@@ -112,6 +112,8 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         watches: Mutex::new(Vec::new()),
         #[cfg(feature = "code")]
         layer_sync: Mutex::new(None),
+        nodes_seen: Mutex::new(None),
+        auto_reloads: std::sync::atomic::AtomicUsize::new(0),
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
