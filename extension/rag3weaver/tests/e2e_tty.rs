@@ -143,7 +143,7 @@ fn le_flux_coupe_au_milieu_d_un_run_de_l_equipier_se_reprend_sans_perte_ni_doubl
         let host = host.clone();
         std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
     }
-    let ep = Endpoint { address, token: "jeton-du-temoin".into() };
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
     let agent = client::agent();
 
     // Un mauvais jeton est refusé avant le flux : le client le dit.
@@ -254,7 +254,7 @@ fn le_code_d_un_bloc_se_colore_par_les_spans_de_l_hote() {
     let address = ecoute.local_addr().unwrap().to_string();
     let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
     std::thread::spawn(move || DaemonServer::new(server, 2).serve(host, Some("jeton-du-temoin".into())));
-    let ep = Endpoint { address, token: "jeton-du-temoin".into() };
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
     let agent = client::agent();
     let code = "fn main() {\n    // é\n    let x = \"chaîne\";\n}";
     let spans = client::surligner(&agent, &ep, code, "rust").expect("rust est connu des grammaires");
@@ -323,7 +323,7 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
         let host = host.clone();
         std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
     }
-    let ep = Endpoint { address, token: "jeton-du-temoin".into() };
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
     let agent = client::agent();
     // La demande, comme le terminal la pose (le superviseur par défaut).
     let r = client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "porte", "kind": "request", "text": "Liste le dépôt, puis dis bonjour par echo." }))
