@@ -7,3 +7,4 @@ extension/rag3weaver/scripts/poste poste extension/rag3weaver/scripts/test_poste
 tools/poste/menage.py menage.py tools/poste/test_menage.py
 tools/poste/lucivy_sonde.py lucivy_sonde.py tools/poste/test_lucivy_sonde.py
 tools/poste/lucivy_sonde_connus.txt lucivy_sonde_connus.txt tools/poste/test_lucivy_sonde.py
+tools/poste/index_master_ff.sh index_master_ff.sh tools/poste/test_index_master_ff.sh

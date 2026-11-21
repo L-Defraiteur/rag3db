@@ -1,0 +1,7 @@
+[Unit]
+Description=rag3weaver : l'arbre de master indexé à luciepc suit origin/master par ff seulement (21 nov. 2026)
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/bin/bash %h/.cache/rag3weaver-build/index_master_ff.sh %h/git_workspaces/index-master/rag3db
