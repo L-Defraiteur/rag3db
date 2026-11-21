@@ -3596,6 +3596,9 @@ mod ide_ouvrir_tests;
 /// La page « Poste » (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_poste_tests;
+/// L'accueil en arbre des agents (21 novembre 2026), ses témoins dans leur fichier.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_agents_tests;
 
 /// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
 /// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
