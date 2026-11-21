@@ -1783,6 +1783,11 @@ fn double_dash_as_terms(query: &str) -> String {
         .join(" ")
 }
 
+/// The witnesses of a query that is text only (21 November 2026), in a file of their own.
+#[cfg(test)]
+#[path = "search_words_tests.rs"]
+mod words_tests;
+
 /// The witnesses of a word starting with two dashes (21 November 2026), in a file of their own.
 #[cfg(test)]
 #[path = "search_double_dash_tests.rs"]
