@@ -678,6 +678,8 @@ fn fautes_de_test(ctx: &NodeContext) -> crate::fautes_de_test::FautesDeTest {
 /// La clé du service qui porte le seuil réglé sur le catalogue
 /// ([`crate::Catalog::set_link_copy_threshold`]).
 pub(crate) const LINK_COPY_THRESHOLD_SERVICE: &str = "link_copy_threshold";
+/// The catalogue's count of the links dropped for lack of an end (`Arc<AtomicUsize>`, `Catalog::take_dangling_links`).
+pub(crate) const DANGLING_LINKS_SERVICE: &str = "dangling_links";
 
 /// Le seuil du catalogue de ce drain, sinon `RAG3WEAVER_LINK_COPY_THRESHOLD`,
 /// sinon [`COPY_SEUIL`].

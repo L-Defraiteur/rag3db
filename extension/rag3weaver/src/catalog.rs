@@ -365,6 +365,10 @@ pub struct Catalog {
     /// Texts cut in characters by a service client, already reported.
     char_truncations_reported: usize,
     drain_counters: DrainCounters,
+    /// **The links dropped for lack of an end** since the last [`Self::take_dangling_links`] (21 November 2026): a
+    /// link whose start or end is in no table is not written. The drain's link node counts them here, and says them
+    /// in its warnings with an example; they were dropped without a word.
+    dangling_links: Arc<std::sync::atomic::AtomicUsize>,
     event_bus: EventBus,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
     entity_configs: HashMap<String, crate::config::EntityConfig>,
@@ -846,6 +850,7 @@ fn read_threads() -> u64 {
             troncatures_signalees: 0,
             char_truncations_reported: 0,
             drain_counters: DrainCounters::default(),
+            dangling_links: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             // 1024 : un agent émet quelques événements par appel d'outil et
             // par nœud ; un graphe de trace qui draine entre deux tours ne
             // doit pas en perdre. Au-delà, le plus ancien est écarté sans
@@ -4243,6 +4248,7 @@ fn read_threads() -> u64 {
         if let Some(seuil) = self.link_copy_threshold {
             services.register(crate::dataflow::record_nodes::LINK_COPY_THRESHOLD_SERVICE, seuil);
         }
+        services.register(crate::dataflow::record_nodes::DANGLING_LINKS_SERVICE, self.dangling_links.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
@@ -9554,6 +9560,12 @@ fn read_threads() -> u64 {
         std::mem::take(&mut self.replis_en_masse)
     }
 
+    /// **The links dropped for lack of an end** since the last call, and the count back to zero: a link whose start
+    /// or end is in no table is not written. A report puts it beside its `failed`.
+    pub fn take_dangling_links(&self) -> usize {
+        self.dangling_links.swap(0, std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Relevés au seul endroit où les avertissements des nœuds sont
     /// ramassés, pour qu'aucun chemin de drain n'y échappe.
     fn relever_les_replis(&mut self, avertissements: &[String]) {
@@ -10129,6 +10141,7 @@ fn read_threads() -> u64 {
         if let Some(seuil) = self.link_copy_threshold {
             services.register(crate::dataflow::record_nodes::LINK_COPY_THRESHOLD_SERVICE, seuil);
         }
+        services.register(crate::dataflow::record_nodes::DANGLING_LINKS_SERVICE, self.dangling_links.clone());
         services.register("scope", self.scope.clone());
         services.register("node_id_cache", self.node_id_cache.clone());
         if let Some(ref prouves) = self.proven_present {
