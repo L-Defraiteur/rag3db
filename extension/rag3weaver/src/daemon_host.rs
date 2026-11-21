@@ -1151,8 +1151,12 @@ impl DaemonHost {
                 }
             };
             let hosted = self.hosted(&atelier)?;
-            let dit = self.with_backend(&hosted, |b| b.call("attach_worktree", json!({ "path": lettre })))??;
-            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit["result"] }))
+            self.with_backend(&hosted, |_| ())?;
+            // **Attached without an index** (archi's page « un agent qui part neutre »): the folder is served by the
+            // standard file tools; its index is an offer, made on demand.
+            let soi = self.soi.get().cloned().ok_or("ouvrir un dossier : l'hôte ne se connaît pas encore (se_connaitre)")?;
+            let dit = worktrees::HoteDesWorktrees { hote: soi, backend: hosted.id.clone() }.attach_with(&lettre, false)?;
+            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit.text, "indexed": false }))
         });
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
