@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **La carte d'accord du mode auto dans le terminal.** Elle nomme l'outil, ses arguments et sa
+  portée (« pour cet envoi seulement »), et ne se cache jamais : chaque étape de la porte remplace son état à côté
+  d'elle (« cherche une autorisation… », « l'agent fait valoir… », le compte à rebours du survivant), sans rien
+  écrire à l'historique, et o / n répond à tout instant. Sa fermeture laisse une seule ligne qui dit qui a tranché :
+  toi, ton autorisation rappelée (sa citation, « le 21 nov. à 16 h 05 »), l'appel de l'agent, ou le vérificateur
+  (son modèle, ses raisons, son alternative). Une réponse arrivée après la fermeture se dit sans effet.
 - 21 novembre 2026 — **Le terminal signe ce que l'on tape.** Un message, une réponse à une carte, un arrêt ou une
   commande `!` tapés au clavier partent avec le jeton d'utilisateur (`X-Rag3weaver-User`), lu dans `user/user_token`
   à côté de `daemon.json`, ou par `--user-token-cmd` pour un hôte distant. L'hôte peut ainsi reconnaître une ligne
