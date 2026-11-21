@@ -101,26 +101,20 @@ fn depot_de(b: &Value) -> Depot {
 /// **Le dépôt que l'hôte a résolu** (`POST /depots/resoudre`, la route d'arbre : un seul nom partout, le nom court,
 /// le nom complet `code-<nom>`, l'id, le manifeste, la racine du dépôt ou le dossier du manifeste), complété par son
 /// entrée de l'état de l'hôte (`GET /ide/etat`, pour sa branche).
-pub fn depot_resolu(_etat: &Value, _resolu: &Value) -> Result<Depot, String> {
-    Err("à faire".into())
+pub fn depot_resolu(etat: &Value, resolu: &Value) -> Result<Depot, String> {
+    let id = resolu["id"].as_str().filter(|i| !i.is_empty()).ok_or_else(|| format!("l'hôte n'a pas dit l'id du dépôt résolu : {resolu}"))?;
+    if let Some(b) = etat["backends"].as_array().and_then(|v| v.iter().find(|b| b["id"] == id && b["tache"].is_null())) {
+        return Ok(depot_de(b));
+    }
+    let s = |k: &str| resolu[k].as_str().unwrap_or_default().to_string();
+    Ok(Depot { id: id.to_string(), manifest: s("manifest"), repo: s("repo"), branch: String::new() })
 }
 
-/// **Le dépôt désigné** dans l'état de l'hôte (`GET /ide/etat`) : par son nom de
-/// dépôt, le chemin de son manifeste (ou un dossier qui le contient), ou son id.
-/// Les worktrees des tâches ne se désignent pas : on désigne le dépôt.
-pub fn resoudre_depot(etat: &Value, depot: &str) -> Result<Depot, String> {
-    let attaches: Vec<&Value> = etat["backends"].as_array().map(|v| v.iter().filter(|b| b["tache"].is_null()).collect()).unwrap_or_default();
-    let d = depot.trim_end_matches('/');
-    let exact: Vec<&Value> = attaches.iter().copied().filter(|b| b["id"] == d || b["repo"] == d || b["manifest"] == d).collect();
-    let trouves = if exact.is_empty() { attaches.iter().copied().filter(|b| b["manifest"].as_str().is_some_and(|m| !d.is_empty() && m.starts_with(&format!("{d}/")))).collect() } else { exact };
-    match trouves.as_slice() {
-        [un] => Ok(depot_de(un)),
-        [] => Err(format!(
-            "aucun dépôt attaché ne s'appelle « {depot} » ; attachés : {}",
-            attaches.iter().map(|b| b["repo"].as_str().or(b["manifest"].as_str()).unwrap_or("?").to_string()).collect::<Vec<_>>().join(", ")
-        )),
-        plusieurs => Err(format!("« {depot} » désigne plusieurs dépôts : {} — donnez le chemin du manifeste", plusieurs.iter().map(|b| b["manifest"].as_str().unwrap_or("?").to_string()).collect::<Vec<_>>().join(", "))),
-    }
+/// **Le dépôt désigné** par son nom, résolu par l'hôte (`POST /depots/resoudre`), complété par son état.
+pub fn resoudre(agent: &ureq::Agent, ep: &Endpoint, depot: &str) -> Result<Depot, String> {
+    let resolu = poster(agent, ep, "/depots/resoudre", &serde_json::json!({ "name": depot }))?;
+    let etat = lire_brut(agent, ep, "/ide/etat")?;
+    depot_resolu(&etat, &resolu)
 }
 
 /// **L'en-tête d'un worktree** : « dépôt · branche · tâche », d'après l'état de
@@ -143,18 +137,6 @@ mod tests {
             { "id": "b2", "manifest": "/c/code-coeur/backend.json", "repo": "rag3db", "branch": "master", "tache": null },
             { "id": "t3", "manifest": "/t/parle/backend.json", "repo": "petit-depot", "branch": "tache/parle", "tache": { "nom": "parle", "parent": "a1", "branche": "tache/parle" } }
         ] })
-    }
-
-    #[test]
-    fn a_repo_is_named_by_its_name_its_path_or_its_id_never_a_task_worktree() {
-        let e = etat();
-        assert_eq!(resoudre_depot(&e, "rag3db").unwrap().id, "b2");
-        assert_eq!(resoudre_depot(&e, "/c/code-petit").unwrap().id, "a1");
-        assert_eq!(resoudre_depot(&e, "/c/code-petit/backend.json").unwrap().id, "a1");
-        assert_eq!(resoudre_depot(&e, "a1").unwrap().repo, "petit-depot", "un id reste lu");
-        let refus = resoudre_depot(&e, "lucivy").unwrap_err();
-        assert!(refus.contains("petit-depot") && refus.contains("rag3db") && !refus.contains("backend "), "{refus}");
-        assert!(resoudre_depot(&e, "/c").unwrap_err().contains("plusieurs"));
     }
 
     /// **The host resolves the name, the terminal completes it** (arbre's route, 21 Nov. 2026: `code-tree add` said

@@ -176,6 +176,14 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             extra = {k: corps[k] for k in ("peer", "direction", "delivery", "delivery_reason", "reply_to") if k in corps}
             ligne(corps.get("kind", "message"), corps.get("text", ""), de="session", **extra)
             self.json({"ok": True, "result": {"id": boite[-1]["id"]}})
+        elif self.path == "/depots/resoudre":
+            # The host's resolver (arbre's route): the id, the short name, the full name « code-<name> », or the manifest.
+            nom = corps.get("name", "")
+            if nom in ("faux", "faux-depot", "code-faux-depot", MANIFESTE):
+                self.json({"ok": True, "result": {"id": "faux", "repo": "faux-depot", "name": "code-faux-depot", "manifest": MANIFESTE}})
+            else:
+                self.json({"ok": False, "error": f"aucun dépôt attaché ne s'appelle « {nom} » ; attachés : faux-depot (code-faux-depot)"}, 422)
+            return
         elif self.path == "/ide/turns/read":
             # read_turns (archi's route, on master 19 nov.): {run, from, to}; by apport it is refused, as the host does.
             if "apport" in corps or not all(k in corps for k in ("run", "from", "to")):
