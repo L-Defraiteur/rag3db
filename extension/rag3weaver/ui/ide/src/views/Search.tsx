@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { SearchBox, normalizeDir, searchLink } from "@/components/SearchBox";
-import { callFull, shortName, unwrap, type HostState } from "@/lib/host";
+import { displayName, callFull, unwrap, type HostState } from "@/lib/host";
 import { fileLink, symbolLink } from "@/views/File";
 
 // **La recherche** (page 08, vue 4) : le JSON de `search_code` tel que la session
@@ -94,7 +94,7 @@ export function Search({ id, state }: { id: string; state: HostState }) {
       .catch((e: Error) => setError(e.message));
   }, [backend?.manifest, q, rerank, dir]);
 
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const hits: Hit[] = Array.isArray(response?.result) ? (response!.result as Hit[]) : [];
   // La méta porte le nom du nœud qui la rend dans le graphe (`render`, port `meta`).
   const meta = ((response?.metadata as Record<string, unknown> | undefined)?.["render.meta"] as Meta | undefined) ?? {};
@@ -134,7 +134,7 @@ export function Search({ id, state }: { id: string; state: HostState }) {
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a> · recherche
+        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{displayName(backend)}</a> · recherche
       </p>
       <SearchBox id={id} q={q} dir={dir} onClearDir={() => { if (q) location.href = searchLink(id, q); }} />
       <h1 className="text-xl font-semibold mb-2">« {q} »</h1>

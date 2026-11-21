@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Folder, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { call, shortName, type HostState } from "@/lib/host";
+import { displayName, call, type HostState } from "@/lib/host";
 import { fileLink } from "@/views/File";
 import { SearchBox } from "@/components/SearchBox";
 
@@ -21,7 +21,7 @@ export function Tree({ id, dir, state }: { id: string; dir: string; state: HostS
     if (!backend) return;
     (call(backend.manifest, "list_files", { path_prefix: prefix, limit: 2000, format: "json" }) as Promise<{ entries: Entry[]; total: number; returned: number }>).then(setR).catch((e: Error) => setError(e.message));
   }, [backend?.manifest, prefix]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const folders = new Map<string, number>();
   const files: Entry[] = [];
   for (const e of r?.entries ?? []) {
@@ -34,7 +34,7 @@ export function Tree({ id, dir, state }: { id: string; dir: string; state: HostS
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a>
+        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{displayName(backend)}</a>
         {parts.map((p, i) => <span key={i}>{" / "}<a href={`/ide/code/${id}/arbre/${enc(parts.slice(0, i + 1).join("/"))}/`} className="hover:underline">{p}</a></span>)}
       </p>
       <SearchBox key={prefix} id={id} dir={prefix} />
