@@ -33,3 +33,52 @@ fn the_wasm_previous_step_is_the_rust_one_and_a_broken_module_falls_back() {
     let e = error.expect("the error is said");
     assert!(e.contains("previous_step.wasm"), "the error names the module's file: {e}");
 }
+
+/// **The cost of the WebAssembly block, against the Rust one and the TypeScript one** (a measure, not a witness:
+/// `--ignored`, in release). The state of the scripted node's measure (200 reads, 50 writes, a command and its 1 500
+/// last characters, a last text of 3 000 characters, over the 8 000 budget): the Rust block; the node as a step calls
+/// it (the declaration read and the module prepared again); the module prepared once.
+#[test]
+#[ignore]
+fn measure_the_wasm_previous_step_against_the_rust_one() {
+    let (_d, dir) = wasm_nodes();
+    let w = StepWork {
+        read: (0..200).map(|i| format!("src/module_{i}/fichier_é.rs (lines {i}-{})", i + 40)).collect(),
+        wrote: (0..50).map(|i| format!("src/écrit_{i}.rs")).collect(),
+        command: Some(("cargo test --lib".into(), "test ok 😀\n".repeat(150))),
+    };
+    let text = "Je relis le module, puis j'édite la fonction. ".repeat(65);
+    let n = 200;
+    let median = |mut v: Vec<std::time::Duration>| {
+        v.sort();
+        v[v.len() / 2]
+    };
+    let rust: Vec<_> = (0..n).map(|_| { let t = std::time::Instant::now(); std::hint::black_box(w.block(7, &text, 8_000)); t.elapsed() }).collect();
+    let node: Vec<_> = (0..n)
+        .map(|_| {
+            let t = std::time::Instant::now();
+            std::hint::black_box(carry_over_by_node(&dir, "PreviousStepWasm", &Value::Null, w.to_json(7, &text, 8_000)).unwrap());
+            t.elapsed()
+        })
+        .collect();
+    use crate::dataflow::node_registry::NodeFactory;
+    let decl = crate::dataflow::scripted_node::read_declaration(&dir.join("previous_step_wasm.node.json")).unwrap();
+    let factory = crate::dataflow::scripted_node::ScriptedNodeFactory::new(decl, crate::script::ScriptLimits::default()).unwrap();
+    let prepared: Vec<_> = (0..n)
+        .map(|_| {
+            let mut node = factory.create("m", &Value::Null).unwrap();
+            let mut ctx = crate::dataflow::node::NodeContext::new();
+            ctx.set_input("work", crate::dataflow::port::PortValue::new(w.to_json(7, &text, 8_000)));
+            let t = std::time::Instant::now();
+            node.execute(&mut ctx).unwrap();
+            t.elapsed()
+        })
+        .collect();
+    assert_eq!(carry_over_by_node(&dir, "PreviousStepWasm", &Value::Null, w.to_json(7, &text, 8_000)).unwrap(), w.block(7, &text, 8_000));
+    eprintln!(
+        "[measure] Previous step, medians of {n} calls: Rust {:?}; WebAssembly node as a step calls it (read and prepared) {:?}; module prepared once {:?}",
+        median(rust),
+        median(node),
+        median(prepared)
+    );
+}

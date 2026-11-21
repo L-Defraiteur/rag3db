@@ -113,8 +113,9 @@ impl PreparedScript for PreparedWasm {
             if store.get_fuel().is_ok_and(|f| f == 0) {
                 return ScriptError::new(ScriptErrorKind::Timeout, format!("WebAssembly: all fuel consumed (fuel limit {})", limits.fuel));
             }
-            // A growth the limiter refuses traps (`trap_on_grow_failure`), named so: never guessed from the size.
-            if e.to_string().contains("resource limiter denied allocation") {
+            // A growth the limiter refuses traps (`trap_on_grow_failure`) with its own code: read from the code, never
+            // guessed from the size or the text.
+            if e.as_trap_code() == Some(wasmi::TrapCode::GrowthOperationLimited) {
                 return ScriptError::new(
                     ScriptErrorKind::Memory,
                     format!("WebAssembly: the memory reached the host's ceiling of {} bytes ({e})", limits.memory_bytes),
