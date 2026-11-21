@@ -1086,13 +1086,13 @@ mod tests {
         let list = |q: &[f64]| CypherValue::List(q.iter().map(|&f| CypherValue::Float(f)).collect());
         let hashes_of = |q: &str, v: &[f64]| -> (std::collections::BTreeSet<String>, f64) {
             let t = std::time::Instant::now();
-            let rows = conn.execute_with_params(q, &[QueryParam::new("q", list(v))]).map(|r| r.rows).unwrap_or_default();
+            let rows = conn.execute_with_params(q, &[QueryParam::new("q", list(v))]).map(|r| r.rows).unwrap_or_else(|e| { println!("PROBE_TEXT error « {} » : {e}", &q[..q.len().min(90)]); Vec::new() });
             let ms = t.elapsed().as_secs_f64() * 1000.0;
             (rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect(), ms)
         };
-        let exact = format!("MATCH (t:{text}) RETURN t._text_hash ORDER BY array_cosine_similarity(t.embedding, CAST($q AS {typ})) DESC LIMIT 10");
-        let today = format!("CALL QUERY_VECTOR_INDEX('{chunk}', '{cidx}', CAST($q AS {typ}), 10) RETURN node._text_hash");
-        let shared = format!("CALL QUERY_VECTOR_INDEX('{text}', '{tidx}', CAST($q AS {typ}), 10) RETURN node._text_hash");
+        let exact = format!("MATCH (t:{text}) RETURN t._text_hash ORDER BY array_cosine_similarity(t.embedding, CAST($q, '{typ}')) DESC LIMIT 10");
+        let today = format!("CALL QUERY_VECTOR_INDEX('{chunk}', '{cidx}', $q, 10) RETURN node._text_hash");
+        let shared = format!("CALL QUERY_VECTOR_INDEX('{text}', '{tidx}', $q, 10) RETURN node._text_hash");
         let (mut t_today, mut t_shared) = (Vec::new(), Vec::new());
         let (mut r_today, mut r_shared, mut distinct_today) = (0usize, 0usize, 0usize);
         for q in &queries {
@@ -1111,6 +1111,84 @@ mod tests {
         let nq = queries.len().max(1) as f64;
         println!("PROBE_TEXT unfiltered, {} queries : today median {m_today:.1} ms p95 {p_today:.1} ms, recall@10 of distinct texts {:.3} ({:.1} distinct texts in its 10) ; shared median {m_shared:.1} ms p95 {p_shared:.1} ms, recall@10 {:.3}",
             queries.len(), r_today as f64 / (10.0 * nq), distinct_today as f64 / nq, r_shared as f64 / (10.0 * nq));
+    }
+
+    /// **The filtered dense search of a shared text node, against today's** (embarquement, 21 November 2026) : on the copy
+    /// `probe_shared_text_search` built, a filter on the occurrence (`Scope`, a path prefix, as `search_code`'s scope),
+    /// projected the way `Rag3dbSearchBackend::vector_search_filtered` does : today chunk -> version <- occurrence, B text <-
+    /// chunk -> version <- occurrence ; and the admitted versions passed as a list (ED's occurrence mask), timed apart.
+    /// Recall against the exact top 10 distinct texts inside the filter.
+    #[test]
+    #[ignore]
+    fn probe_shared_text_search_filtered() {
+        use crate::connection::{CypherValue, DbConnection, QueryParam};
+        let path = std::env::var("RAG3WEAVER_SONDE_BASE").expect("RAG3WEAVER_SONDE_BASE");
+        let conn = crate::Rag3dbConnection::new(&path).expect("the probe's base");
+        let ext = crate::backend::vector_extension_of_this_process().expect("the vector extension");
+        conn.execute(&format!("LOAD EXTENSION '{}'", ext.display())).expect("load the vector extension");
+        let (chunk, col, cidx, text, tidx) = ("ScopeContent_Chunk", "embedding__granite_278m", "ScopeContent_Chunk_vec__granite_278m", "ScopeContent_Text", "ScopeContent_Text_vec");
+        let prefix = std::env::var("RAG3WEAVER_PROBE_PREFIX").unwrap_or_else(|_| "extension/rag3weaver/src/dataflow/".into());
+        let n: usize = std::env::var("RAG3WEAVER_PROBE_QUERIES").ok().and_then(|v| v.parse().ok()).unwrap_or(100);
+        let first = |q: &str| conn.execute(q).ok().and_then(|r| r.rows.into_iter().next());
+        let rel = first("MATCH (s:Scope)-[r]->(p:ScopeContent) RETURN label(r) LIMIT 1").and_then(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).expect("the occurrence -> version relation");
+        let scope_cols: Vec<String> = conn.execute("CALL TABLE_INFO('Scope') RETURN *").unwrap().rows.iter().filter_map(|r| r.get(1).and_then(|v| v.as_str()).map(str::to_string)).collect();
+        let pathc = scope_cols.iter().find(|c| c.as_str() == "file_path").or_else(|| scope_cols.iter().find(|c| c.contains("path"))).cloned().expect("a path column on Scope");
+        let typ = conn.execute(&format!("CALL TABLE_INFO('{chunk}') RETURN *")).unwrap().rows.iter().find(|r| r.get(1).and_then(|v| v.as_str()) == Some(col)).and_then(|r| r.get(2).and_then(|v| v.as_str()).map(str::to_string)).unwrap();
+        println!("PROBE_TEXTF relation {rel} ; path column {pathc} ; prefix {prefix}");
+        let lit = format!("'{}'", prefix.replace('\'', "\\'"));
+        let occ = format!("(p:ScopeContent)<-[:`{rel}`]-(s:Scope) WHERE s.{pathc} STARTS WITH {lit}");
+        let today_filter = format!("MATCH (n:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} RETURN n");
+        let shared_filter = format!("MATCH (n:{text})<-[:HAS_TEXT]-(c:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} RETURN n");
+        // The admitted versions as a list (the occurrence mask's fallback), timed apart.
+        let t = std::time::Instant::now();
+        let versions: Vec<String> = conn.execute(&format!("MATCH {occ} RETURN DISTINCT p._uuid")).unwrap().rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+        println!("PROBE_TEXTF the admitted versions : {} in {:.0} ms", versions.len(), t.elapsed().as_secs_f64() * 1000.0);
+        let quote = |v: &[String]| v.iter().map(|u| format!("'{u}'")).collect::<Vec<_>>().join(",");
+        let today_list = format!("MATCH (n:{chunk})-[:ScopeContent_CHUNKED_FROM]->(p:ScopeContent) WHERE p._uuid IN [{}] RETURN n", quote(&versions));
+        let shared_list = format!("MATCH (n:{text})<-[:HAS_TEXT]-(c:{chunk})-[:ScopeContent_CHUNKED_FROM]->(p:ScopeContent) WHERE p._uuid IN [{}] RETURN n", quote(&versions));
+        // Queries : chunk vectors inside the filter.
+        let queries: Vec<Vec<f64>> = conn
+            .execute(&format!("MATCH (c:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} AND c.{col} IS NOT NULL RETURN DISTINCT c.{col}"))
+            .unwrap()
+            .rows
+            .iter()
+            .take(n)
+            .filter_map(|r| match r.first() { Some(CypherValue::List(v)) => Some(v.iter().filter_map(|x| x.as_f64()).collect()), _ => None })
+            .collect();
+        let list = |q: &[f64]| CypherValue::List(q.iter().map(|&f| CypherValue::Float(f)).collect());
+        let search = |filter: &str, table: &str, index: &str, q: &[f64]| -> (std::collections::BTreeSet<String>, f64) {
+            let t = std::time::Instant::now();
+            let escaped = filter.replace('\\', "\\\\").replace('\'', "\\'");
+            let _ = conn.execute("CALL DROP_PROJECTED_GRAPH('_vf_probe', skip_if_not_exists := true)");
+            let ok = conn.execute(&format!("CALL PROJECT_GRAPH_CYPHER('_vf_probe', '{escaped}')"));
+            let rows = if ok.is_ok() {
+                conn.execute_with_params(&format!("CALL QUERY_VECTOR_INDEX('_vf_probe', '{index}', $q, 10) RETURN node._text_hash"), &[QueryParam::new("q", list(q))]).map(|r| r.rows).unwrap_or_else(|e| { println!("PROBE_TEXTF query {table} : {e}"); Vec::new() })
+            } else {
+                println!("PROBE_TEXTF projection {table} : {:?}", ok.err());
+                Vec::new()
+            };
+            let _ = conn.execute("CALL DROP_PROJECTED_GRAPH('_vf_probe', skip_if_not_exists := true)");
+            (rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect(), t.elapsed().as_secs_f64() * 1000.0)
+        };
+        let exact = format!("MATCH (c:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} AND c.{col} IS NOT NULL WITH DISTINCT c._text_hash AS h, c.{col} AS e RETURN h ORDER BY array_cosine_similarity(e, CAST($q, '{typ}')) DESC LIMIT 10");
+        let mut rows: Vec<(&str, Vec<f64>, usize, f64)> = Vec::new();
+        for (label, filter, table, index) in [("today, path", &today_filter, chunk, cidx), ("shared, path", &shared_filter, text, tidx), ("today, version list", &today_list, chunk, cidx), ("shared, version list", &shared_list, text, tidx)] {
+            let (mut times, mut hit, mut distinct) = (Vec::new(), 0usize, 0usize);
+            for q in &queries {
+                let truth: std::collections::BTreeSet<String> = conn.execute_with_params(&exact, &[QueryParam::new("q", list(q))]).map(|r| r.rows).unwrap_or_default().iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+                let (got, ms) = search(filter, table, index, q);
+                times.push(ms);
+                distinct += got.len();
+                hit += got.intersection(&truth).count();
+            }
+            rows.push((label, times, hit, distinct as f64));
+        }
+        let nq = queries.len().max(1) as f64;
+        for (label, mut times, hit, distinct) in rows {
+            times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let (m, p) = (times[times.len() / 2], times[(times.len() * 95 / 100).min(times.len() - 1)]);
+            println!("PROBE_TEXTF {label} : {} queries, median {m:.1} ms, p95 {p:.1} ms, recall@10 {:.3}, {:.1} distinct texts", queries.len(), hit as f64 / (10.0 * nq), distinct / nq);
+        }
     }
 
     /// **The plan and the time of a lookup by text hash** (ED, 21 November 2026, for embarquement's reuse by hash): on a
