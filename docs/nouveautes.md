@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Les pages d'un dépôt parlent git.** Dans l'IDE, le fil d'Ariane des tâches, des propositions,
+  des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son
+  nom et sa branche, comme l'accueil ; le tableau des tâches a une colonne « worktree ». « backend » n'y paraît plus.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
