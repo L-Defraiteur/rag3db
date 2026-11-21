@@ -292,10 +292,11 @@ impl Node for RunCommandNode {
         // roots the sandbox mounts stops it; the host turns the refusal into a request to the gate, with the command to
         // replay once the root is granted.
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned() {
-            if let Some(dehors) = path_outside_the_sandbox(&self.ligne, &racine, &bac) {
+            let ecrit = verdict.parties.iter().any(|(c, _)| crate::commande::observer(c).ecrit);
+            if let Some((dehors, mode)) = open_root_needed(&self.ligne, &racine, &bac, ecrit, &crate::backend::granted_roots()) {
                 return Err(format!(
                     "{OPEN_ROOT_MARKER}{}",
-                    serde_json::json!({ "class": "open_root", "refused": dehors, "replay": self.ligne })
+                    serde_json::json!({ "class": "open_root", "mode": mode, "refused": dehors, "replay": self.ligne })
                 ));
             }
         }
@@ -482,8 +483,10 @@ pub const EN_ATTENTE: &str = "**Commande en attente.**";
 /// object follows it (`{class: "open_root", refused, replay}`), which the host turns into a request to the gate.
 pub const OPEN_ROOT_MARKER: &str = "open_root: ";
 
-/// **Whether a command needs a root it has not**, and in which mode (RootGrants, lot B): RED STUB.
-#[allow(unused_variables)]
+/// **Whether a command needs a root it has not, and in which mode** (RootGrants, lot B, 21 November 2026): the first
+/// word of `ligne` that resolves (absolute, `~/`, or from `racine`) to a path the sandbox does not let it touch. A
+/// writing command (`ecrit`) under a root granted "read" asks for "write"; an existing path outside every root of the
+/// sandbox asks for "read". A path under a root the sandbox writes, or a system path, asks nothing (the sandbox decides).
 pub fn open_root_needed(
     ligne: &str,
     racine: &std::path::Path,
@@ -491,14 +494,10 @@ pub fn open_root_needed(
     ecrit: bool,
     accordees: &[(std::path::PathBuf, String)],
 ) -> Option<(std::path::PathBuf, String)> {
-    None // RED STUB.
-}
-
-/// The first word of `ligne` that resolves (absolute, `~/`, or from `racine`) to an existing path outside the roots the
-/// sandbox mounts (its writes and its reads), canonical; `None` when every such word stays inside.
-fn path_outside_the_sandbox(ligne: &str, racine: &std::path::Path, bac: &crate::commande::BacASable) -> Option<std::path::PathBuf> {
-    let racines: Vec<std::path::PathBuf> =
-        bac.ecritures.iter().chain(bac.lectures.iter()).map(|r| r.canonicalize().unwrap_or_else(|_| r.clone())).collect();
+    let canon = |r: &std::path::PathBuf| r.canonicalize().unwrap_or_else(|_| r.clone());
+    let ecritures: Vec<std::path::PathBuf> = bac.ecritures.iter().map(canon).collect();
+    let lectures: Vec<std::path::PathBuf> = bac.lectures.iter().map(canon).collect();
+    let en_lecture: Vec<std::path::PathBuf> = accordees.iter().filter(|(_, m)| m != "write").map(|(r, _)| canon(r)).collect();
     let maison = std::env::var_os("HOME").map(std::path::PathBuf::from);
     for mot in ligne.split_whitespace() {
         let mot = mot.trim_matches(|c| c == '\'' || c == '"');
@@ -516,12 +515,37 @@ fn path_outside_the_sandbox(ligne: &str, racine: &std::path::Path, bac: &crate::
         } else {
             racine.join(mot)
         };
-        let Ok(reel) = candidat.canonicalize() else { continue };
-        if !racines.iter().any(|r| reel.starts_with(r)) {
-            return Some(reel);
+        let Some(reel) = resolve_path(&candidat) else { continue };
+        if ecritures.iter().any(|r| reel.starts_with(r)) {
+            continue;
+        }
+        if ecrit && en_lecture.iter().any(|r| reel.starts_with(r)) {
+            return Some((reel, "write".into()));
+        }
+        if reel.exists() && !lectures.iter().any(|r| reel.starts_with(r)) {
+            return Some((reel, "read".into()));
         }
     }
     None
+}
+
+/// A path made canonical, existing or not: its deepest existing ancestor resolved, the rest appended; `None` when the
+/// rest climbs (`..`).
+fn resolve_path(chemin: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut existant = chemin.to_path_buf();
+    let mut reste = Vec::new();
+    while !existant.exists() {
+        reste.push(existant.file_name()?.to_os_string());
+        existant = existant.parent()?.to_path_buf();
+    }
+    let mut out = existant.canonicalize().ok()?;
+    for c in reste.iter().rev() {
+        if c == ".." || c == "." {
+            return None;
+        }
+        out.push(c);
+    }
+    Some(out)
 }
 
 fn rendre(ctx: &mut NodeContext, texte: String) -> Result<(), String> {

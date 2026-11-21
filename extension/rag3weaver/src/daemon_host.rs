@@ -2041,7 +2041,8 @@ impl DaemonHost {
             // The agent writes in a view the host opened for it, on its branch (point 1 of tty's scenario 1).
             let en_ecriture = self.vue_en_ecriture_de(&s)?;
             // The roots granted to the agent of this backend (and to every agent): its sandbox mounts them.
-            let accordees: Vec<PathBuf> = self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default())).into_iter().map(|g| g.root).collect();
+            let accordees: Vec<(PathBuf, String)> =
+                self.root_grants(Some(&self.agent_key_of_backend(&hosted.id).unwrap_or_default())).into_iter().map(|g| (g.root, g.mode)).collect();
             crate::backend::with_granted_roots(accordees, || crate::backend::with_writable_view(en_ecriture, || crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.

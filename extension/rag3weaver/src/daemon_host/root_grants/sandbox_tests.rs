@@ -33,7 +33,7 @@ fn a_command_outside_its_roots_asks_for_the_root_and_runs_once_granted() {
     assert_eq!(demande["path"], json!(dehors.canonicalize().unwrap()), "the root proposed: {r}");
     assert_eq!(demande["replay"], json!(commande), "the command to replay: {r}");
 
-    a.host.grant_root("*", &dehors, Proof { quote: "oui".into(), at: None, turn: None }, "user").unwrap();
+    a.host.grant_root("*", &dehors, Proof { quote: "oui".into(), at: None, turn: None }, "user", "read").unwrap();
     let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": commande}));
     assert_eq!(r["ok"], json!(true), "the command does not run once the root is granted: {r}");
     let sortie = r["result"]["result"].as_str().unwrap_or_default();

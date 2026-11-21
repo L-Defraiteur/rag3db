@@ -20,9 +20,14 @@ pub struct Grant {
     pub turn: Option<String>,
     /// `"user"`, `"judge"` or `"survivor"`.
     pub granted_by: String,
-    /// RED STUB: the mode comes with the green.
-    #[serde(default)]
+    /// `"read"` (the default, and a grant kept before the mode) or `"write"`: the sandbox mounts a root granted
+    /// "read" read only (c7's word, 21 November 2026: a « yes » to look at a folder does not open its deletion).
+    #[serde(default = "mode_read")]
     pub mode: String,
+}
+
+fn mode_read() -> String {
+    "read".into()
 }
 
 /// The proof of a grant: the user's words, when, and in which turn.
@@ -88,7 +93,10 @@ impl DaemonHost {
 
     /// **Grant a root** (the Card's « yes » on an `open_root` card): kept in the register, canonical; a grant already
     /// there for the same agent and root is replaced by the new proof.
-    pub fn grant_root(&self, agent: &str, root: &Path, proof: Proof, by: &str) -> Result<Grant, String> {
+    pub fn grant_root(&self, agent: &str, root: &Path, proof: Proof, by: &str, mode: &str) -> Result<Grant, String> {
+        if !matches!(mode, "read" | "write") {
+            return Err(format!("accorder une racine : le mode « {mode} » n'est ni read ni write"));
+        }
         if !matches!(by, "user" | "judge" | "survivor") {
             return Err(format!("accorder une racine : « {by} » n'est pas user, judge ni survivor"));
         }
@@ -106,7 +114,7 @@ impl DaemonHost {
             at: proof.at.unwrap_or_else(crate::catalog::retard::now_ms),
             turn: proof.turn,
             granted_by: by.to_string(),
-            mode: String::new(),
+            mode: mode.to_string(),
         };
         let mut accords = self.read_grants();
         accords.retain(|a| !(a.agent == accord.agent && a.root == accord.root));
@@ -175,8 +183,14 @@ impl DaemonHost {
         let reste = &erreur[erreur.find(marqueur)? + marqueur.len()..];
         let refus: Value = serde_json::Deserializer::from_str(reste).into_iter::<Value>().next()?.ok()?;
         let refuse = PathBuf::from(refus["refused"].as_str()?);
+        let mode = refus["mode"].as_str().unwrap_or("read").to_string();
         let proposee = self.proposed_root(&refuse);
         let message = match &proposee {
+            Some(r) if mode == "write" => format!(
+                "la commande écrit sous {} , une racine accordée en lecture seule : l'écriture dans {} se demande (open_root, mode write), puis la commande se rejoue",
+                refuse.display(),
+                r.display()
+            ),
             Some(r) => format!(
                 "la commande touche {} , hors des racines de l'agent : l'accès à {} se demande (open_root), puis la commande se rejoue",
                 refuse.display(),
@@ -190,7 +204,7 @@ impl DaemonHost {
         Some(json!({
             "ok": false,
             "error": message,
-            "open_root": { "class": "open_root", "path": proposee, "refused": refuse, "replay": refus["replay"] },
+            "open_root": { "class": "open_root", "mode": mode, "path": proposee, "refused": refuse, "replay": refus["replay"] },
         }))
     }
 
@@ -226,7 +240,7 @@ mod tests {
         std::fs::create_dir_all(racine.join("steamapps")).unwrap();
         std::fs::create_dir_all(&voisin).unwrap();
         let a = hote(d.path());
-        let accord = a.grant_root("agent:k1", &racine, proof(), "user").unwrap();
+        let accord = a.grant_root("agent:k1", &racine, proof(), "user", "read").unwrap();
         assert_eq!(accord.root, racine.canonicalize().unwrap());
         drop(a);
         let b = hote(d.path());
@@ -247,7 +261,7 @@ mod tests {
         std::fs::create_dir_all(&racine).unwrap();
         std::fs::create_dir_all(&prefixe).unwrap();
         let a = hote(d.path());
-        a.grant_root("*", &racine, proof(), "user").unwrap();
+        a.grant_root("*", &racine, proof(), "user", "read").unwrap();
         assert!(a.root_grant_for("agent:autre", &racine).is_some(), "« * » does not cover another agent");
         assert!(a.root_grant_for("agent:autre", &prefixe).is_none(), "« notes-privees » passes for a sub-root of « notes »");
     }
@@ -263,7 +277,7 @@ mod tests {
         std::fs::write(dehors.join("cle"), "non").unwrap();
         std::os::unix::fs::symlink(&dehors, racine.join("sortie")).unwrap();
         let a = hote(d.path());
-        a.grant_root("agent:k1", &racine, proof(), "user").unwrap();
+        a.grant_root("agent:k1", &racine, proof(), "user", "read").unwrap();
         assert!(a.root_grant_for("agent:k1", &racine.join("sortie/cle")).is_none(), "a link leaves its root");
         assert!(a.root_grant_for("agent:k1", &racine.join("../secret/cle")).is_none(), "« .. » leaves its root");
     }
