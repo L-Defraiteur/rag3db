@@ -829,6 +829,8 @@ impl DaemonHost {
                 let reel_f = reel.clone();
                 let arret: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)> = Default::default();
                 let arret_f = arret.clone();
+                let tours: std::sync::Arc<std::sync::atomic::AtomicUsize> = Default::default();
+                let tours_f = tours.clone();
                 let fil = std::thread::Builder::new()
                     .name("vue-en-fond".into())
                     .spawn(move || {
@@ -871,6 +873,7 @@ impl DaemonHost {
                             if !reel_f.is_dir() {
                                 return;
                             }
+                            tours_f.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             let signature = worktree_signature(&reel_f);
                             if signature == ecrite {
                                 continue;
@@ -890,7 +893,7 @@ impl DaemonHost {
                         }
                     })
                     .map_err(|e| format!("le fil d'écriture de la vue : {e}"))?;
-                self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), ViewFollower { stop: arret, thread: Some(fil) });
+                self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), ViewFollower { stop: arret, thread: Some(fil), turns: tours });
                 Ok(true)
             })();
             // Without the code feature, no layer of code: the worktree is opened all the same.
@@ -1313,6 +1316,13 @@ impl DaemonHost {
         let mut etat: Value = std::fs::read_to_string(&chemin).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
         etat["ouvertes"][nom] = ouverte.clone();
         ecrire_par_renommage(&chemin, &etat)
+    }
+
+    /// The signatures computed by the thread that makes the view of `layer` follow its worktree, since its first writing
+    /// (`None` for a view that does not follow): the witness of a view at rest that costs nothing.
+    #[cfg(feature = "code")]
+    pub fn view_follower_turns(&self, layer: &str) -> Option<usize> {
+        self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).get(layer).map(|f| f.turns.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// The view by default of a session, `None` without one.
@@ -3431,6 +3441,8 @@ impl PorteDEcriture {
 pub(crate) struct ViewFollower {
     stop: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)>,
     thread: Option<std::thread::JoinHandle<()>>,
+    /// The signatures the thread computed since the first writing (each one a `git status`).
+    turns: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(feature = "code")]
