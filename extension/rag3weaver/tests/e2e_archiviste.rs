@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// The author is set by the host (writes.author, M7) : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
+#[path = "e2e_archiviste/author.rs"]
+mod author;
+
 /// B4, le Decide de l'archiviste en parts : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
 #[path = "e2e_archiviste/b4_decide.rs"]
 mod b4_decide;
