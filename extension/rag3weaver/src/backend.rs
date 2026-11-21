@@ -350,6 +350,14 @@ impl BackendManifest {
     }
 }
 
+/// See [`BackendManifest::index_offer`].
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct IndexOffer {
+    /// Files or folders at a folder's root that make it a code or docs project.
+    pub markers: Vec<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
@@ -451,6 +459,12 @@ pub struct BackendManifest {
     /// terminal »).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chat_instructions: Option<String>,
+    /// **When the index of an opened folder is offered** (archi's page « un agent qui part neutre », 21 November 2026):
+    /// the markers of a code or docs project, files or folders at the folder's root (`Cargo.toml`, `package.json`,
+    /// `mkdocs.yml`…). The host says `index_offer` by them when a folder is opened; the agent offers the index only when
+    /// it is true. Absent: never offered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_offer: Option<IndexOffer>,
     /// **L'outil `graph`** : le graphe d'un outil, d'une réaction ou d'un
     /// composant, en JSON (le même que la route `/ide/graphe`). Opt-in, comme
     /// `search_graphs` : il change la liste d'outils que voit l'agent.
