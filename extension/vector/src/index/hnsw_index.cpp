@@ -1226,20 +1226,20 @@ void OnDiskHNSWIndex::repairEntryPoint(Transaction* transaction, bool isUpperLay
     }
 }
 
-void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset_t offset,
+bool OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset_t offset,
     const std::vector<common::offset_t>& neighbors, bool isUpperLayer,
     HNSWInsertState& insertState) {
     if (isUpperLayer) {
         // In the upper layer a node nothing leads to only costs a shortcut: the search falls
         // back on the lower layer, where every node must be reachable.
-        return;
+        return false;
     }
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     auto& searchState = insertState.searchState;
     const auto vector =
         searchState.embeddings->getEmbedding(offset, searchState.embeddingScanState);
     if (vector.isNull()) {
-        return;
+        return false;
     }
     // Enter the lower layer where a query for this vector enters it: through the upper layer.
     // Reachable from the lower entry point is not enough. The rows of one update gather around
@@ -1248,7 +1248,7 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
     // efs = 1000 in TwentyRowsToDistinctVectorsLineByLine, the row reachable all the same).
     auto entryPoint = searchNNInUpperLayer(vector, searchState);
     if (entryPoint == offset) {
-        return; // the query starts on it
+        return false; // the query starts on it
     }
     if (entryPoint == common::INVALID_OFFSET) {
         entryPoint = hnswStorageInfo.lowerEntryPoint;
@@ -1257,7 +1257,7 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
         entryPoint = findLiveNode(transaction, insertState.searchState, offset);
     }
     if (entryPoint == common::INVALID_OFFSET) {
-        return; // it is the only node left
+        return false; // it is the only node left
     }
     // The test is the one that matters: search for the node's own vector from the entry point.
     // Having an edge pointing to it would not be enough — two survivors may point to each other
@@ -1266,7 +1266,7 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
         searchKNNInLayer(transaction, vector, entryPoint, searchState, isUpperLayer);
     if (std::ranges::any_of(closest,
             [&](const NodeWithDistance& found) { return found.nodeOffset == offset; })) {
-        return;
+        return true;
     }
     // Not found: tie it both ways to the nearest nodes the search did reach. The edges are
     // written directly, without the pruning an insertion may do; a few nodes end up one edge
@@ -1293,6 +1293,7 @@ void OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
             break;
         }
     }
+    return true;
 }
 
 std::vector<common::offset_t> OnDiskHNSWIndex::cleanEdgesForNode(Transaction* transaction,
@@ -1438,26 +1439,16 @@ void OnDiskHNSWIndex::keepFormerNeighboursReachable(Transaction* transaction,
         return std::ranges::find(edges, to) != edges.end();
     };
     std::unordered_set<common::offset_t> reachable;
-    // 3a. Pointed to by the anchor, or by a node outside the former neighbours that lost nothing.
-    static constexpr size_t MAX_OUTSIDE_NODES_TRIED = 4;
+    // 3a. Pointed to by the anchor. A node outside the former neighbours that points to one proves
+    // nothing: it may itself be reached only through them. Two survivors pointing to each other,
+    // whose only way in came through the deleted rows, were each taken as reachable by the other,
+    // and both lost (ticket 2026-11-20-une-suppression-sous-un-index-vectoriel-peut-couper-des-
+    // voisins-du-graphe : an island of four near-copies of code-lourd, cut by the delete of a block
+    // that held its only incoming edges).
+    (void)notAnchors;
     for (const auto& [nbr, edges] : edgesOf) {
         if (pointsTo(anchorEdges, nbr)) {
             reachable.insert(nbr);
-            continue;
-        }
-        size_t numTried = 0;
-        for (const auto other : edges) {
-            if (other == nbr || notAnchors.contains(other) || edgesOf.contains(other)) {
-                continue;
-            }
-            if (pointsTo(scanNeighbors(transaction, other, false /*isUpperLayer*/, insertState),
-                    nbr)) {
-                reachable.insert(nbr);
-                break;
-            }
-            if (++numTried == MAX_OUTSIDE_NODES_TRIED) {
-                break;
-            }
         }
     }
     // 3b. Pointed to by a former neighbour already known reachable, until nothing changes.
@@ -1476,10 +1467,32 @@ void OnDiskHNSWIndex::keepFormerNeighboursReachable(Transaction* transaction,
             }
         }
     }
-    // 3c. The rest: the search, and ties if it does not find them.
+    // 3c. The rest: the search, and ties if it does not find them. A search from an entry visits
+    // only what the entry reaches: every former neighbour it visited is reachable, and needs no
+    // search of its own.
+    std::vector<common::offset_t> pending;
     for (const auto& [nbr, edges] : edgesOf) {
         if (!reachable.contains(nbr)) {
-            keepNodeReachable(transaction, nbr, edges, false /*isUpperLayer*/, insertState);
+            pending.push_back(nbr);
+        }
+    }
+    for (size_t i = 0; i < pending.size(); ++i) {
+        const auto nbr = pending[i];
+        if (reachable.contains(nbr)) {
+            continue;
+        }
+        const auto searched = keepNodeReachable(transaction, nbr, edgesOf.at(nbr),
+            false /*isUpperLayer*/, insertState);
+        reachable.insert(nbr);
+        if (!searched) {
+            continue;
+        }
+        const auto& visited = insertState.searchState.visited;
+        for (size_t j = i + 1; j < pending.size(); ++j) {
+            const auto other = pending[j];
+            if (other < visited.size && visited.contains(other)) {
+                reachable.insert(other);
+            }
         }
     }
 }
