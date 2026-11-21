@@ -76,12 +76,14 @@ fn a_rewrite_keeps_the_mentions_of_a_name_never_seen() {
     }
 }
 
-/// **A mention made inside a closure belongs to the scope that holds it** (ticket
+/// **A mention made inside a closure belongs to the scope that holds it, and the closure makes no link** (ticket
 /// `docs/codeparsers/tickets/2026-11-21-une-reecriture-perd-les-mentions-d-un-nom-neuf.md`, its cause): a closure or a
 /// Python comprehension is folded into the named scope around it (`fold_lambdas`), and so must the names it calls
 /// that no file defines — the rendezvous (`pending`). Before, they kept the closure's key, a scope never written:
 /// their `MENTIONS` left from nowhere and the drain dropped them without a word (26 544 on a rewrite of 419 files of
-/// rag3weaver, 21 November 2026).
+/// rag3weaver, 21 November 2026). The scope that holds the closure already mentions what it calls; what it does not
+/// are its own locals read inside a comprehension, and the closure's link to its parent: the closure's rendezvous
+/// are dropped, not moved, and no link is left without an end.
 #[test]
 #[ignore]
 fn a_mention_inside_a_closure_belongs_to_the_scope_that_holds_it() {
@@ -90,7 +92,9 @@ fn a_mention_inside_a_closure_belongs_to_the_scope_that_holds_it() {
         let rust = "pub fn f(v: Vec<u32>) -> Vec<u32> {\n    v.into_iter().map(|x| unknown_fn(x)).collect()\n}\n";
         let snapshot = Snapshot::new("demo", [("a.py".to_string(), python.to_string()), ("b.rs".to_string(), rust.to_string())]);
         let mut catalog = catalogue(threshold);
+        catalog.take_dangling_links();
         catalog.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
+        assert_eq!(catalog.take_dangling_links(), 0, "{path}: no link is made from a folded closure, a scope never written");
         assert!(mentions_of(&catalog, "main").contains(&"helper@2".to_string()), "{path}: main mentions helper, {:?}", mentions_of(&catalog, "main"));
         assert!(mentions_of(&catalog, "f").contains(&"unknown_fn@2".to_string()), "{path}: f mentions unknown_fn, {:?}", mentions_of(&catalog, "f"));
     }
