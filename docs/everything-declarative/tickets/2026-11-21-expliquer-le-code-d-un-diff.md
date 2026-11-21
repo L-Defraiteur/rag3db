@@ -64,3 +64,25 @@ manque pour découper le diff en îlots ; dans ce cas, il est petit et pur.
    de l'îlot (un dépôt indexé) ou ses lignes voisines bornées (un dépôt sans index) ; et l'invite servie est celle du
    gabarit (la changer change ce que reçoit le modèle, sans rebâti).
 3. Le bouton dans la vue des diffs, par recherche, sur cet outil.
+
+## Précision de Lucie (21 novembre 2026, 8 h 4x) : des vues, et les justifications en entrée
+
+**Les niveaux deviennent des vues.** Elles remplacent les trois niveaux écrits plus haut :
+1. **« Comprendre le code »** : le déroulé, pour qui apprend (« la boucle `for` permet de… ») ;
+2. **« Choix techniques »** : pour un humain expérimenté, le pourquoi (« `React.memo` parce que… ») ;
+3. **« Architecture »** (l'abstraction, le flux des données) : **seulement si elle se sépare proprement de (2)**, sinon
+   elle est fondue dedans.
+
+Les deux premières se font d'abord. **Les trois parties (montré, déduit, vérifié) restent dans chaque vue.**
+
+**L'entrée s'enrichit.** En plus du code de l'îlot et de son scope, le modèle reçoit les **justifications techniques**
+attachées à l'îlot, quand il y en a, **citées comme sources** :
+- celles du **relecteur**, qui soutient un îlot ou s'y oppose (leur format est fait par archi, côté relecteur) ;
+- celles de **l'agent auteur**, si son run les a dites.
+
+Une justification citée entre dans « ce qu'on en déduit » avec sa source ; elle n'y passe jamais pour un fait.
+L'explication ne la reprend pas comme vraie sans la confronter au diff.
+
+**Le témoin** vérifie en plus : les deux vues donnent deux invites distinctes, servies du gabarit ; une justification
+donnée en entrée est citée comme source dans la sortie ; une sortie qui présente une justification comme un fait
+montré est refusée.
