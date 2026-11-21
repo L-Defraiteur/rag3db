@@ -142,6 +142,8 @@ H
 chmod +x "$D/gh.sh"
 # The check_features attestation of a Rust lot (case 42) is required by default; the other cases deposit without it.
 export PUSHER_EXIGER_ATTESTATION=0
+# The French identifiers (case 45) are read by the crate's own function, not from the throwaway origin's master.
+export PUSHER_FRENCH_ROOT=$(realpath "$HERE/../../extension/rag3weaver")
 export PUSHER_GH=$D/gh.sh GH_CALLS=$D/gh_calls GH_BODIES=$D/gh_bodies GH_DOWN=$D/gh-down GUARD_REFUSE=$D/guard-refuse
 : > "$D/gh_calls"; : > "$D/gh_bodies"
 P() { bash "$PUSHER" "$@"; }
@@ -786,4 +788,23 @@ P enqueue tp-r tp-r "$h" rust some_witness e2e_code - - author-c > /dev/null; ec
 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 ! on_master tp-r && grep -q "^rouge	tp-r	.*check_tickets" "$D/pusher/inbox/author-c.txt" && ok "un lot rust au ticket mal rangé : rendu par la garde des tickets, avant sa passe" || ko "lot rust au ticket mal rangé : $(on_master tp-r && echo poussé || echo gardé)"
 P dequeue tp-r > /dev/null 2>&1
+# 45. French identifiers (21 Nov., Lucie through c7): a warning at the deposit, never a refusal. A lot that adds a French
+# function and a French route is deposited, and said to its author (output, log, inbox); one that adds only French
+# comments is said nothing.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B fr-1 origin/master
+printf '#!/bin/bash\nouvrir_un_dossier() {\n  curl -s "http://h/dossiers/x"\n  curl -s "/dossiers/x"\n}\n' > "$D/author/tools/poste/fr1.sh"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm fr-1 && git -C "$D/author" push -q origin HEAD:fr-1; h=$(git -C "$D/author" rev-parse HEAD)
+out=$(P enqueue fr-1 fr-1 "$h" scripts - - - - author-f 2>&1); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'ouvrir_un_dossier' && echo "$out" | grep -q '/dossiers/x' \
+  && grep -P '\tfr-1\tidentifiants français\t' "$D/pusher/log.tsv" | grep -q ouvrir_un_dossier \
+  && grep -q "^avertissement	fr-1	.*ouvrir_un_dossier" "$D/pusher/inbox/author-f.txt" 2>/dev/null \
+  && ok "identifiants français : le lot est déposé, et l'auteur averti (sortie, journal, boîte)" \
+  || ko "identifiants français non dits ou lot refusé : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-200) ; journal : $(grep -P '\tfr-1\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+git -C "$D/author" checkout -q -B fr-2 origin/master
+printf '#!/bin/bash\n# ouvrir le dossier racine, puis fermer la tâche\necho ok  # retirer le dépôt\n' > "$D/author/tools/poste/fr2.sh"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm fr-2 && git -C "$D/author" push -q origin HEAD:fr-2; h=$(git -C "$D/author" rev-parse HEAD)
+out=$(P enqueue fr-2 fr-2 "$h" scripts - - - - author-f 2>&1)
+! echo "$out" | grep -q avertissement && ! grep -qP '\tfr-2\tidentifiants français' "$D/pusher/log.tsv" \
+  && ok "des commentaires français seuls : aucun avertissement" || ko "commentaires français signalés : $(echo "$out" | tr '\n' ' ' | cut -c1-200)"
+P dequeue fr-1 > /dev/null 2>&1; P dequeue fr-2 > /dev/null 2>&1
 exit $red

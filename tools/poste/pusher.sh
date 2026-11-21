@@ -106,6 +106,32 @@ kind_of() { # <head>
   if [ -n "$code" ]; then echo rust; else echo scripts; fi
 }
 
+# French identifiers (21 Nov. 2026, Lucie through c7: identifiers are in English): a warning at the deposit, never a
+# refusal. The function lives in the crate (extension/rag3weaver/scripts/french_identifiers.py, its word lists in
+# data/wordlists), read from master's tree at each deposit (PUSHER_FRENCH_ROOT: a crate folder instead, for the witness).
+# The lot is read from its base on master, or from its parent's head; said on the output, to the log and to the inbox.
+french_identifiers() { # <id> <head> <parent> <author>
+  local base ph root tmp="" out="" n
+  base=$(g merge-base origin/master "$2" 2>/dev/null) || return 0
+  if [ "$3" != - ]; then
+    ph=$(origin_head "$3")
+    [ -n "$ph" ] && g merge-base --is-ancestor "$ph" "$2" 2>/dev/null && base=$ph
+  fi
+  root=${PUSHER_FRENCH_ROOT:-}
+  if [ -z "$root" ]; then
+    tmp=$(mktemp -d); root=$tmp/extension/rag3weaver
+    g archive origin/master extension/rag3weaver/scripts/french_identifiers.py extension/rag3weaver/data/wordlists 2>/dev/null | tar -x -C "$tmp" 2>/dev/null
+  fi
+  [ -f "$root/scripts/french_identifiers.py" ] && out=$(python3 -I "$root/scripts/french_identifiers.py" "$WT" "$base" "$2" 2>/dev/null)
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  [ -n "$out" ] || return 0
+  n=$(printf '%s\n' "$out" | grep -c .)
+  log "$1" "identifiants français" "$n : $(printf '%s\n' "$out" | head -5 | sed 's/  */ /g' | paste -sd';')"
+  printf 'avertissement\t%s\tidentifiants français (%s, règle : identifiants en anglais) : %s\n' "$1" "$n" "$(printf '%s\n' "$out" | head -10 | sed 's/  */ /g' | paste -sd';')" >> "$D/inbox/$4.txt"
+  echo "avertissement : $n identifiant(s) neuf(s) en français (règle de Lucie : identifiants en anglais ; le lot passe quand même) :"
+  printf '%s\n' "$out" | head -20 | sed 's/^/  /'
+}
+
 enqueue() {
   [ $# = 9 ] || { echo "enqueue : neuf champs attendus (id branch head kind witness witness_suite extra_suites parent author)" >&2; return 2; }
   local id=$1 branch=$2 head=$3 kind=$4 parent=$8 remote full computed
@@ -217,6 +243,8 @@ enqueue() {
     fi ) 9> "$D/queue.lock"
   log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
   echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"
+  french_identifiers "$id" "$full" "$parent" "$9"
+  return 0
 }
 
 dequeue() {
