@@ -898,6 +898,15 @@ mod tests {
         println!("SONDE_BUILD_ID {build_id:?}");
         let occurs = compte("OCCURS");
         let mentions = compte("MENTIONS");
+        // L'écart de MENTIONS entre deux passes : chaque arête, triée, dans RAG3WEAVER_SONDE_DUMP.
+        if let Ok(dump) = std::env::var("RAG3WEAVER_SONDE_DUMP") {
+            let r = cat
+                .execute_raw("MATCH (s:Scope)-[r:MENTIONS]->(y:Symbol) RETURN s.file_path, s.name, s._uuid, y.name, r.usage, r.line")
+                .expect("les MENTIONS");
+            let mut lignes: Vec<String> = r.rows.iter().map(|l| l.iter().map(|v| format!("{v:?}")).collect::<Vec<_>>().join("\t")).collect();
+            lignes.sort();
+            std::fs::write(&dump, lignes.join("\n") + "\n").expect("le fichier des MENTIONS");
+        }
         let consumes = compte("CONSUMES");
         println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "occurrences_en_file": crate::code::PROTO_OCCURRENCES.load(std::sync::atomic::Ordering::Relaxed), "OCCURS": format!("{occurs:?}"), "MENTIONS": format!("{mentions:?}"), "CONSUMES": format!("{consumes:?}"), "étapes": lourdes}));
     }
