@@ -8,7 +8,7 @@
 //! 100 000 scopes.
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use crate::e2e_generations_commun as g;
+use crate::e2e_generations_common as g;
 
 #[test]
 #[ignore]

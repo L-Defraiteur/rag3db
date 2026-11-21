@@ -32,7 +32,7 @@ pub fn case_dir(cas: &str) -> PathBuf {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_generations_commun") };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_generations_common") };
     let base = PathBuf::from(base);
     if role == "generations" {
         // La génération que la base a validée, et celle du case_dir, par index ; sans ouvrir de catalogue.

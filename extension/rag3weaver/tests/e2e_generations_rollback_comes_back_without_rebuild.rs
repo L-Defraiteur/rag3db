@@ -4,7 +4,7 @@
 //! au lieu de le jeter (la réouverture elle-même reste : d'autres caches gardent des écritures défaites).
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use crate::e2e_generations_commun as g;
+use crate::e2e_generations_common as g;
 
 #[test]
 #[ignore]
