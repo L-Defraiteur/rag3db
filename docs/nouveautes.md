@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Plus de fausses « écritures perdues » au matin.** Après la maintenance de la nuit, l'état
+  d'une base sous la règle des non-candidats disait « des écritures ont été perdues » pour chaque conteneur replié
+  qu'elle écarte volontairement du plein texte (11 674 sur le dépôt). La note de la maintenance compte maintenant les
+  lignes qui portent un document, comme la fin d'un index : un écart qu'elle dit est de nouveau une vraie perte.
+
 - 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
   en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.
