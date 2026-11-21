@@ -1,8 +1,9 @@
 # Nouveautés
 
-- 21 novembre 2026 — **Chercher une option de ligne de commande marche par mots.** `--save-dev`, `--features` ou
-  `--daemon` dans une requête de `search_code` sont cherchés comme des termes ; avant, le mot était lu comme une
-  négation et la recherche par mots tombait (en le disant), seul le reste répondait.
+- 21 novembre 2026 — **La requête de `search_code` n'est que du texte.** Aucun caractère n'y est un opérateur :
+  `--save-dev`, `-test`, un guillemet, `AND` ou une parenthèse sont cherchés tels quels. Une phrase reste pesée mot à
+  mot (un « contient » par mot et par champ), construite par rag3weaver ; aucun analyseur de requêtes de lucivy ne
+  la lit plus. L'ancienne syntaxe (`-mot` pour exclure) n'est plus reconnue.
 - 21 novembre 2026 — **L'IDE ne dit « dépôt git » que pour un dépôt git.** Un dossier ouvert qui n'en est pas un
   est dit « dossier ouvert ».
 - 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
