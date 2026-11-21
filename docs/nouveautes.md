@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'équipier lit le web et y cherche.** `fetch {url, max_bytes?}` rend le texte lisible d'une
+  page (sans script, style ni balises), coupé à sa borne avec la coupe dite, son statut, son type, son adresse finale et
+  ses redirections ; une adresse locale est refusée par défaut (`teammate.fetch.allow_local`), et chaque refus nomme
+  l'adresse. `web_search {query}` passe par le grounding Google Search de Gemini sur Vertex : la réponse, les requêtes
+  jouées et les sources (titre, adresse, passages appuyés, provenance), bornées par `teammate.web_search.max_sources` ;
+  un modèle qui n'est pas Gemini est refusé avec la raison, sans rien envoyer.
+
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
