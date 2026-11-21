@@ -282,6 +282,17 @@ impl DaemonHost {
         }))
     }
 
+    /// **The sandbox of a call on the backend `backend_id`** (the v1 defaults): RED STUB, the grants only.
+    pub fn call_sandbox_for(&self, backend_id: &str) -> crate::backend::CallSandbox {
+        let roots = self
+            .root_grants(Some(&self.agent_key_of_backend(backend_id).unwrap_or_default()))
+            .into_iter()
+            .filter(|g| !self.holds_a_protected_folder(&g.root))
+            .map(|g| (g.root, g.mode))
+            .collect();
+        crate::backend::CallSandbox { roots, network: None, protected: Vec::new(), judge_all: true }
+    }
+
     /// `GET /ide/root-grants`: every grant.
     pub(super) fn root_grants_route(&self) -> Value {
         json!({ "ok": true, "grants": self.root_grants(None) })
