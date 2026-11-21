@@ -23,9 +23,17 @@ fn the_nightly_maintenance_does_not_count_the_non_candidates_as_lost_writes() {
     let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
     let backend = backend_de_code(dir.path(), prepared);
     let source = backend.file_source.clone().unwrap();
-    // Under the declared rule: the index sets the folded containers aside, and its guard sees no gap.
+    let regle = backend.catalog.lock().unwrap().entity_config(crate::code::SCOPE_CONTENT).and_then(|c| c.chunking.not_candidate.first().cloned()).expect("the rule is declared");
+    // The base of the repository: indexed before the rule, then the rule, and the next index sets the folded containers
+    // aside (the gesture); the end-of-index guard sees no gap.
+    {
+        let mut cat = backend.catalog.lock().unwrap();
+        cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, None);
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index before the rule");
+    }
     let ecartees = {
         let mut cat = backend.catalog.lock().unwrap();
+        cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, Some(regle));
         crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index under the rule").non_candidates_set_aside
     };
     let ecart = |backend: &Backend| -> Vec<String> {
