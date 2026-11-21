@@ -73,3 +73,13 @@ Les deux fermetures de la pose de 07 h 08 (`/backend/close`, raison « pose du s
 étaient rangées ou refusées jusqu'à ce que G les relève par `POST /backend/open`. Une fermeture dont l'auteur a disparu
 (sa session fermée, l'hôte redémarré) ne devrait pas tenir au-delà de son délai sans le dire ; et un script de pose
 doit relever ses propres fermetures après le réveil (fait dans celui de G).
+
+## Le coût de l'ouverture elle-même : 35 s sans WAL à rejouer (21 novembre 2026, 11 h 49)
+
+Pour une copie demandée par ED, le dépôt de la tablette a été fermé proprement par `POST /backend/close`, à 11 h 49 min
+42 s : point de reprise fait, aucun `.wal` à côté de la base (4,55 Go), aucun réacteur figé. La fermeture a pris 7 s
+(« backend fermé : VmRSS 1653 → 458 Mio »). La copie par reflink a pris moins d'1 s, et `POST /backend/open` a levé la
+fermeture à 11 h 49 min 51 s. **Le dépôt n'a répondu qu'à 11 h 50 min 26 s : 35 s de réouverture, sans aucun WAL à
+rejouer.** Le journal de l'hôte ne dit rien entre la levée et la fin (défaut 3 ci-dessus). C'est donc le coût
+d'ouverture lui-même (catalogue, index vectoriels, plein texte ?) qu'il faut comprendre, et qu'on paie à chaque pose
+d'un hôte et à chaque réouverture. À mesurer étape par étape, sur une copie.
