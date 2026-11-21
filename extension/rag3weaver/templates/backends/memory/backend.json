@@ -452,6 +452,7 @@
         }
       },
       "writes": {
+        "mask_secrets": true,
         "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
@@ -558,6 +559,7 @@
         }
       },
       "writes": {
+        "mask_secrets": true,
         "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
@@ -642,6 +644,7 @@
         ]
       },
       "writes": {
+        "mask_secrets": true,
         "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",

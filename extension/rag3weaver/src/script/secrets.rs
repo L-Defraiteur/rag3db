@@ -17,6 +17,15 @@ pub enum Pattern {
 }
 
 /// The patterns from their JSON declaration; an unknown kind or field is refused, naming it.
+/// **The shipped patterns** (`templates/secrets/patterns.json`): the default of a manifest's `secrets.patterns`.
+pub fn shipped_patterns() -> &'static [Pattern] {
+    static SHIPPED: std::sync::OnceLock<Vec<Pattern>> = std::sync::OnceLock::new();
+    SHIPPED.get_or_init(|| {
+        let v: serde_json::Value = serde_json::from_str(include_str!("../../templates/secrets/patterns.json")).expect("the shipped patterns are JSON");
+        patterns_from(&v).expect("the shipped patterns are valid")
+    })
+}
+
 pub fn patterns_from(value: &serde_json::Value) -> Result<Vec<Pattern>, String> {
     let list = value.as_array().ok_or("mask_secrets: the patterns are a list")?;
     list.iter()

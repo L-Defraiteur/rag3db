@@ -296,6 +296,20 @@ impl Node for EntityRecordNode {
             ctx.set_output("record", PortValue::new(result));
             return Ok(());
         }
+        // **No secret enters a masked entity** (lot 5): its text fields, masked before the mirror and the row.
+        if policy.mask_secrets {
+            let patterns = ctx.service::<std::sync::Arc<Vec<crate::script::secrets::Pattern>>>(crate::backend::SECRETS_SERVICE).cloned().unwrap_or_else(|| std::sync::Arc::new(crate::script::secrets::shipped_patterns().to_vec()));
+            if let Some(fields) = input.as_object_mut() {
+                for v in fields.values_mut() {
+                    if let Some(text) = v.as_str() {
+                        let (masked, n) = crate::script::secrets::mask_secrets(text, &patterns);
+                        if n > 0 {
+                            *v = json!(masked);
+                        }
+                    }
+                }
+            }
+        }
         // **The author is the host's** (M7): given by the caller, refused, saying what to do.
         if let Some(field) = &policy.author {
             if input.get(field).is_some() {

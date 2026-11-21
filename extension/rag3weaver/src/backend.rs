@@ -267,6 +267,28 @@ impl Default for FetchPolicy {
     }
 }
 
+/// **The secrets of a backend** (`secrets`, 21 November 2026): the patterns a masked entity's text fields are masked
+/// with — `{name, kind: prefix | bearer | pem, …}`, the form of `crate::script::secrets::patterns_from`.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SecretsDeclared {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patterns: Option<Value>,
+}
+
+impl BackendManifest {
+    /// The patterns the backend masks with: its `secrets.patterns`, else the shipped list.
+    pub fn secret_patterns(&self) -> Result<Vec<crate::script::secrets::Pattern>, String> {
+        match self.secrets.as_ref().and_then(|s| s.patterns.as_ref()) {
+            Some(p) => crate::script::secrets::patterns_from(p).map_err(|e| format!("secrets.patterns: {e}")),
+            None => Ok(crate::script::secrets::shipped_patterns().to_vec()),
+        }
+    }
+}
+
+/// The service under which the backend's secret patterns reach the write nodes (`writes.mask_secrets`).
+pub const SECRETS_SERVICE: &str = "backend_secrets";
+
 /// **The session archived as it goes** (page 07 of 18 Nov 2026, rag3weaver-archi): the `memory`
 /// key of a backend manifest. The host writes each turn to the memory of `bilans.memoire`
 /// (`put_turn`) and, past `slice_tokens` since the last archived turn, has the archivist file the
@@ -514,6 +536,10 @@ pub struct BackendManifest {
     /// the archivist of `bilans.memoire` files in the background. Absent: the defaults.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<SessionArchive>,
+    /// **The secrets' patterns** (lot 5 of the auto mode, 21 November 2026): what `writes.mask_secrets` masks.
+    /// Absent: the shipped list (`templates/secrets/patterns.json`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secrets: Option<SecretsDeclared>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting. **Absent: no
     /// positions** (19 November 2026, the light profile); an entity may keep them (`ftsPositions`).
     #[serde(default)]
@@ -662,6 +688,10 @@ pub struct WritePolicy {
     /// Immutable rows can be inserted or replayed identically, never overwritten.
     #[serde(default)]
     pub immutable: bool,
+    /// **No secret enters these rows** (lot 5 of the auto mode, 21 November 2026): every text field given to a put is
+    /// masked with the backend's patterns (`secrets.patterns`) before the file mirror and the row are written.
+    #[serde(default)]
+    pub mask_secrets: bool,
     /// **The author, set by the host** (M7, 21 November 2026): the field filled with the key of the agent the call
     /// is made for (`Backend::call_as`). Given by the tool's caller, it is refused; with no agent, it stays absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1782,6 +1812,8 @@ impl PreparedBackend {
         if manifest.version != 1 {
             return Err("unsupported backend manifest version".into());
         }
+        // A pattern that does not parse is refused at load, by its name, not at the first write.
+        manifest.secret_patterns()?;
         let embed = manifest.embed_source()?;
         for (capability, source) in manifest.models.iter() {
             source.check_log(&format!("models.{}", format!("{capability:?}").to_lowercase()))?;
@@ -6073,6 +6105,8 @@ impl Backend {
             },
         }
         services.register("catalog", self.catalog.clone());
+        // The secrets' patterns (`writes.mask_secrets`): checked at load, so the fallback never serves.
+        services.register(SECRETS_SERVICE, std::sync::Arc::new(prepared.manifest.secret_patterns().unwrap_or_default()));
         // The agent the call is made for, if the host said it (`as_agent`): `writes.author`.
         if let Some(agent) = AGENT_OF_CALL.with(|c| c.borrow().clone()) {
             services.register(AGENT_SERVICE, agent);
