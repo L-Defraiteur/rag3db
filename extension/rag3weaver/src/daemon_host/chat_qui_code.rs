@@ -661,3 +661,25 @@ fn le_parcours_vertex_se_reprend_dans_la_page() {
     assert_eq!(empreinte(&depot), avant, "principal intact");
     std::fs::write(preuves.join("verdict-page"), "VERT\n").unwrap();
 }
+
+/// **A task on a repository without any commit says to make one** (the night's essays, 21 Nov. 2026, scenario 2: a
+/// project from scratch). `git init`, then `code-tree add` accepts the repository; but a task starts from a commit,
+/// and opening one fell on git's own words (« git rev-parse HEAD : fatal : argument 'HEAD' ambigu »). It must say
+/// that the repository has no commit yet, and the command that makes one; and it leaves no branch behind.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn a_task_on_a_repository_without_a_commit_says_to_make_one() {
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    // No commit on the branch: the state of a `git init` right after `code-tree add`.
+    git(&depot, &["checkout", "-q", "--orphan", "vide"]);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("rien"))) });
+    let host = hote(d.path(), model);
+    let h = host.hosted(&manifeste).unwrap();
+    let e = host.ouvrir_une_tache(&h.id, "debut").expect_err("no task on a repository without a commit");
+    assert!(e.contains("aucun commit"), "it says the repository has no commit yet : {e}");
+    assert!(e.contains("commit --allow-empty"), "it says the command that makes one : {e}");
+    assert!(!e.contains("fatal"), "not git's own words : {e}");
+    let branches = std::process::Command::new("git").arg("-C").arg(&depot).args(["branch", "--list", "agent/debut"]).output().unwrap();
+    assert!(String::from_utf8_lossy(&branches.stdout).trim().is_empty(), "no branch left behind");
+}
