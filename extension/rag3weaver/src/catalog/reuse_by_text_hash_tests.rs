@@ -9,6 +9,7 @@
 use super::*;
 use std::sync::{Arc, Mutex};
 
+use crate::config::{EntityDef, FieldDef, FieldType, KBConfig};
 use crate::embedder::{EmbedError, Embedder};
 
 /// A model that notes every text it is sent.
