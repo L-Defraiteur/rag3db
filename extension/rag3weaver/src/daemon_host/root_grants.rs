@@ -60,6 +60,23 @@ fn canonical(chemin: &Path) -> Option<PathBuf> {
     Some(out)
 }
 
+/// **The folders no grant reopens** (archi via c7, 21 November 2026): the host's data folder (its token, `daemon.token`:
+/// a command that read it could call the host as the IDE's page), the browsers' profiles (the IDE's cookie), `~/.ssh`.
+pub fn protected_folders() -> Vec<PathBuf> {
+    let mut dossiers: Vec<PathBuf> = crate::daemon_lifecycle::file_path().parent().map(Path::to_path_buf).into_iter().collect();
+    if let Some(maison) = std::env::var_os("HOME").map(PathBuf::from) {
+        for relatif in [".ssh", ".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/vivaldi", ".mozilla"] {
+            dossiers.push(maison.join(relatif));
+        }
+    }
+    dossiers.into_iter().map(|d| d.canonicalize().unwrap_or(d)).collect()
+}
+
+/// Whether a root holds a protected folder, or lies inside one.
+pub(super) fn holds_a_protected_folder(root: &Path) -> bool {
+    protected_folders().iter().any(|p| p.starts_with(root) || root.starts_with(p))
+}
+
 /// Whether `chemin` is `root` or under it, by whole components (`notes-privees` is not under `notes`).
 fn covers(root: &Path, chemin: &Path) -> bool {
     chemin.starts_with(root)
@@ -106,6 +123,12 @@ impl DaemonHost {
         let root = root.canonicalize().map_err(|e| format!("accorder {} : {e}", root.display()))?;
         if !root.is_dir() {
             return Err(format!("accorder {} : une racine est un dossier", root.display()));
+        }
+        if holds_a_protected_folder(&root) {
+            return Err(format!(
+                "accorder {} : cette racine tient un dossier protégé (le jeton de l'hôte, un profil de navigateur, ~/.ssh) ; aucun accord ne l'ouvre",
+                root.display()
+            ));
         }
         let accord = Grant {
             agent: agent.to_string(),
@@ -157,6 +180,9 @@ impl DaemonHost {
             }
         }
         if dossier.components().any(|c| c.as_os_str() == ".vault" || c.as_os_str() == ".ssh") {
+            return None;
+        }
+        if holds_a_protected_folder(&dossier) {
             return None;
         }
         // A parent of several repositories attached: their roots, read in their manifests.
