@@ -304,6 +304,53 @@ pub trait Sentinelle: Send + Sync {
     }
 }
 
+/// **A git identity set by the agent** (`git config user.*`, `git -c user.*=…`, `git config
+/// --global`): refused whatever the grant (the night of 20 Nov 2026, the teammate made one up).
+/// The identity comes from the host's global configuration or the workshop's manifest.
+fn refus_d_identite_git(c: &Commande) -> Option<Verdict> {
+    let programme = std::path::Path::new(&c.programme).file_name()?.to_str()?;
+    if programme != "git" {
+        return None;
+    }
+    let mut avant_le_verbe = true;
+    let mut fautif = None;
+    let mut i = 0;
+    while i < c.args.len() {
+        let a = c.args[i].as_str();
+        if avant_le_verbe && a == "-c" {
+            if c.args.get(i + 1).is_some_and(|v| v.starts_with("user.")) {
+                fautif = Some(format!("-c {}", c.args[i + 1]));
+            }
+            i += 2;
+            continue;
+        }
+        if avant_le_verbe && a.starts_with("-c") && a[2..].starts_with("user.") {
+            fautif = Some(a.to_string());
+        }
+        if avant_le_verbe && !a.starts_with('-') {
+            avant_le_verbe = false;
+            if a != "config" {
+                break;
+            }
+        } else if !avant_le_verbe && (a == "--global" || a.starts_with("user.")) {
+            fautif = Some(a.to_string());
+        }
+        i += 1;
+    }
+    let fautif = fautif?;
+    Some(Verdict {
+        decision: Decision::Refuse,
+        portee: Portee::CetteFois,
+        fondement: Fondement::Configuration,
+        faits: observer(c),
+        motif: format!(
+            "`{fautif}` : the agent never sets a git identity nor the global configuration. The identity \
+             comes from the host's global git configuration, or from the workshop's manifest \
+             (sandbox.env). If a commit lacks an identity, say so to the human; never make one up."
+        ),
+    })
+}
+
 /// La sentinelle par défaut : des règles, pas de modèle.
 ///
 /// **C'est délibéré.** Un mécanisme de sûreté qui a besoin d'un modèle distant
@@ -318,6 +365,9 @@ impl Sentinelle for SentinelleDeBase {
     }
 
     fn juger(&self, c: &Commande, ctx: &Contexte) -> Verdict {
+        if let Some(refus) = refus_d_identite_git(c) {
+            return refus;
+        }
         let faits = observer(c);
         let famille = c.famille();
 
@@ -560,6 +610,10 @@ impl Garde {
     /// **Le verdict, et lui seul.** Rien ne s'exécute ici : décider et faire
     /// sont deux gestes, et les séparer permet de montrer le premier.
     pub fn juger(&self, c: &Commande, ctx: &Contexte) -> Verdict {
+        // A git identity set by the agent: refused before any grant.
+        if let Some(refus) = refus_d_identite_git(c) {
+            return refus;
+        }
         // **Le confinement passe avant les acquis** : un oui sur `cat x.rs`
         // retient la famille, et `cat ../secret` arrivait couvert — la
         // famille est la même, le domaine non. Seul un oui explicite de

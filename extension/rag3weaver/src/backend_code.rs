@@ -647,7 +647,18 @@ pub(crate) fn identite_de_l_hote() -> Option<(String, String)> {
 /// The identity given to the sandbox: the one the workshop's manifest declares (`sandbox.env`)
 /// wins, key by key; the host's fills the rest; none, nothing is set (the commit fails, and says so).
 pub(crate) fn avec_l_identite(bac: crate::commande::BacASable, identite: Option<(String, String)>) -> crate::commande::BacASable {
-    let _ = identite;
+    let Some((nom, courriel)) = identite else { return bac };
+    let mut bac = bac;
+    for (cle, valeur) in [
+        ("GIT_AUTHOR_NAME", &nom),
+        ("GIT_AUTHOR_EMAIL", &courriel),
+        ("GIT_COMMITTER_NAME", &nom),
+        ("GIT_COMMITTER_EMAIL", &courriel),
+    ] {
+        if !bac.env.iter().any(|(k, _)| k == cle) {
+            bac = bac.avec_env(cle, valeur.clone());
+        }
+    }
     bac
 }
 
