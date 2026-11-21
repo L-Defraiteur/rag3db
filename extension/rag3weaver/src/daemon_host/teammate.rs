@@ -519,6 +519,9 @@ pub struct Step {
     pair: Option<(Arc<super::pair::Pair>, String)>,
     /// The browser family (`teammate.browser`): its policy, and its tools or why the host does not listen.
     browser: Option<(crate::backend::BrowserPolicy, Result<super::browser_tools::BrowserTools, String>)>,
+    /// The gate of the auto mode, when the task's backend is in it (page 07 of rag3weaver-archi).
+    #[cfg(feature = "code")]
+    pub gate: Option<super::gate::StepGate>,
     /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
@@ -689,6 +692,8 @@ impl Step {
             turn_run: Mutex::new(None),
             pair: None,
             browser: None,
+            #[cfg(feature = "code")]
+            gate: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
@@ -1210,8 +1215,21 @@ impl StepTools<'_> {
         if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
             let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
             if let Some(ligne) = args["command"].as_str() {
-                let texte = format!("commande en attente d'accord : {ligne}");
-                if let Ok(line) = self.step.files.append_with("teammate", "approval", None, &texte, &json!({ "command": ligne })) {
+                // **The gate of the auto mode** (page 07): a safe class or the judge's yes grants the line, and it
+                // is replayed now; anything else is the card, with the action's class.
+                let mut class = None;
+                if let Some(gate) = &self.step.gate {
+                    match gate(ligne) {
+                        super::gate::GateOutcome::Pass { .. } => return self.inner.call(call),
+                        super::gate::GateOutcome::Card { class: c } => class = Some(c),
+                    }
+                }
+                let ouverte = match &class {
+                    Some(c) => super::card::open_card(&self.step.files, "run_command", &args, c, "once")
+                        .and_then(|id| self.step.files.mailbox().into_iter().find(|l| l["id"] == id.as_str()).ok_or_else(|| "the card's line".to_string())),
+                    None => self.step.files.append_with("teammate", "approval", None, &format!("commande en attente d'accord : {ligne}"), &json!({ "command": ligne })),
+                };
+                if let Ok(line) = ouverte {
                     publish(self.step.bus.as_ref(), &self.step.task, &line);
                     turn.content.push_str(&format!(
                         "\n\n_La demande est dans la boîte du superviseur (ligne {}) : continue sans cette commande ; sa réponse arrivera à une frontière, et un accord la laissera passer telle quelle._",
@@ -1589,7 +1607,24 @@ impl DaemonHost {
                 accord = Some(note);
             }
         }
+        // **A no to a held command is said to the teammate** (the auto mode's v1): it reads it in the line that
+        // wakes it, and the host says it in the mailbox.
+        #[allow(unused_mut)]
+        let mut refus: Option<String> = None;
+        if kind == "answer" && extra["approved"] == false {
+            let visee = extra["reply_to"].as_str().and_then(|r| files.mailbox().into_iter().find(|l| l["id"] == r));
+            if let Some(ligne) = visee.as_ref().filter(|l| l["kind"] == "approval").and_then(|l| l["command"].as_str().map(str::to_string)) {
+                let note = format!("commande refusée par l'utilisateur : {ligne} — ne la relance pas ; continue sans elle, ou demande autre chose");
+                if let Some(o) = extra.as_object_mut() {
+                    o.insert("granted".into(), Value::String(note.clone()));
+                }
+                refus = Some(note);
+            }
+        }
         let line = files.append_with(from, kind, item, text, &extra)?;
+        if let Some(note) = refus {
+            let _ = files.append("host", "report", None, &note);
+        }
         // **D'où part la tâche** (c7, premier essai réel, 7 novembre) : ses
         // déclarations et son code sont ceux d'un commit ; une modification non
         // commitée n'y est pas, et sans le dire on la cherche longtemps.
@@ -1979,6 +2014,13 @@ impl DaemonHost {
                 let tools = self.browser_listening().map(|ecoute| super::browser_tools::BrowserTools { policy: p.clone(), ecoute, session: format!("teammate:{parent}/{task}") });
                 (p, tools)
             }));
+            #[cfg(feature = "code")]
+            {
+                if let Some(t) = self.tache(parent, task) {
+                    let racine = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
+                    step.gate = self.step_gate(&t.id, &files, racine);
+                }
+            }
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
