@@ -804,6 +804,7 @@ out=$(P enqueue fr-1 fr-1 "$h" scripts - - - - author-f 2>&1); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'ouvrir_un_dossier' && echo "$out" | grep -q '/dossiers/x' \
   && grep -P '\tfr-1\tidentifiants français\t' "$D/pusher/log.tsv" | grep -q ouvrir_un_dossier \
   && grep -q "^avertissement	fr-1	.*ouvrir_un_dossier" "$D/pusher/inbox/author-f.txt" 2>/dev/null \
+  && echo "$out" | tail -1 | grep -q '^déposé : fr-1' \
   && ok "identifiants français : le lot est déposé, et l'auteur averti (sortie, journal, boîte)" \
   || ko "identifiants français non dits ou lot refusé : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-200) ; journal : $(grep -P '\tfr-1\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
 git -C "$D/author" checkout -q -B fr-2 origin/master

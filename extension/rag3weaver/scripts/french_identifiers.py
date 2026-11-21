@@ -11,7 +11,8 @@ Two layers, each usable alone:
   `git diff base...head` declare or name, in code files (Rust, TS/JS, Python, shell, JSON templates): functions,
   types, constants, test names, shell functions and subcommands, routes (« "/…" »), JSON keys, serde and clap names,
   the values of keys that name a node, a tool or a type, and the names of the files the lot adds. Text is never read:
-  comments, displayed strings, prompts, error messages, the prose of templates. An identifier also present on a line the
+  comments, displayed strings, prompts, error messages, the prose of templates; nor the strings of test files and Rust
+  test modules, which are data (their function and test names are judged). An identifier also present on a line the
   lot removes, or already written in the base's tree, is not new.
 
 Usage: french_identifiers.py <repository> <base> <head>
@@ -175,16 +176,44 @@ def line_identifiers(line, kind):
     return found
 
 
+# What a string names in a test file is data, not an identifier (21 Nov., c7): the strings of test_* files, of tests/, and
+# of a Rust file's test module are not read; the names of their functions and tests still are.
+STRING_WHATS = ("clé JSON", "clé", "route", "nom déclaré")
+
+
+def is_test_file(path):
+    base = os.path.basename(path)
+    return base.startswith("test_") or path.startswith("tests/") or "/tests/" in path or base.endswith("_tests.rs") or base == "tests.rs"
+
+
+def test_module_start(repo, head, path):
+    """The first line of a Rust file's test module (#[cfg(test)] or mod tests), or None."""
+    if not path.endswith(".rs"):
+        return None
+    try:
+        text = _git(repo, "show", f"{head}:{path}")
+    except subprocess.CalledProcessError:
+        return None
+    for i, line in enumerate(text.splitlines(), 1):
+        if re.match(r"\s*(#\[cfg\(test\)\]|mod\s+tests\b)", line):
+            return i
+    return None
+
+
 def lot_identifiers(repo, base, head):
     """(path, line, identifier, what) for each identifier the lot adds; line 0 for an added file."""
     diff = _git(repo, "diff", "-U0", "--no-color", "--no-ext-diff", f"{base}...{head}")
     added, removed = [], set()
-    path = kind = None
+    path = kind = test_from = None
+    test_file = False
     lineno = 0
     for raw in diff.splitlines():
         if raw.startswith("+++ "):
             p = raw[4:]; path = p[2:] if p.startswith("b/") else None
-            kind = _kind(repo, head, path) if path else None; continue
+            kind = _kind(repo, head, path) if path else None
+            test_file = bool(path) and is_test_file(path)
+            test_from = test_module_start(repo, head, path) if path and kind == "rust" and not test_file else None
+            continue
         if raw.startswith("--- "):
             continue
         m = re.match(r"@@ -\S+ \+(\d+)", raw)
@@ -193,7 +222,9 @@ def lot_identifiers(repo, base, head):
         if kind is None:
             continue
         if raw.startswith("+"):
-            added += [(path, lineno, i, w) for i, w in line_identifiers(raw[1:], kind)]
+            data = test_file or (test_from is not None and lineno >= test_from)
+            added += [(path, lineno, i, w) for i, w in line_identifiers(raw[1:], kind)
+                      if not (data and (w in STRING_WHATS or w.startswith("nom (")))]
             lineno += 1
         elif raw.startswith("-"):
             removed.update(i for i, _ in line_identifiers(raw[1:], kind))
