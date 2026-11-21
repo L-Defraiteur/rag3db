@@ -213,7 +213,7 @@ fn the_hosts_state_folder_is_protected() {
 }
 
 /// An atelier with a small repository attached, a session, and the repository's backend: the bench of the v1 defaults.
-fn banc_des_defauts(d: &std::path::Path) -> (crate::daemon_host::atelier_fichiers::tests::Atelier, std::path::PathBuf, String, String) {
+fn defaults_bench(d: &std::path::Path) -> (crate::daemon_host::atelier_fichiers::tests::Atelier, std::path::PathBuf, String, String) {
     let a = atelier(d);
     let depot = petit_depot(&d.join("B"));
     a.appeler("attach_worktree", json!({"path": depot})).unwrap();
@@ -233,7 +233,7 @@ fn banc_des_defauts(d: &std::path::Path) -> (crate::daemon_host::atelier_fichier
 #[test]
 fn the_v1_defaults_grant_the_creation_root_open_the_network_and_refuse_a_protected_path_hard() {
     let d = tempfile::tempdir().unwrap();
-    let (a, manifeste, s, id) = banc_des_defauts(d.path());
+    let (a, manifeste, s, id) = defaults_bench(d.path());
     let config = a.host.racines_de_code().unwrap().config;
     std::fs::create_dir_all(&config).unwrap();
     let projets = d.path().join("projets");
@@ -265,7 +265,7 @@ fn the_v1_defaults_grant_the_creation_root_open_the_network_and_refuse_a_protect
 #[test]
 fn a_protected_folder_opens_for_one_command_on_a_human_yes() {
     let d = tempfile::tempdir().unwrap();
-    let (a, manifeste, s, _id) = banc_des_defauts(d.path());
+    let (a, manifeste, s, _id) = defaults_bench(d.path());
     let config = a.host.racines_de_code().unwrap().config;
     std::fs::create_dir_all(&config).unwrap();
     let coffre = d.path().join("coffre");
