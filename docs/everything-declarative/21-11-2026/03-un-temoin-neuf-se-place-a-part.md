@@ -30,3 +30,17 @@ nœuds fournis, les nœuds d'outil), dont le compte se relit après toute repose
 
 `git diff origin/master...HEAD -- <fichier>` montre où le lot insère. Si l'ancre est un test qu'un autre lot en file
 touche aussi, déplacer le témoin avant de déposer.
+
+## Quand le conflit coupe dans des corps de fonctions : repartir du fichier de master
+
+Une leçon de la même nuit (4 h 0x). Pour reprendre deux lots sur master, j'ai résolu leurs conflits en gardant les
+deux côtés. Mais les témoins en conflit commençaient par les mêmes lignes de fixture
+(`let tools = …`, `fixture_code_avec(…)`), et git a découpé ses blocs **au milieu des corps** des fonctions. Garder les
+deux côtés a laissé une accolade ouverte, et la compilation a échoué sur les deux branches. C'était avant tout dépôt,
+mais la passe était perdue et le lot a manqué l'hôte du matin.
+
+**La règle** : garder les deux côtés ne vaut que pour des ajouts **entiers**, des lignes de nouveautés ou des items
+d'une liste. Quand un bloc de conflit commence ou finit au milieu d'une fonction, on ne le résout pas en place : on
+repart du fichier de master et on y réapplique les changements du lot, à la main ou par un script, en plaçant chaque
+témoin en fin de module. Puis on vérifie que le fichier compile avant toute passe longue : `cargo check` sur la cible
+de test, ou au moins l'équilibre des accolades comparé à celui de master.
