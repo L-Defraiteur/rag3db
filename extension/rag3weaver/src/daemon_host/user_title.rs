@@ -33,7 +33,7 @@ impl DaemonHost {
     /// **Who wrote a line**: `{kind: "human" | "agent", client}`, from the user cookie or the
     /// `X-Rag3weaver-User` header, never from the body.
     pub fn by_of(&self, user_cookie: Option<&str>, user_header: Option<&str>, client: &str) -> Value {
-        let _ = (user_cookie, user_header);
+        let _ = (user_cookie, user_header, &self.user_token, &self.entry_codes);
         json!({ "kind": "agent", "client": client })
     }
 }
