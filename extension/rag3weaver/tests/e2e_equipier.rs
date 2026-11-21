@@ -275,3 +275,67 @@ fn l_equipier_rend_le_texte_demande_et_non_un_compte_rendu() {
     let erreurs = host.shutdown();
     assert!(erreurs.is_empty(), "l'arrêt de l'hôte : {erreurs:?}");
 }
+
+/// A tool call of the fake model, as one SSE reply (the OpenAI form that `fake_sse` serves).
+#[cfg(feature = "openai-llm")]
+fn appel_d_outil(nom: &str, arguments: Value) -> crate::common::fake_sse::Reply {
+    let args = serde_json::to_string(&arguments.to_string()).unwrap();
+    crate::common::fake_sse::Reply::Sse {
+        frames: vec![
+            format!(r#"{{"id":"e1","choices":[{{"index":0,"delta":{{"role":"assistant","tool_calls":[{{"index":0,"id":"call_{nom}","type":"function","function":{{"name":"{nom}","arguments":{args}}}}}]}},"finish_reason":null}}]}}"#),
+            r#"{"id":"e1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}"#.into(),
+            r#"{"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":12,"total_tokens":132}}"#.into(),
+        ],
+    }
+}
+
+/// **The teammate end to end on a fake model** (the night of 21 Nov 2026: this suite had only its two
+/// Gemini cases, skipped without credentials, and counted green). The real host and the real `code`
+/// template; the model is a local SSE server. The supervisor's request opens the task; the step writes
+/// `DOC.md` and says done; the declared verification gate (`teammate.verify`) plays in the task's tree
+/// and is green; the task ends, and the mailbox says each of these. A guard written green: the
+/// behaviour is on master, the suite did not judge it.
+#[cfg(feature = "openai-llm")]
+#[test]
+#[ignore]
+fn l_equipier_joue_une_demande_de_bout_en_bout_sur_faux_modele() {
+    use crate::common::fake_sse::FakeServer;
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste, _memoire) = depot_de_test(d.path());
+    let mut replies = vec![
+        appel_d_outil("edit_file", json!({ "path": "DOC.md", "content": "# Sommes\n\nLa somme des entiers d'une ligne.\n" })),
+        appel_d_outil("step_done", json!({ "item": "", "succeeded": true, "done": "DOC.md écrit", "remaining": "" })),
+    ];
+    // Spare replies: a second step_done if the host asks again, never a hang.
+    for _ in 0..4 {
+        replies.push(appel_d_outil("step_done", json!({ "item": "", "succeeded": true, "done": "DOC.md écrit", "remaining": "" })));
+    }
+    let serveur = FakeServer::start_sequence(replies);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["models"]["llm"] = json!({ "provider": "compatible", "protocol": "openai", "model": "faux", "address": serveur.url });
+    m["teammate"] = json!({ "verify": ["cat DOC.md"] });
+    m.as_object_mut().unwrap().remove("bilans");
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let config = manifeste.ancestors().find(|p| p.join(".git").exists()).unwrap().to_path_buf();
+    git(&config, &["add", "-A"]);
+    git(&config, &["commit", "-q", "-m", "le faux modèle et la porte"]);
+    let host = Arc::new(DaemonHost::new().with_runs_root(d.path().join("runs")));
+    let id = heberger(&host, &manifeste);
+    let r = host
+        .post_to_teammate(&id, "doc", "c7", "request", None, "Écris DOC.md : une phrase sur la bibliothèque.", &json!({ "expects": "none" }))
+        .expect("la demande ouvre la tâche et lance l'équipier");
+    assert_eq!(r["started"], true, "{r}");
+    let fin = Instant::now() + Duration::from_secs(300);
+    while host.teammate_running(&id, "doc") {
+        assert!(Instant::now() < fin, "en 300 s, l'équipier ne finit pas");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let boite = host.teammate_files(&id, "doc").unwrap().mailbox();
+    let dit = |de: &str, genre: &str, mot: &str| boite.iter().any(|l| l["from"] == de && l["kind"] == genre && l["text"].as_str().is_some_and(|t| t.contains(mot)));
+    assert!(boite.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "a step said done: {boite:#?}");
+    assert!(dit("host", "report", "verification green"), "the gate played and was green: {boite:#?}");
+    let fin_de_tache = boite.iter().find(|l| l["kind"] == "ended").expect("the task ended");
+    assert!(!fin_de_tache["text"].as_str().unwrap_or_default().starts_with("failure"), "{fin_de_tache}");
+    let t = host.tache(&id, "doc").expect("la tâche est ouverte");
+    assert!(t.arbre.join("DOC.md").is_file(), "DOC.md is in the task's tree");
+}
