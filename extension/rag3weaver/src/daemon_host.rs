@@ -1143,9 +1143,9 @@ impl DaemonHost {
                     let (espace, _) = self.espace_et_table();
                     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
                     let (manifeste, _, racine) = crate::code_tree::poser_l_atelier(&racines, &espace, home.as_deref())
-                        .map_err(|e| format!("ouvrir un dossier : l'atelier n'est pas posé, et l'hôte n'a pas pu le poser : {e}"))?;
+                        .map_err(|e| format!("ouvrir un dossier : l'hôte n'a pas pu poser de quoi attacher des dépôts : {e}"))?;
                     eprintln!(
-                        "[démon] atelier posé par l'hôte à l'ouverture d'un dossier : {} (racine {})",
+                        "[démon] dossier ouvert sur un poste neuf : de quoi attacher des dépôts est posé, {} (racine {})",
                         manifeste.display(),
                         racine.map(|r| r.display().to_string()).unwrap_or_else(|| "non posée".into())
                     );
