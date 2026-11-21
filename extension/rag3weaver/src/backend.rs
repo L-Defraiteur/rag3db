@@ -3835,6 +3835,26 @@ thread_local! {
     static SESSION_VIEW: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
 }
 
+/// **The worktree a session writes in** (tty's scenario 1, 21 November 2026, its point 1; Lucie: the agent works in its
+/// view): the host poses it around a call only for a view it opened for that session (`open_view`), on its branch.
+/// A writing tool then writes that worktree, and only it; the main tree stays refused to the agent (`task_writes`).
+pub fn with_writable_view<T>(racine: Option<PathBuf>, f: impl FnOnce() -> T) -> T {
+    struct Remettre(Option<PathBuf>);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            WRITABLE_VIEW.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let avant = WRITABLE_VIEW.with(|c| c.replace(racine));
+    let _remettre = Remettre(avant);
+    f()
+}
+
+thread_local! {
+    /// See [`with_writable_view`].
+    static WRITABLE_VIEW: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
 pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
     struct Remettre(Option<CallDeadline>);
     impl Drop for Remettre {
@@ -4941,7 +4961,8 @@ impl Backend {
     fn refus_de_l_agent_hors_tache(&self, prepared: &PreparedBackend, name: &str) -> Result<(), String> {
         let task_writes = prepared.manifest.workspace.as_ref().is_some_and(|w| w.task_writes);
         let ecrit = prepared.manifest.tools.get(name).is_some_and(|t| t.policy.write_files);
-        if task_writes && ecrit && prepared.surcharges().workspace.is_none() {
+        let dans_sa_vue = WRITABLE_VIEW.with(|c| c.borrow().is_some());
+        if task_writes && ecrit && prepared.surcharges().workspace.is_none() && !dans_sa_vue {
             return Err(format!(
                 "« {name} » écrit les fichiers, et sur ce backend l'agent n'écrit pas l'arbre principal (task_writes) : \
                  ouvrez une tâche (POST /ide/taches {{backend, nom}}) — sa branche agent/<nom>, relue puis fusionnée — \
@@ -5742,12 +5763,19 @@ impl Backend {
             // **A view of a worktree reads that worktree** (tty's scenario 1, 21 November 2026, its point 3): under a
             // view `worktree:<path>`, the call's file source is that worktree's, built as the backend's (its
             // read-only, its index gate), not the backend's own root.
+            // A writable view (the host posed it, see `with_writable_view`) is that worktree's, writable; the call's
+            // view, when it names a worktree, goes first.
+            let en_ecriture = WRITABLE_VIEW.with(|c| c.borrow().clone());
             let de_la_vue: Option<Arc<dyn crate::code_tools::FileSource>> = CALL_VIEW
                 .with(|v| v.borrow().clone())
                 .and_then(|r| r.layer.strip_prefix("worktree:").map(PathBuf::from))
+                .or_else(|| en_ecriture.clone())
                 .filter(|racine| racine.is_dir())
                 .and_then(|racine| {
                     let mut w = prepared.manifest.workspace.clone()?;
+                    if en_ecriture.as_ref() == Some(&racine) {
+                        w.read_only = false;
+                    }
                     w.root = racine;
                     crate::backend_code::build_source(&w, &prepared.directory, &prepared.manifest.name).ok()
                 });
