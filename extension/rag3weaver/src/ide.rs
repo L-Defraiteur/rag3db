@@ -1158,8 +1158,15 @@ mod tests {
             }
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
-        /// The ids received once at least `n` are there (bounded on the event, not on a sleep).
-        fn ids_attendus(&self, _n: usize) -> Vec<u64> {
+        /// The ids received **once at least `n` are there** (21 November 2026, a pass at full load read `[3, 4]` for
+        /// `[3, 4, 5]`): the wait is bounded on the event — the n-th id delivered — and by 5 s, never a bare sleep;
+        /// then the stable read, which would still show a duplicate.
+        fn ids_attendus(&self, n: usize) -> Vec<u64> {
+            let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let compte = || String::from_utf8_lossy(&self.0.lock().unwrap()).lines().filter(|l| l.starts_with("id: ")).count();
+            while compte() < n && std::time::Instant::now() < fin {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
             self.ids()
         }
         /// Les ids des événements reçus, dans l'ordre.
@@ -1221,7 +1228,7 @@ mod tests {
                 });
             }
         });
-        let ids = fenetre.ids();
+        let ids = fenetre.ids_attendus(4 * PAR_FIL as usize);
         let attendus: Vec<u64> = (1..=4 * PAR_FIL).collect();
         if ids != attendus {
             let manquants: Vec<u64> = attendus.iter().copied().filter(|i| !ids.contains(i)).take(10).collect();
@@ -1243,15 +1250,15 @@ mod tests {
         flux.abonner(Box::new(un.clone()), None, None);
         flux.abonner(Box::new(deux.clone()), None, None);
         flux.publier("files", "b", fichier("b.rs"));
-        assert_eq!(un.ids(), vec![2], "une fenêtre neuve commence à maintenant");
-        assert_eq!(un.ids(), deux.ids(), "le même événement, le même id");
+        assert_eq!(un.ids_attendus(1), vec![2], "une fenêtre neuve commence à maintenant");
+        assert_eq!(un.ids_attendus(1), deux.ids_attendus(1), "le même événement, le même id");
         flux.publier("files", "b", fichier("c.rs"));
         flux.publier("dataflow", "b", json!({ "kind": "RunStarted" }));
         let revenue = Capture::default();
         flux.abonner(Box::new(revenue.clone()), None, Some(2));
-        assert_eq!(revenue.ids(), vec![3, 4], "ce qu'elle a manqué depuis 2");
+        assert_eq!(revenue.ids_attendus(2), vec![3, 4], "ce qu'elle a manqué depuis 2");
         flux.publier("files", "b", fichier("d.rs"));
-        assert_eq!(revenue.ids(), vec![3, 4, 5], "puis la suite, sans doublon");
+        assert_eq!(revenue.ids_attendus(3), vec![3, 4, 5], "puis la suite, sans doublon");
         assert!(revenue.texte().contains("\"backend\":\"b\"") && revenue.texte().contains("d.rs"));
     }
 
@@ -1263,7 +1270,7 @@ mod tests {
         flux.abonner(Box::new(fichiers.clone()), Some(HashSet::from(["files".to_string()])), None);
         flux.publier("dataflow", "b", json!({ "kind": "RunStarted" }));
         flux.publier("files", "b", fichier("a.rs"));
-        assert_eq!(fichiers.ids(), vec![2]);
+        assert_eq!(fichiers.ids_attendus(1), vec![2]);
         for i in 0..TAMPON + 10 {
             flux.publier("files", "b", fichier(&format!("f{i}.rs")));
         }
@@ -1271,7 +1278,7 @@ mod tests {
         flux.abonner(Box::new(vieille.clone()), None, Some(1));
         let t = vieille.texte();
         assert!(t.contains("event: lacune"), "{}", &t[..t.len().min(300)]);
-        assert_eq!(vieille.ids().len(), TAMPON, "puis tout ce que le tampon garde");
+        assert_eq!(vieille.ids_attendus(TAMPON).len(), TAMPON, "puis tout ce que le tampon garde");
     }
 
     /// **Le relais ne dépend pas du runtime des graphes** : ses deux fils tenus
