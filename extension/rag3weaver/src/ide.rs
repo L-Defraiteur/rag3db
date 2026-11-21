@@ -1086,6 +1086,15 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(statut, &v));
         }
+        // **The machine at a glance** (scenario 1 of the night of 20 November 2026): the page, and what it reads, the
+        // host's `GET /poste` (sessions, folders, views, repositories, tasks).
+        ("GET", "/ide/poste") | ("GET", "/ide/poste/") => {
+            let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
+        }
+        ("GET", "/ide/poste/etat") => {
+            let (statut, v) = host.handle("GET", "/poste", None, &[]);
+            let _ = request.respond(json_(statut, &v));
+        }
         ("GET", "/ide/etat") => {
             let (statut, v) = host.handle("GET", "/etat", None, &[]);
             let _ = request.respond(json_(statut, &v));

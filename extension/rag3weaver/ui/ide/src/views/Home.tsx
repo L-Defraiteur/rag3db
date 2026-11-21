@@ -1,4 +1,4 @@
-import { FolderOpen, FolderTree, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
+import { FolderOpen, FolderTree, Server, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { displayName, type Backend, type HostState } from "@/lib/host";
@@ -21,6 +21,7 @@ export function Home({ state }: { state: HostState }) {
       <>
       <OpenFolder />
       <div className="accueil-vide text-muted-foreground space-y-2 mt-4">
+        <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
         <p>L'hôte ne sert encore aucun dépôt.</p>
         <p>
           Pour ouvrir un projet, lancez dans un terminal, depuis le dossier du projet :{" "}
@@ -39,6 +40,7 @@ export function Home({ state }: { state: HostState }) {
   return (
     <>
       <OpenFolder />
+      <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
       <h1 className="text-xl font-semibold mb-4 mt-6">Dépôts</h1>
       <ul id="dossiers-ouverts" className="liste grid gap-3">
         {principals.map((b) => (
