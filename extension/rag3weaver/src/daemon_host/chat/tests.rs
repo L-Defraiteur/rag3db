@@ -2330,8 +2330,9 @@ fn an_empty_welcome_says_how_to_open_a_project() {
     n.aller(&format!("{racine}/ide/"), "(document.querySelector('#vue')?.innerText ?? '').length > 0");
     let texte = n.evaluer("document.querySelector('#vue').innerText");
     let texte = texte.as_str().unwrap_or_default();
-    assert!(texte.contains("rag3weaver-backend atelier"), "the empty welcome gives the command: {texte}");
-    assert!(texte.contains("dossier"), "and says where to run it, the project's folder: {texte}");
+    // « Atelier » means nothing to a user (Lucie, 21 November 2026): the empty welcome sends to the field.
+    assert!(texte.contains("Ouvrir un dossier"), "the empty welcome sends to the field « Ouvrir un dossier »: {texte}");
+    assert!(!texte.to_lowercase().contains("atelier"), "« atelier » on the empty welcome: {texte}");
     drop(n);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
