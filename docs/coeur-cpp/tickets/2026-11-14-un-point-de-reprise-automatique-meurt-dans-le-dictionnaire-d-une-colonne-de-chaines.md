@@ -297,3 +297,29 @@ L'incohérence relue (8 831 offsets pour 4 991 octets) reste un fait du core, ma
 sonde de hotfixs (à la relecture, dans `DictionaryColumn::scan`, les métadonnées des deux enfants à l'abort) dira
 lequel des deux est en retard, et de combien. C'est elle qui départagera.
 
+## La sonde déclenche à la relecture : des pages d'offsets réécrites sur disque (21 novembre, 15 h 25, cœur c++)
+
+Branche de sonde `c1-scan-probe` (`437e8a841f`), RelWithDebInfo à luciepc (`~/git_workspaces/coeur/20-11-2026-bati`),
+`DdlEveryMinute` : déclenchement **au premier tour**, à la relecture (`DictionaryColumn::scan`, appelée par
+`Column::checkpointSegment`) ; core 4013013 (SIGABRT) gardé à luciepc ; journal `~/.cache/rag3db-moteur-notes/c1-scan/`.
+
+```
+dictionnaire relu incohérent : offset[1] = 6928 (précédent 25970), octets 106496, offsets 8938
+DATA numValues avant l'agrandissement 106496, après le scanSegment 106496 ; OFFSET numValues 8938
+DATA : numValues 106496, pages 2434..+26, compression 0, min 32, max 116
+OFFSET : numValues 8938, pages 2460..+5, compression 1, min 0, max 106483
+offset[8934..8937] = 2073, 41990, 95027, 84897
+```
+
+Les **métadonnées** des deux enfants sont cohérentes entre elles : 106 496 octets, 8 938 offsets, un maximum annoncé de
+106 483, sous les octets. Ce sont les **pages d'offsets sur disque** (2460..2464) qui ne portent pas des offsets : les
+valeurs relues ne croissent pas. Une page vivante a donc été réécrite : la forme d'une plage rendue libre, puis
+redonnée alors qu'un segment la tenait encore. C'est ce que donne la course que hotfixs a trouvée sous TSan le 21 :
+`FreeSpaceManager::finalizeCheckpoint` vide `uncheckpointedFreePageRanges` sans `mtx`, pendant qu'un fil qui détruit
+un vieux morceau y fait `push_back` sous `mtx` (ticket de hotfixs, 1619434d76). Les deux formes vues jusqu'ici
+s'y rangent : le débordement de `appendString` du core du 20 (un dictionnaire relu incohérent), et ce déclenchement.
+
+Le lien n'est pas encore prouvé. La preuve prévue : la même série sondée, vingt tours, sur la branche de hotfixs qui
+verrouille `PageManager::finalizeCheckpoint` et `rollbackCheckpoint`. Sans le verrou, la sonde déclenche dès le
+premier tour ; si elle ne déclenche plus en vingt tours avec le verrou, le lien est fait.
+
