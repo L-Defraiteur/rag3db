@@ -468,6 +468,23 @@ pub fn register(address: &str, manifest: &Path) -> Result<Value, String> {
     r
 }
 
+/// **Retirer le dépôt de l'hôte** (`POST /depots/retirer`, `code-tree remove`) : refusé tant qu'une tâche du dépôt est
+/// ouverte (nommée), sauf `close_tasks`, qui les rejette d'abord ; puis la base lâchée et le dépôt hors de l'état de
+/// l'hôte, avant [`remove_files`]. Le manifeste est canonisé : il doit encore exister — `remove` retire d'abord, déplace
+/// ensuite ; garder cet ordre.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+pub fn retirer(address: &str, manifest: &Path, close_tasks: bool) -> Result<Value, String> {
+    let client = crate::daemon_client::DaemonClient::connect(address, manifest, "code-tree", vec!["dev".into()])?;
+    let r = client
+        .op(
+            "/depots/retirer",
+            serde_json::json!({ "manifest": std::fs::canonicalize(manifest).map_err(|e| e.to_string())?, "close_tasks": close_tasks }),
+        )
+        .map_err(|e| e.error);
+    client.close();
+    r
+}
+
 /// **Fermer le backend de l'arbre à l'hôte** (`POST /backend/close`) : la
 /// base lâchée, avant [`remove_files`]. Le manifeste est canonisé : il doit
 /// encore exister — `remove` ferme d'abord, déplace ensuite ; garder cet ordre.

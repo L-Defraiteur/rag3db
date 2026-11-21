@@ -2947,6 +2947,18 @@ impl DaemonHost {
                 },
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
+            // **Remove a repository** (`code-tree remove`, tty's ticket of 21 November 2026): refused while a task is
+            // open, naming it, unless `close_tasks` rejects them first; then it leaves the host's state.
+            ("POST", "/depots/retirer") => match corps() {
+                Ok(v) => match v["manifest"].as_str() {
+                    Some(m) => {
+                        let r = op_response(self.retirer_un_depot(Path::new(m), v["close_tasks"] == json!(true)));
+                        (statut(&r), r)
+                    }
+                    None => (400, json!({ "ok": false, "error": "« manifest » manque : le manifeste du dépôt à retirer" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("POST", "/depots/resoudre") => match corps() {
                 Ok(v) => match v["name"].as_str() {
                     Some(n) => {
