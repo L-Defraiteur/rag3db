@@ -1043,6 +1043,7 @@ fn paires_posees(
 pub static SONDE_DEPARTS_ABSENTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 pub static SONDE_ARRIVEES_ABSENTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 pub static SONDE_EXEMPLES: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+pub static SONDE_CLES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, (String, Option<i64>)>>> = std::sync::LazyLock::new(Default::default);
 
 /// **Poser un lot d'arêtes par COPY.** Rend `Ok(Some(écrites))` si le lot est
 /// posé — les indices des paires réellement écrites, sans les doublons, les

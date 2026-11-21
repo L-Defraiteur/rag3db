@@ -3188,6 +3188,10 @@ impl Catalog {
             .map(|(key, name, symbol)| ((key.as_str(), name.as_str()), symbol.as_str())).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
+            // SONDE (branche de mesure) : la clé du scope de départ de chaque MENTIONS, par son uuid.
+            if crate::ingest_profile::enabled() {
+                crate::dataflow::record_nodes::SONDE_CLES.lock().unwrap_or_else(|e| e.into_inner()).insert(from.clone(), (scope_key.clone(), self.naissances.get(scope_key.as_str()).copied()));
+            }
             let to = symbol_uuid(self, defaults.get(&(scope_key.as_str(), name.as_str())).copied().unwrap_or(name))?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera ; l'usage aussi, que

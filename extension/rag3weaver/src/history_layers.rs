@@ -906,6 +906,12 @@ mod tests {
                 let sc = cat.execute_raw(&format!("MATCH (s:Scope) WHERE s._uuid = '{u}' RETURN s.file_path, s.name, s._depuis, s._jusqu_a")).map(|r| format!("{:?}", r.rows)).unwrap_or_default();
                 let sy = cat.execute_raw(&format!("MATCH (y:Symbol) WHERE y._uuid = '{u}' RETURN y.name")).map(|r| format!("{:?}", r.rows)).unwrap_or_default();
                 println!("SONDE_UUID {u} scope {sc} symbole {sy}");
+                let cle = crate::dataflow::record_nodes::SONDE_CLES.lock().unwrap_or_else(|e| e.into_inner()).get(u.as_str()).cloned();
+                if let Some((k, naissance)) = cle {
+                    let k_echappee = k.replace('\\', "\\\\").replace('\'', "\\'");
+                    let lignes = cat.execute_raw(&format!("MATCH (s:Scope) WHERE s.key = '{k_echappee}' RETURN s._uuid, s.couche, s._depuis, s._jusqu_a")).map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
+                    println!("SONDE_CLE {u} clé « {k} » naissance {naissance:?} lignes {lignes}");
+                }
             }
         }
         let occurs = compte("OCCURS");
