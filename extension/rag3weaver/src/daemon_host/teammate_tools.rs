@@ -441,7 +441,12 @@ impl FileTools {
 }
 
 /// **The mailbox line of a call that waits** (for the model too, which reads the mailbox at its frontier: in English).
-/// Its cause as far as the host can say: an index holding the write. Seam for the night's essays of 21 Nov. 2026.
+/// Its cause as far as the host can say: a command still running for `run_command` and `wait_output` (the night's
+/// essays of 21 Nov. 2026: `cargo check` was said to wait for an index), an index holding the write for the others.
 pub(crate) fn the_waiting_line(tool: &str, secs: u64) -> String {
-    format!("\"{tool}\" has been waiting for {secs} s (an index is probably holding the write); the call goes on, nothing is abandoned")
+    let cause = match tool {
+        "run_command" | "wait_output" => "the command is still running",
+        _ => "an index is probably holding the write",
+    };
+    format!("\"{tool}\" has been waiting for {secs} s ({cause}); the call goes on, nothing is abandoned")
 }
