@@ -2506,7 +2506,7 @@ mod tests {
         let r = repondre(&Evenement::lire(SESSION_START.replace("compact", "startup").as_str()).unwrap(), &Reglage::defaut(), Ok(&h));
         assert!(r.bloc.contains("Aucune fiche d'identité ne cite cette session"), "{}", r.bloc);
         assert!(r.bloc.contains("session:25b7ff4b-dabf-42ef-8580-86661c846fb9"), "l'id est donné à l'agent");
-        assert!(r.bloc.contains("Rien n'est créé à ta place") && r.bloc.contains("author: <clé>"), "{}", r.bloc);
+        assert!(r.bloc.contains("Rien n'est créé à ta place") && !r.bloc.contains("author: <clé>") && r.bloc.contains("posé par l'hôte"), "M7: the session never passes author: {}", r.bloc);
         assert_eq!(h.noms(), vec!["cited_by", "create_ref_type"], "deux lectures, aucune écriture");
         let lecture = &h.appels.lock().unwrap()[1].1;
         assert_eq!(lecture["confirm"], false, "create_ref_type sans confirmation n'écrit rien");
@@ -3002,10 +3002,12 @@ mod tests {
         let noms: Vec<&str> = appels.iter().map(|(n, _)| n.as_str()).collect();
         let source = appels.iter().find(|(n, _)| n == "put_source").expect("le L0").1["record"].clone();
         assert!(source["chemin"].as_str().unwrap().starts_with("sources/") && source["chemin"].as_str().unwrap().ends_with("-compaction-s1.md"), "{source}");
-        assert_eq!((source["via"].as_str(), source["author"].as_str(), source["origine"].as_str()), (Some("hook"), Some("96"), Some("filet")), "l'origine d'un L0 de crochet est « filet » (schéma Source : envoi, filet, migration ; page M9 du 18 octobre)");
+        assert_eq!((source["via"].as_str(), source.get("author").and_then(Value::as_str), source["origine"].as_str()), (Some("hook"), None, Some("filet")), "l'origine d'un L0 de crochet est « filet » (schéma Source : envoi, filet, migration ; page M9 du 18 octobre)");
+        let pour = |outil: &str| h.appels.lock().unwrap().iter().find(|(n, _)| n == outil).map(|(_, a)| a["agent"].clone()).unwrap_or(Value::Null);
+        assert_eq!((pour("put_source"), pour("put_apport")), (json!("96"), json!("96")), "the host signs (writes.author): the hook says for whom it calls, never author in the record (M7)");
         assert!(source["contenu"].as_str().unwrap().contains("la session migrait la fiche."));
         let apport = appels.iter().find(|(n, _)| n == "put_apport").expect("le L1").1["record"].clone();
-        assert_eq!((apport["fiche"].as_str(), apport["section"].as_str(), apport["via"].as_str(), apport["author"].as_str(), apport["niveau"].as_str()), (Some("migration-fiche"), Some("compaction"), Some("hook"), Some("96"), Some("L1")));
+        assert_eq!((apport["fiche"].as_str(), apport["section"].as_str(), apport["via"].as_str(), apport.get("author").and_then(Value::as_str), apport["niveau"].as_str()), (Some("migration-fiche"), Some("compaction"), Some("hook"), None, Some("L1")));
         assert_eq!(apport["source"], source["chemin"]);
         assert!(noms.contains(&"relier_apport"));
         let genres: Vec<&str> = appels.iter().filter(|(n, _)| n == "citer_source").map(|(_, a)| a["genre"].as_str().unwrap()).collect();
@@ -3045,7 +3047,9 @@ mod tests {
         std::env::remove_var("RAG3WEAVER_AGENT_KEY");
         let r = repondre(&post_compact("inconnue", "résumé"), &Reglage::defaut(), Ok(&h));
         let source = h.appels.lock().unwrap().iter().find(|(n, _)| n == "put_source").expect("le L0 même sans identité").1["record"].clone();
-        assert_eq!(source["author"], "");
+        assert!(source.get("author").is_none(), "no author in the record: {source}");
+        let agent = h.appels.lock().unwrap().iter().find(|(n, _)| n == "put_source").map(|(_, a)| a["agent"].clone()).unwrap_or(Value::Null);
+        assert!(agent.is_null(), "no key, no agent: never an invented one ({agent})");
         assert!(r.journal.iter().any(|l| l.contains("aucune identité")), "{:?}", r.journal);
     }
 
@@ -3126,7 +3130,9 @@ mod tests {
         assert!(r.bloc.contains("ton L1 `handle` est écrit"), "{}", r.bloc);
         let appels = h.appels.lock().unwrap();
         let handle = appels.iter().find(|(n, a)| n == "put_apport" && a["record"]["section"] == "handle").expect("le L1 handle").1["record"].clone();
-        assert_eq!((handle["fiche"].as_str(), handle["texte"].as_str(), handle["via"].as_str(), handle["author"].as_str()), (Some("archi"), Some("session:25b7ff4b-dabf-42ef-8580-86661c846fb9"), Some("hook"), Some("archi")));
+        assert_eq!((handle["fiche"].as_str(), handle["texte"].as_str(), handle["via"].as_str(), handle.get("author").and_then(Value::as_str)), (Some("archi"), Some("session:25b7ff4b-dabf-42ef-8580-86661c846fb9"), Some("hook"), None));
+        let agent = appels.iter().find(|(n, a)| n == "put_apport" && a["record"]["section"] == "handle").map(|(_, a)| a["agent"].clone()).unwrap_or(Value::Null);
+        assert_eq!(agent, json!("archi"), "the hook calls for the agent; the host signs");
         assert_eq!(handle["source"], "sessions/25b7ff4b-dabf-42ef-8580-86661c846fb9", "une source par session : le L1 ne se réécrit pas");
         assert!(appels.iter().any(|(n, a)| n == "citer_source" && a["genre"] == "handle" && a["valeur"] == "session:25b7ff4b-dabf-42ef-8580-86661c846fb9"));
         drop(appels);

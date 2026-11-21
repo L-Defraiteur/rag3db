@@ -55,6 +55,9 @@ mod web;
 /// The witnesses of the agent's key (21 November 2026), in a module of their own.
 mod agent_key;
 
+/// The witnesses of the author set by the host (M7, 21 November 2026), in a module of their own.
+mod author;
+
 /// Ce que le faux modèle a vu : les frontières, pas par pas, et les refus.
 #[derive(Default)]
 struct Seen {
