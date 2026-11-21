@@ -89,6 +89,21 @@ fn role_enfant() {
     println!("COMPTES {role} {}", serde_json::to_string(&tx::comptes(&catalog)).unwrap());
 }
 
+/// Le mode mesure (`GEN_GROS=1`) : le corpus de 100 000 scopes n'a que deux paquets de 200 fichiers ; on y meurt au
+/// paquet 1, un paquet par validation (une génération d'avance), pour comparer le temps de reprise.
+pub fn mesure() -> bool {
+    std::env::var_os("GEN_GROS").is_some()
+}
+
+fn par_validation() -> &'static str {
+    if mesure() { "1" } else { "2" }
+}
+
+/// Le paquet où l'écrivain meurt.
+pub fn paquet_tue() -> &'static str {
+    if mesure() { "1" } else { "3" }
+}
+
 /// La taille d'un dossier, sous-dossiers compris.
 pub fn taille(p: &Path) -> u64 {
     let mut t = 0;
@@ -107,7 +122,7 @@ pub fn lancer(role: &str, base: &Path, pieges: &[(&str, &str)]) -> (std::process
         .env(BASE, base)
         .env("TX_ARRET_FTS", "fichiers")
         .env("RAG3WEAVER_TX_PAR_PAQUET", "1")
-        .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", "2");
+        .env("RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION", par_validation());
     for p in PIEGES {
         cmd.env_remove(p);
     }

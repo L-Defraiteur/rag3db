@@ -15,13 +15,13 @@ use crate::e2e_generations_commun as g;
 fn a_kill_two_generations_ahead_comes_back_without_a_rebuild() {
     let d = g::dossier("arret-deux-generations");
     let base = d.join("base.rag3db");
-    let (statut, sortie) = g::lancer("ecrivain", &base, &[("RAG3WEAVER_TEST_KILL_IN_BATCH", "3")]);
+    let (statut, sortie) = g::lancer("ecrivain", &base, &[("RAG3WEAVER_TEST_KILL_IN_BATCH", g::paquet_tue())]);
     use std::os::unix::process::ExitStatusExt;
-    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet 3 :\n{sortie}");
+    assert_eq!(statut.signal(), Some(9), "mort par SIGKILL au paquet {} :\n{sortie}", g::paquet_tue());
     let avant = g::generations(&base);
     assert!(!avant.is_empty(), "des index au plein texte marqués avant la mort");
     assert!(
-        avant.iter().any(|(_, en_base, disque)| *disque >= en_base + 2),
+        avant.iter().any(|(_, en_base, disque)| *disque >= en_base + if g::mesure() { 1 } else { 2 }),
         "au moins un dossier deux générations au-dessus de la base (k ≥ 2) : {avant:?}"
     );
 
