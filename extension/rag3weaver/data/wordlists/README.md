@@ -7,12 +7,12 @@ English. A word of an identifier counts as French when it has at least four lett
 
 | Folder | Package | Version | License | Words |
 |---|---|---|---|---|
-| `fr/` | [`an-array-of-french-words`](https://github.com/words/an-array-of-french-words) | 2.0.0 | MIT (`fr/LICENSE`) | 336 524 |
-| `en/` | [`an-array-of-english-words`](https://github.com/words/an-array-of-english-words) | 2.0.0 | MIT (`en/LICENSE`) | 274 937 |
+| `fr/` | [`an-array-of-french-words`](https://github.com/words/an-array-of-french-words) | 2.0.0 | MIT (`fr/LICENSE.txt`) | 336 524 |
+| `en/` | [`an-array-of-english-words`](https://github.com/words/an-array-of-english-words) | 2.0.0 | MIT (`en/LICENSE.txt`) | 274 937 |
 
 Both were taken on 21 November 2026 from the npm registry, as the package tarball alone
 (`https://registry.npmjs.org/<package>/-/<package>-2.0.0.tgz`): nothing in it was run, no `npm install`. Only
-`index.json` (renamed `words.json`, unchanged) and `license` (renamed `LICENSE`) are kept. The tarballs matched the
+`index.json` (renamed `words.json`, unchanged) and `license` (renamed `LICENSE.txt`: the push guard reads a bare `LICENSE` as a script that something calls) are kept. The tarballs matched the
 registry's own sums:
 
 | Tarball | sha256 | sha512 (registry `integrity`) |
