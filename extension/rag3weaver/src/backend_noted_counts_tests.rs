@@ -36,12 +36,9 @@ fn the_nightly_maintenance_does_not_count_the_non_candidates_as_lost_writes() {
         }
         v
     };
+    assert!(ecartees >= 10, "the rule sets the folded containers aside: {ecartees}");
     let comptes = backend.catalog.lock().unwrap().comptes_du_plein_texte();
-    let ecartees_avant = if ecartees > 0 { ecartees } else { 0 };
-    assert!(
-        comptes.iter().all(|(_, d, l)| d == l),
-        "the end-of-index guard sees no gap: {comptes:?} ({ecartees_avant} set aside)"
-    );
+    assert!(comptes.iter().all(|(_, d, l)| d == l), "the end-of-index guard sees no gap: {comptes:?}");
     assert!(ecart(&backend).is_empty(), "no gap said after the index");
     // The nightly maintenance rewrites the noted counts: the containers set aside are no lost write.
     let maintenant = jiff::civil::date(2026, 11, 21).at(3, 30, 0, 0);
