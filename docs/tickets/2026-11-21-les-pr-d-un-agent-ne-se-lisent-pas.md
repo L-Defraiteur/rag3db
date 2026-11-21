@@ -27,9 +27,15 @@
 - Le compte : celui de `gh` sur le poste de l'hôte, dit dans la réponse (`gh api user --jq .login`). Jamais `gh auth switch`.
   Un `gh` absent ou non connecté est dit, comme un état, pas comme une panne.
 - La réponse : `{agent, session, account, prs: [{number, title, url, state, branch, updated_at, from: "vue"|"tache", name}], unreachable?}`.
+- **Le diff d'une PR ouverte** (c7, 21 novembre, 8 h 4x) : `GET /agents/prs/diff?pr=<n>`, par `gh pr diff <n>`, borné, de
+  la même forme que `/vues/diff` (la stat d'abord, `[{path, added, removed, binary?, from?}]` ; `&path=<fichier>` pour le
+  patch d'un seul fichier ; `truncated`). Seulement pour une PR de l'agent (sa branche de tête parmi les siennes), en
+  lecture seule. recherche l'ouvre dans la même vue que les diffs non poussés : un changement poussé mais pas encore revu
+  ne doit pas disparaître.
 - Le témoin, rouge d'abord, dans son fichier : sur un faux `gh` (un script en tête de `PATH` qui rend un JSON fixe et journalise ses
   arguments), une session avec une vue et une tâche reçoit les PR de leurs deux branches, et pas celle d'une autre branche ;
-  `etat=ouvertes` passe `--state open` ; le journal du faux `gh` ne contient aucune commande d'écriture.
+  `etat=ouvertes` passe `--state open` ; `/agents/prs/diff?pr=<n>` d'une de ses PR rend la stat et le patch borné, et celui
+  d'une PR d'une autre branche est refusé ; le journal du faux `gh` ne contient aucune commande d'écriture.
 
 ## Ordre
 
