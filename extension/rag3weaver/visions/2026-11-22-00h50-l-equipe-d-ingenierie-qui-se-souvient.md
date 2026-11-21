@@ -79,3 +79,31 @@ L'inférence passe par nous, et nous prenons une marge sur chaque fournisseur, a
 
 Le registre des dépenses (prix datés, sources citées, plafonds) en est la base : il suffit d'y ajouter la marge et le
 client. Le choix du fournisseur reste une ligne de config, comme aujourd'hui `models.llm`.
+
+## Les offres : abonnement, marge et licence Community (Lucie, 22 nov.)
+
+Deux revenus, plus une porte d'entrée gratuite :
+
+- **un abonnement mensuel** pour profiter de nos systèmes : mémoire collective, orchestration, recherche, gouvernance
+  des agents, coordination hébergée ;
+- **la marge sur l'inférence** (section précédente), pour qui passe par notre facturation ;
+- **une licence Community** : gratuite sous conditions, infrastructure et clés à la charge de l'utilisateur.
+
+| Offre | Modèle |
+|---|---|
+| Community | licence gratuite sous conditions, sa propre infrastructure et ses propres clés |
+| Pro | abonnement + consommation d'inférence |
+| Team | abonnement par équipe + consommation ; mémoire partagée, gouvernance |
+| Enterprise | contrat sur mesure, déploiement privé, contrôle des données, support |
+
+Points à concevoir :
+
+- **les clés du client (BYOK)** : abonnement sans marge sur l'inférence. Le revenu ne dépend donc pas que de la
+  revente de jetons ;
+- **la Community comme canal d'acquisition** : ne pas enfermer trop tôt la mémoire et la recherche derrière le
+  paiement, c'est elles qui font adopter. Le payant vend l'exploitation : synchronisation entre postes, coordination
+  hébergée, équipes, garanties. « On distribue les outils de la forge, on facture son exploitation » ;
+- **du registre à la facturation client** : isolation des comptes, attribution sûre de chaque appel, erreurs et
+  remboursements, prix historiques, rapprochement avec les factures des fournisseurs ;
+- **l'offre européenne** : distinguer l'hébergement européen, le traitement européen et le fournisseur européen dans
+  ce qu'on garantit.
