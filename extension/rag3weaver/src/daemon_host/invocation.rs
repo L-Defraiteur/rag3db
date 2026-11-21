@@ -476,7 +476,7 @@ mod tests {
         let mut n = Navigateur::lancer(&binaire);
         n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
         n.attendre("document.querySelector('a[href=\"/ide/poste\"]')", "a link to the page « Poste » on the welcome page");
-        n.cliquer_pour_naviguer("a[href=\"/ide/poste\"]");
+        n.cliquer_pour_naviguer("document.querySelector('a[href=\"/ide/poste\"]')");
         n.attendre("document.querySelector('#agents') && document.querySelector('#dossiers-du-poste')", "the page « Poste »");
         let texte = |n: &mut Navigateur, id: &str| -> String {
             n.evaluer(&format!("document.querySelector('#{id}')?.innerText ?? ''")).as_str().unwrap_or_default().to_string()
