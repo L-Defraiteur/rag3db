@@ -103,7 +103,20 @@ fn the_hosts_token_and_the_ides_cookie_stay_out_of_every_sandbox() {
     let manifeste = racines.manifest(&nom).canonicalize().unwrap();
     let (_, r) = a.host.handle("POST", "/session", None, json!({"client": "mcp (pid 1)"}).to_string().as_bytes());
     let s = r["session"].as_str().unwrap().to_string();
-    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": format!("ls {}", jetons.display())}));
-    let sortie = r["result"]["result"].as_str().unwrap_or_default().to_string();
-    assert!(!(r["ok"] == json!(true) && sortie.contains("code 0")), "a command reads the host's data folder under the sandbox: {r}");
+    // The three paths archi names: the user's token folder (absent yet: it must not be created before the host), the
+    // host's daemon.json and daemon.token. Read only here: a witness never writes in the real data folder.
+    for commande in [
+        format!("ls {}", jetons.display()),
+        format!("cat {}", jetons.join("user/token").display()),
+        format!("cat {}", jetons.join("daemon.json").display()),
+        format!("cat {}", jetons.join("daemon.token").display()),
+    ] {
+        let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": commande}));
+        let sortie = r["result"]["result"].as_str().unwrap_or_default().to_string();
+        assert!(!(r["ok"] == json!(true) && sortie.contains("code 0")), "`{commande}` reads the host's data folder under the sandbox: {r}");
+    }
+    // A browser's profile (the IDE's cookie) is never proposed either.
+    if let Some(maison) = std::env::var_os("HOME").map(std::path::PathBuf::from) {
+        assert_eq!(a.host.proposed_root(&maison.join(".config/google-chrome/Default/Cookies")), None, "a browser's profile is proposed");
+    }
 }
