@@ -84,6 +84,7 @@ impl InvocationHost for HostedInvocations {
 mod tests {
     // A lot's new witness goes in a file of its own, `invocation/tests/<lot>.rs` (c7, 21 November 2026): lots that
     // all appended to this module met here, one rebase after another.
+    mod atelier_pose;
     mod ecrire_la_vue;
     mod fermer_tout;
 
