@@ -58,7 +58,7 @@ mod web;
 
 /// The witnesses of the agent's key (21 November 2026), in a module of their own.
 mod agent_key;
-mod fermeture;
+mod closing;
 
 /// The witnesses of the author set by the host (M7, 21 November 2026), in a module of their own.
 mod author;
