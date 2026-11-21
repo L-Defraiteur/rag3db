@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **lucivy 4.4.0 : le plein texte peut garder ses générations.** Le moteur de plein texte sait
+  désormais garder la dernière version validée d'un index et celle en cours, y revenir d'un coup ou la lire sans rien
+  écrire. rag3weaver passe à cette version sans rien changer à ce qu'on voit : ses rebâtis, son tampon d'écriture et le
+  geste des non-candidats commitent sans créer de génération, et l'annulation d'un flush dit désormais un commit qui
+  échoue au lieu de l'avaler. Brancher les générations sur les versions de la base est l'étape suivante.
+
 - 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
   en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.
