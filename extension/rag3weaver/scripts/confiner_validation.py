@@ -256,7 +256,10 @@ class Descendants:
         return noms
 
     def apres_la_grace(self, grace):
-        """`finir`, then a second reading: (left behind, closed late), each named."""
+        """`finir`, then a second reading: (left behind, closed late), each named. A reading first: the root just
+        ended, and its orphans join this supervisor (subreaper) before `finir` looks at who is alive — without it, a
+        grandchild was found only at the cleaning, one run in ten (« découverts au nettoyage »)."""
+        self.relever(processus())
         restants = self.finir(grace)
         if not restants:
             return [], []
