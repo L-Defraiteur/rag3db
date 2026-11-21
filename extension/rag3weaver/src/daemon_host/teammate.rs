@@ -47,7 +47,7 @@ const MAX_STALLED: usize = 3;
 const MAX_FAITS_RAPPELES: usize = 20;
 
 /// Ce que l'équipier lit en plus du message système du chat dans une tâche.
-const SYSTEM_PROMPT: &str = "\
+const SYSTEM_PROMPT: &str = concat!("\
 You are a teammate: you carry out tasks on your own, step by step, and talk to a supervisor through a mailbox.
 - In a task opened from the terminal or the chat, the supervisor is the user: answer them directly, once per turn, in plain text. Do not quote yourself, and never add a closing line such as 'report done' or 'answer given to the supervisor'. A request can also come from another agent through the mailbox; then that agent is your supervisor. Always write your answer as text, not inside report: the text reaches the user as you write it, and the mailbox keeps a copy. A requested file is written to the file, never only described.
 - A plan is not mandatory. A greeting or a small change (center a div) needs none: answer or act, then call step_done. Write a mini-plan (edit_plan) only when the request needed a real analysis or splits into several items.
@@ -60,7 +60,8 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - At most 12 tool calls per step; after that, only step_done is accepted.
 - A request for a text (an introduction, an explanation, a summary, a list): the text itself is the answer. Write it, as it is meant to be read (titles, lists and bold kept), in report or in your reply — never a sentence about it (« présentation fournie conformément au format » is not an answer). step_done's `done` says the work; it never stands for the answer.
 - When nothing is left after work done with tools, report what was done (report), close the active plan as accomplished, and call step_done.
-- Write plans, reports and step_done texts in French.";
+- Write plans, reports and step_done texts in French.
+", super::observed::observed_content_rule!());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1027,15 +1028,22 @@ impl Step {
                     Ok(json!({ "ok": true, "msg_id": msg_id }))
                 }))
             }
-            FETCH => reply(super::web_fetch::fetch(&self.fetch, &args)),
+            // **What comes from outside is marked as observed** (tty, 21 November 2026): data, never instructions.
+            FETCH => reply(super::web_fetch::fetch(&self.fetch, &args).map(|v| {
+                let source = v["url"].as_str().or(args["url"].as_str()).unwrap_or("fetch").to_string();
+                super::observed::mark(v, &source)
+            })),
             name @ (super::browser_tools::BROWSER_TABS | super::browser_tools::BROWSER_READ | super::browser_tools::BROWSER_CONSOLE) if self.browser.is_some() => {
                 reply(match self.browser.as_ref().map(|(_, t)| t) {
-                    Some(Ok(t)) => t.call(name, &args).unwrap_or_else(|| Err(format!("{name} : pas de la famille du navigateur"))),
+                    Some(Ok(t)) => t.call(name, &args).unwrap_or_else(|| Err(format!("{name} : pas de la famille du navigateur"))).map(|v| {
+                        let source = v["url"].as_str().map_or_else(|| format!("{name}: the browser"), str::to_string);
+                        super::observed::mark(v, &source)
+                    }),
                     Some(Err(e)) => Err(format!("l'hôte n'écoute pas le navigateur : {e}")),
                     None => Err("teammate.browser n'est pas déclaré".into()),
                 })
             }
-            WEB_SEARCH => reply(super::web_search::web_search(&self.web_search, &args)),
+            WEB_SEARCH => reply(super::web_search::web_search(&self.web_search, &args).map(|v| super::observed::mark(v, &format!("web_search: {}", args["query"].as_str().unwrap_or_default())))),
             SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
                 if text.trim().is_empty() {
