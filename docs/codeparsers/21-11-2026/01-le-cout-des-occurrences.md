@@ -61,13 +61,30 @@ telle quelle, ne tient pas la promesse du lot.
    - **Coût** : non mesuré. Les entités passent par les dérivations, l'étape la plus lourde de la réécriture.
    - **C'est une décision de conception, à Lucie**, si la voie 1 échoue.
 
-## Ce qui reste
+## La voie 1 essayée : la clé de MERGE ne suffit pas
 
-- **La justesse de la voie 1** : le nombre d'`OCCURS` en base égal au nombre mis en file, sur une passe sous
-  `poste lourd`.
-- **Sa mesure**, dans une fenêtre de c7.
-- **Un écart hors lot** : `MENTIONS` vaut 733 332 dans la passe sans et 733 344 dans la passe avec. Même copie, même
-  lot, et le prototype n'écrit aucune `MENTIONS`. Si l'écart se reproduit sans le prototype, il aura son ticket : il
-  sent un ordre non déterministe.
+Le prototype 96374241ba (la clé de MERGE d'`OCCURS` porte `byte_start` et `byte_end`) a été joué sous `poste lourd` à
+06 h 57 : un contrôle de justesse, pas une mesure. Lib prouvée 4753938c9d. Résultat : **toujours 134 592 `OCCURS`
+pour 248 610 mises en file**, exactement comme sans la clé.
+
+La fusion est en amont du Cypher : **le drain tient un lien pour une paire** (`LinkRecordNode`,
+`dataflow/record_nodes.rs`) :
+
+- **Le chemin COPY** (au-delà de `copy_seuil`) « garde la sémantique de MERGE » : il dédoublonne dans le lot, et il
+  écarte les paires déjà en base (`copier_les_liens`, `presents_connus`).
+- **Le chemin par tranches** garde « une paire, une fois, sa dernière valeur » (`derniers`, recette du banc du
+  4 octobre 2026 : le moteur perdait un `SET` sur une paire répétée).
+- **Le journal des liens neufs** (`crees`, `noter_liee`) et **l'annulation d'un lot** raisonnent aussi par paire
+  (ticket du 19 octobre 2026).
+
+La voie 1 demande donc **une identité de lien déclarée par relation** : la paire, plus des propriétés-clés. Elle se
+lirait dans ces trois endroits et dans chaque dialecte. C'est un changement du modèle de lien du catalogue, aussi
+profond que la voie 2 : **les deux voies sont des décisions de conception**, à Lucie.
+
+
+- **Le choix entre les deux voies**, à Lucie. La mesure de la voie retenue suivra, dans une fenêtre de c7.
+- **L'écart de `MENTIONS`** : 733 332 dans la passe sans, 733 344 dans les deux passes avec (la mesure, puis le
+  contrôle de 06 h 57). Il suit le prototype, il n'est pas aléatoire : pas de ticket. Il reste à comprendre par où
+  une arête `OCCURS` change douze `MENTIONS`, avant tout code du lot.
 - **Les reflinks** sont gardés 48 h, sous `~/.cache/rag3weaver-build/mesures/occurrences-{sans,avec}-20261121-*`
   (manifeste « garder 2 »).
