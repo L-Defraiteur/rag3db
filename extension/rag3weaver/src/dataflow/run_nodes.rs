@@ -260,6 +260,19 @@ impl Node for RunCommandNode {
         let racine = racine_du_travail(ctx)
             .ok_or("run: pas de racine de travail (la source de fichiers est virtuelle)")?;
 
+        // **A path outside the sandbox's roots becomes an open_root request** (RootGrants, lot B, 21 November 2026):
+        // before the guard, which would only hold it for a human, each word of the command that resolves (from its
+        // directory) to an existing path outside the roots the sandbox mounts stops it; the host turns the refusal into a
+        // request to the gate, with the command to replay once the root is granted.
+        if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned() {
+            if let Some((dehors, mode)) = open_root_needed(&self.ligne, &racine, &bac, false, &crate::backend::granted_roots()) {
+                return Err(format!(
+                    "{OPEN_ROOT_MARKER}{}",
+                    serde_json::json!({ "class": "open_root", "mode": mode, "refused": dehors, "replay": self.ligne })
+                ));
+            }
+        }
+
         let contexte = Contexte { accorde_par_l_utilisateur: false, domaine: Some(racine.clone()) };
         let verdict = match garde.juger_ligne(&self.ligne, &contexte) {
             Ok(v) => v,
@@ -287,10 +300,9 @@ impl Node for RunCommandNode {
             );
         }
 
-        // **A path outside the sandbox's roots becomes an open_root request** (RootGrants, lot B, 21 November 2026):
-        // before running, each word of the command that resolves (from its directory) to an existing path outside the
-        // roots the sandbox mounts stops it; the host turns the refusal into a request to the gate, with the command to
-        // replay once the root is granted.
+        // **A write under a root granted read becomes an open_root request in mode write** (RootGrants, lot B): the
+        // guard has let the command through; a writing command whose path lies under a root granted "read" asks for
+        // "write" before running.
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned() {
             let ecrit = verdict.parties.iter().any(|(c, _)| crate::commande::observer(c).ecrit);
             if let Some((dehors, mode)) = open_root_needed(&self.ligne, &racine, &bac, ecrit, &crate::backend::granted_roots()) {
