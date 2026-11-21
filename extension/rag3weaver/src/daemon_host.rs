@@ -873,6 +873,9 @@ impl DaemonHost {
                 let arret_f = arret.clone();
                 let tours: std::sync::Arc<std::sync::atomic::AtomicUsize> = Default::default();
                 let tours_f = tours.clone();
+                let par_evenement: std::sync::Arc<std::sync::atomic::AtomicUsize> = Default::default();
+                let par_releve: std::sync::Arc<std::sync::atomic::AtomicUsize> = Default::default();
+                let (par_evenement_f, par_releve_f) = (par_evenement.clone(), par_releve.clone());
                 let fil = std::thread::Builder::new()
                     .name("vue-en-fond".into())
                     .spawn(move || {
@@ -931,6 +934,8 @@ impl DaemonHost {
                         .ok();
                         let mut dit: Option<String> = None;
                         loop {
+                            // Whether this turn was woken by a kernel event (the bell) or by the slow poll.
+                            let sonne;
                             {
                                 let (etat, cv) = &*arret_f;
                                 let mut g = etat.lock().unwrap_or_else(|e| e.into_inner());
@@ -940,6 +945,7 @@ impl DaemonHost {
                                 if g.arret {
                                     return;
                                 }
+                                sonne = g.sonne;
                                 g.sonne = false;
                             }
                             // 150 ms of quiet: an editor's burst of writes is one change.
@@ -958,6 +964,7 @@ impl DaemonHost {
                                 Ok(()) => {
                                     ecrite = signature;
                                     dit = None;
+                                    if sonne { &par_evenement_f } else { &par_releve_f }.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 }
                                 Err(e) => {
                                     if dit.as_deref() != Some(e.as_str()) {
@@ -969,7 +976,7 @@ impl DaemonHost {
                         }
                     })
                     .map_err(|e| format!("le fil d'écriture de la vue : {e}"))?;
-                self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), ViewFollower { stop: arret, thread: Some(fil), turns: tours });
+                self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), ViewFollower { stop: arret, thread: Some(fil), turns: tours, rewrites_by_event: par_evenement, rewrites_by_poll: par_releve });
                 Ok(true)
             })();
             // Without the code feature, no layer of code: the worktree is opened all the same.
@@ -1407,11 +1414,11 @@ impl DaemonHost {
 
     /// The rewrites of the view's layer by the thread that makes it follow its worktree: `(by a kernel event, by the
     /// slow poll)`, `None` for a view that does not follow. The witness that a write is followed by the kernel's events,
-    /// without a bound in time that a loaded machine breaks. RED STUB.
+    /// without a bound in time that a loaded machine breaks.
     #[cfg(feature = "code")]
-    #[allow(unused_variables)]
     pub fn view_follower_rewrites(&self, layer: &str) -> Option<(usize, usize)> {
-        Some((0, 0)) // RED STUB.
+        use std::sync::atomic::Ordering::Relaxed;
+        self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).get(layer).map(|f| (f.rewrites_by_event.load(Relaxed), f.rewrites_by_poll.load(Relaxed)))
     }
 
     /// The view by default of a session, `None` without one.
@@ -3565,6 +3572,10 @@ pub(crate) struct ViewFollower {
     thread: Option<std::thread::JoinHandle<()>>,
     /// The signatures the thread computed since the first writing (each one a `git status`).
     turns: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    /// The rewrites of the layer on a turn woken by a kernel event.
+    rewrites_by_event: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    /// The rewrites of the layer on a turn of the slow poll.
+    rewrites_by_poll: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 
 #[cfg(feature = "code")]
