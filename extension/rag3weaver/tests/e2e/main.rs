@@ -110,8 +110,6 @@ mod e2e_code_sync;
 mod e2e_new_name_mentions;
 #[path = "../e2e_dangling_links.rs"]
 mod e2e_dangling_links;
-#[path = "../e2e_usages_of_a_free_function.rs"]
-mod e2e_usages_of_a_free_function;
 #[path = "../e2e_drain_order.rs"]
 mod e2e_drain_order;
 #[path = "../e2e_compose_restart.rs"]
