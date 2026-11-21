@@ -1,6 +1,6 @@
 # Une réécriture perd les mentions d'un nom neuf, et garde la vieille ligne des autres
 
-- **État** : ouvert (21 novembre 2026)
+- **État** : corrigé (21 novembre 2026), branche `codeparsers/new-name-mentions-r`. Deux causes, deux correctifs ; voir « Ce que l'enquête a établi » en fin de ticket
 - **Famille** : produit
 - **Gravité** : moyenne. Après une réécriture, `usages` d'un nom apparu dans ce lot manque des sites ; dans les mêmes
   scopes, des sites d'un nom déjà connu gardent leur ancienne ligne. Rien ne le signale.
@@ -52,3 +52,34 @@ Après le drain :
 - le compte de liens sans bout de la tranche est nul.
 
 Il faut le voir rouge sur master avant le correctif.
+
+## Ce que l'enquête a établi (21 novembre 2026, au soir)
+
+L'hypothèse de ce ticket (l'ordre du drain écrit une `MENTIONS` avant son `Symbol`) est **contredite** par la lecture
+du code : les symboles d'une ingestion sont écrits tout de suite, par un graphe à eux, avant la mise en file des liens.
+L'enquête a trouvé deux défauts distincts.
+
+1. **L'ordre des groupes de liens n'était pas déterministe.** C'est la cause des arêtes de ce ticket (`from_file`,
+   `BatchLongest`, `Tokenizer`, la vieille ligne de `map_err`).
+   - **Le mécanisme** : le drain groupe ses liens par relation et par jeu de propriétés, et parcourait les groupes dans
+     l'ordre d'une `HashMap`, dont la graine change à chaque table. Une paire venue dans deux groupes prenait la valeur
+     du groupe écrit en dernier.
+   - **La preuve** : deux réécritures identiques ont donné 733 332 puis 733 344 `MENTIONS`, sans le prototype comme
+     avec. Le prototype des occurrences n'y était pour rien.
+   - **Le correctif** : un `BTreeMap`, par relation puis par propriétés. Le témoin est
+     `e2e_drain_order::two_identical_drains_write_the_same_links`, rouge sur master (deux valeurs en seize drains).
+2. **Les rendez-vous d'une fermeture repliée partaient d'un scope jamais écrit.**
+   - **Le mécanisme** : `fold_lambdas` replie une fermeture ou une compréhension dans le scope nommé qui la porte, mais
+     laissait ses rendez-vous (`pending` et ses neuf listes) sous la clé de la fermeture. Le drain écartait donc, sans
+     un mot, 26 544 `MENTIONS` sur la réécriture des 419 fichiers.
+   - **La mesure** : 17 991 de ces liens portaient un nom que le scope englobant mentionne déjà. Les 8 553 autres
+     étaient ses locales, lues dans une compréhension, et le lien de la fermeture vers son parent. **La perte réelle
+     est nulle** ; les déplacer vers le scope aurait ajouté de faux liens.
+   - **Le correctif** : ces rendez-vous sont écartés, comme l'est déjà la hiérarchie de la fermeture. Le témoin est
+     `e2e_new_name_mentions::a_mention_inside_a_closure_belongs_to_the_scope_that_holds_it`, rouge sur master (cinq
+     liens sans bout).
+3. **Le silence, en plus des deux défauts.** Un lien écarté faute de bout est maintenant compté et dit : avec un
+   exemple au journal du drain, dans `Catalog::take_dangling_links` et à côté de `failed` dans les rapports
+   d'ingestion et de réécriture (`dangling_links`). Les témoins sont dans `e2e_dangling_links`. Le compte n'est pas
+   encore visible dans `daemon_status` : voir le ticket
+   [`2026-11-21-le-compte-des-liens-sans-bout-n-est-pas-dans-daemon-status`](../2026-11-21-le-compte-des-liens-sans-bout-n-est-pas-dans-daemon-status.md).
