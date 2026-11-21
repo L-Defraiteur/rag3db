@@ -572,7 +572,7 @@ mod tests {
     use super::*;
 
     /// **The delivered workshop lets cargo read its chain** (scenario 2 of the night of 20 November 2026, ticket
-    /// `docs/recherche/tickets/2026-11-21-cargo-ne-peut-rien-dans-le-bac-a-sable-de-l-atelier.md`). In the workshop's chat,
+    /// `docs/tickets/closed/2026-11-21-cargo-ne-peut-rien-dans-le-bac-a-sable-de-l-atelier.md`). In the workshop's chat,
     /// `cargo init --lib` failed: « accès refusé sur le fichier de configuration local de rustup ». The sandbox only opens
     /// the workshop's folder, and the delivered workshop declared no extra read; the delivered code backend declares the
     /// Rust chain (rustup, cargo's bin, registry, git and config). The workshop declares the same.
