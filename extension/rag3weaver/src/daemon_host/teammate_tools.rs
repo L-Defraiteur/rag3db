@@ -162,12 +162,14 @@ impl Etanche<'_> {
                 );
             },
             || {
-                self.host.with_backend(&self.hosted, |b| {
+                // The teammate's sandbox is the session's: its agent's granted roots, the v1 defaults, the protected
+                // folders (it went straight to the backend, and a granted root was never mounted for it).
+                crate::backend::with_call_sandbox(self.host.call_sandbox_for(&self.hosted.id), || self.host.with_backend(&self.hosted, |b| {
                     let outils = crate::backend_tools::BackendTools { backend: b };
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
                     let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root()).avec_les_vues(self.host.vues_de(&self.hosted.id));
                     f(&du_chat)
-                })
+                }))
             },
         );
         match r {
