@@ -490,6 +490,9 @@ pub struct Catalog {
     /// entre les lignes et le plein texte.
     fts_promise: std::sync::atomic::AtomicBool,
     fts_promise_token: String,
+    /// Une synchronisation par paquet en transaction est en cours (lucivy 4.4, (A)) : ses lignes et la marque de
+    /// génération du plein texte se valident ensemble, et une promesse faite pendant elle le dit.
+    sync_par_paquet: bool,
     /// Une promesse d'un autre processus, trouvée quand ce processus a posé
     /// la sienne par-dessus : à reprendre à l'ouverture des index.
     fts_promise_orphan: std::sync::atomic::AtomicBool,
@@ -892,6 +895,7 @@ fn read_threads() -> u64 {
             fts_promise: std::sync::atomic::AtomicBool::new(false),
             fts_promise_orphan: std::sync::atomic::AtomicBool::new(false),
             fts_promise_token: format!("{}-{}", std::process::id(), crate::dataflow::checkpoint::timestamp_ms()),
+            sync_par_paquet: false,
             fts_storage: Default::default(),
             fts_storage_pose: false,
             fts_positions: false,
@@ -7450,9 +7454,10 @@ fn read_threads() -> u64 {
         if !avant.is_empty() && jeton_de_la_promesse(&avant) != self.fts_promise_token {
             self.fts_promise_orphan.store(true, Ordering::SeqCst);
         }
-        // Sous la transaction d'un paquet, la promesse est validée avec les lignes, et la marque de génération aussi :
-        // elle le dit (`|tx`), et une reprise ne la prend pas pour des lignes en avance (lucivy 4.4, (A)).
-        let promesse = if self.in_transaction { format!("{}{PROMESSE_EN_TRANSACTION}", self.fts_promise_token) } else { self.fts_promise_token.clone() };
+        // Pendant une synchronisation par paquet en transaction, les lignes du plein texte et sa marque de génération se
+        // valident ensemble ; ce qui s'écrit entre deux paquets n'a pas de plein texte. La promesse le dit (`|tx`), et
+        // une reprise ne la prend pas pour des lignes en avance (lucivy 4.4, (A)).
+        let promesse = if self.in_transaction || self.sync_par_paquet { format!("{}{PROMESSE_EN_TRANSACTION}", self.fts_promise_token) } else { self.fts_promise_token.clone() };
         self.persist_meta_key(FTS_PROMISE, &promesse)
     }
 
@@ -9221,6 +9226,11 @@ fn read_threads() -> u64 {
             }
         }
         Ok(())
+    }
+
+    /// Une synchronisation par paquet en transaction commence ou finit (voir `sync_par_paquet`).
+    pub fn set_sync_par_paquet(&mut self, actif: bool) {
+        self.sync_par_paquet = actif;
     }
 
     pub fn set_in_transaction(&mut self, open: bool) {
