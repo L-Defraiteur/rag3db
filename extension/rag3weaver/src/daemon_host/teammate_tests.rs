@@ -2847,12 +2847,15 @@ fn the_teammate_fetches_a_page_says_its_status_and_refuses_a_local_address_by_de
         let d = tempfile::tempdir().unwrap();
         let (_depot, manifeste) = depot_inscrit(d.path(), true);
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
-        m["teammate"] = json!({ "fetch": { "allow_local": allow_local, "max_bytes": 300 } });
+        // reply_wait_s: once the pages are read, the teammate waits for the supervisor; the witness does not.
+        m["teammate"] = json!({ "fetch": { "allow_local": allow_local, "max_bytes": 300 }, "reply_wait_s": 2 });
         std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         let declarations = manifeste.parent().unwrap();
         for args in [&["add", "-A"][..], &["commit", "-q", "-m", "fetch"]] {
             assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
         }
+        let loaded = crate::backend::PreparedBackend::load(&manifeste).map(|p| p.manifest.teammate.clone().unwrap_or_default().fetch.allow_local);
+        assert_eq!(loaded, Ok(allow_local), "the manifest loads with its teammate.fetch");
         let results = Arc::new(Mutex::new(Vec::<Value>::new()));
         let model: ChatModel = {
             let (base, results) = (base.clone(), results.clone());
@@ -2880,9 +2883,9 @@ fn the_teammate_fetches_a_page_says_its_status_and_refuses_a_local_address_by_de
         host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
         let files = host.teammate_files(&h.id, "doc").unwrap();
         files.append("supervisor", "request", None, "Lis ces pages.").unwrap();
-        let _ = host.run_teammate(&h.id, "doc");
+        let outcome = host.run_teammate(&h.id, "doc");
         let r = results.lock().unwrap().clone();
-        assert_eq!(r.len(), 3, "allow_local={allow_local}: {r:?}");
+        assert_eq!(r.len(), 3, "allow_local={allow_local}: {r:?}\noutcome: {outcome:?}\nmailbox: {:?}", files.mailbox());
         if !allow_local {
             for x in &r {
                 assert_eq!(x["ok"], json!(false), "{x}");
