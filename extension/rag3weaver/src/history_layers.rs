@@ -1130,13 +1130,19 @@ mod tests {
         let prefix = std::env::var("RAG3WEAVER_PROBE_PREFIX").unwrap_or_else(|_| "extension/rag3weaver/src/dataflow/".into());
         let n: usize = std::env::var("RAG3WEAVER_PROBE_QUERIES").ok().and_then(|v| v.parse().ok()).unwrap_or(100);
         let first = |q: &str| conn.execute(q).ok().and_then(|r| r.rows.into_iter().next());
-        let rel = first("MATCH (s:Scope)-[r]->(p:ScopeContent) RETURN label(r) LIMIT 1").and_then(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).expect("the occurrence -> version relation");
+        let rels: Vec<String> = conn.execute("CALL SHOW_TABLES() RETURN *").unwrap().rows.iter()
+            .filter(|r| r.iter().any(|v| v.as_str() == Some("REL")))
+            .filter_map(|r| r.iter().filter_map(|v| v.as_str()).find(|s| s.contains("Scope") && !s.contains("CHUNKED_FROM") && !s.contains("_Chunk")).map(str::to_string))
+            .collect();
+        println!("PROBE_TEXTF relation candidates {rels:?}");
+        let rel = rels.iter().find(|r| first(&format!("MATCH (s:Scope)-[:`{r}`]-(p:ScopeContent) RETURN count(*)")).and_then(|r| r.first().and_then(|v| v.as_i64())).unwrap_or(0) > 0)
+            .cloned().expect("the occurrence -- version relation");
         let scope_cols: Vec<String> = conn.execute("CALL TABLE_INFO('Scope') RETURN *").unwrap().rows.iter().filter_map(|r| r.get(1).and_then(|v| v.as_str()).map(str::to_string)).collect();
         let pathc = scope_cols.iter().find(|c| c.as_str() == "file_path").or_else(|| scope_cols.iter().find(|c| c.contains("path"))).cloned().expect("a path column on Scope");
         let typ = conn.execute(&format!("CALL TABLE_INFO('{chunk}') RETURN *")).unwrap().rows.iter().find(|r| r.get(1).and_then(|v| v.as_str()) == Some(col)).and_then(|r| r.get(2).and_then(|v| v.as_str()).map(str::to_string)).unwrap();
         println!("PROBE_TEXTF relation {rel} ; path column {pathc} ; prefix {prefix}");
         let lit = format!("'{}'", prefix.replace('\'', "\\'"));
-        let occ = format!("(p:ScopeContent)<-[:`{rel}`]-(s:Scope) WHERE s.{pathc} STARTS WITH {lit}");
+        let occ = format!("(p:ScopeContent)-[:`{rel}`]-(s:Scope) WHERE s.{pathc} STARTS WITH {lit}");
         let today_filter = format!("MATCH (n:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} RETURN n");
         let shared_filter = format!("MATCH (n:{text})<-[:HAS_TEXT]-(c:{chunk})-[:ScopeContent_CHUNKED_FROM]->{occ} RETURN n");
         // The admitted versions as a list (the occurrence mask's fallback), timed apart.
