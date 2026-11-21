@@ -35,6 +35,7 @@ fn the_agents_of_the_machine_are_a_tree_of_roots_and_tasks() {
     assert_eq!(taches, ["archi-a", "archi-b"], "its tasks, by name");
     let t = &roots[0]["tasks"][0];
     assert_eq!(t["backend"], json!(h.id));
+    assert_eq!(t["state"], json!("open"));
     assert_eq!(t["running"], json!(false));
     assert_eq!(t["doing"], json!({ "id": "lire", "text": "Lire la porte" }));
     assert_eq!(t["views"], json!(["backend"]));
