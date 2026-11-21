@@ -184,3 +184,44 @@ Sur le même écart d'un jour qu'ED (281 fichiers, environ 7 000 vecteurs), à l
 - les **vecteurs écrits** : aujourd'hui, un par morceau neuf ; avec B, un par texte neuf ;
 - le **temps d'ouverture de la vue**, et la part de `derive_embed` ;
 - le **temps d'une recherche dense** sur la vue, avant et après, pour la projection à deux sauts.
+
+## Les lots (Lucie : « oui absolument », 21 novembre vers 22 h)
+
+Rouge d'abord, en plusieurs lots, **derrière un réglage éteint par défaut** (`shared_text_vectors`) : aucun lot qui
+atterrit seul ne désynchronise une base réelle. La cartographie du chemin des vecteurs (une quarantaine de sites,
+une vingtaine de suites de tests) est la source de ce découpage.
+
+| Lot | Contenu | Remarques |
+|---|---|---|
+| **L1** | Le schéma (`<E>_Text` repéré par `_text_hash`, `<E>_HAS_TEXT`, colonne et index HNSW par modèle, sur les deux dialectes) et **la migration** (`crate::shared_text::migrate_to_shared_text`, appelée par `Catalog::ensure_shared_text_storage` quand le réglage est allumé, idempotente et notée en méta ; **la version du schéma ne monte qu'en L5**, pour ne pas réécrire la méta des vraies bases à leur prochaine ouverture) : un texte par empreinte distincte, le vecteur d'un morceau à vecteur frais, les arêtes, l'index. **Elle copie sans rien retirer** : les colonnes des morceaux restent, tous les lecteurs d'aujourd'hui marchent. | Sous le réglage. Mesurée sur une copie : durée, vecteurs avant et après, recherche avant et après. |
+| **L2** | **L'écriture partagée** : `EmbedNode` écrit le vecteur sur le texte. La paire « `MERGE` du texte + arête » se fait dans la transaction du morceau. Seuls les textes sans vecteur vont au modèle. La dette se compte par texte. Le retrait de l'orphelin se fait en un énoncé, branché sur la suppression d'une entité (`DeleteRecordNode`), le redécoupage (`RechunkDeleteNode`), la mise de côté par règle et `purge_layer`. Plus la garde de l'écrivain unique. | Les cinq témoins de la page. |
+| **L3** | **La lecture** : la recherche dense sur l'index de `<E>_Text`, le filtre de vue dans la projection (trois sauts), le retour aux morceaux visibles, puis à leurs parents. Les compteurs (`dense_missing`, `vectors_due_for_view`, le silence d'un signal) et la mise de côté passent par le texte. | Le témoin : les plus proches invisibles, k résultats visibles quand même. |
+| **L4** | **Postgres** : les mêmes formes en SQL (une table de textes, une jointure). | |
+| **L5** | **La bascule** : le réglage allumé par défaut, puis le retrait des colonnes et des index des morceaux. Les bases réelles ne migrent qu'au mot de c7. | |
+
+**Le branchement sur `purge_layer`** (réponse d'arbre, 21 novembre) : `close_view` à la main ne fait que `end_layer` (la
+couche marquée finie, ses lignes gardées) ; avec `purge`, ou à la fermeture d'une vue atterrie, `purge_layer` retire les
+lignes et les générations de la couche. Les contenus orphelins restent (ticket d'arbre
+`2026-11-21-un-worktree-fini-ne-quitte-pas-toute-la-base`). Le retrait des textes orphelins se branche là où des
+morceaux partent réellement, dans la même écriture. Tant que les contenus orphelins restent, leurs morceaux tiennent
+leurs textes.
+
+## L1, mesuré (21 novembre, 23 h 50, luciepc, release)
+
+La migration du lot (branche `shared-text-l1`, 61c8f83d97), appelée telle quelle par une sonde jetable sur un reflink
+neuf de la copie en règles 13 (`mesures/embarquement-partage-20261121`), lib 424ce93e56 :
+
+| Table de morceaux | Vecteurs avant | Textes après | Gain | Durée |
+|---|---|---|---|---|
+| `ScopeContent_Chunk` | 181 811 | 134 763 | −26 % | 82,6 s |
+| `Scope_Chunk` | 132 605 | 122 709 | −7 % | 78,7 s |
+| `File_Chunk` | 26 307 | 8 875 | **−66 %** | 3,8 s |
+| `Library_Chunk` | 482 | 482 | 0 | 0,4 s |
+| **Total** | **341 205** | **266 829** | **−22 %** | **172 s** |
+
+- **Chaque texte porte un vecteur**, et chaque morceau son arête (autant d'arêtes que de morceaux).
+- **La recherche, avant et après** (`ScopeContent`, 50 requêtes, sans filtre) : l'index des morceaux, médiane 296,8 ms,
+  p95 425,4 ms, 7,2 textes distincts sur 10 ; l'index des textes, **médiane 103,8 ms, p95 241,8 ms, 10 textes
+  distincts**, et **tous les textes rendus avant le sont après**.
+- `Symbol_Chunk` n'a pas de colonne de vecteur : le catalogue ne la migre pas (`vector_tables` ne retient que les
+  entités à signal vectoriel). Seule la sonde, qui prenait toutes les tables `_Chunk`, l'a essayée.
