@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Les pages d'un dépôt parlent git.** Dans l'IDE, le fil d'Ariane des tâches, des propositions,
+  des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son
+  nom et sa branche, comme l'accueil ; le tableau des tâches a une colonne « worktree ». « backend » n'y paraît plus.
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
