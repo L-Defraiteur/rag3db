@@ -315,6 +315,8 @@ pub struct DaemonHost {
     /// view's layer, the stop of the thread that rewrites its layer when the worktree changes, and the thread itself.
     #[cfg(feature = "code")]
     view_followers: Mutex<HashMap<String, ViewFollower>>,
+    /// The grants for one command (a human yes on a protected folder), spent by the next call of their agent.
+    grants_once: Mutex<Vec<root_grants::Grant>>,
     /// **This host's machine and the way to its landings** (page 03 of 20 November 2026, O4): `None` reads
     /// `~/.config/rag3weaver/atterrissages.json`, the machine being the hostname unless the file names it.
     atterrissages: Mutex<Option<(String, VoieDesAtterrissages)>>,
@@ -572,6 +574,7 @@ impl DaemonHost {
             vues_en_ecriture: Mutex::new(HashMap::new()),
             #[cfg(feature = "code")]
             view_followers: Mutex::new(HashMap::new()),
+            grants_once: Mutex::new(Vec::new()),
             atterrissages: Mutex::new(None),
             #[cfg(test)]
             porte_d_ecriture: Mutex::new(None),
