@@ -2358,9 +2358,134 @@ impl DaemonHost {
     /// found under each, the views opened, the repositories attached, those available, and the tasks.
     /// **What a view has not pushed yet** (`GET /vues/diff`, Lucie, 21 November 2026): the commits not pushed and the
     /// uncommitted diff of a view, by its name, of the calling session or of `session=<id>` (read only, for the IDE).
-    #[allow(unused_variables)]
     pub fn diff_d_une_vue(&self, appelant: Option<&str>, parametres: &std::collections::HashMap<String, String>) -> Result<Value, String> {
-        Err("le diff d'une vue : pas encore".into()) // RED STUB.
+        const BORNE: usize = 64 * 1024;
+        let p = |k: &str| parametres.get(k).map(String::as_str).filter(|v| !v.is_empty());
+        let vue = p("vue").ok_or("« vue » manque : le nom de la vue (celui qu'open_view rend), ou « backend » avec « manifest »")?;
+        // The worktree: the main tree of a repository, or a view the host opened for a session (the caller's, or
+        // `session=<id>` for the IDE, read only).
+        let (racine, fourche) = if vue == crate::generations::COUCHE_DU_BACKEND {
+            let m = p("manifest").ok_or("vue=backend demande « manifest » : le dépôt dont l'arbre principal se lit")?;
+            let h = self.hosted(Path::new(m))?;
+            (self.with_backend(&h, |b| b.prepared().workspace_root())?.ok_or("ce dépôt n'a pas de racine de travail")?, None)
+        } else {
+            let claude = match p("session") {
+                Some(c) => c.to_string(),
+                None => self
+                    .check_session(appelant)?
+                    .claude_session
+                    .ok_or("la session qui appelle n'est pas une session Claude Code : donnez « session »")?,
+            };
+            let fichier = self.fichier_de_vue(&claude).ok_or_else(|| format!("session illisible : « {claude} »"))?;
+            let etat: Value = std::fs::read_to_string(&fichier).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+            let ouverte = etat["ouvertes"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .find(|(nom, o)| nom.as_str() == vue || o["layer"].as_str() == Some(vue))
+                .map(|(_, o)| o.clone())
+                .ok_or_else(|| format!("la session « {claude} » n'a pas de vue ouverte « {vue} »"))?;
+            let chemin = ouverte["path"].as_str().map(std::path::PathBuf::from).ok_or("la vue notée n'a pas de chemin")?;
+            (chemin, ouverte["fork"].as_str().map(str::to_string))
+        };
+        let git = |args: &[&str]| -> Result<String, String> {
+            let o = std::process::Command::new("git").arg("-C").arg(&racine).args(args).output().map_err(|e| format!("git : {e}"))?;
+            // `git diff --no-index` says « different » by its code 1.
+            if o.status.success() || (o.status.code() == Some(1) && args.contains(&"--no-index")) {
+                Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+            } else {
+                Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+            }
+        };
+        let borner = |t: String| -> (String, bool) {
+            if t.len() <= BORNE {
+                return (t, false);
+            }
+            let mut fin = BORNE;
+            while !t.is_char_boundary(fin) {
+                fin -= 1;
+            }
+            (t[..fin].to_string(), true)
+        };
+        // `--numstat -z -M`: `a\tb\tpath\0`, or `a\tb\t\0old\0new\0` for a rename; `-` for a binary.
+        let stat = |sortie: &str| -> Vec<Value> {
+            let mut out = Vec::new();
+            let mut morceaux = sortie.split('\0').filter(|m| !m.is_empty()).peekable();
+            while let Some(m) = morceaux.next() {
+                let mut c = m.splitn(3, '\t');
+                let (a, r, chemin) = (c.next().unwrap_or_default(), c.next().unwrap_or_default(), c.next().unwrap_or_default());
+                let binaire = a == "-" && r == "-";
+                let nombre = |x: &str| x.parse::<u64>().ok();
+                let mut e = json!({ "path": chemin, "added": nombre(a), "removed": nombre(r) });
+                if chemin.is_empty() {
+                    let ancien = morceaux.next().unwrap_or_default();
+                    e["path"] = json!(morceaux.next().unwrap_or_default());
+                    e["from"] = json!(ancien);
+                }
+                if binaire {
+                    e["binary"] = json!(true);
+                }
+                out.push(e);
+            }
+            out
+        };
+        // The commits not pushed: `@{u}..HEAD` when the branch has an upstream, else since its fork.
+        let amont = git(&["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).ok().map(|a| a.trim().to_string()).filter(|a| !a.is_empty());
+        let intervalle = match (&amont, &fourche) {
+            (Some(_), _) => Some("@{u}..HEAD".to_string()),
+            (None, Some(f)) => Some(format!("{f}..HEAD")),
+            (None, None) => None,
+        };
+        let shas: Vec<(String, String, String)> = match &intervalle {
+            Some(i) => git(&["log", "--format=%H%x1f%s%x1f%cI", i])?
+                .lines()
+                .filter_map(|l| {
+                    let mut c = l.split('\u{1f}');
+                    Some((c.next()?.to_string(), c.next()?.to_string(), c.next()?.to_string()))
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        if let Some(sha) = p("commit") {
+            let (sha, _, _) = shas
+                .iter()
+                .find(|(s, _, _)| s == sha || (sha.len() >= 7 && s.starts_with(sha)))
+                .ok_or_else(|| format!("« {sha} » n'est pas un commit non poussé de cette vue"))?;
+            let mut args = vec!["show", "--format=", "-M", sha.as_str()];
+            if let Some(f) = p("path") {
+                args.extend(["--", f]);
+            }
+            let (patch, truncated) = borner(git(&args)?);
+            return Ok(json!({ "sha": sha, "path": p("path"), "patch": patch, "truncated": truncated }));
+        }
+        let neufs: Vec<String> = git(&["ls-files", "--others", "--exclude-standard"])?.lines().map(str::to_string).filter(|l| !l.is_empty()).collect();
+        if let Some(f) = p("path") {
+            let (patch, truncated) = if neufs.iter().any(|n| n == f) {
+                borner(git(&["diff", "--no-index", "--", "/dev/null", f])?)
+            } else {
+                borner(git(&["diff", "-M", "HEAD", "--", f])?)
+            };
+            return Ok(json!({ "path": f, "patch": patch, "truncated": truncated }));
+        }
+        let mut non_commite = stat(&git(&["diff", "--numstat", "-z", "-M", "HEAD"])?);
+        for n in &neufs {
+            let lignes = std::fs::read_to_string(racine.join(n)).map(|t| t.lines().count() as u64).ok();
+            let mut e = json!({ "path": n, "added": lignes, "removed": 0, "new": true });
+            if lignes.is_none() {
+                e["binary"] = json!(true);
+                e["added"] = Value::Null;
+            }
+            non_commite.push(e);
+        }
+        let non_commite = json!({ "stat": non_commite });
+        if p("seulement") == Some("non_commite") {
+            return Ok(json!({ "path": racine, "non_commite": non_commite }));
+        }
+        let mut commits = Vec::new();
+        for (sha, sujet, date) in &shas {
+            commits.push(json!({ "sha": sha, "subject": sujet, "date": date, "stat": stat(&git(&["show", "--numstat", "-z", "-M", "--format=", sha])?) }));
+        }
+        Ok(json!({ "path": racine, "upstream": amont, "base": intervalle, "commits": commits, "non_commite": non_commite }))
     }
 
     pub fn poste(&self) -> Value {
@@ -2415,6 +2540,8 @@ impl DaemonHost {
                     "name": nom,
                     "path": o["path"],
                     "branch": o["branch"],
+                    "from": o["from"],
+                    "fork": o["fork"],
                     "layer": couche,
                     "active": couche.is_some() && etat_vue["active"]["layer"].as_str() == couche,
                     "writing": couche.is_some_and(|c| en_ecriture.iter().any(|x| x == c)),
