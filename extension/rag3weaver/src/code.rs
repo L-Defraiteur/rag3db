@@ -894,7 +894,7 @@ pub fn register_code_schema_sans_versions(catalog: &mut Catalog, scope_chunking:
     }
     for (name, _, _) in RELATIONS {
         let relation = relations.remove(name).expect("relation du schéma code");
-        catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
+        catalog.register_keyed_relation(name, &relation.from, &relation.to, relation.properties.unwrap_or_default(), relation.key)?;
     }
     Ok(())
 }
@@ -1005,7 +1005,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     }
     for (name, _, _) in RELATIONS {
         let relation = relations.remove(name).expect("relation du schéma code");
-        catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
+        catalog.register_keyed_relation(name, &relation.from, &relation.to, relation.properties.unwrap_or_default(), relation.key)?;
     }
     if generations {
         catalog.poser_les_generations(&[FILE, SCOPE], COUCHE_DU_BACKEND)?;
@@ -6038,7 +6038,7 @@ mod tests_des_colonnes_neuves {
         }
         for (name, _, _) in RELATIONS {
             let relation = relations.remove(name).unwrap();
-            cat.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default()).unwrap();
+            cat.register_keyed_relation(name, &relation.from, &relation.to, relation.properties.unwrap_or_default(), relation.key).unwrap();
         }
         cat.execute_raw("CREATE (s:Scope {_uuid: 'uuid-avant', key: 'avant', name: 'ancien'})").unwrap();
         // La réouverture sous le schéma d'aujourd'hui : la migration additive pose les colonnes.
