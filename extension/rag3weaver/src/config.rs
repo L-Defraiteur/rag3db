@@ -1586,6 +1586,12 @@ pub struct CatalogConfig {
     /// gens voudront de tout, et peut-être seulement sur certaines données »).
     #[serde(default)]
     pub checkpoint_mode: CheckpointMode,
+    /// **The vector of a text, shared by its chunks** (21 November 2026, lot L1 of
+    /// `docs/embarquement/21-11-2026/02-partager-le-vecteur-d-un-texte.md`) : off by default ;
+    /// on, the catalog builds `<E>_Text` beside each chunk table (`crate::shared_text`).
+    /// Nothing reads it before lot L3 : in L1 it serves the migration of copies.
+    #[serde(default)]
+    pub shared_text_vectors: bool,
 }
 
 /// **Ce qu'un checkpoint garde d'un graphe.**
@@ -1619,6 +1625,7 @@ impl Default for CatalogConfig {
             allow_mock_embedder: false,
             checkpoint_dir: None,
             checkpoint_mode: CheckpointMode::Full,
+            shared_text_vectors: false,
         }
     }
 }

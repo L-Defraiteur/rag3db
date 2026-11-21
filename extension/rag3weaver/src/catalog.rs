@@ -28,6 +28,8 @@ const INDEX_RATE_KEY: &str = "index_rate_ms_per_file";
 mod synchronisation;
 #[cfg(all(test, feature = "rag3db-native"))]
 mod reuse_by_text_hash_tests;
+#[cfg(all(test, feature = "rag3db-native"))]
+mod shared_text_tests;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
@@ -3879,14 +3881,15 @@ fn read_threads() -> u64 {
                     current: current.signature(),
                 });
             }
-            return Ok(());
+            return self.ensure_shared_text_storage().map(|_| ());
         }
         if self.lecture_seule {
             return Err(CatalogError::EmbeddingModelUnavailable(
                 crate::embedding_storage::unavailable_message(&slug, &registered),
             ));
         }
-        self.register_embedding_model(&current)
+        self.register_embedding_model(&current)?;
+        self.ensure_shared_text_storage().map(|_| ())
     }
 
     /// L'ancien nom. Il vérifiait qu'un index n'avait qu'un modèle ; il
@@ -3984,6 +3987,32 @@ fn read_threads() -> u64 {
         // ce refus-là se répare.
         self.ensure_vector_index(table, &s.column, &s.index)?;
         Ok(())
+    }
+
+    /// **The shared text storage** (21 November 2026, lot L1, `crate::shared_text`) : under
+    /// `shared_text_vectors`, `<E>_Text` beside each chunk table, filled from its chunks, its
+    /// edges, and one vector per text and registered model. Idempotent, and noted in the meta
+    /// per table and models : a table done is not read again. Off, or read only : nothing.
+    pub fn ensure_shared_text_storage(&self) -> Result<Vec<crate::shared_text::TableReport>, CatalogError> {
+        if !self.config.shared_text_vectors || self.lecture_seule {
+            return Ok(Vec::new());
+        }
+        let entries = self.registered_embedding_models()?;
+        let slugs: Vec<String> = entries.iter().map(|e| e.slug()).collect();
+        let mut reports = Vec::new();
+        for table in self.vector_tables() {
+            let key = format!("shared_text:{table}:{}", slugs.join(","));
+            if self.read_meta_key(&key)?.is_some() {
+                continue;
+            }
+            let create_index = |t: &str, c: &str, i: &str| self.ensure_vector_index(t, c, i).map_err(|e| e.to_string());
+            let report = crate::shared_text::migrate_to_shared_text(self.conn.as_ref(), self.dialect.as_ref(), &table, &entries, &create_index)
+                .map_err(|e| CatalogError::DbError(format!("{table} : textes partagés : {e}")))?;
+            eprintln!("[rag3weaver] textes partagés de {table} : {} textes, {:?} arêtes, vecteurs {:?}, {} ms", report.texts, report.edges, report.vectors, report.ms);
+            self.persist_meta_key(&key, "done")?;
+            reports.push(report);
+        }
+        Ok(reports)
     }
 
     /// Un `ALTER` dont « existe déjà » n'est pas une erreur.

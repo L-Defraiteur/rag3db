@@ -183,6 +183,8 @@ pub mod embedder;
 pub mod lot_memory;
 /// The embedder checks itself at start against a reference (20 November 2026).
 pub mod embedder_check;
+/// The vector of a text, shared by its chunks (21 November 2026, lot L1).
+pub mod shared_text;
 #[cfg(feature = "daemon")]
 pub mod http_embedder;
 pub mod chat;

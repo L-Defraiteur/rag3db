@@ -1187,6 +1187,23 @@ pub trait SchemaDialect: Send + Sync {
     /// et chacun juge la fraîcheur par le sien (7 septembre 2026).
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String;
 
+    /// **The shared text table** beside a chunk table (21 November 2026, `crate::shared_text`) :
+    /// one row per `_text_hash`, its key.
+    fn create_text_table(&self, text_table: &str) -> String;
+    /// The rel from a chunk to its text ; `None` : the engine joins on `_text_hash`.
+    fn create_has_text_rel(&self, rel: &str, chunk_table: &str, text_table: &str) -> Option<String>;
+    /// One text per distinct non-empty `_text_hash` of the chunks ; idempotent.
+    fn fill_texts(&self, chunk_table: &str, text_table: &str) -> String;
+    /// The edges from the chunks that have none ; `None` without a rel.
+    fn link_chunks_to_texts(&self, rel: &str, chunk_table: &str, text_table: &str) -> Option<String>;
+    /// A text's vector for a model, from one chunk whose vector is fresh (its marker equals its
+    /// `_text_hash`), where the text has none yet ; idempotent.
+    fn fill_text_vectors(&self, chunk_table: &str, chunk_col: &str, chunk_marker: &str, text_table: &str, text_col: &str) -> String;
+    /// The rows of `table` whose `column` is not null, as one count.
+    fn count_non_null(&self, table: &str, column: &str) -> String;
+    /// The edges of a chunk-to-text rel, as one count ; `None` without a rel.
+    fn count_has_text_edges(&self, rel: &str) -> Option<String>;
+
     /// **The vector already computed for a text, by its fingerprint** (21 November
     /// 2026) : for the fingerprints of `$hashes` (a list of strings), the rows of `table`
     /// whose `_text_hash` is one of them
@@ -2742,6 +2759,49 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
+    fn create_text_table(&self, text_table: &str) -> String {
+        format!("CREATE NODE TABLE IF NOT EXISTS {}(_text_hash STRING, PRIMARY KEY(_text_hash))", self.quote(text_table))
+    }
+
+    fn create_has_text_rel(&self, rel: &str, chunk_table: &str, text_table: &str) -> Option<String> {
+        Some(format!("CREATE REL TABLE IF NOT EXISTS {}(FROM {} TO {})", self.quote(rel), self.quote(chunk_table), self.quote(text_table)))
+    }
+
+    fn fill_texts(&self, chunk_table: &str, text_table: &str) -> String {
+        format!(
+            "MATCH (c:{}) WHERE c._text_hash IS NOT NULL AND c._text_hash <> '' WITH DISTINCT c._text_hash AS h MERGE (:{} {{_text_hash: h}})",
+            self.quote(chunk_table),
+            self.quote(text_table)
+        )
+    }
+
+    fn link_chunks_to_texts(&self, rel: &str, chunk_table: &str, text_table: &str) -> Option<String> {
+        let r = self.quote(rel);
+        Some(format!(
+            "MATCH (c:{}) WHERE NOT EXISTS {{ MATCH (c)-[:{r}]->() }} WITH c MATCH (t:{} {{_text_hash: c._text_hash}}) CREATE (c)-[:{r}]->(t)",
+            self.quote(chunk_table),
+            self.quote(text_table)
+        ))
+    }
+
+    fn fill_text_vectors(&self, chunk_table: &str, chunk_col: &str, chunk_marker: &str, text_table: &str, text_col: &str) -> String {
+        let (cc, cm, tc) = (self.quote(chunk_col), self.quote(chunk_marker), self.quote(text_col));
+        format!(
+            "MATCH (c:{}) WHERE c.{cc} IS NOT NULL AND c.{cm} = c._text_hash WITH c._text_hash AS h, collect(c.{cc}) AS es \
+             MATCH (t:{} {{_text_hash: h}}) WHERE t.{tc} IS NULL SET t.{tc} = list_extract(es, 1)",
+            self.quote(chunk_table),
+            self.quote(text_table)
+        )
+    }
+
+    fn count_non_null(&self, table: &str, column: &str) -> String {
+        format!("MATCH (n:{}) WHERE n.{} IS NOT NULL RETURN count(*)", self.quote(table), self.quote(column))
+    }
+
+    fn count_has_text_edges(&self, rel: &str) -> Option<String> {
+        Some(format!("MATCH ()-[e:{}]->() RETURN count(e)", self.quote(rel)))
+    }
+
     fn embed_find_by_hash(&self, table: &str, embedding_col: &str, marker: &str) -> Option<String> {
         let (t, col, m) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
         // One scan with the filter : an `UNWIND … MATCH … WHERE n.x = item.y` is planned as a
@@ -4266,6 +4326,44 @@ impl SchemaDialect for PostgresDialect {
              WHERE {chunk_table}._uuid = ANY($uuids)",
             select_cols.join(", ")
         )
+    }
+
+    fn create_text_table(&self, text_table: &str) -> String {
+        format!("CREATE TABLE IF NOT EXISTS {} (_text_hash TEXT PRIMARY KEY)", self.quote(text_table))
+    }
+
+    fn create_has_text_rel(&self, _rel: &str, _chunk_table: &str, _text_table: &str) -> Option<String> {
+        None
+    }
+
+    fn fill_texts(&self, chunk_table: &str, text_table: &str) -> String {
+        format!(
+            "INSERT INTO {} (_text_hash) SELECT DISTINCT _text_hash FROM {} WHERE _text_hash IS NOT NULL AND _text_hash <> '' ON CONFLICT DO NOTHING",
+            self.quote(text_table),
+            self.quote(chunk_table)
+        )
+    }
+
+    fn link_chunks_to_texts(&self, _rel: &str, _chunk_table: &str, _text_table: &str) -> Option<String> {
+        None
+    }
+
+    fn fill_text_vectors(&self, chunk_table: &str, chunk_col: &str, chunk_marker: &str, text_table: &str, text_col: &str) -> String {
+        let (cc, cm, tc) = (self.quote(chunk_col), self.quote(chunk_marker), self.quote(text_col));
+        format!(
+            "UPDATE {} AS t SET {tc} = s.v FROM (SELECT DISTINCT ON (_text_hash) _text_hash, {cc} AS v FROM {} \
+             WHERE {cc} IS NOT NULL AND {cm} = _text_hash) AS s WHERE t._text_hash = s._text_hash AND t.{tc} IS NULL",
+            self.quote(text_table),
+            self.quote(chunk_table)
+        )
+    }
+
+    fn count_non_null(&self, table: &str, column: &str) -> String {
+        format!("SELECT count(*) FROM {} WHERE {} IS NOT NULL", self.quote(table), self.quote(column))
+    }
+
+    fn count_has_text_edges(&self, _rel: &str) -> Option<String> {
+        None
     }
 
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String {
