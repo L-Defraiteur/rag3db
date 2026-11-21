@@ -13,6 +13,12 @@ Deux sortes, une seule page :
   client MCP, un hook ou le terminal ;
 - **un agent de rag3weaver** : une conversation de chat d'un dépôt, et l'équipier d'une tâche.
 
+**Un agent est sa clé stable `agent:<clé>`** (décision de Lucie du 25 octobre 2026), qui traverse les sessions :
+une session Claude Code, une conversation de chat et une tâche d'équipier sont des contextes d'exécution de cet agent,
+rangés sous sa page ; ses noms sont des alias datés. Un contexte dont l'agent n'a pas encore de clé se liste « sans
+nom ». La mémoire (sa page `docs/memoire/21-11-2026/01-ce-que-cet-agent-sait.md`) attribue `author = agent:<clé>` à ce
+que l'hôte écrit, puis sert `GET /ide/agent/memoire` : la tranche 4 s'y branche.
+
 L'accueil devient la liste des agents (actifs, puis inactifs) ; la page « Poste » d'aujourd'hui en devient l'entrée
 « avancé » (la plomberie).
 
