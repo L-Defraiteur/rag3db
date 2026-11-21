@@ -144,6 +144,14 @@ mod e2e_fichier_compose;
 mod e2e_fichiers_entite;
 #[path = "../e2e_garde_des_liens.rs"]
 mod e2e_garde_des_liens;
+#[path = "../e2e_generations_commun.rs"]
+mod e2e_generations_commun;
+#[path = "../e2e_generations_un_arret_revient_sans_rebatir.rs"]
+mod e2e_generations_un_arret_revient_sans_rebatir;
+#[path = "../e2e_generations_un_dossier_en_retard_se_rebatit.rs"]
+mod e2e_generations_un_dossier_en_retard_se_rebatit;
+#[path = "../e2e_generations_un_rollback_revient_sans_rebatir.rs"]
+mod e2e_generations_un_rollback_revient_sans_rebatir;
 #[path = "../e2e_generic_search.rs"]
 mod e2e_generic_search;
 #[path = "../e2e_graph_tool.rs"]
