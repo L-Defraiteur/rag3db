@@ -18,6 +18,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <thread>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -190,6 +192,66 @@ TEST_F(DataFileExtentTest, ARangeBeyondTheFileIsNotFreed) {
         EXPECT_LE(f.start + f.num, dataFH()->getNumPages())
             << "free range [" << f.start << ", +" << f.num << ") lies beyond the file";
     }
+}
+
+// Des pages rendues pendant la fin d'un point de reprise (ticket 2026-11-21-le-point-de-reprise-vide-
+// les-pages-libres-non-reprises-sans-verrou ; TSan sous TwentyWriters.DdlEveryMinute). Un fil de
+// requête qui lâche le dernier segment retiré rend ses pages (freePageRange, sous le verrou du
+// PageManager) pendant que le point de reprise déplace puis vide la liste des pages libres non
+// reprises (finalizeCheckpoint, sans ce verrou). Le témoin : quatre fils rendent chacun 4 000 pages
+// réelles, allouées d'abord, une par une, pendant que le fil principal appelle finalizeCheckpoint en
+// boucle ; une dernière fin de point de reprise, puis toutes les pages rendues doivent être libres.
+// Une page perdue (poussée entre le déplacement et le vidage) ou un plantage disent la course ;
+// sous TSan, elle est nommée.
+TEST_F(DataFileExtentTest, PagesFreedWhileACheckpointFinalizesAreNotLost) {
+    auto* pageManager = PageManager::Get(*conn->getClientContext());
+    constexpr int THREADS = 4;
+    constexpr int PAGES_PER_THREAD = 4000;
+    std::vector<std::vector<PageRange>> ranges(THREADS);
+    for (auto& mine : ranges) {
+        for (auto i = 0; i < PAGES_PER_THREAD; ++i) {
+            mine.push_back(pageManager->allocatePageRange(1));
+        }
+    }
+    pageManager->finalizeCheckpoint();
+    const auto freePages = [&]() {
+        uint64_t total = 0;
+        for (const auto& range :
+            pageManager->getFreeEntries(0, pageManager->getNumFreeEntries())) {
+            total += range.numPages;
+        }
+        return total;
+    };
+    const auto before = freePages();
+    std::atomic<bool> go{false};
+    std::atomic<int> running{THREADS};
+    std::vector<std::thread> threads;
+    for (auto t = 0; t < THREADS; ++t) {
+        threads.emplace_back([&, t] {
+            while (!go.load()) {
+                std::this_thread::yield();
+            }
+            for (const auto& range : ranges[t]) {
+                pageManager->freePageRange(range);
+            }
+            running.fetch_sub(1);
+        });
+    }
+    go.store(true);
+    uint64_t finalizes = 0;
+    while (running.load() > 0) {
+        pageManager->finalizeCheckpoint();
+        finalizes++;
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    pageManager->finalizeCheckpoint();
+    const auto freed = static_cast<uint64_t>(THREADS) * PAGES_PER_THREAD;
+    EXPECT_EQ(freePages() - before, freed)
+        << "[check: pages-freed-during-finalize-not-lost] " << freed << " pages freed by " << THREADS
+        << " threads during " << finalizes << " finalizes; free pages went from " << before
+        << " to " << freePages();
 }
 
 TEST_F(DataFileExtentTest, AWriteBeyondTheFileIsRefused) {
