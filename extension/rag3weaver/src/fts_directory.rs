@@ -147,6 +147,11 @@ impl FtsDirectory {
         Ok(paths.len())
     }
 
+    /// Les fichiers écrits depuis la dernière synchronisation.
+    pub fn pending_writes(&self) -> usize {
+        self.pending.lock().unwrap().len()
+    }
+
     fn note(&self, path: PathBuf) {
         self.pending.lock().unwrap().insert(path);
     }
@@ -271,6 +276,41 @@ impl FtsShardStorage {
         self.generation.fetch_max(generation, Ordering::SeqCst);
     }
 
+    /// La génération que le prochain `mark_next_generation` rendra (lucivy 4.4 : celle dont le commit du paquet
+    /// s'étiquette avant la synchronisation).
+    pub fn next_generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst) + 1
+    }
+
+    /// Les fichiers écrits dans les morceaux depuis la dernière synchronisation.
+    pub fn pending_writes(&self) -> usize {
+        self.directories.lock().unwrap().iter().map(|d| d.pending_writes()).sum()
+    }
+
+    /// **Revenir à une génération plus basse** (lucivy 4.4, `revert_to`) : le dossier porte de nouveau la génération
+    /// que la base a validée, durablement, et le compteur repart d'elle.
+    pub fn rewind_to(&self, generation: u64) -> io::Result<()> {
+        let path = self.base_path.join(GENERATION_FILE);
+        let tmp = path.with_extension("tmp");
+        let mut f = File::create(&tmp)?;
+        f.write_all(generation.to_string().as_bytes())?;
+        f.sync_data()?;
+        std::fs::rename(&tmp, &path)?;
+        fsync_dir(&self.base_path)?;
+        self.generation.store(generation, Ordering::SeqCst);
+        Ok(())
+    }
+
+    /// Les générations que le dossier garde (lucivy 4.4, `_generations.json` de la racine), vide s'il n'est pas
+    /// étiqueté.
+    pub fn kept_generations(base_path: &Path) -> Vec<u64> {
+        std::fs::read(base_path.join("_generations.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|v| v["kept"].as_array().map(|a| a.iter().filter_map(|g| g.as_u64()).collect()))
+            .unwrap_or_default()
+    }
+
     /// **Marquer une génération nouvelle** dans le dossier, durablement, et la
     /// rendre : à écrire ensuite en base, avec les lignes.
     pub fn mark_next_generation(&self) -> io::Result<u64> {
@@ -336,6 +376,13 @@ impl ShardStorage for SharedFtsStorage {
 
     fn root_file_exists(&self, name: &str) -> bool {
         self.0.base_path.join(name).exists()
+    }
+
+    fn delete_root_file(&self, name: &str) -> Result<(), String> {
+        match std::fs::remove_file(self.0.base_path.join(name)) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(format!("supprimer {name} : {e}")),
+            _ => Ok(()),
+        }
     }
 
     fn drop_storage(&self, _num_shards: usize) -> Result<(), String> {

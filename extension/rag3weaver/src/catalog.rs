@@ -1855,6 +1855,7 @@ fn read_threads() -> u64 {
         // Le mode fichiers : le dossier n'est cru que si sa génération est
         // celle que la base a validée avec ses lignes.
         let mut base_generation = 0u64;
+        let mut revenir_a: Option<(u64, u64)> = None;
         if let crate::fts_handle::FtsStorage::Files { base_path } = &self.fts_storage {
             let dir = std::path::Path::new(base_path).join(&index_name);
             let marque = self.read_meta_key(&format!("fts_generation:{index_name}")).ok().flatten().and_then(|v| v.parse::<u64>().ok());
@@ -1868,7 +1869,17 @@ fn read_threads() -> u64 {
             let interrompu = entite
                 .as_ref()
                 .is_some_and(|e| self.fts_pending_entities().map(|p| p.contains(e)).unwrap_or(false));
-            if (marque != sur_disque && (marque.is_some() || dir.exists())) || interrompu {
+            // **Un dossier en avance qui garde la génération de la base** (lucivy 4.4, décision (A) du 21 novembre
+            // 2026) : un arrêt ou un ROLLBACK entre ses fichiers et la validation du paquet. Il revient à elle, sans
+            // rebâti, une fois ouvert. Un dossier en retard, ou qui ne la garde pas, est jeté et rebâti comme avant.
+            if !interrompu && !self.lecture_seule {
+                if let (Some(m), Some(d)) = (marque, sur_disque) {
+                    if d > m && crate::fts_directory::FtsShardStorage::kept_generations(&dir).contains(&m) {
+                        revenir_a = Some((m, d));
+                    }
+                }
+            }
+            if revenir_a.is_none() && ((marque != sur_disque && (marque.is_some() || dir.exists())) || interrompu) {
                 if self.lecture_seule {
                     // Un lecteur ne jette rien et n'écrit rien : il sert ce
                     // qui est là, et l'état dit « à rebâtir ».
@@ -1945,6 +1956,33 @@ fn read_threads() -> u64 {
             let handle = crate::fts_handle::open_blob_snapshot(blob_store.as_ref(), &index_name)
                 .map_err(|e| Some(format!("lecture du plein texte {table} : {e}")))?;
             let handle = Arc::new(handle);
+        if let Some((g, d)) = revenir_a {
+            match handle.revert_to(g) {
+                Ok(()) => {
+                    for storage in files.borrow().iter() {
+                        if let Err(e) = storage.rewind_to(g) {
+                            return Err(Some(format!("plein texte {table} : revenu à la génération {g}, marque du dossier impossible ({e})")));
+                        }
+                    }
+                    eprintln!("[rag3weaver] plein texte {table} : génération du dossier {d}, de la base {g} — dossier revenu à la génération {g}, sans rebâti");
+                }
+                Err(e) => {
+                    // Le retour a échoué, tout ou rien : le dossier est resté où il était. Il est marqué à rebâtir, et
+                    // la prochaine ouverture le jette comme avant.
+                    eprintln!("[rag3weaver] plein texte {table} : retour à la génération {g} impossible ({e}) — marqué à rebâtir");
+                    if let Some(entite) = self.entity_of_fts_table(table) {
+                        let _ = self.mark_fts_pending(&[entite.as_str()]);
+                    }
+                    return Err(Some(format!("plein texte {table} : retour à la génération {g} impossible ({e}) — à rouvrir")));
+                }
+            }
+        }
+        // Ce qui reste d'une génération que la base a validée depuis : relâché.
+        if !self.lecture_seule && base_generation > 0 && handle.is_tagged() {
+            if let Err(e) = handle.release_below(base_generation) {
+                eprintln!("[rag3weaver] plein texte {table} : relâcher sous la génération {base_generation} : {e}");
+            }
+        }
             self.fts_handles.insert(table.to_string(), handle.clone());
             self.publish_read_view();
             return Ok(handle);
@@ -7357,10 +7395,13 @@ fn read_threads() -> u64 {
         }
         // Une promesse d'un mort ne s'écrase pas sans être notée.
         let avant = self.read_meta_key(FTS_PROMISE)?.unwrap_or_default();
-        if !avant.is_empty() && avant != self.fts_promise_token {
+        if !avant.is_empty() && jeton_de_la_promesse(&avant) != self.fts_promise_token {
             self.fts_promise_orphan.store(true, Ordering::SeqCst);
         }
-        self.persist_meta_key(FTS_PROMISE, &self.fts_promise_token)
+        // Sous la transaction d'un paquet, la promesse est validée avec les lignes, et la marque de génération aussi :
+        // elle le dit (`|tx`), et une reprise ne la prend pas pour des lignes en avance (lucivy 4.4, (A)).
+        let promesse = if self.in_transaction { format!("{}{PROMESSE_EN_TRANSACTION}", self.fts_promise_token) } else { self.fts_promise_token.clone() };
+        self.persist_meta_key(FTS_PROMISE, &promesse)
     }
 
     /// **Une promesse orpheline** (posée par un processus mort avant de la
@@ -7372,8 +7413,17 @@ fn read_threads() -> u64 {
         }
         let promesse = self.read_meta_key(FTS_PROMISE)?.unwrap_or_default();
         let orpheline = self.fts_promise_orphan.swap(false, std::sync::atomic::Ordering::SeqCst)
-            || (!promesse.is_empty() && promesse != self.fts_promise_token);
+            || (!promesse.is_empty() && jeton_de_la_promesse(&promesse) != self.fts_promise_token);
         if !orpheline {
+            return Ok(());
+        }
+        // **Une promesse faite sous la transaction d'un paquet** (lucivy 4.4, décision (A) du 21 novembre 2026) : elle a
+        // été validée avec ses lignes et avec la marque de génération du plein texte. Des lignes validées ont donc leur
+        // plein texte à une génération que la base nomme ; un dossier en avance revient à elle à l'ouverture (la garde
+        // de génération), et la garde des comptes rattrape un document manquant. Rien à rebâtir pour elle.
+        if promesse.ends_with(PROMESSE_EN_TRANSACTION) {
+            eprintln!("[rag3weaver] plein texte : une promesse d'un paquet en transaction, validée avec ses lignes — levée sans rebâti");
+            self.persist_meta_key(FTS_PROMISE, "")?;
             return Ok(());
         }
         let entites: Vec<String> = self
@@ -7394,7 +7444,7 @@ fn read_threads() -> u64 {
             self.fts_promise_orphan.store(true, std::sync::atomic::Ordering::SeqCst);
             return Err(e);
         }
-        if promesse != self.fts_promise_token {
+        if jeton_de_la_promesse(&promesse) != self.fts_promise_token {
             self.persist_meta_key(FTS_PROMISE, "")?;
         }
         Ok(())
@@ -9893,6 +9943,38 @@ fn read_threads() -> u64 {
     ///
     /// Return failures to the caller as well as emitting an event. Retaining
     /// pending blobs permits retry but does not mean the index is durable.
+    /// L'index plein texte ouvert dont le dossier porte ce nom (la clé de sa marque en base).
+    fn handle_du_dossier(&self, key: &str) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
+        self.fts_handles
+            .iter()
+            .find(|(table, _)| self.scope.index_name(&crate::fts_handle::fts_index_name(table)) == key)
+            .map(|(_, h)| h.clone())
+    }
+
+    /// Relâche, dans l'index de ce dossier, les générations sous `g`, que la base a validée (lucivy 4.4). Leurs
+    /// fichiers partent au ramasse-miettes suivant. Un échec se dit, et ne défait rien : la place revient au suivant.
+    fn relacher_sous(&self, key: &str, g: u64) {
+        if let Some(h) = self.handle_du_dossier(key) {
+            if h.is_tagged() {
+                if let Err(e) = h.release_below(g) {
+                    eprintln!("[rag3weaver] plein texte {key} : relâcher sous la génération {g} : {e}");
+                }
+            }
+        }
+    }
+
+    /// **Après le COMMIT durable d'un paquet** (lucivy 4.4, (A)) : dans chaque index en fichiers, les générations sous
+    /// celle que la base vient de valider partent. Ne pas l'appeler avant que le COMMIT soit durable : une mort
+    /// laisserait la base nommer une génération effacée.
+    pub fn relacher_les_generations_validees(&self) {
+        for storage in &self.fts_files {
+            let key = storage.key();
+            if let Some(g) = self.read_meta_key(&format!("fts_generation:{key}")).ok().flatten().and_then(|v| v.parse::<u64>().ok()) {
+                self.relacher_sous(&key, g);
+            }
+        }
+    }
+
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
         // Dans un lot en transaction : rien à synchroniser, le plein texte
         // attend le COMMIT (`commit_lot`).
@@ -9909,6 +9991,17 @@ fn read_threads() -> u64 {
             tuer_avant_la_synchronisation_du_plein_texte();
             let t = std::time::Instant::now();
             for storage in &self.fts_files {
+                // **L'index étiqueté de la génération à venir** (lucivy 4.4, décision (A) du 21 novembre 2026) : ses
+                // fichiers de génération s'écrivent avant la synchronisation, et partent avec elle. lucivy garde alors
+                // toute génération au-dessus de celle que la base a validée : un arrêt ou un ROLLBACK avant la
+                // validation revient à elle à l'ouverture, sans rebâti.
+                if storage.pending_writes() > 0 {
+                    if let Some(h) = self.handle_du_dossier(&storage.key()) {
+                        let g = storage.next_generation();
+                        h.commit_tagged(g)
+                            .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : génération {g} : {e}")))?;
+                    }
+                }
                 let ecrits = storage
                     .sync_generation()
                     .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : {e}")))?;
@@ -9920,6 +10013,11 @@ fn read_threads() -> u64 {
                         .mark_next_generation()
                         .map_err(|e| CatalogError::IndexPersistence(format!("plein texte ({context}) : marque : {e}")))?;
                     self.persist_meta_key(&format!("fts_generation:{}", storage.key()), &g.to_string())?;
+                    // Hors transaction, la marque est validée tout de suite : ce qui est en dessous part. Sous la
+                    // transaction d'un paquet, après son COMMIT (`relacher_les_generations_validees`).
+                    if !self.in_transaction {
+                        self.relacher_sous(&storage.key(), g);
+                    }
                 }
             }
             // La promesse est tenue : fichiers synchronisés, génération
@@ -15236,6 +15334,13 @@ const FTS_PENDING: &str = "fts_pending:";
 
 /// La génération promise du plein texte en fichiers (voir `fts_promise`).
 const FTS_PROMISE: &str = "fts_promesse";
+/// Le suffixe d'une promesse faite sous la transaction d'un paquet.
+const PROMESSE_EN_TRANSACTION: &str = "|tx";
+
+/// Le jeton du processus qui a fait une promesse, sans son suffixe.
+fn jeton_de_la_promesse(promesse: &str) -> &str {
+    promesse.strip_suffix(PROMESSE_EN_TRANSACTION).unwrap_or(promesse)
+}
 
 /// **Crochet de test** (`RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC=<n>`) : le
 /// processus se tue par SIGKILL à la n-ième synchronisation du plein texte en
