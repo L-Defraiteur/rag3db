@@ -20,7 +20,7 @@ def suites_suivies():
     partout ailleurs. Sans git, tous les fichiers présents."""
     import subprocess
     try:
-        r = subprocess.run(["git", "ls-files", "tests/e2e_*.rs"], cwd=CRATE,
+        r = subprocess.run(["git", "ls-files", ":(glob)tests/e2e_*.rs"], cwd=CRATE,
                            capture_output=True, text=True, check=True)
         return sorted(pathlib.Path(l).stem for l in r.stdout.split())
     except (OSError, subprocess.CalledProcessError):
@@ -69,7 +69,7 @@ filet = '''
 fn suites_suivies() -> Vec<String> {
     let crate_ = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let par_git = std::process::Command::new("git")
-        .args(["ls-files", "tests/e2e_*.rs"])
+        .args(["ls-files", ":(glob)tests/e2e_*.rs"])
         .current_dir(crate_)
         .output()
         .ok()
