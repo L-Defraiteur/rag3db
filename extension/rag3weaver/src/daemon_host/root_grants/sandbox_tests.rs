@@ -238,7 +238,8 @@ fn the_v1_defaults_grant_the_creation_root_open_the_network_and_refuse_a_protect
     std::fs::create_dir_all(&config).unwrap();
     let projets = d.path().join("projets");
     std::fs::create_dir_all(projets.join("neuf")).unwrap();
-    std::fs::write(config.join("sandbox-defaults.json"), json!({ "creation_root": projets }).to_string()).unwrap();
+    // `protected: strict` (off by default since Lucie's word of 20 h 05): the hard refusal of a protected path.
+    std::fs::write(config.join("sandbox-defaults.json"), json!({ "creation_root": projets, "protected": "strict" }).to_string()).unwrap();
     let coffre = d.path().join("coffre");
     std::fs::create_dir_all(&coffre).unwrap();
     std::fs::write(coffre.join("cle"), "non").unwrap();
@@ -254,4 +255,36 @@ fn the_v1_defaults_grant_the_creation_root_open_the_network_and_refuse_a_protect
     let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": format!("cat {}", coffre.join("cle").display())}));
     assert!(r["open_root"].is_null(), "a protected path becomes an open_root request the judge would see: {r}");
     assert!(r.to_string().contains("protégé") && r["ok"] != json!(true), "a protected path is not refused hard: {r}");
+}
+
+/// **A protected folder opens for one command, on a human yes** (Lucie, 21 November 2026, 20 h 05: « si je te dis d'aller
+/// lire tel truc, tu y vas » ; protected no longer means never): without `strict`, a command under a protected folder is
+/// stopped as an open_root request marked protected (a card the agent words, never the judge); a grant by a human for
+/// that command opens it for the next command, in read; the command after is stopped again; and no durable grant of a
+/// protected folder is possible.
+#[test]
+fn a_protected_folder_opens_for_one_command_on_a_human_yes() {
+    let d = tempfile::tempdir().unwrap();
+    let (a, manifeste, s, _id) = banc_des_defauts(d.path());
+    let config = a.host.racines_de_code().unwrap().config;
+    std::fs::create_dir_all(&config).unwrap();
+    let coffre = d.path().join("coffre");
+    std::fs::create_dir_all(&coffre).unwrap();
+    std::fs::write(coffre.join("cle"), "contenu du coffre").unwrap();
+    std::fs::write(config.join("protected-folders.txt"), format!("{}\n", coffre.display())).unwrap();
+    let commande = format!("cat {}", coffre.join("cle").display());
+    let preuve = || Proof { quote: "va lire la clé".into(), at: None, turn: None };
+
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": commande}));
+    assert_eq!(r["open_root"]["protected"], json!(true), "a protected path is not an open_root request marked protected: {r}");
+    assert!(a.host.grant_root("*", &coffre, preuve(), "user", "read").is_err(), "a protected folder is granted durably");
+
+    a.host.grant_once("*", &coffre, preuve(), "user", "read").unwrap();
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": commande}));
+    let sortie = r["result"]["result"].as_str().unwrap_or_default().to_string();
+    assert!(r["ok"] == json!(true) && sortie.contains("contenu du coffre"), "the protected folder does not open after a human yes: {r}");
+
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": commande}));
+    assert_eq!(r["open_root"]["protected"], json!(true), "the protected folder stays open after its command: {r}");
+    assert!(a.host.grant_once("*", &coffre, preuve(), "judge", "read").is_err(), "a protected folder opens on the judge's yes");
 }
