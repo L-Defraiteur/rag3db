@@ -482,6 +482,18 @@ pub const EN_ATTENTE: &str = "**Commande en attente.**";
 /// object follows it (`{class: "open_root", refused, replay}`), which the host turns into a request to the gate.
 pub const OPEN_ROOT_MARKER: &str = "open_root: ";
 
+/// **Whether a command needs a root it has not**, and in which mode (RootGrants, lot B): RED STUB.
+#[allow(unused_variables)]
+pub fn open_root_needed(
+    ligne: &str,
+    racine: &std::path::Path,
+    bac: &crate::commande::BacASable,
+    ecrit: bool,
+    accordees: &[(std::path::PathBuf, String)],
+) -> Option<(std::path::PathBuf, String)> {
+    None // RED STUB.
+}
+
 /// The first word of `ligne` that resolves (absolute, `~/`, or from `racine`) to an existing path outside the roots the
 /// sandbox mounts (its writes and its reads), canonical; `None` when every such word stays inside.
 fn path_outside_the_sandbox(ligne: &str, racine: &std::path::Path, bac: &crate::commande::BacASable) -> Option<std::path::PathBuf> {
