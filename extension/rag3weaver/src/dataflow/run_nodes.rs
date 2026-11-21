@@ -266,10 +266,18 @@ impl Node for RunCommandNode {
         // request to the gate, with the command to replay once the root is granted.
         // **A protected path is a hard refusal** (the v1 defaults, 21 November 2026): the host's data, its state, its
         // configuration, the credential stores; never an open_root request, which the judge would see.
+        // Since Lucie's word of 20 h 05: without `strict`, it asks a human for this command only (a card the agent words,
+        // never the judge, never a durable grant); under `strict`, the hard refusal.
         if let Some(protege) = protected_path_in(&self.ligne, &racine, &crate::backend::call_protected_folders()) {
+            if crate::backend::call_protected_strict() {
+                return Err(format!(
+                    "chemin protégé : {} est sous un dossier que rien n'ouvre (les données ou l'état de l'hôte, un profil de navigateur, un magasin d'identifiants) ; aucun accord ne l'ouvre",
+                    protege.display()
+                ));
+            }
             return Err(format!(
-                "chemin protégé : {} est sous un dossier que rien n'ouvre (les données ou l'état de l'hôte, un profil de navigateur, un magasin d'identifiants) ; aucun accord ne l'ouvre",
-                protege.display()
+                "{OPEN_ROOT_MARKER}{}",
+                serde_json::json!({ "class": "open_root", "protected": true, "mode": "read", "refused": protege, "replay": self.ligne })
             ));
         }
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE).cloned().filter(|_| crate::backend::call_judge_all()) {

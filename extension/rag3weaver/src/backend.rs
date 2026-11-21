@@ -4070,22 +4070,26 @@ pub struct CallSandbox {
     pub network: Option<bool>,
     pub protected: Vec<PathBuf>,
     pub judge_all: bool,
+    /// `protected: strict`: a protected path is a hard refusal; otherwise it asks a human for this command only.
+    pub protected_strict: bool,
 }
 
 /// Runs `f` under the sandbox of a call (see [`CallSandbox`]).
 pub fn with_call_sandbox<T>(sandbox: CallSandbox, f: impl FnOnce() -> T) -> T {
-    struct Remettre(Option<bool>, Vec<PathBuf>, bool);
+    struct Remettre(Option<bool>, Vec<PathBuf>, bool, bool);
     impl Drop for Remettre {
         fn drop(&mut self) {
             CALL_NETWORK.with(|c| c.set(self.0));
             CALL_PROTECTED.with(|c| *c.borrow_mut() = std::mem::take(&mut self.1));
             CALL_JUDGE_ALL.with(|c| c.set(self.2));
+            CALL_PROTECTED_STRICT.with(|c| c.set(self.3));
         }
     }
     let avant = Remettre(
         CALL_NETWORK.with(|c| c.replace(sandbox.network)),
         CALL_PROTECTED.with(|c| c.replace(sandbox.protected)),
         CALL_JUDGE_ALL.with(|c| c.replace(sandbox.judge_all)),
+        CALL_PROTECTED_STRICT.with(|c| c.replace(sandbox.protected_strict)),
     );
     let r = with_granted_roots(sandbox.roots, f);
     drop(avant);
@@ -4099,6 +4103,13 @@ thread_local! {
     static CALL_PROTECTED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
     /// See [`with_call_sandbox`]: a path outside the roots goes to the judge (true by default).
     static CALL_JUDGE_ALL: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// See [`with_call_sandbox`]: `protected: strict`.
+    static CALL_PROTECTED_STRICT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether a protected path is a hard refusal in this call (`protected: strict`, see [`with_call_sandbox`]).
+pub fn call_protected_strict() -> bool {
+    CALL_PROTECTED_STRICT.with(|c| c.get())
 }
 
 /// The protected folders of the call (see [`with_call_sandbox`]).
