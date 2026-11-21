@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
+  comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
+  et n'écrit jamais une ligne sans ses morceaux.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze

@@ -3120,14 +3120,14 @@ impl PreparedBackend {
             let seuil = self.manifest.workspace.as_ref().and_then(|w| w.container_min_chars).unwrap_or(crate::code::CONTAINER_MIN_CHARS);
             let seuil_variable = self.manifest.workspace.as_ref().and_then(|w| w.variable_min_chars).unwrap_or(crate::code::VARIABLE_MIN_CHARS);
             // **The chunks fit the base's smallest embedder** (ticket of embarquement, 20 November 2026): the one this
-            // backend declares, and those the base already holds vectors for. Its tokenizer is a capability: missing,
-            // the base refuses to open for indexing, naming the file — never chunks cut by the bytes alone.
+            // backend declares, and those the base already holds vectors for. Its tokenizer is a capability **of the
+            // chunking only** (c7, 21 November 2026: a build without `token-count` refused to open the base, even to
+            // read and converse): the base opens and serves; a chunking without its counter refuses where chunks are
+            // written (`Catalog` ingestion, `ChunkRecordNode`), naming the feature — never chunks cut by the bytes
+            // alone, never a row written without its chunks.
             let mut embarqueurs: Vec<String> = cat.registered_embedding_models().unwrap_or_default().into_iter().map(|e| e.name).collect();
             embarqueurs.push(self.embed.model.clone());
             let decoupage = crate::code::scope_chunking_for(seuil, seuil_variable, embarqueurs.iter().map(String::as_str));
-            if let Some(b) = &decoupage.token_bound {
-                crate::tokens::counter(&b.model)?;
-            }
             crate::code::register_code_schema(&mut cat, decoupage).map_err(|e| e.to_string())?;
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
@@ -8331,6 +8331,39 @@ mod tests {
             par_defaut.is_some_and(|r| r <= par_le_texte),
             "by the default signals, the constant keeps its full-text rank {par_le_texte}: {par_defaut:?} {noms:?}"
         );
+    }
+
+    /// **A build without `token-count` opens a base under granite and serves it; only the chunks are refused** (c7, 21
+    /// November 2026: the host posed that night, built without the feature, answered « il faut la feature token-count »
+    /// even to the chat). Reading needs no token; the chunking of an index does, and it is refused, naming the feature —
+    /// never a scope written without its chunks.
+    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
+    #[test]
+    fn a_build_without_token_count_opens_a_granite_base_and_refuses_only_its_chunks() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["embeddings"] = json!({"model": "granite-278m", "dimensions": 768});
+            m["workspace"]["index"] = json!("code");
+            m["tools"]["read_file"] = json!({"graph": "read.mmd", "policy": {"read_files": true}});
+        });
+        let prepared = p.unwrap_or_else(|e| panic!("the manifest loads: {e}"));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test())).unwrap();
+        let backend = prepared.open(Box::new(conn), None).unwrap_or_else(|e| panic!("a base under granite opens without token-count: {e}"));
+        let lu = backend.call("read_file", json!({"path": "main.rs"})).expect("reading needs no token");
+        assert!(lu.to_string().contains("depart"), "{lu}");
+        let fichiers = vec![("lib.rs".to_string(), "pub fn longue() -> usize {\n    let a = 1;\n    let b = 2;\n    a + b\n}\n".to_string())];
+        let e = backend.catalog.lock().unwrap().ingest_code(&crate::code::analyze("/banc", fichiers)).err().expect("the chunks are refused");
+        assert!(e.to_string().contains("token-count"), "the refusal names the feature: {e}");
+        let sans_morceaux = backend
+            .catalog
+            .lock()
+            .unwrap()
+            .execute_read_with_params("MATCH (s:ScopeContent) RETURN count(s)", &[])
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+            .unwrap_or(0);
+        drop(dir);
+        assert_eq!(sans_morceaux, 0, "the refused ingestion writes no scope, so none without its chunks");
     }
 
     /// **A short `variable` is not a vector candidate, and keeps its full text** (c7, 20 November 2026: since the content
