@@ -1,6 +1,11 @@
 # Le point de reprise vide les pages libres non reprises sans verrou, pendant qu'un lecteur y en rend
 
-- **État** : ouvert (21 novembre 2026, hotfixs) ; correctif et témoin en cours, même jour
+- **État** : fermé (21 novembre 2026, hotfixs), corrigé sur la branche `fsm-finalize-lock` (ebb420d149 avant
+  la repose) : `PageManager::finalizeCheckpoint` et `rollbackCheckpoint` prennent `mtx`. La preuve : le témoin
+  `DataFileExtentTest.PagesFreedWhileACheckpointFinalizesAreNotLost`, **rouge sur 1619434d76** (en Release,
+  « free(): double free detected in tcache 2 », abort sur 3 essais ; sous TSan, la course nommée sur
+  `FreeSpaceManager::finalizeCheckpoint`), **vert avec le correctif**. Le lien avec C1 se dira sur les vingt tours du
+  cœur, joués sous ses sondes sur ce correctif.
 - **Famille** : moteur
 - **Gravité** : corruption mémoire possible (le tas de malloc), ou des pages perdues (une fuite). Une course de
   données, que ni ASan ni le Release ne voient.
