@@ -98,6 +98,13 @@ fn depot_de(b: &Value) -> Depot {
     Depot { id: s("id"), manifest: s("manifest"), repo: s("repo"), branch: s("branch") }
 }
 
+/// **Le dépôt que l'hôte a résolu** (`POST /depots/resoudre`, la route d'arbre : un seul nom partout, le nom court,
+/// le nom complet `code-<nom>`, l'id, le manifeste, la racine du dépôt ou le dossier du manifeste), complété par son
+/// entrée de l'état de l'hôte (`GET /ide/etat`, pour sa branche).
+pub fn depot_resolu(_etat: &Value, _resolu: &Value) -> Result<Depot, String> {
+    Err("à faire".into())
+}
+
 /// **Le dépôt désigné** dans l'état de l'hôte (`GET /ide/etat`) : par son nom de
 /// dépôt, le chemin de son manifeste (ou un dossier qui le contient), ou son id.
 /// Les worktrees des tâches ne se désignent pas : on désigne le dépôt.
@@ -148,6 +155,19 @@ mod tests {
         let refus = resoudre_depot(&e, "lucivy").unwrap_err();
         assert!(refus.contains("petit-depot") && refus.contains("rag3db") && !refus.contains("backend "), "{refus}");
         assert!(resoudre_depot(&e, "/c").unwrap_err().contains("plusieurs"));
+    }
+
+    /// **The host resolves the name, the terminal completes it** (arbre's route, 21 Nov. 2026: `code-tree add` said
+    /// « code-compteur », the terminal knew only « compteur »): the resolved id is the repository, with its branch from
+    /// the host's state; a resolution the state does not list still gives the repository, without a branch.
+    #[test]
+    fn the_repo_the_host_resolved_is_completed_by_the_state() {
+        let r = json!({ "id": "a1", "repo": "petit-depot", "name": "code-petit", "manifest": "/c/code-petit/backend.json" });
+        let d = depot_resolu(&etat(), &r).unwrap();
+        assert_eq!((d.id.as_str(), d.repo.as_str(), d.branch.as_str(), d.manifest.as_str()), ("a1", "petit-depot", "master", "/c/code-petit/backend.json"));
+        let seul = json!({ "id": "z9", "repo": "neuf", "name": "code-neuf", "manifest": "/c/code-neuf/backend.json" });
+        assert_eq!(depot_resolu(&etat(), &seul).unwrap().repo, "neuf", "not in the state: the resolution alone");
+        assert!(depot_resolu(&etat(), &json!({ "repo": "x" })).is_err(), "no id: refused");
     }
 
     #[test]
