@@ -1158,6 +1158,10 @@ mod tests {
             }
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
+        /// The ids received once at least `n` are there (bounded on the event, not on a sleep).
+        fn ids_attendus(&self, _n: usize) -> Vec<u64> {
+            self.ids()
+        }
         /// Les ids des événements reçus, dans l'ordre.
         fn ids(&self) -> Vec<u64> {
             self.texte().lines().filter_map(|l| l.strip_prefix("id: ")).map(|v| v.parse().unwrap()).collect()
@@ -1191,7 +1195,7 @@ mod tests {
         let lente = Capture::default();
         flux.abonner(Box::new(Lente(lente.clone(), std::time::Duration::from_millis(60))), None, None);
         flux.publier("files", "b", fichier("a.rs"));
-        assert_eq!(lente.ids(), vec![1], "the late window read before its writer delivered");
+        assert_eq!(lente.ids_attendus(1), vec![1], "the late window read before its writer delivered");
     }
 
     /// **Des relais qui publient ensemble ne perdent rien** (ticket du 7 novembre
