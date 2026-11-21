@@ -18,9 +18,15 @@ Le client connaît une **liste d'hôtes déclarée**, dans un fichier de l'utili
 (`~/.config/rag3weaver/hosts.json`) :
 
 ```json
-{"hosts": [{"name": "tablette", "local": true},
-           {"name": "luciepc", "address": "127.0.0.1:7971", "token_from": "…"}]}
+{"default": "luciepc",
+ "hosts": [{"name": "tablette", "label": "ma tablette", "description": "16 cœurs, écran de Lucie, pas de lourd en semaine",
+            "local": true},
+           {"name": "luciepc", "label": "mon PC fixe", "description": "24 cœurs, deux GPU, toujours allumé",
+            "address": "127.0.0.1:7971", "token_from": "…"}]}
 ```
+
+`address` et la source du jeton sont de la plomberie : ils ne vivent que dans ce fichier (les paramètres avancés), et
+**ne sortent jamais** dans une réponse d'outil.
 
 Un appel va à l'hôte de **sa cible**, résolue dans cet ordre :
 
@@ -97,8 +103,17 @@ ses dépôts et ses vues, et le moment du dernier contact. L'hôte par défaut e
 ### Les deux outils de l'aiguillage
 
 Sur le modèle de `views` et `use_view` :
-- `hosts` liste les hôtes déclarés : nom, poste, joignable ou non (et pourquoi), dépôts servis, et lequel est
-  l'hôte courant de la session ;
+- `hosts` liste les hôtes déclarés, pour chacun :
+  - `name`, le nom à donner à `use_host` ;
+  - `label`, le libellé humain écrit par l'utilisatrice (« mon PC fixe », « ma tablette »), rendu tel quel ;
+  - `this_machine: true | false`, calculé par le client : l'hôte tourne-t-il sur le poste de l'agent ? C'est ce qui
+    traduit « prends celui de mon autre PC » : l'hôte joignable dont `this_machine` vaut `false`. S'il y en a
+    plusieurs, l'agent demande lequel, par leur `label` ;
+  - `description`, facultative : la nature du poste (cœurs, GPU, toujours allumé), pour que l'agent sache proposer
+    le bon poste pour un travail lourd ;
+  - joignable ou non, et pourquoi ; les dépôts servis ; s'il est l'hôte courant de la session ou le défaut.
+
+  **Jamais l'adresse ni l'IP** : c'est une donnée réseau qui n'a rien à faire dans une conversation ;
 - `use_host <nom>` pose l'hôte courant de la session. Un nom inconnu est refusé, avec la liste des hôtes connus ; un
   hôte injoignable est refusé en le disant, et l'hôte courant ne change pas.
 
@@ -121,7 +136,16 @@ L'hôte courant vit dans la session MCP du client. À une reconnexion, il est re
 
 Chaque réponse porte toujours `host`.
 
-### Le témoin, rouge d'abord
+### `this_machine` : comment le client le sait
+
+Le client compare l'identité de la machine de l'hôte, rendue par l'hôte à sa sonde (`machine_id` lu dans
+`/etc/machine-id`, haché pour ne pas le diffuser), à celle de son propre poste. L'adresse ne sert pas à le dire : un
+tunnel fait passer luciepc par `127.0.0.1`.
+
+### Les témoins, rouges d'abord
+
+`hosts` sur deux faux hôtes, l'un de la même machine et l'autre non : `this_machine` vaut `true` puis `false`, les
+`label` et `description` sont rendus tels quels, et aucune adresse ni IP n'est dans la réponse.
 
 Deux faux hôtes, chacun avec son nom dans sa réponse. `use_host luciepc`, puis un `search_code` sans cible : la
 réponse vient de luciepc et porte `host: "luciepc"`. Une vue préfixée `tablette:` l'emporte sur l'hôte courant. Un
