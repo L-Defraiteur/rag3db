@@ -203,7 +203,7 @@ impl AppTools {
             // CompletionTools must see the authoritative receipt before rendering/clipping.
             Ok(result.to_string())
         } else if let Some(text) = result["presentation"].as_str() {
-            match result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())) {
+            match rag3weaver::backend_tools::metadata_for_the_model(&result) {
                 Some(metadata) => Ok(format!("{text}\nMetadata: {metadata}")),
                 None => Ok(text.to_string()),
             }

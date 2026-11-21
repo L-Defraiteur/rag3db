@@ -50,10 +50,18 @@ pub fn model_text(result: &Value) -> String {
     let Some(text) = text.filter(|_| !failed || result["presentation"].is_string()) else {
         return result.to_string();
     };
-    match result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())) {
+    match metadata_for_the_model(result) {
         Some(metadata) => format!("{text}\nMetadata: {metadata}"),
         None => text.to_string(),
     }
+}
+
+/// **The metadata the model reads**: the answer's, without `template` — the template version (5.1, 21 Nov. 2026)
+/// is for the run's journal and the rows, not for the model's reading. `None` when nothing remains.
+pub fn metadata_for_the_model(result: &Value) -> Option<Value> {
+    let mut metadata = result.get("metadata")?.as_object()?.clone();
+    metadata.remove("template");
+    (!metadata.is_empty()).then(|| Value::Object(metadata))
 }
 
 #[cfg(test)]
