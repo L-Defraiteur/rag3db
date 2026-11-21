@@ -2425,6 +2425,27 @@ fn fold_lambdas(a: &mut CodeAnalysis) {
         }
         cur
     };
+    // SONDE (branche de mesure) : les rendez-vous d'une fermeture que le scope englobant ne porte pas déjà.
+    if crate::ingest_profile::enabled() {
+        let portes: std::collections::HashSet<(String, String)> = a.pending.iter().filter(|p| !to_parent.contains_key(&p.0)).map(|p| (p.0.clone(), p.1.clone())).collect();
+        let (mut total, mut neufs) = (0usize, 0usize);
+        let mut exemples: Vec<String> = Vec::new();
+        for p in a.pending.iter().filter(|p| to_parent.contains_key(&p.0)) {
+            total += 1;
+            let parent = resolve(&p.0);
+            if !portes.contains(&(parent.clone(), p.1.clone())) {
+                neufs += 1;
+                if exemples.len() < 8 {
+                    exemples.push(format!("{} ← {} ({})", p.1, parent, p.2));
+                }
+            }
+        }
+        crate::dataflow::record_nodes::SONDE_FERMETURES.fetch_add(total, std::sync::atomic::Ordering::Relaxed);
+        crate::dataflow::record_nodes::SONDE_FERMETURES_NEUFS.fetch_add(neufs, std::sync::atomic::Ordering::Relaxed);
+        if !exemples.is_empty() {
+            crate::dataflow::record_nodes::SONDE_EXEMPLES.lock().unwrap_or_else(|e| e.into_inner()).push(format!("NEUF {}", exemples.join(" | ")));
+        }
+    }
     a.scopes.retain(|s| !to_parent.contains_key(&s.key));
     let mut kept = Vec::with_capacity(a.relations.len());
     for mut r in a.relations.drain(..) {

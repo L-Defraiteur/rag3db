@@ -898,6 +898,10 @@ mod tests {
         let compte = |rel: &str| cat.execute_raw(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)")).ok().and_then(|v| v.rows.first().and_then(|l| l.first().cloned()));
         let build_id = cat.execute_raw("CALL BUILD_ID() RETURN *").ok().and_then(|v| v.rows.first().and_then(|l| l.first().cloned()));
         println!("SONDE_BUILD_ID {build_id:?}");
+        println!("SONDE_FERMETURES rendez-vous {} dont non portés par le parent {}", crate::dataflow::record_nodes::SONDE_FERMETURES.load(std::sync::atomic::Ordering::Relaxed), crate::dataflow::record_nodes::SONDE_FERMETURES_NEUFS.load(std::sync::atomic::Ordering::Relaxed));
+        for e in crate::dataflow::record_nodes::SONDE_EXEMPLES.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|e| e.starts_with("NEUF")).take(6) {
+            println!("SONDE_{e}");
+        }
         println!("SONDE_ABSENTS départs {} arrivées {}", crate::dataflow::record_nodes::SONDE_DEPARTS_ABSENTS.load(std::sync::atomic::Ordering::Relaxed), crate::dataflow::record_nodes::SONDE_ARRIVEES_ABSENTES.load(std::sync::atomic::Ordering::Relaxed));
         // Les exemples d'uuid écartés : leur ligne en base, s'il y en a une (Scope, toutes générations ; Symbol).
         {
