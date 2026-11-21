@@ -139,6 +139,20 @@ with tempfile.TemporaryDirectory() as t:
     for loud in ("ouvrir_le_tiroir", "test_rangement", "fermer_le_placard", "/coffres/a"):
         case(f"« {loud} » (nom de test, ou chaîne hors du module de test) : signalé", r is not None and loud in out, out)
 
+    # c7 (21 Nov.): generated files are not read (a minified bundle's displayed text looks like a key): those the
+    # repository lists in tools/poste/generated_files.txt, and those .gitattributes marks linguist-generated.
+    git(repo, "checkout", "-q", "-f", "master")
+    (repo / "tools" / "poste").mkdir(parents=True, exist_ok=True)
+    (repo / "tools" / "poste" / "generated_files.txt").write_text("# generated\nui/app/app.js\tbash build.sh\n", encoding="utf-8")
+    (repo / ".gitattributes").write_text("dist/** linguist-generated=true\n", encoding="utf-8")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "generated files declared")
+    r, out = report(repo, {"ui/app/app.js": 'const a={"actif":1,"fermer_tout":2};function ouvrir_le_bac(){}\n',
+                           "dist/bundle.js": 'function fermer_le_bac(){}\n',
+                           "ui/src/main.ts": 'export function ouvrir_la_trappe() {}\n'})
+    for quiet in ("actif", "fermer_tout", "ouvrir_le_bac", "fermer_le_bac"):
+        case(f"fichier généré : « {quiet} » non signalé", r is not None and quiet not in out, out)
+    case("la source du bundle reste lue : « ouvrir_la_trappe » signalé", r is not None and "ouvrir_la_trappe" in out, out)
+
     # Each identifier once, with its file and line.
     r, out = report(repo, {"src/twice.rs": "fn fermer_x() {}\nfn other() { fermer_x(); }\nmod m { fn fermer_x() {} }\n"})
     case("un identifiant dit une fois, avec fichier:ligne", r is not None and out.count("fermer_x") == 1 and "src/twice.rs:1" in out, out)
