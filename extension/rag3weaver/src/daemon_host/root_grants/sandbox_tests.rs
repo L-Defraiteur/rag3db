@@ -76,3 +76,34 @@ fn a_granted_root_is_read_only_unless_granted_write() {
     let r = crate::dataflow::run_nodes::open_root_needed(&format!("cat {}", dehors.display()), &travail, &bac, false, &lecture);
     assert_eq!(r.map(|(_, m)| m), Some("read".to_string()));
 }
+
+/// **The host's token and the IDE's cookie stay out of every sandbox** (archi via c7, 21 November 2026): an agent's
+/// command that read `daemon.token` could call the host as the IDE's page and pass for Lucie. No grant reopens the
+/// host's data folder or a browser's profile: granting a root that holds them is refused, none is proposed, and a grant
+/// written by hand in the register is not mounted, even in "write".
+#[test]
+fn the_hosts_token_and_the_ides_cookie_stay_out_of_every_sandbox() {
+    let d = tempfile::tempdir().unwrap();
+    let a = atelier(d.path());
+    let depot = petit_depot(&d.path().join("B"));
+    a.appeler("attach_worktree", json!({"path": depot})).unwrap();
+    attendre_l_index(&a, &depot);
+    let jetons = crate::daemon_lifecycle::file_path().parent().unwrap().to_path_buf();
+    let Some(au_dessus) = jetons.parent().map(std::path::Path::to_path_buf).filter(|p| p.is_dir()) else { return };
+    // Granting the folder above the token, in write, is refused; none is proposed there.
+    let refus = a.host.grant_root("*", &au_dessus, Proof { quote: "oui".into(), at: None, turn: None }, "user", "write");
+    assert!(refus.is_err(), "a root holding the host's token is granted: {refus:?}");
+    assert_eq!(a.host.proposed_root(&jetons.join("daemon.token")), None, "the host's data folder is proposed");
+    // A grant written by hand in the register is not mounted.
+    let racines = a.host.racines_de_code().unwrap();
+    let a_la_main = json!({ "grants": [{ "agent": "*", "root": au_dessus.canonicalize().unwrap(), "quote": "à la main", "at": 1, "turn": null, "granted_by": "user", "mode": "write" }] });
+    std::fs::create_dir_all(&racines.data).unwrap();
+    std::fs::write(racines.data.join("root-grants.json"), a_la_main.to_string()).unwrap();
+    let nom = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+    let manifeste = racines.manifest(&nom).canonicalize().unwrap();
+    let (_, r) = a.host.handle("POST", "/session", None, json!({"client": "mcp (pid 1)"}).to_string().as_bytes());
+    let s = r["session"].as_str().unwrap().to_string();
+    let r = a.host.call(Some(&s), &manifeste, "run_command", json!({"command": format!("ls {}", jetons.display())}));
+    let sortie = r["result"]["result"].as_str().unwrap_or_default().to_string();
+    assert!(!(r["ok"] == json!(true) && sortie.contains("code 0")), "a command reads the host's data folder under the sandbox: {r}");
+}
