@@ -2,6 +2,9 @@
 use super::*;
 use std::time::{Duration, Instant};
 
+// A lot's new witness goes in a file of its own, `taches/tests/<lot>.rs` (c7, 21 November 2026).
+mod retrait;
+
 /// Un backend du gabarit `code` dans un dépôt git (le manifeste seul y est
 /// commité : sa base, au chemin absolu, est à côté), son arbre de code, et un
 /// hôte dont les tâches vivent dans le dossier du témoin.
