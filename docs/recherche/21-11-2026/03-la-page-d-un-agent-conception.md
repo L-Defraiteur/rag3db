@@ -58,14 +58,14 @@ plan ; chaque nœud ouvre sa conversation, et la saisie va au nœud ouvert.
 |---|---|---|
 | **Les racines** | les sessions de `/poste` (nom Claude ; « sans nom » = serveur MCP d'avant le 21 nov., à reconnecter par `/mcp`) et les conversations de `/ide/etat` | la clé `agent:<clé>` qui regroupe les contextes d'un même agent |
 | **Une tâche sous sa conversation** | `tasks[].session` : le backend dont la conversation a ouvert la tâche | le lien tâche → session Claude (une tâche ouverte par un agent Claude via le terminal ou le MCP) |
-| **Un sous-agent sous son agent** | `tasks[].parent_task` existe, mais vaut toujours `null` : aucune tâche n'en délègue encore une autre ; le `parent` des runs fait l'arbre d'un run (un pas, ses outils, leurs nœuds) | la délégation d'une tâche à une sous-tâche (le parent posé par `POST /ide/taches`) ; les sous-agents de Claude Code (l'outil Agent) ne sont pas connus de l'hôte : aucun hook ne les relève |
+| **Un sous-agent sous son agent** | un sous-agent est une tâche d'équipier ouverte par `POST /ide/taches {backend, nom, parent_session, views, active}` (nommée `<session>-<nom>`) ; `GET /ide/taches?backend=` rend les tâches ouvertes et fermées avec leur `parent_session` : racine = la session Claude nommée par `parent_session`, enfants = les tâches qui la portent ; une tâche sans `parent_session` est une racine | une route qui rende l'arbre d'un coup sur tous les dépôts du poste (`GET /ide/agents`, archi la prend) ; un troisième niveau (un équipier qui ouvre une sous-tâche) n'existe pas : l'équipier n'a pas cet outil (`parent_task` reste nul) ; les sous-agents de Claude Code (l'outil Agent) ne sont pas connus de l'hôte |
 | **Le plan en cours** | `GET /ide/teammate` : `plan.json`, ses éléments et leur statut (`todo`, `doing`, `done`…) | rien pour l'équipier ; un agent Claude n'a pas de plan que l'hôte connaisse |
-| **Parler au nœud ouvert** | une conversation : `POST /ide/chat` ; l'équipier d'une tâche : `POST /ide/teammate/mailbox` (une demande dans sa boîte, vue au terminal ; joué cette nuit au scénario 1) | un agent Claude Code : l'hôte ne peut pas lui écrire (sa saisie est dans son terminal) ; un sous-agent Claude, de même |
+| **Parler au nœud ouvert** | une conversation : `POST /ide/chat` ; un sous-agent (une tâche) : `POST /ide/teammate/mailbox {backend, task, kind, text}` — `request` ouvre la tâche et lance l'équipier, `answer` répond à sa question, `stop` arrête le pas ; il lit à sa prochaine frontière (joué cette nuit au scénario 1) | écrire à une racine, une session Claude Code : l'IDE ne le peut pas ; le chemin est le bus entre sessions (le relais par pair, chez archi) |
 
-Ce que la tranche 1 peut montrer sans route neuve : les racines (sessions et conversations), leurs tâches par
-`tasks[].session`, le plan en cours de chaque équipier, et la saisie vers une conversation ou une boîte d'équipier.
-Le reste (la clé d'agent, la délégation, les sous-agents de Claude, écrire à un agent Claude) attend ses routes ; la
-partie équipier est chez archi.
+Ce que la tranche 1 peut montrer sans route neuve : les racines (sessions Claude et conversations), leurs
+sous-agents par `parent_session` de `GET /ide/taches`, le plan en cours de chacun, et la saisie vers une conversation
+ou la boîte d'un sous-agent. Ensuite, dans l'ordre proposé par archi : `GET /ide/agents` (l'arbre d'un coup), puis
+écrire à une racine par le relais ; un troisième niveau seulement si Lucie veut des sous-agents de sous-agents.
 
 ## Ce qui reste hors de la vue principale
 
