@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
+  d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
+  rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
+  (toi, ton autorisation citée, l'appel de l'agent, le vérificateur). Chaque ligne de la boîte dit qui l'a écrite.
 - 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
   le dossier `nodes/` d'un backend ouvert, l'appel suivant recharge le backend et sert la nouvelle version, sans
   redémarrer l'hôte. Un appel sans changement ne relit aucun fichier, et une édition cassée laisse servir la version
