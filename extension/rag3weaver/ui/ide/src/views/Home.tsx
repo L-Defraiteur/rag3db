@@ -94,7 +94,7 @@ function Link({ href, icon, label }: { href: string; icon: React.ReactNode; labe
   );
 }
 
-type Opened = { path: string; created: boolean };
+type Opened = { path: string; created: boolean; git?: boolean };
 
 // **Open a folder** (Lucie's first step in the IDE, 21 November 2026): an absolute path; a new or empty folder is
 // created and gets `git init` (never a remote, never a push), a git repository is attached to the atelier; refused,
@@ -120,7 +120,9 @@ function OpenFolder() {
           ok: true,
           text: o.created
             ? `${o.path} : dossier créé, git init fait (aucun distant, rien de poussé), ouvert.`
-            : `${o.path} : dépôt git ouvert.`,
+            : o.git === false
+              ? `${o.path} : dossier ouvert.`
+              : `${o.path} : dépôt git ouvert.`,
         });
       } else {
         setSaid({ ok: false, text: r.error ?? "refusé" });
