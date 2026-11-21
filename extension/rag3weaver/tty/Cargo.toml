@@ -31,6 +31,11 @@ unicode-width = { version = "0.2", optional = true }
 # curseur. Déjà tiré par ratatui : rien de neuf au bâti.
 unicode-segmentation = { version = "1", optional = true }
 
+# L'heure locale d'une autorisation (la carte du mode auto, 21 nov. 2026) : `localtime_r`. Déjà tiré par crossterm :
+# rien de neuf au bâti.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [features]
 # La vue inline. Sans elle, le crate n'est que le client du flux et `--plain` :
 # c'est ce que rag3weaver prend pour ses témoins, sans ratatui dans son bâti.
