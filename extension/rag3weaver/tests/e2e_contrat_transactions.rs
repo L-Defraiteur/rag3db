@@ -99,13 +99,13 @@ fn defaire_un_lien_le_retire() {
             (cles.1.to_string(), CypherValue::String(vers.into())),
         ]))
     };
-    let lier = d.write(&Write::Link { relation: relation.into(), ends: Some((table.into(), table.into())), props: vec![] }).unwrap();
+    let lier = d.write(&Write::Link { relation: relation.into(), ends: Some((table.into(), table.into())), props: vec![], key: vec![] }).unwrap();
     let items = CypherValue::List(vec![paire("a", "b", ("from_uuid", "to_uuid")), paire("a", "c", ("from_uuid", "to_uuid"))]);
     conn.execute_with_params(&lier, &[QueryParam::new("items", items)]).unwrap();
     let compter = d.count_rows(relation);
     assert_eq!(conn.execute(&compter).unwrap().rows[0][0], CypherValue::Int(2), "deux arêtes posées");
 
-    let defaire = d.write(&Write::Unlink { relation: relation.into() }).unwrap();
+    let defaire = d.write(&Write::Unlink { relation: relation.into(), key: vec![] }).unwrap();
     conn.execute_with_params(&defaire, &[QueryParam::new("items", CypherValue::List(vec![paire("a", "b", ("from", "to"))]))]).unwrap();
     let restes = conn.execute(&format!("SELECT from_uuid, to_uuid FROM {}", d.quote(relation))).unwrap();
     assert_eq!(restes.rows.len(), 1, "une arête défaite, l'autre reste : {:?}", restes.rows);

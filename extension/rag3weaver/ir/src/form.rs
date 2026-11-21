@@ -674,8 +674,9 @@ pub enum Write {
     Upsert { table: String, columns: Vec<String> },
     /// Poser des arêtes entre des lignes données par leurs uuids
     /// (`from_uuid`, `to_uuid`, puis les propriétés). Les tables des deux
-    /// bouts, quand on les connaît, évitent de chercher dans toutes.
-    Link { relation: String, ends: Option<(String, String)>, props: Vec<String> },
+    /// bouts, quand on les connaît, évitent de chercher dans toutes. `key` : les propriétés qui distinguent plusieurs
+    /// arêtes entre deux mêmes lignes (vide : une arête est sa paire) ; chacune est aussi dans `props`.
+    Link { relation: String, ends: Option<(String, String)>, props: Vec<String>, key: Vec<String> },
     /// Mettre à jour des champs, **une valeur par ligne** : `$items` porte
     /// `_uuid` et les champs.
     Update { table: String, columns: Vec<String> },
@@ -687,8 +688,9 @@ pub enum Write {
     /// `by`, le nombre de lignes supprimées.
     Delete { table: String, by: String, cascade: bool, count: bool },
     /// Supprimer des arêtes données par leurs bouts : `$items` porte `from`
-    /// et `to` (les uuids), une carte par arête.
-    Unlink { relation: String },
+    /// et `to` (les uuids), une carte par arête ; avec `key`, aussi les valeurs de ces propriétés, et seule l'arête qui
+    /// les porte est retirée (vide : toutes les arêtes de la paire).
+    Unlink { relation: String, key: Vec<String> },
     /// Charger en masse depuis un fichier écrit par l'appelant (le CSV de
     /// l'ingestion). Un dialecte qui ne déclare pas `bulk_load` le refuse en
     /// le nommant, et l'appelant repasse par `Upsert` / `Link`.
@@ -724,12 +726,13 @@ impl Write {
                 noms.push(table);
                 noms.extend(columns.iter().map(String::as_str));
             }
-            Write::Link { relation, ends, props } => {
+            Write::Link { relation, ends, props, key } => {
                 noms.push(relation);
                 if let Some((f, t)) = ends {
                     noms.extend([f.as_str(), t.as_str()]);
                 }
                 noms.extend(props.iter().map(String::as_str));
+                noms.extend(key.iter().map(String::as_str));
             }
             Write::Update { table, columns } => {
                 noms.push(table);
@@ -743,7 +746,10 @@ impl Write {
                 }
             }
             Write::Delete { table, by, .. } => noms.extend([table.as_str(), by.as_str()]),
-            Write::Unlink { relation } => noms.push(relation),
+            Write::Unlink { relation, key } => {
+                noms.push(relation);
+                noms.extend(key.iter().map(String::as_str));
+            }
             // Le chemin du fichier n'entre pas comme un nom : il est cité.
             Write::Load { target: LoadTarget::Nodes { table, columns }, .. } => {
                 noms.push(table);
