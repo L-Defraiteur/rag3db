@@ -1160,7 +1160,8 @@ pub trait SchemaDialect: Send + Sync {
     fn embed_check_hashes(&self, table: &str, marker: &str) -> String;
 
     /// **The vector already computed for a text, by its fingerprint** (21 November
-    /// 2026) : for each `item.hash`, the rows of `table` whose `_text_hash` is that hash
+    /// 2026) : for the fingerprints of `$hashes` (a list of strings), the rows of `table`
+    /// whose `_text_hash` is one of them
     /// and whose vector is valid for the model (its marker equals its `_text_hash`),
     /// as `(hash, vector)`. `None` : this engine does not reuse, every text goes to the
     /// model.
@@ -2667,9 +2668,12 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn embed_find_by_hash(&self, table: &str, embedding_col: &str, marker: &str) -> Option<String> {
         let (t, col, m) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
+        // One scan with the filter : an `UNWIND … MATCH … WHERE n.x = item.y` is planned as a
+        // cross product, 16 s for 20 000 fingerprints on 161 873 chunks, against 0.9 s for
+        // `IN $hashes` (ED's probe, 21 November 2026).
         Some(format!(
-            "UNWIND $items AS item MATCH (n:{t}) WHERE n._text_hash = item.hash AND n.{m} = item.hash AND n.{col} IS NOT NULL \
-             RETURN item.hash, n.{col}"
+            "MATCH (n:{t}) WHERE n._text_hash IN $hashes AND n.{m} = n._text_hash AND n.{col} IS NOT NULL \
+             RETURN n._text_hash, n.{col}"
         ))
     }
 
