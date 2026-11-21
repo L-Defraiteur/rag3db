@@ -3513,6 +3513,213 @@ TEST_F(VectorIndexUpdate, AnIslandOfFormerNeighboursStaysReachableAfterADelete) 
         << " linked rows, " << after.unreachable << " unreachable from every entry "
         << after.error << " ; own searches (k = 2): " << ownSearch;
 }
+
+// Le coût d'un SET de vecteur sous un index HNSW, pour ED (21 novembre 2026 : 36,6 ms par vecteur à
+// l'indexation d'une vue, 404 s pour 412 fichiers). Sur les vecteurs de BANC_VECTORS_CSV (cosinus,
+// comme rag3weaver) : les 200 dernières lignes sont des requêtes, hors de la table ; des autres,
+// les BANC_NEW_ROWS dernières (4 096 par défaut) naissent sans vecteur, et l'index est bâti sur le
+// reste. Puis leurs vecteurs sont posés par SET, en lots de BANC_BATCHES lignes par instruction
+// (1,64,512,4096 ; un lot de 1 ne pose que les 256 premières, au même prix par vecteur), pour
+// chaque efc de BANC_EFCS (200,100,50) ; et une variante « reconstruire » (DROP de l'index, SET sans
+// index, CREATE). Chaque variante dit son coût par vecteur et le rappel@10 de 200 requêtes contre une
+// recherche exhaustive. Une mesure : sautée sans CONCURRENCE_MEASURE=1 et BANC_VECTORS_CSV.
+TEST_F(VectorIndexBridgeMeasure, InsertionCostByBatchAndEfc) {
+    const auto* source = std::getenv("BANC_VECTORS_CSV");
+    if (std::getenv("CONCURRENCE_MEASURE") == nullptr || source == nullptr) {
+        GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1 and BANC_VECTORS_CSV, under `poste cpu`";
+    }
+    constexpr int QUERIES = 200;
+    constexpr int K = 10;
+    const auto listOf = [](const char* name, std::vector<int64_t> fallback) {
+        const auto* value = std::getenv(name);
+        if (value == nullptr) {
+            return fallback;
+        }
+        std::vector<int64_t> out;
+        std::stringstream in(value);
+        for (std::string cell; std::getline(in, cell, ',');) {
+            out.push_back(std::stoll(cell));
+        }
+        return out;
+    };
+    const auto batches = listOf("BANC_BATCHES", {1, 64, 512, 4096});
+    const auto efcs = listOf("BANC_EFCS", {200, 100, 50});
+    const auto* newRowsValue = std::getenv("BANC_NEW_ROWS");
+    const int64_t newRows = newRowsValue == nullptr ? 4096 : std::stoll(newRowsValue);
+    std::vector<std::string> lines;
+    {
+        std::ifstream in(source);
+        for (std::string line; std::getline(in, line);) {
+            line.erase(std::remove(line.begin(), line.end(), '"'), line.end());
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+    }
+    ASSERT_GT(static_cast<int64_t>(lines.size()), QUERIES + newRows + 1000)
+        << "[check: setup] too few vectors";
+    const int dimension = 1 + static_cast<int>(std::count(lines[0].begin(), lines[0].end(), ','));
+    const int64_t total = static_cast<int64_t>(lines.size()) - QUERIES;
+    const int64_t firstNew = total - newRows;
+    std::vector<float> base(static_cast<size_t>(total) * dimension);
+    std::vector<std::vector<float>> queries;
+    const auto csv = databasePath + ".insertion.csv";
+    {
+        std::ofstream out(csv);
+        for (size_t row = 0; row < lines.size(); ++row) {
+            std::vector<float> values;
+            std::stringstream cells(lines[row].substr(1, lines[row].size() - 2));
+            for (std::string cell; std::getline(cells, cell, ',');) {
+                values.push_back(std::stof(cell));
+            }
+            ASSERT_EQ(static_cast<int>(values.size()), dimension) << "[check: setup] line " << row;
+            if (static_cast<int64_t>(row) < total) {
+                std::copy(values.begin(), values.end(), &base[row * dimension]);
+                out << row << ",\"" << lines[row] << "\",\"" << lines[row] << "\"\n";
+            } else {
+                queries.push_back(std::move(values));
+            }
+        }
+    }
+    // The exhaustive top k of each query, in cosine distance (1 - cos), over all rows.
+    const auto norm = [&](const float* v) {
+        double sum = 0;
+        for (auto d = 0; d < dimension; ++d) {
+            sum += static_cast<double>(v[d]) * v[d];
+        }
+        return std::sqrt(sum);
+    };
+    std::vector<double> norms(total);
+    for (int64_t id = 0; id < total; ++id) {
+        norms[id] = norm(&base[id * dimension]);
+    }
+    std::vector<std::set<int64_t>> truth(QUERIES);
+    {
+        const auto workers = std::max<unsigned>(1, std::thread::hardware_concurrency() - 2);
+        std::vector<std::thread> pool;
+        for (unsigned w = 0; w < workers; ++w) {
+            pool.emplace_back([&, w] {
+                for (auto q = static_cast<int>(w); q < QUERIES; q += static_cast<int>(workers)) {
+                    const auto& query = queries[q];
+                    const auto queryNorm = norm(query.data());
+                    std::vector<std::pair<double, int64_t>> all;
+                    all.reserve(total);
+                    for (int64_t id = 0; id < total; ++id) {
+                        double dot = 0;
+                        const auto* v = &base[id * dimension];
+                        for (auto d = 0; d < dimension; ++d) {
+                            dot += static_cast<double>(query[d]) * v[d];
+                        }
+                        all.emplace_back(1 - dot / (queryNorm * norms[id] + 1e-30), id);
+                    }
+                    std::partial_sort(all.begin(), all.begin() + K, all.end());
+                    for (auto i = 0; i < K; ++i) {
+                        truth[q].insert(all[i].second);
+                    }
+                }
+            });
+        }
+        for (auto& t : pool) {
+            t.join();
+        }
+    }
+    const auto recall = [&]() {
+        double sum = 0;
+        for (auto q = 0; q < QUERIES; ++q) {
+            std::string literal = "[";
+            for (auto d = 0; d < dimension; ++d) {
+                literal += (d ? "," : "") + std::to_string(queries[q][d]);
+            }
+            literal += "]";
+            auto result = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, {}) RETURN node.id;", table,
+                literal, K));
+            auto hits = 0;
+            while (result->isSuccess() && result->hasNext()) {
+                hits += static_cast<int>(
+                    truth[q].count(result->getNext()->getValue(0)->getValue<int64_t>()));
+            }
+            sum += static_cast<double>(hits) / K;
+        }
+        return sum / QUERIES;
+    };
+    const auto ms = [](auto start) {
+        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+            .count();
+    };
+    int variant = 0;
+    // One table per variant: the rows, the staged vectors, and the new rows' vectors set to NULL.
+    const auto prepare = [&](int64_t efc, bool withIndex) {
+        table = stringFormat("Ins{}", variant++);
+        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[{}], staged "
+                             "FLOAT[{}]);",
+            table, dimension, dimension));
+        mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
+        mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= {} SET n.vec = NULL;", table, firstNew));
+        if (!withIndex) {
+            return 0.0;
+        }
+        const auto start = std::chrono::steady_clock::now();
+        mustRun(stringFormat("CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := "
+                             "'cosine', efc := {});",
+            table, efc));
+        mustRun("CHECKPOINT;");
+        return ms(start);
+    };
+    const auto setRange = [&](int64_t low, int64_t high, int64_t batch) {
+        for (auto a = low; a < high; a += batch) {
+            mustRun(stringFormat(
+                "MATCH (n:{}) WHERE n.id >= {} AND n.id < {} SET n.vec = n.staged;", table, a,
+                std::min(high, a + batch)));
+        }
+    };
+    const auto drop = [&](bool withIndex) {
+        if (withIndex) {
+            mustRun(stringFormat("CALL DROP_VECTOR_INDEX('{}', 'doc_index');", table));
+        }
+        mustRun(stringFormat("DROP TABLE {};", table));
+    };
+    std::cerr << "  [insertion] " << total << " rows (" << newRows << " set after the CREATE), "
+              << dimension << " dimensions, " << QUERIES << " queries, cosine\n";
+    for (const auto efc : efcs) {
+        for (const auto batch : batches) {
+            const auto createMs = prepare(efc, true);
+            if (HasFatalFailure()) {
+                return;
+            }
+            const auto rows = batch == 1 ? std::min<int64_t>(256, newRows) : newRows;
+            const auto start = std::chrono::steady_clock::now();
+            setRange(firstNew, firstNew + rows, batch);
+            const auto setMs = ms(start);
+            if (rows < newRows) {
+                setRange(firstNew + rows, total, 4096);
+            }
+            const auto r = recall();
+            std::cerr << "  [insertion] efc " << efc << ", SET by " << batch << " : " << setMs / rows
+                      << " ms per vector (" << rows << " vectors, " << setMs << " ms) ; CREATE "
+                      << createMs << " ms ; recall@" << K << " " << r << "\n";
+            drop(true);
+        }
+        // Rebuild: drop the index, set the vectors without it, create it again.
+        prepare(efc, false);
+        const auto start = std::chrono::steady_clock::now();
+        setRange(firstNew, total, 4096);
+        const auto setMs = ms(start);
+        const auto createStart = std::chrono::steady_clock::now();
+        mustRun(stringFormat("CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := "
+                             "'cosine', efc := {});",
+            table, efc));
+        mustRun("CHECKPOINT;");
+        const auto createMs = ms(createStart);
+        const auto r = recall();
+        std::cerr << "  [insertion] efc " << efc << ", rebuild : SET without index " << setMs
+                  << " ms, CREATE " << createMs << " ms, so " << (setMs + createMs) / newRows
+                  << " ms per new vector (for " << newRows << ") ; recall@" << K << " " << r
+                  << "\n";
+        drop(true);
+    }
+    std::filesystem::remove(csv);
+}
 } // namespace
 
 #endif
