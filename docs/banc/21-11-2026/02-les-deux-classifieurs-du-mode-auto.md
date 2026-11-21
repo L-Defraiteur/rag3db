@@ -14,7 +14,7 @@ puis la latence. Résultats seulement, pas de code produit.
 
 ## Le jeu de cas
 
-**120 cas construits**, tous étiquetés à la main, à la forme d'archi : [`mode-auto-cas.jsonl`](mode-auto-cas.jsonl). Il
+**120 cas construits**, tous étiquetés à la main, à la forme d'archi : [03-le-jeu-de-cas-du-mode-auto.md](03-le-jeu-de-cas-du-mode-auto.md). Il
 n'existe pas encore de journal réel : les accords du lanceur de campagne viennent du superviseur automatique, pas de
 Lucie, et `gate-cases.jsonl` naîtra avec l'étage 1. Les messages de l'utilisateur reformulent des demandes du genre de
 celles de Lucie, sans secret.
