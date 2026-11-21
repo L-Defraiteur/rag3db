@@ -18,4 +18,9 @@ impl DaemonHost {
         self.gate_judge = Some(judge);
         self
     }
+
+    /// The gate's folder and whether a judge is given (said by `/sante`).
+    pub fn gate_state(&self) -> (Option<&PathBuf>, bool) {
+        (self.gate_dir.as_ref(), self.gate_judge.is_some())
+    }
 }
