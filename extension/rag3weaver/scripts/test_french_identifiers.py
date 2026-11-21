@@ -120,6 +120,15 @@ with tempfile.TemporaryDirectory() as t:
     case("un nœud nommé en français (\"name\": \"ouvrir_le_coffre\") : signalé", r is not None and "ouvrir_le_coffre" in out, out)
     case("une constante d'invite au nom anglais (PROMPT) : non signalée", r is not None and "PROMPT" not in out, out)
 
+    # c7 (21 Nov.): an identifier already in the base's tree is not new (arbre-open-command called the existing route
+    # /dossiers/ouvrir); only what the lot introduces is reported.
+    git(repo, "checkout", "-q", "-f", "master")
+    (repo / "src" / "routes.rs").write_text('fn r() { route("/dossiers/ouvrir", get(o)); }\n', encoding="utf-8")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "route existante")
+    r, out = report(repo, {"src/open.rs": 'fn open() { call("/dossiers/ouvrir"); }\nfn close() { route("/dossiers/fermer", get(c)); }\n'})
+    case("une route française déjà dans la base, citée par le lot : non signalée", r is not None and "/dossiers/ouvrir" not in out, out)
+    case("une route française que le lot crée : signalée", r is not None and "/dossiers/fermer" in out, out)
+
     # Each identifier once, with its file and line.
     r, out = report(repo, {"src/twice.rs": "fn fermer_x() {}\nfn other() { fermer_x(); }\nmod m { fn fermer_x() {} }\n"})
     case("un identifiant dit une fois, avec fichier:ligne", r is not None and out.count("fermer_x") == 1 and "src/twice.rs:1" in out, out)
