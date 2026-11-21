@@ -72,7 +72,7 @@ fn a_reply_without_usage_and_an_open_reservation_count_at_their_bound() {
 /// itself, as two processes would: `flock` holds per open file.
 #[test]
 fn two_writers_at_the_edge_of_the_cap_only_one_passes() {
-    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":100,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":100,"free_private_hosts":true,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
     for _ in 0..20 {
         std::fs::remove_dir_all(&l.dir).ok();
         let barrier = Arc::new(std::sync::Barrier::new(2));
@@ -108,7 +108,8 @@ fn two_writers_at_the_edge_of_the_cap_only_one_passes() {
 }
 
 /// **What is refused, said**: a slug without a price, a prices file that cannot be read, a tariff in another currency
-/// than the cap. A model at a private address passes without any prices, written as free.
+/// than the cap. Without a file, the ledger writes the default one, which frees the private addresses: a local model is
+/// free because the file says so, never by default.
 #[test]
 fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
     let (_d, l) = ledger(Some(PRICES));
@@ -116,16 +117,42 @@ fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
     assert!(e.contains("no price for `unknown`") && e.contains("never counted at zero"), "{e}");
     let (_d, l) = ledger(None);
     let e = l.reserve("paid", "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(e.contains("prices.json") && e.contains("a paid call is refused"), "{e}");
+    assert!(e.contains("no price for `paid`"), "{e}");
+    l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false)
+        .expect("the shipped prices know the regime's default model");
+    let written = Prices::load(&l.prices_path).expect("the default file is written");
+    assert_eq!(written, Prices::default_file());
+    assert_eq!((written.currency.as_str(), written.monthly_cap, written.free_private_hosts), ("USD", 200.0, true));
     let r = l.reserve("qwen", "http://192.168.1.20:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap();
-    assert!(r.line.free);
+    assert!(r.line.free, "free because the written file says so");
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200}"#));
+    let e = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap_err();
+    assert!(e.contains("no price for `qwen`"), "a file that does not free the private addresses: {e}");
     let (_d, l) = ledger(Some("{ not json"));
-    assert!(l.reserve("paid", "vertex", false, Tokens::default(), &Caller::default(), false).is_err());
+    let e = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap_err();
+    assert!(e.contains("a paid call is refused while the prices cannot be read"), "an unreadable file frees nothing: {e}");
+    assert_eq!(std::fs::read_to_string(&l.prices_path).unwrap(), "{ not json", "never written over");
     let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200,"prices":{"paid":[{"from":"2026-01-01","input":1,"output":1,"currency":"EUR"}]}}"#));
     let e = l.reserve("paid", "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
     assert!(e.contains("EUR") && e.contains("never converted"), "{e}");
     assert!(is_private_address("http://127.0.0.1:8080/v1") && is_private_address("http://luciepc:7983/v1"));
     assert!(!is_private_address("https://api.anthropic.com") && !is_private_address("https://8.8.8.8/v1"));
+}
+
+/// **The shipped prices are whole and dated**: they parse and pass the checks, every tariff names its source and the
+/// day it was read, and Argon's rise of 1 December 2026 is an entry of its own.
+#[test]
+fn the_shipped_prices_name_their_source_and_carry_argons_rise() {
+    let p = Prices::default_file();
+    p.check().unwrap();
+    for (slug, tariffs) in &p.prices {
+        for t in tariffs {
+            assert!(t.source.as_deref().is_some_and(|s| s.starts_with("https://")) && t.read_on.as_deref().is_some_and(is_day), "{slug} {}", t.from);
+        }
+    }
+    let argon = |day: &str| p.tariff("google/gemini-4-argon", day).unwrap().output;
+    assert_eq!((argon("2026-11-30"), argon("2026-12-01")), (10.0, 20.0));
+    assert!(p.tariff(crate::regime::MODELE_VERTEX_PAR_DEFAUT, "2026-11-21").is_some(), "the regime's default model has a price");
 }
 
 /// **A tariff that changes on 1 December**: a call of 30 November and one of 1 December each count at their own.
