@@ -4000,6 +4000,25 @@ thread_local! {
     static WRITABLE_VIEW: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
+/// **The roots granted to the agent that calls** (RootGrants, lot B, 21 November 2026): the host poses them around a
+/// call; the commands' sandbox mounts them, read and write, beside the agent's worktree.
+pub fn with_granted_roots<T>(racines: Vec<PathBuf>, f: impl FnOnce() -> T) -> T {
+    struct Remettre(Vec<PathBuf>);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            GRANTED_ROOTS.with(|c| *c.borrow_mut() = std::mem::take(&mut self.0));
+        }
+    }
+    let avant = GRANTED_ROOTS.with(|c| c.replace(racines));
+    let _remettre = Remettre(avant);
+    f()
+}
+
+thread_local! {
+    /// See [`with_granted_roots`].
+    static GRANTED_ROOTS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
     struct Remettre(Option<CallDeadline>);
     impl Drop for Remettre {
@@ -5984,6 +6003,7 @@ impl Backend {
                     // edits; the git of the shared repository is read from the backend's tree, as for a task.
                     let racine = WRITABLE_VIEW.with(|c| c.borrow().clone()).filter(|r| r.is_dir()).unwrap_or_else(|| racine_du_backend.clone());
                     if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine, &jetons) {
+                        let bac = GRANTED_ROOTS.with(|c| c.borrow().iter().fold(bac, |b, r| b.ecrire_en_plus(r.clone())));
                         let principale = prepared.surcharges.racine_principale.as_deref().unwrap_or(&racine_du_backend);
                         let bac = crate::backend_code::avec_lecture_git(bac, &racine, principale);
                         services.register(
