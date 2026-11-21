@@ -2712,6 +2712,7 @@ fn every_parameter_of_the_teammates_tools_is_described() {
     }
     let mut defs = super::teammate::Step::tool_defs();
     defs.push(super::teammate::Step::fetch_def());
+    defs.push(super::teammate::Step::web_search_def());
     defs.push(super::teammate::Step::send_to_session_def());
     let mut manquent = Vec::new();
     for d in &defs {
@@ -2904,6 +2905,7 @@ fn the_teammate_searches_the_web_through_gemini_grounding_and_a_model_that_is_no
         host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
         let files = host.teammate_files(&h.id, "doc").unwrap();
         files.append("supervisor", "request", None, "Cherche ce que Rust 1.98 a stabilisé.").unwrap();
+        let sent_before = bodies.lock().unwrap().len();
         let outcome = host.run_teammate(&h.id, "doc");
         let r = results.lock().unwrap().clone();
         assert_eq!(r.len(), 1, "{model}: {r:?}\noutcome: {outcome:?}");
@@ -2912,6 +2914,7 @@ fn the_teammate_searches_the_web_through_gemini_grounding_and_a_model_that_is_no
             assert_eq!(x["ok"], json!(false), "{x}");
             let e = x["error"].as_str().unwrap_or_default();
             assert!(e.contains("Gemini") && e.contains(model) && e.contains("teammate.web_search.model"), "refused with the reason: {x}");
+            assert_eq!(bodies.lock().unwrap().len(), sent_before, "a model that is not Gemini sends nothing");
             continue;
         }
         assert_eq!(x["ok"], json!(true), "{x}");
@@ -2930,5 +2933,4 @@ fn the_teammate_searches_the_web_through_gemini_grounding_and_a_model_that_is_no
         assert_eq!(sent["tools"], json!([{ "googleSearch": {} }]), "grounding asked: {sent}");
         assert!(sent["contents"].to_string().contains("what did Rust 1.98 stabilise?"), "{sent}");
     }
-    assert_eq!(bodies.lock().unwrap().len(), 1, "a model that is not Gemini sends nothing");
 }
