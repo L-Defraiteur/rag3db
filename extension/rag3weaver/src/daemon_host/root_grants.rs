@@ -72,6 +72,13 @@ pub fn protected_folders() -> Vec<PathBuf> {
     dossiers.into_iter().map(|d| d.canonicalize().unwrap_or(d)).collect()
 }
 
+impl DaemonHost {
+    /// RED STUB: the protected folders, the defaults and the list of `<config>/protected-folders.txt`.
+    pub fn protected_folders(&self) -> Vec<PathBuf> {
+        protected_folders()
+    }
+}
+
 /// Whether a root holds a protected folder, or lies inside one.
 pub(super) fn holds_a_protected_folder(root: &Path) -> bool {
     protected_folders().iter().any(|p| p.starts_with(root) || root.starts_with(p))
