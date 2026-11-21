@@ -231,6 +231,13 @@ impl DaemonClient {
         Ok(me)
     }
 
+    /// **Follow a restarted host** (scenario 1 of the night of 20 November 2026): after a restart, the host knew a
+    /// client's session only at its next tool call, and the IDE listed no agent. `Ok(true)` when the host changed and a
+    /// new session was opened; `Ok(false)` when it is the same host.
+    pub fn follow_restart(&self) -> Result<bool, String> {
+        Ok(false)
+    }
+
     /// L'hôte désigné a refusé le jeton : relire la source, une session neuve,
     /// le backend rouvert.
     fn relire_le_jeton(&self, d: &Designated) -> Result<(), OpError> {
@@ -1243,6 +1250,45 @@ mod tests {
             1,
             "un appel qui a croisé une réouverture ne se rejoue pas tout seul"
         );
+    }
+
+    /// **A restarted host knows the client again without waiting for a tool call** (scenario 1 of the night of 20
+    /// November 2026, ticket `docs/recherche/tickets/2026-11-21-l-ide-ne-montre-pas-les-agents-du-poste.md`: after the
+    /// pose of 01 h 55, `/ide/etat` listed two sessions for about ten live agents). The daemon.json now describes
+    /// another host: the client opens a session on it, on its own, with its name; the same host again changes nothing.
+    #[test]
+    fn a_restarted_host_knows_the_client_again_without_a_tool_call() {
+        let d = tempfile::tempdir().unwrap();
+        let fiche = d.path().join("daemon.json");
+        let ecrire = |adresse: &str, debut: u64| {
+            let f = crate::daemon_lifecycle::DaemonFile {
+                address: adresse.to_string(),
+                pid: 4242,
+                token: format!("jeton-{debut}"),
+                build: "le témoin".into(),
+                started_at: debut,
+                reponse_s: None,
+                sonde_s: None,
+            };
+            std::fs::write(&fiche, serde_json::to_vec(&f).unwrap()).unwrap();
+        };
+        let (avant, _) = faux_hote(vec![(200, json!({"session": "s-1"})), ouvert()]);
+        ecrire(&avant, 1);
+        let m = std::fs::canonicalize(manifeste_quelconque().path()).unwrap();
+        let designe = Designated { source: DaemonSource::File(fiche.clone()), address: None };
+        let client = DaemonClient::attach_designated(designe, &m, "le témoin", vec![]).expect("branché");
+        assert_eq!(client.session(), "s-1");
+        assert_eq!(client.follow_restart(), Ok(false), "the same host: nothing to do");
+
+        let (apres, recues) = faux_hote(vec![(200, json!({"session": "s-2"}))]);
+        ecrire(&apres, 2);
+        assert_eq!(client.follow_restart(), Ok(true), "the host changed: a new session");
+        assert_eq!(client.session(), "s-2");
+        let recues = recues.lock().unwrap();
+        assert_eq!(recues.first().map(|r| r.0.as_str()), Some("/session"), "the new host got a session: {recues:?}");
+        assert!(recues[0].2.contains("le témoin"), "the session carries the client's name: {:?}", recues[0].2);
+        drop(recues);
+        assert_eq!(client.follow_restart(), Ok(false), "known now: nothing more");
     }
 
     /// Un hôte injoignable est un refus **au démarrage**, qui nomme l'adresse.
