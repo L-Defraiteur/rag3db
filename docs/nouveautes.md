@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Chaque paramètre du serveur de mémoire se décrit.** Une phrase courte par paramètre, à toute
+  profondeur : la vue lue (`layer`, `worktree`, `rank`), la condition de filtre, les options de recherche (`limit`,
+  `offset`, `signals`, `consistency`), les liens d'une relation, le `record` d'un payload, l'état et la nature d'une
+  Memory. Un témoin rougit sur toute propriété sans description. Coût mesuré : la liste des 39 outils passe de
+  82 164 à 96 755 octets, environ 3 650 jetons de plus par tour pour un client qui la reçoit entière.
+
 - 21 novembre 2026 — **Les pages d'un dépôt parlent git.** Dans l'IDE, le fil d'Ariane des tâches, des propositions,
   des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son
   nom et sa branche, comme l'accueil ; le tableau des tâches a une colonne « worktree ». « backend » n'y paraît plus.
