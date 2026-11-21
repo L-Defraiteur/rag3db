@@ -84,8 +84,21 @@ void PageManager::deserialize(common::Deserializer& deSer) {
     freeSpaceManager->deserialize(deSer);
 }
 
+// Under the same lock as freePageRange: a query thread that drops the last retired segment frees its
+// pages (addUncheckpointedFreePages) while the checkpoint evicts, moves and clears that same list.
+// Unordered, a range pushed between the move and the clear was lost, and a push_back that reallocated
+// during the move wrote into a block malloc may have handed out again (ticket 2026-11-21-le-point-
+// de-reprise-vide-les-pages-libres-non-reprises-sans-verrou, seen by TSan under DdlEveryMinute).
+// Lock order: mtx, then the buffer manager's frames (evictPages), as freeImmediatelyRewritablePageRange
+// already does; nothing under mtx takes a checkpoint or transaction manager lock.
 void PageManager::finalizeCheckpoint() {
+    common::UniqLock lck{mtx};
     freeSpaceManager->finalizeCheckpoint(fileHandle);
+}
+
+void PageManager::rollbackCheckpoint() {
+    common::UniqLock lck{mtx};
+    freeSpaceManager->rollbackCheckpoint();
 }
 
 void PageManager::clearEvictedBMEntriesIfNeeded(BufferManager* bufferManager) {
