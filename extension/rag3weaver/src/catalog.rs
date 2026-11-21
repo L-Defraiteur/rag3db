@@ -12052,8 +12052,8 @@ impl Catalog {
     fn warm_chunker_cache(&mut self) {
         for ec in self.entity_configs.values() {
             let key = ChunkerConfig::from(&ec.chunking);
-            // A chunking bounded in tokens without its tokenizer is refused where the schema is registered; here it
-            // is left out of the cache, so nothing is chunked for it (never by the bytes alone).
+            // A chunking bounded in tokens without its tokenizer is left out of the cache: the writers of chunks
+            // refuse it, naming the feature (`ChunkRecordNode`, the ingestion), never chunking by the bytes alone.
             if !self.chunker_cache.contains_key(&key) {
                 if let Ok(chunker) = Chunker::try_new(key.clone()) {
                     self.chunker_cache.insert(key, chunker);
