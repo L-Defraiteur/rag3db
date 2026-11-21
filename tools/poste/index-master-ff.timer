@@ -1,0 +1,9 @@
+[Unit]
+Description=rag3weaver : l'arbre de master indexé, un fetch et un ff chaque minute
+
+[Timer]
+OnCalendar=*:*:00
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
