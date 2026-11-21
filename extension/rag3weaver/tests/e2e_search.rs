@@ -124,6 +124,7 @@ fn make_kb_config() -> CatalogConfig {
             from: "Document".into(),
             to: "Author".into(),
             properties: None,
+            key: Vec::new(),
         },
     );
     relations.insert(
@@ -132,6 +133,7 @@ fn make_kb_config() -> CatalogConfig {
             from: "Document".into(),
             to: "Document".into(),
             properties: None,
+            key: Vec::new(),
         },
     );
     let mut cites_props = HashMap::new();
@@ -142,6 +144,7 @@ fn make_kb_config() -> CatalogConfig {
             from: "Document".into(),
             to: "Document".into(),
             properties: Some(cites_props),
+            key: Vec::new(),
         },
     );
 

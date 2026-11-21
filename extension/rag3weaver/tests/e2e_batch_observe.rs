@@ -75,6 +75,7 @@ fn make_batch_config() -> CatalogConfig {
             from: "File".into(),
             to: "Document".into(),
             properties: None,
+            key: Vec::new(),
         },
     );
 

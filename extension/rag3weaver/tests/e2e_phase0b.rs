@@ -104,6 +104,7 @@ fn make_phase0b_config() -> CatalogConfig {
             from: "Directory".into(),
             to: "File".into(),
             properties: None,
+            key: Vec::new(),
         },
     );
 

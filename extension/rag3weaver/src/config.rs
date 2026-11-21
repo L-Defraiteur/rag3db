@@ -121,6 +121,15 @@ pub struct RelationDef {
 
     #[serde(default)]
     pub properties: Option<HashMap<String, FieldDef>>,
+
+    /// **The identity of a link, beyond its pair** (21 November 2026, the keyed links): the names of the properties
+    /// that tell apart several links between the same two nodes. Empty — the default, and every relation before this
+    /// field — a link is its pair, and a second write of the pair updates the first. With a key, a link is its pair and
+    /// the values of these properties: the occurrences of a name (one link per site, its bytes as key), the calls of a
+    /// function, the citations of a source. Every key is a declared property. Left out of the JSON when empty, so a
+    /// base written before reads the same.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub key: Vec<String>,
 }
 
 // ─── Search & KB Config ─────────────────────────────────────────────────────

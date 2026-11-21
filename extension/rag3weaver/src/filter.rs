@@ -793,6 +793,7 @@ mod tests {
                 from: from.to_string(),
                 to: to.to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
         rels

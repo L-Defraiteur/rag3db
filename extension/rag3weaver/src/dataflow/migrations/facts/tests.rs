@@ -22,6 +22,7 @@ fn input() -> DeclaredSchemaInput {
         relations: Some(BTreeMap::from([("CONTAINS".into(),BackendRelation { def:RelationDef {
             from:"Collection".into(),to:"Document".into(),properties:Some(HashMap::from([("reason".into(),
                 serde_json::from_value::<FieldDef>(serde_json::json!({"type":"string"})).unwrap())])),
+                key: Vec::new(),
         },from_states:Some(vec!["open".into(),"review".into()]),to_states:None,description:Some("ownership".into()) })])),
         provider:ProviderFacts::Absent,index_signals:BTreeMap::new(),recipe:recipe() }
 }

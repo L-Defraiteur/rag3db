@@ -616,6 +616,7 @@ mod tests {
                     from: "Card".into(),
                     to: "Ability".into(),
                     properties: None,
+                    key: Vec::new(),
                 },
             )]
             .into(),

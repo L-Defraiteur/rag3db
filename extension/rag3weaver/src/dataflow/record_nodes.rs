@@ -4789,7 +4789,7 @@ mod tests {
         let mut config = CatalogConfig::default();
         config.relations.insert(
             "R".into(),
-            RelationDef { from: "A".into(), to: "B".into(), properties: Some(HashMap::from([("raison".to_string(), texte())])) },
+            RelationDef { from: "A".into(), to: "B".into(), properties: Some(HashMap::from([("raison".to_string(), texte())])), key: Vec::new() },
         );
         let mut services = ServiceRegistry::new();
         services.register("conn", cat.conn_arc());

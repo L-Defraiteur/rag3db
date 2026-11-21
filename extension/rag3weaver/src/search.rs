@@ -3117,6 +3117,7 @@ mod tests {
                 from: "Document".to_string(),
                 to: "Document".to_string(),
                 properties: None,
+                key: Vec::new(),
             },
         );
 
