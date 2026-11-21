@@ -1463,18 +1463,25 @@ fn synchroniser_la_source(
     // sait que les relations de cette source ne sont pas encore là, au lieu
     // de lire un graphe vide. Sa valeur porte la session, pour qu'une marque
     // laissée par un processus tué se reconnaisse.
+    // Décidée avant la première écriture : sous une synchronisation par paquet, toute promesse du plein texte le dit
+    // (lucivy 4.4, (A)), celles des écritures d'entre deux paquets comprises.
+    let tx = decider_la_transaction_par_paquet(catalog)?;
+    catalog.set_sync_par_paquet(tx.0);
     if mode == RelationsMode::Bulk {
-        catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")).map_err(|e| e.to_string())?;
+        if let Err(e) = catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")) {
+            catalog.set_sync_par_paquet(false);
+            return Err(e.to_string());
+        }
     }
     // **Les lignes posées font preuve d'existence** pour le COPY des liens,
     // le temps de cette synchronisation, derrière la transaction par paquet
     // (levier 2 du chargement final). Fermée sur tout chemin de sortie.
-    let tx = decider_la_transaction_par_paquet(catalog)?;
     if tx.0 && std::env::var("RAG3WEAVER_TX_SANS_PREUVE").as_deref() != Ok("1") {
         catalog.begin_proving_presence();
     }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id, tx);
     catalog.end_proving_presence();
+    catalog.set_sync_par_paquet(false);
     if resultat.is_err() {
         // **Held derivations are never left held**: a suspended or failed pass renders what it held back (their
         // debt is in the base already, and the render catch-up would find it), and the hold is lifted, so that the
