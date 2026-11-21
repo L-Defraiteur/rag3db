@@ -67,6 +67,15 @@ pub struct TeammatePolicy {
     /// The text of that relaunch, after the cut's note (`cut_reply`).
     #[serde(default = "TeammatePolicy::cut_relaunch_text_default")]
     pub cut_relaunch_text: String,
+    /// **The verification gate** (the night replays of 21 Nov 2026: a fix said « implemented and
+    /// verified » on a tree that did not compile): commands played in the task's tree, through the
+    /// gate and the sandbox, before the teammate may end. A red one gives one more step with its
+    /// output; still red after `verify_relaunches`, the task ends as a failure. Empty: no gate.
+    #[serde(default)]
+    pub verify: Vec<String>,
+    /// How many more steps a red verification gives. Default: 2.
+    #[serde(default = "TeammatePolicy::verify_relaunches_default")]
+    pub verify_relaunches: usize,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -105,6 +114,15 @@ pub struct TeammatePolicy {
     /// and the end of its output, the last text) is bounded by these characters. Default: 8 000.
     #[serde(default = "TeammatePolicy::carry_over_chars_default")]
     pub carry_over_chars: usize,
+    /// **The `Previous step` block by a declared scripted node** (21 November 2026): the type name of a node of the
+    /// backend's `nodes/` folder (the shipped `PreviousStep`, or one's own), read again at each step; its `.ts`
+    /// edited serves at the next step. A script that fails never breaks the step: the Rust block serves, and the box
+    /// says why. Absent: the Rust block.
+    #[serde(default)]
+    pub carry_over_node: Option<String>,
+    /// The configuration of that node (`{"style": "compact"}` for the shipped one). Absent: its defaults.
+    #[serde(default)]
+    pub carry_over_node_config: serde_json::Value,
 }
 
 impl TeammatePolicy {
@@ -144,6 +162,9 @@ impl TeammatePolicy {
     fn cut_relaunches_per_step_default() -> usize {
         2
     }
+    fn verify_relaunches_default() -> usize {
+        2
+    }
     fn cut_relaunch_text_default() -> String {
         "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
     }
@@ -162,9 +183,13 @@ impl Default for TeammatePolicy {
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
+            carry_over_node: None,
+            carry_over_node_config: serde_json::Value::Null,
             pair: false,
             cut_relaunches_per_step: Self::cut_relaunches_per_step_default(),
             cut_relaunch_text: Self::cut_relaunch_text_default(),
+            verify: Vec::new(),
+            verify_relaunches: Self::verify_relaunches_default(),
         }
     }
 }
@@ -8387,37 +8412,6 @@ mod tests {
             let texte = std::fs::read_to_string(tools.join(gabarit)).unwrap();
             assert!(!texte.contains("%% param: options json!"), "{gabarit} still requires options");
         }
-    /// **A build without `token-count` opens a base under granite and serves it; only the chunks are refused** (c7, 21
-    /// November 2026: the host posed that night, built without the feature, answered « il faut la feature token-count »
-    /// even to the chat). Reading needs no token; the chunking of an index does, and it is refused, naming the feature —
-    /// never a scope written without its chunks.
-    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
-    #[test]
-    fn a_build_without_token_count_opens_a_granite_base_and_refuses_only_its_chunks() {
-        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
-            m["embeddings"] = json!({"model": "granite-278m", "dimensions": 768});
-            m["workspace"]["index"] = json!("code");
-            m["tools"]["read_file"] = json!({"graph": "read.mmd", "policy": {"read_files": true}});
-        });
-        let prepared = p.unwrap_or_else(|e| panic!("the manifest loads: {e}"));
-        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
-        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test())).unwrap();
-        let backend = prepared.open(Box::new(conn), None).unwrap_or_else(|e| panic!("a base under granite opens without token-count: {e}"));
-        let lu = backend.call("read_file", json!({"path": "main.rs"})).expect("reading needs no token");
-        assert!(lu.to_string().contains("depart"), "{lu}");
-        let fichiers = vec![("lib.rs".to_string(), "pub fn longue() -> usize {\n    let a = 1;\n    let b = 2;\n    a + b\n}\n".to_string())];
-        let e = backend.catalog.lock().unwrap().ingest_code(&crate::code::analyze("/banc", fichiers)).err().expect("the chunks are refused");
-        assert!(e.to_string().contains("token-count"), "the refusal names the feature: {e}");
-        let sans_morceaux = backend
-            .catalog
-            .lock()
-            .unwrap()
-            .execute_read_with_params("MATCH (s:ScopeContent) RETURN count(s)", &[])
-            .ok()
-            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
-            .unwrap_or(0);
-        drop(dir);
-        assert_eq!(sans_morceaux, 0, "the refused ingestion writes no scope, so none without its chunks");
     }
 
     /// **A short `variable` is not a vector candidate, and keeps its full text** (c7, 20 November 2026: since the content
@@ -11501,6 +11495,39 @@ mod tests {
         let validator = jsonschema::validator_for(&outer).unwrap();
         assert!(validator.is_valid(&json!({"record":{"key":"one"}})));
         assert!(!validator.is_valid(&json!({"record":{"key":""}})));
+    }
+
+    /// **A build without `token-count` opens a base under granite and serves it; only the chunks are refused** (c7, 21
+    /// November 2026: the host posed that night, built without the feature, answered « il faut la feature token-count »
+    /// even to the chat). Reading needs no token; the chunking of an index does, and it is refused, naming the feature —
+    /// never a scope written without its chunks.
+    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
+    #[test]
+    fn a_build_without_token_count_opens_a_granite_base_and_refuses_only_its_chunks() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["embeddings"] = json!({"model": "granite-278m", "dimensions": 768});
+            m["workspace"]["index"] = json!("code");
+            m["tools"]["read_file"] = json!({"graph": "read.mmd", "policy": {"read_files": true}});
+        });
+        let prepared = p.unwrap_or_else(|e| panic!("the manifest loads: {e}"));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test())).unwrap();
+        let backend = prepared.open(Box::new(conn), None).unwrap_or_else(|e| panic!("a base under granite opens without token-count: {e}"));
+        let lu = backend.call("read_file", json!({"path": "main.rs"})).expect("reading needs no token");
+        assert!(lu.to_string().contains("depart"), "{lu}");
+        let fichiers = vec![("lib.rs".to_string(), "pub fn longue() -> usize {\n    let a = 1;\n    let b = 2;\n    a + b\n}\n".to_string())];
+        let e = backend.catalog.lock().unwrap().ingest_code(&crate::code::analyze("/banc", fichiers)).err().expect("the chunks are refused");
+        assert!(e.to_string().contains("token-count"), "the refusal names the feature: {e}");
+        let sans_morceaux = backend
+            .catalog
+            .lock()
+            .unwrap()
+            .execute_read_with_params("MATCH (s:ScopeContent) RETURN count(s)", &[])
+            .ok()
+            .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+            .unwrap_or(0);
+        drop(dir);
+        assert_eq!(sans_morceaux, 0, "the refused ingestion writes no scope, so none without its chunks");
     }
 }
 
