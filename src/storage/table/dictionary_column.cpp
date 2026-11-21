@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
 #include "common/exception/runtime.h"
 #include "common/string_format.h"
@@ -67,6 +69,40 @@ void DictionaryColumn::scan(const SegmentState& state, DictionaryChunk& dictChun
     for (row_idx_t i = initialDictSize; i < offsetChunk->getNumValues(); i++) {
         offsetChunk->setValue<string_offset_t>(
             offsetChunk->getValue<string_offset_t>(i) + initialDictDataSize, i);
+    }
+    // SONDE C1 (branche c1-scan-probe, jamais pour master) : les offsets relus doivent croître et
+    // tenir dans les octets relus. Sinon, les métadonnées des deux enfants sur stderr, puis abort.
+    const auto numBytes = stringDataChunk->getNumValues();
+    string_offset_t previous = 0;
+    for (row_idx_t i = initialDictSize; i < offsetChunk->getNumValues(); i++) {
+        const auto offset = offsetChunk->getValue<string_offset_t>(i);
+        if (offset > numBytes || (i > initialDictSize && offset < previous)) {
+            const auto describe = [](const char* name, const ColumnChunkMetadata& m) {
+                fprintf(stderr,
+                    "[sonde C1 scan] %s : numValues %lu, pages %u..+%u, compression %d, min %lu, "
+                    "max %lu\n",
+                    name, (unsigned long)m.numValues, m.pageRange.startPageIdx,
+                    m.pageRange.numPages, static_cast<int>(m.compMeta.compression),
+                    (unsigned long)m.compMeta.min.unsignedInt,
+                    (unsigned long)m.compMeta.max.unsignedInt);
+            };
+            fprintf(stderr,
+                "[sonde C1 scan] dictionnaire relu incohérent : offset[%lu] = %lu (précédent %lu), "
+                "octets %lu, offsets %lu, initialDictSize %lu, initialDictDataSize %lu\n",
+                (unsigned long)i, (unsigned long)offset, (unsigned long)previous,
+                (unsigned long)numBytes, (unsigned long)offsetChunk->getNumValues(),
+                (unsigned long)initialDictSize, (unsigned long)initialDictDataSize);
+            describe("DATA", dataMetadata);
+            describe("OFFSET", offsetMetadata);
+            const auto from = offsetChunk->getNumValues() > 4 ? offsetChunk->getNumValues() - 4 : 0;
+            for (auto k = from; k < offsetChunk->getNumValues(); k++) {
+                fprintf(stderr, "[sonde C1 scan] offset[%lu] = %lu\n", (unsigned long)k,
+                    (unsigned long)offsetChunk->getValue<string_offset_t>(k));
+            }
+            fflush(stderr);
+            abort();
+        }
+        previous = offset;
     }
 }
 
