@@ -3402,6 +3402,116 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsDeletedInWaves) {
                            << " of " << runs * waves
                            << " delete waves leave linked rows that no entry reaches:" << details;
 }
+
+// Le point d'entrée de la couche basse, lu ou, avec newEntryPoint, écrit par les internes.
+offset_t lowerEntryPointOf(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index, std::optional<offset_t> newEntryPoint = std::nullopt) {
+    if (!beginReadOnly(connection)) {
+        return 0;
+    }
+    auto* context = connection.getClientContext();
+    auto* transaction = rag3db::transaction::Transaction::Get(*context);
+    const auto* entry =
+        rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, table);
+    auto& nodeTable = rag3db::storage::StorageManager::Get(*context)
+                          ->getTable(entry->getTableID())
+                          ->cast<rag3db::storage::NodeTable>();
+    auto& info = static_cast<HNSWStorageInfoMirror&>(const_cast<rag3db::storage::IndexStorageInfo&>(
+        nodeTable.getIndex(index, nullptr).value()->getStorageInfo()));
+    if (newEntryPoint) {
+        info.lowerEntryPoint = *newEntryPoint;
+    }
+    const auto entryPoint = info.lowerEntryPoint;
+    EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
+    return entryPoint;
+}
+
+// Un îlot d'anciens voisins (ticket 2026-11-20-une-suppression-sous-un-index-vectoriel-peut-couper-
+// des-voisins-du-graphe ; vu sur code-lourd : quatre quasi-copies coupées par la suppression d'un
+// bloc lointain qui tenait leurs seules arêtes entrantes). Le graphe est posé à la main, par le
+// catalogue interne : un amas de 40 lignes autour de l'origine, D (id 40) au loin, X (41) et Y (42)
+// plus loin encore. Les seules arêtes vers X et Y : D → X, X → Y, Y → X ; D est joint par l'amas.
+// Supprimer D : X est un ancien voisin de D, et Y pointe vers lui sans avoir rien perdu. Y ne prouve
+// pas que X est joignable — il n'est joint que par X. Les deux doivent rester joignables.
+TEST_F(VectorIndexUpdate, AnIslandOfFormerNeighboursStaysReachableAfterADelete) {
+    table = "Island";
+    mustRun("CREATE NODE TABLE Island(id INT64 PRIMARY KEY, vec FLOAT[2]);");
+    mustRun("UNWIND range(0, 39) AS i CREATE (n:Island {id: i}) SET n.vec = "
+            "[CAST(i % 8 AS FLOAT) * 0.1, CAST(i / 8 AS FLOAT) * 0.1];");
+    mustRun("CREATE (:Island {id: 40, vec: [10.0, 0.0]});");
+    mustRun("CREATE (:Island {id: 41, vec: [20.0, 0.0]});");
+    mustRun("CREATE (:Island {id: 42, vec: [20.0, 0.001]});");
+    createIndex();
+    if (HasFatalFailure()) {
+        return;
+    }
+    std::string tableID;
+    {
+        auto tables = conn->query("CALL SHOW_TABLES() RETURN id, name;");
+        ASSERT_TRUE(tables->isSuccess()) << "[check: query] " << tables->getErrorMessage();
+        while (tables->hasNext()) {
+            auto tuple = tables->getNext();
+            if (tuple->getValue(1)->toString() == table) {
+                tableID = tuple->getValue(0)->toString();
+            }
+        }
+    }
+    ASSERT_FALSE(tableID.empty()) << "[check: setup] table id";
+    const auto lower = stringFormat("_{}_doc_index_LOWER", tableID);
+    const auto upper = stringFormat("_{}_doc_index_UPPER", tableID);
+    // The offset of the row with id 0 (the entry points go there).
+    offset_t origin = 0;
+    {
+        auto row = conn->query("MATCH (n:Island {id: 0}) RETURN offset(ID(n));");
+        ASSERT_TRUE(row->isSuccess() && row->hasNext()) << "[check: setup] offset of id 0";
+        origin = row->getNext()->getValue(0)->getValue<int64_t>();
+    }
+    mustRun("CALL ENABLE_INTERNAL_CATALOG=true;");
+    mustRun(stringFormat("MATCH (a:Island)-[r:{}]->(b:Island) WHERE a.id >= 40 OR b.id >= 40 "
+                         "DELETE r;",
+        lower));
+    mustRun(stringFormat("MATCH (a:Island)-[r:{}]->(b:Island) WHERE a.id >= 40 OR b.id >= 40 "
+                         "DELETE r;",
+        upper));
+    mustRun(stringFormat("MATCH (a:Island {id: 0}), (d:Island {id: 40}) CREATE (a)-[:{}]->(d), "
+                         "(d)-[:{}]->(a);",
+        lower, lower));
+    mustRun(stringFormat("MATCH (d:Island {id: 40}), (x:Island {id: 41}) CREATE (d)-[:{}]->(x);",
+        lower));
+    mustRun(stringFormat("MATCH (x:Island {id: 41}), (y:Island {id: 42}) CREATE (x)-[:{}]->(y), "
+                         "(y)-[:{}]->(x);",
+        lower, lower));
+    mustRun("CALL ENABLE_INTERNAL_CATALOG=false;");
+    if (HasFatalFailure()) {
+        return;
+    }
+    upperEntryPointOf(*conn, table, "doc_index", origin);
+    lowerEntryPointOf(*conn, table, "doc_index", origin);
+    const auto before = lowerGraphReach(*conn, table, "doc_index", "vec");
+    ASSERT_TRUE(before.error.empty() && before.unreachable == 0 && before.linked == 43)
+        << "[check: setup] the island is reachable through D before the delete: " << before.linked
+        << " linked, " << before.unreachable << " unreachable " << before.error;
+    mustRun("MATCH (n:Island) WHERE n.id = 40 DELETE n;");
+    if (HasFatalFailure()) {
+        return;
+    }
+    const auto after = lowerGraphReach(*conn, table, "doc_index", "vec");
+    std::string ownSearch;
+    for (const auto* vector : {"[20.0, 0.0]", "[20.0, 0.001]"}) {
+        auto own = conn->query(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('Island', 'doc_index', {}, 2) RETURN node.id ORDER BY node.id;",
+            vector));
+        ownSearch += std::string(vector) + " ->";
+        while (own->isSuccess() && own->hasNext()) {
+            ownSearch += " " + own->getNext()->getValue(0)->toString();
+        }
+        ownSearch += " ; ";
+    }
+    EXPECT_TRUE(after.error.empty() && after.unreachable == 0)
+        << "[check: vector-delete-keeps-former-neighbours-reachable] after deleting D, " << after.linked
+        << " linked rows, " << after.unreachable << " unreachable from every entry "
+        << after.error << " ; own searches (k = 2): " << ownSearch;
+}
 } // namespace
 
 #endif
