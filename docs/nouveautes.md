@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Le confineur des passes ne rougit plus sur un descendant qui se ferme tard.** Un descendant
+  encore vivant à la fin de la grace est relevé une seconde fois, une seconde plus tard : parti, la passe reste verte et
+  le verdict le nomme (`fermes_tard`) ; encore là, le rouge le nomme (`laisses`, pid et commande). Trois passes vertes de
+  la nuit avaient été jugées rouges sans rien nommer.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
