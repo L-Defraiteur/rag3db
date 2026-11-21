@@ -1010,17 +1010,47 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
 /// llama-server, donc `compatible` à une adresse locale.
 #[cfg(feature = "openai-llm")]
 pub fn connect_llm(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
-    connect_llm_with_vertex(source, |project, location, model| {
+    connect_llm_with_vertex(source, crate::usage_ledger::user_ledger(), |project, location, model| {
         let tokens = crate::gcp_auth::TokenSource::from_env()
             .map_err(|e| format!("jeton Vertex : {e}"))?;
         Ok(crate::openai_llm::OpenAiLlm::vertex_with_source(project, location, std::sync::Arc::new(tokens), model))
     })
 }
 
-/// Même résolution déclarative ; seule la construction du fournisseur Vertex s'injecte.
+/// **Every declared model is metered** (21 November 2026, the spending ledger): reserved, capped and settled in
+/// `ledger`. The provider is the one that bills: `anthropic` (a proxy's address changes nothing), `vertex`, or the
+/// address of a compatible service; only the latter can be private, and free when the prices say so.
+#[cfg(feature = "openai-llm")]
+fn metered(
+    llm: std::sync::Arc<dyn crate::llm::Llm>,
+    source: &ModelSource,
+    origin: &Origin,
+    ledger: std::sync::Arc<crate::usage_ledger::Ledger>,
+) -> std::sync::Arc<dyn crate::llm::Llm> {
+    let (provider, private) = match origin {
+        Origin::Compatible(a) if a == "anthropic" => ("anthropic".to_string(), false),
+        Origin::Compatible(a) if a.starts_with("vertex:") => ("vertex".to_string(), false),
+        Origin::Compatible(a) | Origin::Service(a) => (a.clone(), crate::usage_ledger::is_private_address(a)),
+        Origin::Local => ("local".to_string(), true),
+    };
+    std::sync::Arc::new(crate::usage_ledger::MeteredLlm::new(llm, ledger, &source.model, &provider, private))
+}
+
+/// Même résolution déclarative ; seule la construction du fournisseur Vertex s'injecte, et le registre des dépenses.
 /// Les autres protocoles n'appellent jamais cette fabrique.
 #[cfg(feature = "openai-llm")]
 pub(crate) fn connect_llm_with_vertex(
+    source: &ModelSource,
+    ledger: std::sync::Arc<crate::usage_ledger::Ledger>,
+    vertex: impl FnOnce(&str, &str, &str) -> Result<crate::openai_llm::OpenAiLlm, String>,
+) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
+    let (llm, origin) = connect_llm_unmetered(source, vertex)?;
+    Ok((metered(llm, source, &origin, ledger), origin))
+}
+
+/// The client itself, before the ledger: never handed out, `connect_llm_with_vertex` wraps it.
+#[cfg(feature = "openai-llm")]
+fn connect_llm_unmetered(
     source: &ModelSource,
     vertex: impl FnOnce(&str, &str, &str) -> Result<crate::openai_llm::OpenAiLlm, String>,
 ) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
