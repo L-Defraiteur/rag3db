@@ -372,6 +372,12 @@ pub struct DaemonHost {
     /// The user's token, when the host knows it ([`DaemonHost::with_user_token`]): the title of a
     /// human (`by.kind = "human"`).
     user_token: Option<String>,
+    /// The folder of the gate's declared configuration (`rules.json`, the judge's prompt), the
+    /// user's, never an agent's repository (page 07 of rag3weaver-archi).
+    gate_dir: Option<PathBuf>,
+    /// The gate's judge, when it is given here (the witnesses; in service it is the model the
+    /// configuration names).
+    gate_judge: Option<GateJudge>,
     /// The IDE's one-use entry codes, with their deadline (ms).
     entry_codes: Arc<Mutex<std::collections::HashMap<String, u128>>>,
     /// **A guest host** (the night of 20 Nov 2026): started by hand in the root of a live host, it
@@ -429,6 +435,12 @@ pub mod web_search;
 mod agents;
 /// The title of a human: the user token, the IDE's entry codes, `by` (21 Nov 2026).
 pub mod user_title;
+/// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
+pub mod gate;
+
+/// The gate's judge: its input (the action, its class, the human turns, the pair), its verdict
+/// (`{label: explicit | covered | not_authorized, quote}`).
+pub type GateJudge = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
 /// A run as a tree, read-only (`GET /ide/run`).
 mod run_tree;
 /// The approval card: one card, its states, one closing (the gate of the auto mode).
@@ -585,6 +597,8 @@ impl DaemonHost {
             rangements_en_vol: Arc::new(Mutex::new(Default::default())),
             rangement_verrou: Arc::new(Mutex::new(())),
             user_token: None,
+            gate_dir: None,
+            gate_judge: None,
             entry_codes: Arc::new(Mutex::new(std::collections::HashMap::new())),
             invite: None,
             pair: std::sync::OnceLock::new(),

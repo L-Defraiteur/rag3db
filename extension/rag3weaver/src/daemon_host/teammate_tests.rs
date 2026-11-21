@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 /// The witnesses of a lot, each in a file of its own (c7, 21 Nov. 2026).
 mod agents;
 mod card;
+mod mode_auto_v1;
 mod attente_commande;
 mod nom_d_enfant;
 mod run_du_pas;
