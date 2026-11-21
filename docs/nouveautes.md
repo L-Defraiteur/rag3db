@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une commande longue n'est plus dite en attente d'un index.** Quand `run_command` ou `wait_output` dure, la boîte de l'équipier dit que la commande tourne encore ; l'index reste la cause supposée pour les autres outils.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
