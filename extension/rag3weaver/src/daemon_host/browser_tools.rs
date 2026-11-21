@@ -201,7 +201,7 @@ impl BrowserTools {
 
     fn console(&self, args: &Value) -> Result<Value, String> {
         let tab = args["tab_id"].as_str().ok_or("browser_console : tab_id manque (un onglet pris par browser_tabs)")?;
-        self.guarded(tab)?;
+        let (url, _) = self.guarded(tab)?;
         let mut c = crate::pont_navigateur::protocole::Commande::nouvelle("console");
         c.page = Some(tab.to_string());
         c.stream_read = Some(match args["since"].as_u64() {
@@ -210,6 +210,6 @@ impl BrowserTools {
         });
         let v = self.send(c)?;
         let messages: Vec<Value> = v["items"].as_array().into_iter().flatten().map(|m| json!({ "at": m["at"], "level": m["level"], "text": m["text"] })).collect();
-        Ok(json!({ "messages": messages, "next": v["next"] }))
+        Ok(json!({ "url": url, "messages": messages, "next": v["next"] }))
     }
 }
