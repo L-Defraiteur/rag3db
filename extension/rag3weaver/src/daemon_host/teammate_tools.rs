@@ -158,7 +158,7 @@ impl Etanche<'_> {
                     "report",
                     None,
                     // For the model too, which reads the mailbox at its frontier: in English.
-                    &format!("\"{}\" has been waiting for {} s (an index is probably holding the write); the call goes on, nothing is abandoned", call.name, self.notice.as_secs()),
+                    &the_waiting_line(&call.name, self.notice.as_secs()),
                 );
             },
             || {
@@ -438,4 +438,10 @@ impl FileTools {
         }
         Ok(sortie)
     }
+}
+
+/// **The mailbox line of a call that waits** (for the model too, which reads the mailbox at its frontier: in English).
+/// Its cause as far as the host can say: an index holding the write. Seam for the night's essays of 21 Nov. 2026.
+pub(crate) fn the_waiting_line(tool: &str, secs: u64) -> String {
+    format!("\"{tool}\" has been waiting for {secs} s (an index is probably holding the write); the call goes on, nothing is abandoned")
 }
