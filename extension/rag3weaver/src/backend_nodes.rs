@@ -296,7 +296,13 @@ impl Node for EntityRecordNode {
             ctx.set_output("record", PortValue::new(result));
             return Ok(());
         }
-        let generated: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision, &policy.template]
+        // **The author is the host's** (M7): given by the caller, refused, saying what to do.
+        if let Some(field) = &policy.author {
+            if input.get(field).is_some() {
+                return Err(format!("{field} is set by the host (writes.author); remove it from the call"));
+            }
+        }
+        let generated: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision, &policy.template, &policy.author]
             .into_iter()
             .flatten()
             .map(String::as_str)
@@ -357,6 +363,11 @@ impl Node for EntityRecordNode {
         if let Some(field) = &policy.template {
             if let Some(hash) = ctx.service::<String>(crate::backend::TEMPLATE_SERVICE) {
                 input[field] = json!(hash);
+            }
+        }
+        if let Some(field) = &policy.author {
+            if let Some(agent) = ctx.service::<String>(crate::backend::AGENT_SERVICE) {
+                input[field] = json!(agent);
             }
         }
         for transition in &policy.transition_dates {
