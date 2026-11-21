@@ -485,6 +485,21 @@ pub fn retirer(address: &str, manifest: &Path, close_tasks: bool) -> Result<Valu
     r
 }
 
+/// **Open a folder by the host** (`rag3weaver-backend open [folder]`, Lucie, 21 November 2026: « atelier » means
+/// nothing to a user): the same gesture as the IDE's, `POST /dossiers/ouvrir` — the folder created or found, attached,
+/// what is needed posed first. Gives the host's answer.
+#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+#[allow(unused_variables)]
+pub fn open_folder(endpoint: &crate::daemon_client::Endpoint, dossier: &Path) -> Result<Value, String> {
+    Err("open_folder : pas encore".into()) // RED STUB.
+}
+
+/// What the command says of an opening, in the user's words (« dossier ouvert », « dépôt attaché »), never « atelier ».
+#[allow(unused_variables)]
+pub fn describe_opening(r: &Value) -> String {
+    String::new() // RED STUB.
+}
+
 /// **Fermer le backend de l'arbre à l'hôte** (`POST /backend/close`) : la
 /// base lâchée, avant [`remove_files`]. Le manifeste est canonisé : il doit
 /// encore exister — `remove` ferme d'abord, déplace ensuite ; garder cet ordre.
