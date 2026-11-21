@@ -1168,6 +1168,32 @@ mod tests {
         json!({ "kind": "FileChanged", "path": path })
     }
 
+    /// A window whose writer delivers late (a loaded machine: the writer thread scheduled after `publier` returned).
+    struct Lente(Capture, std::time::Duration);
+
+    impl Write for Lente {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            std::thread::sleep(self.1);
+            self.0.write(b)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// **A capture is read once its writer has delivered, even a late one** (the pass of `ed-exact-name-by-name-4`,
+    /// 21 November 2026, 06 h 57, at full load: `two_windows_share_ids_and_a_returning_one_gets_what_it_missed` read
+    /// `[3, 4]` for `[3, 4, 5]`). The capture was read « stable » after 20 ms without growth, before a late writer
+    /// delivered anything.
+    #[test]
+    fn a_capture_is_read_once_a_late_writer_has_delivered() {
+        let flux = Flux::new();
+        let lente = Capture::default();
+        flux.abonner(Box::new(Lente(lente.clone(), std::time::Duration::from_millis(60))), None, None);
+        flux.publier("files", "b", fichier("a.rs"));
+        assert_eq!(lente.ids(), vec![1], "the late window read before its writer delivered");
+    }
+
     /// **Des relais qui publient ensemble ne perdent rien** (ticket du 7 novembre
     /// 2026, « l'affichage en direct du chat peut manquer le premier jeton »).
     /// Quatre fils publient chacun sur son sujet, en boucle, en même temps : la
