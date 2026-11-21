@@ -46,6 +46,7 @@
   livré dans `nodes/` du gabarit `code`, au lieu du code Rust : on l'édite, et le pas suivant le prend, sans rebâtir ni
   redémarrer. Un script qui échoue ne casse rien : le résumé Rust sert, et la boîte de l'équipier dit l'erreur avec le
   fichier et la ligne.
+- 21 novembre 2026 — **Une suppression ne coupe plus des lignes de la recherche vectorielle.** Après la suppression de lignes indexées, comme la resynchronisation qui retire les morceaux d'un fichier, des lignes voisines qui n'étaient jointes que par les lignes supprimées pouvaient devenir introuvables, pas même par leur propre vecteur (un amas de quasi-copies de code-lourd). Chacune est maintenant vérifiée par une recherche, et rattachée si elle n'est plus atteinte ; une suppression n'en est pas plus lente.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
