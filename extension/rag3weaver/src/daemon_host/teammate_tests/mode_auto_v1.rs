@@ -81,7 +81,8 @@ fn v1(commands: Vec<&'static str>, request: &str) -> V1 {
         let judged = judged.clone();
         Arc::new(move |input: &Value| {
             judged.lock().unwrap().push(input.clone());
-            let asked = input["user_turns"].as_array().into_iter().flatten().filter_map(|t| t["text"].as_str()).find(|t| t.to_lowercase().contains("supprime vieux.txt"));
+            let asked = input["user_turns"].as_array().into_iter().flatten().filter_map(|t| t["text"].as_str())
+                .find(|t| { let t = t.to_lowercase(); t.contains("supprime vieux.txt") || t.contains("projet") });
             match asked {
                 Some(q) => json!({ "label": "explicit", "quote": q }),
                 None => json!({ "label": "not_authorized" }),
@@ -188,4 +189,17 @@ fn showing_a_secret_is_refused_with_its_alternative() {
     let r = seen.iter().find(|r| r.contains(".env")).expect("the refusal reached the model");
     assert!(!r.contains("sk-temoin"), "the value never reaches the model: {r}");
     assert!(r.contains("secret_store"), "the refusal names the alternative: {r}");
+}
+
+/// 6. An install of packages goes to the card unless the user asked to install (Lucie, 21 Nov 20 h, banc's install
+/// rule in code before the judge): « prépare-moi un projet » is not an install's consent, even for a judge that
+/// would say yes.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn an_install_the_user_did_not_ask_for_opens_the_card() {
+    let v = v1(vec!["npm install left-pad"], "Prépare-moi un projet React.");
+    let b = v.wait("the card", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    let card = b.iter().find(|l| l["kind"] == "approval").unwrap();
+    assert_eq!(card["class"], json!("outbound"), "{card}");
+    assert!(v.judged.lock().unwrap().is_empty(), "the install rule sends it to the card before the judge");
 }
