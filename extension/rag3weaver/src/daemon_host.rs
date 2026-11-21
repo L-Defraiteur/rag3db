@@ -402,6 +402,9 @@ pub mod taches;
 /// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
 pub mod chat;
 
+/// The roots granted to the agents (RootGrants), kept by the host.
+pub mod root_grants;
+
 /// The session archived as it goes: each turn to the memory, each slice to the archivist.
 pub mod rangement;
 pub mod pair;
@@ -3160,6 +3163,18 @@ impl DaemonHost {
                 },
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
+            // **The roots granted to the agents** (RootGrants, 21 November 2026): read, and withdrawn.
+            ("GET", "/ide/root-grants") => (200, self.root_grants_route()),
+            ("POST", "/ide/root-grants/revoke") => match corps() {
+                Ok(v) => match (v["agent"].as_str(), v["root"].as_str()) {
+                    (Some(agent), Some(root)) => {
+                        let r = op_response(self.revoke_root(agent, Path::new(root)).map(|_| json!({ "withdrawn": root, "agent": agent })));
+                        (statut(&r), r)
+                    }
+                    _ => (400, json!({ "ok": false, "error": "« agent » et « root » sont attendus : l'accord à retirer" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("POST", "/views/close") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
@@ -3299,7 +3314,7 @@ impl PorteDEcriture {
 }
 
 /// Writes `v` at `chemin` by a temporary file and a rename, its folder created.
-fn ecrire_par_renommage(chemin: &Path, v: &Value) -> Result<(), String> {
+pub(super) fn ecrire_par_renommage(chemin: &Path, v: &Value) -> Result<(), String> {
     let dir = chemin.parent().ok_or_else(|| format!("{} : sans dossier", chemin.display()))?;
     std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
     let tmp = chemin.with_extension("json.tmp");
