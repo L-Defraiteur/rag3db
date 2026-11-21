@@ -283,6 +283,7 @@ pub mod regime;
 pub use regime::Regime;
 pub mod postures;
 pub mod meter;
+pub mod usage_ledger;
 pub use meter::{Consumption, Meter, Unit};
 pub mod session;
 pub use session::{Absorb, Compaction, Session, SessionTools};
