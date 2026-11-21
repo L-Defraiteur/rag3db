@@ -61,8 +61,11 @@ fn role_enfant() {
         let maintenant = jiff::civil::date(2026, 11, 21).at(3, 30, 0, 0);
         let note = catalog.fts_maintenance_nocturne(maintenant, 0.5, true).expect("une maintenance du plein texte");
         assert!(!note.to_string().contains("\"error\""), "la maintenance passe : {note}");
-        // Le ramasse-miettes passe au commit suivant d'un index : une écriture de plus le fait passer partout.
-        tx::synchroniser(&mut catalog, false);
+        // Le ramasse-miettes passe au commit suivant d'un index : un commit sous la génération courante, qui n'en
+        // étiquette aucune (une synchronisation en étiquetterait une, et rendrait la place pour une autre raison).
+        for (table, h) in catalog.fts_handles() {
+            h.commit_keeping_generation().unwrap_or_else(|e| panic!("commit de {table} : {e}"));
+        }
         println!("TAILLE avant={avant} apres={}", taille(&fts));
         return;
     }
