@@ -40,8 +40,8 @@ L'accueil devient la liste des agents (actifs, puis inactifs) ; la page « Poste
    « avancé ».
 2. **La page d'un agent, première tranche** : qui, ses vues, ses tâches ; la conversation des agents de rag3weaver
    (routes existantes). Rien de neuf côté hôte.
-3. **Les vues d'un agent et leurs diffs** : les vues dépliées (route existante), puis leurs diffs sur la route
-   d'arbre, en stat puis par fichier.
+3. **Les vues d'un agent et ce qui n'est pas poussé** : les vues dépliées (route existante), puis leurs commits non
+   poussés et leur non-commité, sur la route d'arbre.
 4. **La conversation d'un agent Claude** : une route en lecture seule de sa transcription, bornée (les N derniers
    messages), rouge d'abord. À qui : arbre ou moi.
 5. **Sa mémoire** : la route de la session mémoire, puis le bloc.
@@ -69,18 +69,22 @@ sous-agents par `parent_session` de `GET /ide/taches`, le plan en cours de chacu
 ou la boîte d'un sous-agent. Ensuite, dans l'ordre proposé par archi : `GET /ide/agents` (l'arbre d'un coup), puis
 écrire à une racine par le relais ; un troisième niveau seulement si Lucie veut des sous-agents de sous-agents.
 
-## Les vues d'un agent et leurs diffs
+## Les vues d'un agent et ce qui n'est pas encore poussé
 
-Lucie (08 h 2x) : « afficher les vues de chacun, ou bien voir les diff git en cours du worktree actuel ou de telle vue
-sur son parent ». Dans l'arbre, chaque agent déplie ses vues (`open_views` de `/poste` par `session_id`, l'active
-dite) ; chaque vue, et le worktree courant, déplie deux diffs, repliés par défaut : **en cours** (le worktree contre
-sa tête) et **sur son parent** (sa branche contre la branche dont elle part). Un diff se montre en stat d'abord
-(fichiers, + et −), puis le patch d'un fichier au clic.
+Lucie (08 h 2x, précisé ensuite) : sous chaque vue, **seulement ce qui n'est pas encore poussé**. Dans l'arbre, chaque
+agent déplie ses vues (`open_views` de `/poste` par `session_id`, l'active dite) ; chaque vue, et le worktree courant,
+déplie, replié par défaut :
 
-- Ce que l'hôte donne : la liste des vues, leur chemin, leur branche, leur couche (`/poste`) ; le diff d'une tâche sur
-  sa base (la page d'une tâche le montre déjà).
-- Ce qui manque : une route de lecture du diff d'une vue, en cours ou sur son parent, en stat puis par fichier ; arbre
-  la fait.
+- **les commits non poussés** : sujet, date et stat (fichiers, + et −) ; un clic sur un commit montre son patch ;
+- **le non-commité** : sa stat, puis le patch d'un fichier au clic ;
+- un filtre « non commité seul ».
+
+Il n'y a pas de « diff sur le parent » à part.
+
+- Ce que l'hôte donne : la liste des vues, leur chemin, leur branche, leur couche, leur base et leur commit de départ
+  (`/poste`).
+- Ce qui manque : la route de lecture `GET /vues/diff?session=&vue=` dans cette forme (arbre la fait) : un binaire
+  ou un renommé y est dit, le patch se borne par fichier, `vue=backend` avec `manifest=` désigne le worktree courant.
 
 ## Ce qui reste hors de la vue principale
 
