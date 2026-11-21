@@ -713,41 +713,13 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         }
     }
     let roots = rag3weaver::code_tree::Roots::of_user()?;
-    let dossier = roots.config.join("atelier");
-    let manifeste = dossier.join("templates/backends/atelier/backend.json");
-    if !manifeste.is_file() {
-        std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
-        let gabarits = rag3weaver::builtin_templates::root()?;
-        let statut = std::process::Command::new("cp")
-            .arg("-r")
-            .arg(&gabarits)
-            .arg(dossier.join("templates"))
-            .status()
-            .map_err(|e| format!("cp : {e}"))?;
-        if !statut.success() {
-            return Err(format!("la copie du gabarit livré vers {} a échoué", dossier.display()));
-        }
-        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?).map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
-        m["database"] = json!(roots.data.join("atelier.rag3db").display().to_string());
-        // **La racine** (Lucie, 8 novembre 2026 au soir ; c7, 9 novembre) : le dossier où
-        // l'atelier est lancé ; depuis le dossier de l'utilisateur ou `/`, `~/rw-code`, créé
-        // s'il manque. Le dossier de lancement est noté au manifeste.
-        if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
-            let ici = std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?;
-            let racine = rag3weaver::code_tree::racine_de_l_atelier(&ici, std::path::Path::new(&home));
-            std::fs::create_dir_all(&racine).map_err(|e| format!("{} : {e}", racine.display()))?;
-            m["workspace"]["root"] = json!(racine.display().to_string());
-            m["workspace"]["launched_from"] = json!(ici.display().to_string());
+    let ici = std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?;
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let (manifeste, posee, racine) = rag3weaver::code_tree::poser_l_atelier(&roots, &ici, home.as_deref())?;
+    if posee {
+        if let Some(racine) = racine {
             println!("racine de l'atelier : {}", racine.display());
         }
-        // Les copies identiques au livré le désignent par son nom (`builtin:`) : elles
-        // suivent chaque bâti ; le manifeste, noté, suit à chaque ouverture par l'hôte.
-        if let Some(dir) = manifeste.parent() {
-            rag3weaver::builtin_templates::link(dir, &mut m);
-        }
-        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifeste.display()))?;
-        rag3weaver::builtin_templates::record(&manifeste, "backends/atelier/backend.json")?;
         println!("atelier posé : {}", manifeste.display());
     } else {
         println!("atelier déjà posé : {}", manifeste.display());

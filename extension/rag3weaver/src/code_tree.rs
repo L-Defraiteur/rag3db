@@ -668,6 +668,54 @@ pub fn racine_de_l_atelier(lance_depuis: &Path, home: &Path) -> PathBuf {
     }
 }
 
+/// **Pose the atelier** in `roots` if it is not there (`<config>/atelier/templates`, copied from the delivered template,
+/// its base under `<data>/atelier.rag3db`), its root [`racine_de_l_atelier`] of `lance_depuis` — noted in the manifest
+/// with the folder it was launched from. Shared by `rag3weaver-backend atelier` and the host, which poses it when a
+/// folder is opened without one (21 November 2026). Gives the manifest's path, whether it was posed now (an atelier
+/// already posed is left as it is), and the root posed (none without a home folder).
+pub fn poser_l_atelier(roots: &Roots, lance_depuis: &Path, home: Option<&Path>) -> Result<(PathBuf, bool, Option<PathBuf>), String> {
+    use serde_json::{json, Value};
+    let dossier = roots.config.join("atelier");
+    let manifeste = dossier.join("templates/backends/atelier/backend.json");
+    if manifeste.is_file() {
+        return Ok((manifeste, false, None));
+    }
+    std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    let gabarits = crate::builtin_templates::root()?;
+    let statut = std::process::Command::new("cp")
+        .arg("-r")
+        .arg(&gabarits)
+        .arg(dossier.join("templates"))
+        .status()
+        .map_err(|e| format!("cp : {e}"))?;
+    if !statut.success() {
+        return Err(format!("la copie du gabarit livré vers {} a échoué", dossier.display()));
+    }
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?)
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&roots.data).map_err(|e| format!("{} : {e}", roots.data.display()))?;
+    m["database"] = json!(roots.data.join("atelier.rag3db").display().to_string());
+    // **La racine** (Lucie, 8 novembre 2026 au soir ; c7, 9 novembre) : le dossier où l'atelier est lancé ; depuis le
+    // dossier de l'utilisateur ou `/`, `~/rw-code`, créé s'il manque. Le dossier de lancement est noté au manifeste.
+    let mut racine_posee = None;
+    if let Some(home) = home.filter(|h| !h.as_os_str().is_empty()) {
+        let racine = racine_de_l_atelier(lance_depuis, home);
+        std::fs::create_dir_all(&racine).map_err(|e| format!("{} : {e}", racine.display()))?;
+        m["workspace"]["root"] = json!(racine.display().to_string());
+        m["workspace"]["launched_from"] = json!(lance_depuis.display().to_string());
+        racine_posee = Some(racine);
+    }
+    // Les copies identiques au livré le désignent par son nom (`builtin:`) : elles suivent chaque bâti ; le manifeste,
+    // noté, suit à chaque ouverture par l'hôte.
+    if let Some(dir) = manifeste.parent() {
+        crate::builtin_templates::link(dir, &mut m);
+    }
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n")
+        .map_err(|e| format!("{} : {e}", manifeste.display()))?;
+    crate::builtin_templates::record(&manifeste, "backends/atelier/backend.json")?;
+    Ok((manifeste, true, racine_posee))
+}
+
 #[cfg(test)]
 mod racine_de_l_atelier_tests {
     use super::racine_de_l_atelier;

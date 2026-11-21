@@ -1131,8 +1131,25 @@ impl DaemonHost {
                 .cloned()
                 .or_else(|| {
                     self.racines_de_code().ok().map(|r| r.config.join("atelier/templates/backends/atelier/backend.json")).filter(|m| m.is_file())
-                })
-                .ok_or("ouvrir un dossier : l'atelier n'est pas posé ; `rag3weaver-backend atelier` le pose")?;
+                });
+            // **Absent, the host poses it** (21 November 2026: Lucie's first step in the IDE stopped on « l'atelier
+            // n'est pas posé »), as `rag3weaver-backend atelier` does, its root the space of worktrees.
+            let atelier = match atelier {
+                Some(m) => m,
+                None => {
+                    let racines = self.racines_de_code()?;
+                    let (espace, _) = self.espace_et_table();
+                    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+                    let (manifeste, _, racine) = crate::code_tree::poser_l_atelier(&racines, &espace, home.as_deref())
+                        .map_err(|e| format!("ouvrir un dossier : l'atelier n'est pas posé, et l'hôte n'a pas pu le poser : {e}"))?;
+                    eprintln!(
+                        "[démon] atelier posé par l'hôte à l'ouverture d'un dossier : {} (racine {})",
+                        manifeste.display(),
+                        racine.map(|r| r.display().to_string()).unwrap_or_else(|| "non posée".into())
+                    );
+                    manifeste
+                }
+            };
             let hosted = self.hosted(&atelier)?;
             let dit = self.with_backend(&hosted, |b| b.call("attach_worktree", json!({ "path": lettre })))??;
             Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit["result"] }))
