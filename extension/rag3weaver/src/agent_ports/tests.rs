@@ -565,6 +565,7 @@ fn hold_from_node() -> crate::dataflow::scripted_node::ScriptedNodeDecl {
                 description: "le pair qu'on n'écoute pas".into(),
             },
         ],
+        script_file: None,
     }
 }
 
@@ -619,6 +620,7 @@ fn pass_node() -> crate::dataflow::scripted_node::ScriptedNodeDecl {
         inputs: vec![DeclaredPort { name: "msg".into(), schema: json!({"type": "object"}), required: true }],
         outputs: vec![DeclaredPort { name: "out".into(), schema: json!({"type": "object"}), required: true }],
         config: vec![],
+        script_file: None,
     }
 }
 

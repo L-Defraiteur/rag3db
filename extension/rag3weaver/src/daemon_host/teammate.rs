@@ -592,11 +592,12 @@ fn carry_over_by_node(nodes_dir: &std::path::Path, type_name: &str, config: &Val
         .and_then(|v| v["script"].as_str().map(|s| nodes_dir.join(s)))
         .unwrap_or_else(|| chemin.clone());
     let nomme = |e: String| format!("{} : {e}", script.display());
-    let fabrique = ScriptedNodeFactory::new(decl, crate::script::ScriptLimits::default()).map_err(nomme)?;
+    // The node's own errors name the script's file and its line (`ScriptedNodeDecl::script_file`).
+    let fabrique = ScriptedNodeFactory::new(decl, crate::script::ScriptLimits::default())?;
     let mut noeud = fabrique.create("carry_over", config).map_err(nomme)?;
     let mut ctx = crate::dataflow::node::NodeContext::new();
     ctx.set_input("work", crate::dataflow::port::PortValue::new(work));
-    noeud.execute(&mut ctx).map_err(nomme)?;
+    noeud.execute(&mut ctx)?;
     ctx.drain_outputs()
         .get("block")
         .and_then(|v| v.downcast::<Value>())

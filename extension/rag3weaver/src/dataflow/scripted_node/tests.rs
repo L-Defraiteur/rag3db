@@ -49,6 +49,7 @@ fn decl(language: &str, source: &str) -> ScriptedNodeDecl {
             default: Some(json!(0.25)),
             description: "the tax rate".into(),
         }],
+        script_file: None,
     }
 }
 
@@ -428,3 +429,6 @@ fn a_config_parameter_takes_the_type_of_its_schema() {
         ["rate:Float", "label:String", "count:Int", "ratio:Float", "strict:Bool", "extra:Json"]
     );
 }
+
+/// The witness of the lot `scripted-error-names-file`, in a file of its own.
+mod error_names_file;

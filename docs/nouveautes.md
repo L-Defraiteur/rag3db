@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
+  JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
+  seul nom du nœud.
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.

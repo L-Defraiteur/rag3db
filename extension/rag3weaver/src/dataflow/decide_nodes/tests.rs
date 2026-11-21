@@ -26,6 +26,7 @@ fn registry() -> NodeRegistry {
         inputs: vec![port("msg")],
         outputs: vec![port("out")],
         config: vec![],
+        script_file: None,
     };
     r.register(Box::new(ScriptedNodeFactory::new(pass, Default::default()).unwrap()));
     r
