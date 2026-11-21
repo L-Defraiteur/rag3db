@@ -165,6 +165,11 @@ pub fn countdown(until_ms: u64, now_ms: u64) -> String {
     }
 }
 
+/// A date in local words: « le 21 nov. à 16 h 05 » (`month0` from 0).
+pub fn said_date(_day: u32, _month0: u32, _hour: u32, _minute: u32) -> String {
+    String::new()
+}
+
 /// Now, in ms since the epoch.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
