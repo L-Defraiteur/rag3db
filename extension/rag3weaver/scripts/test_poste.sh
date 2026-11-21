@@ -497,15 +497,18 @@ echo card0 > "$POSTE_LOCK_DIR/gpu-card"; "$POSTE" gpu 1 -- true > "$G/sortie" 2>
 [ "$rc" = 2 ] && grep -q 'card0' "$G/sortie"
 cas $? "gpu-card = card0 : refusé, jamais la carte des écrans (rc $rc)"
 echo card2 > "$POSTE_LOCK_DIR/gpu-card"; vram 15
-# 56. gpu seul ne prend pas de place cpu ; gpu --cpu en prend une.
-echo 1 > "$POSTE_LOCK_DIR/lourds-max"; : > "$J"
-# K tient 6 s : sous la charge de luciepc (17), un gpu lancé une seconde après lui démarrait parfois après 3 s.
-( "$POSTE" cpu -- bash -c 'note K début; sleep 6; note K fin' > /dev/null 2>&1 ) & pk=$!
-sleep 1; ( "$POSTE" gpu 2 -- bash -c 'note GS début' > /dev/null 2>&1 ) & pg=$!
+# 56. gpu seul ne prend pas de place cpu ; gpu --cpu en prend une. Déterministe (c7) : K tient sa place jusqu'au signal
+# « $G/rends », que le cas pose seulement après avoir vu GS démarrer ; GC ne doit démarrer qu'après la fin de K.
+echo 1 > "$POSTE_LOCK_DIR/lourds-max"; : > "$J"; rm -f "$G/rends"
+( "$POSTE" cpu -- bash -c "note K début; until [ -e '$G/rends' ]; do sleep 0.1; done; note K fin" > /dev/null 2>&1 ) & pk=$!
+until [ -n "$(instant K début)" ]; do sleep 0.1; done
+( "$POSTE" gpu 2 -- bash -c 'note GS début' > /dev/null 2>&1 ) & pg=$!
 ( "$POSTE" gpu 2 --cpu -- bash -c 'note GC début' > /dev/null 2>&1 ) & pc=$!
-wait $pk $pg $pc
-[ -n "$(instant GS début)" ] && [ "$(instant GS début)" -lt "$(instant K fin)" ] && [ "$(instant GC début)" -ge "$(instant K fin)" ]
-cas $? "une place cpu tenue : gpu seul part sans elle, gpu --cpu attend la place (ms : K $(instant K début)-$(instant K fin), GS $(instant GS début), GC $(instant GC début))"
+n=0; until [ -n "$(instant GS début)" ] || [ $n -ge 600 ]; do sleep 0.1; n=$((n + 1)); done
+[ -z "$(instant GC début)" ]; avant=$?
+touch "$G/rends"; wait $pk $pg $pc
+[ -n "$(instant GS début)" ] && [ "$avant" = 0 ] && [ -n "$(instant GC début)" ] && [ "$(instant GC début)" -ge "$(instant K fin)" ]
+cas $? "une place cpu tenue : gpu seul part sans elle, gpu --cpu attend qu'elle soit rendue (ms : K $(instant K début)-$(instant K fin), GS $(instant GS début), GC $(instant GC début))"
 # 57. poste --qui dit la classe et l'état du gpu.
 ( "$POSTE" gpu 3 -- sleep 3 > /dev/null 2>&1 ) & p=$!; sleep 1
 qui=$("$POSTE" --qui 2>&1); wait $p
