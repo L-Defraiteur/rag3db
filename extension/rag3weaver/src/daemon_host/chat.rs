@@ -981,10 +981,13 @@ impl DaemonHost {
                 }
             })
         };
-        let du_pas = step.map(|s| super::teammate::StepTools { inner: tour.boite, step: s });
+        // **The single point of the secrets' mask** (lot 5b, agreed with archi): the turn's toolbox, wrapped before
+        // anything reads a result — the step's work and its carry-over first.
+        let masque = crate::agent::MaskedTools { inner: tour.boite, patterns: std::sync::Arc::new(tour.prepared.manifest.secret_patterns().unwrap_or_default()) };
+        let du_pas = step.map(|s| super::teammate::StepTools { inner: &masque, step: s });
         let boite: &(dyn crate::agent::ToolBox + Sync) = match &du_pas {
             Some(p) => p,
-            None => tour.boite,
+            None => &masque,
         };
         let avant = session.turns.len();
         let fait = session.run_with(

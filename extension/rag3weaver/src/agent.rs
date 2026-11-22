@@ -188,6 +188,52 @@ pub trait ToolBox {
     }
 }
 
+/// **A tool's result, masked** (lot 5b of the auto mode, 21 November 2026; the single point agreed with archi): every
+/// string of the result — its content, its `ui` and its `metadata`, recursively — goes through the secrets' mask
+/// before anyone above sees it: the step's work (`StepTools`), the card, the agent's loop, `ToolCallFinished`, the
+/// journal, the stream and the IDE. As close to the tools as can be, so that no reader comes before it.
+pub struct MaskedTools<'a> {
+    pub inner: &'a (dyn ToolBox + Sync),
+    pub patterns: Arc<Vec<crate::script::secrets::Pattern>>,
+}
+impl MaskedTools<'_> {
+    fn mask(&self, mut t: Turn) -> Turn {
+        t.content = crate::script::secrets::mask_secrets(&t.content, &self.patterns).0;
+        if let Some(ui) = t.ui.as_mut() {
+            mask_value(ui, &self.patterns);
+        }
+        if let Some(m) = t.metadata.as_mut() {
+            mask_value(m, &self.patterns);
+        }
+        t
+    }
+}
+/// Every string of a JSON value, masked in place.
+pub fn mask_value(v: &mut serde_json::Value, patterns: &[crate::script::secrets::Pattern]) {
+    match v {
+        serde_json::Value::String(s) => {
+            let (masked, n) = crate::script::secrets::mask_secrets(s, patterns);
+            if n > 0 {
+                *s = masked;
+            }
+        }
+        serde_json::Value::Array(a) => a.iter_mut().for_each(|x| mask_value(x, patterns)),
+        serde_json::Value::Object(o) => o.values_mut().for_each(|x| mask_value(x, patterns)),
+        _ => {}
+    }
+}
+impl ToolBox for MaskedTools<'_> {
+    fn tool_defs(&self) -> Vec<ToolDef> { self.inner.tool_defs() }
+    fn is_async(&self, tool: &str) -> bool { self.inner.is_async(tool) }
+    fn call(&self, call: &ToolCall) -> Turn { self.call_in(call, "") }
+    fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
+        self.mask(self.inner.call_in(call, run))
+    }
+    fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
+        self.mask(self.inner.call_with(call, run, inv))
+    }
+}
+
 /// Bound what a tool may add to model context. Applies to any tool transport.
 /// Execution has already happened; preserve a readable prefix and mark omitted
 /// lines explicitly. This is a text view, not a complete structured payload.
