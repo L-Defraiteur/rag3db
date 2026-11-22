@@ -23,7 +23,7 @@ avec deux règles :
 
 L'utilisateur passe son temps à parler à un agent. Les détails (fiches mémoire, tâches, chats d'agents) sont des liens
 que l'agent lui donne, et l'agent d'accueil **génère à la volée des affichages** dans le fil : tableaux, cartes, liens
-(section 6 bis).
+(section 7).
 
 ## 1. Ce qu'il est
 
@@ -105,32 +105,59 @@ then give its link.
 5. `create_code_agent` → « Ton agent de code sur `<nom>` est prêt : [ouvrir] ». Il apparaît dans la barre, sous l'accueil.
 6. Lucie passe à lui, et c'est lui qui « regarde le repo », avec ses outils et ses propres cartes.
 
-## 6 bis. Les affichages générés
+## 7. Les composants du chat, en gabarits
 
-L'agent d'accueil ne répond pas qu'en texte : il montre. Un outil `show(blocks)` rend des blocs que le fil de l'IDE
-affiche tels quels, sous sa réponse.
+**Précision de Lucie (22 novembre, 22 h 2x)** : « l'interface principale, c'est des agents ; il peut arriver dans le chat
+que l'agent nous génère des composants à la volée ou des menus préfaits qu'il fait surgir ; mais il faut des gabarits
+tout le temps, quoi qu'il arrive, pour les menus intra-chat ».
 
-| Bloc | Champs | Exemple |
+**Le principe** : l'agent ne dessine rien. Il **choisit un gabarit** dans un catalogue déclaré, et le **remplit** par
+un outil typé, `show(component, data)`. L'hôte vérifie `data` contre le schéma du gabarit ; l'IDE ne rend que des gabarits
+qu'il connaît. Jamais de HTML ni de JS écrit par le modèle.
+
+**Le catalogue** est une famille versionnée de gabarits livrés (`templates/chat-components/<nom>.json`, chacun : son nom,
+sa version, son schéma JSON, sa description pour le modèle). Le rendu est à recherche, un composant React par gabarit.
+
+| Gabarit | Ce qu'il montre | Ses données |
 |---|---|---|
-| `table` | `columns`, `rows` (chaque cellule : un texte ou `{text, link}`) | les dépôts de la machine, avec la fraîcheur de leur index et leur dernier agent |
-| `cards` | `items: [{title, subtitle?, status?, link?, actions?}]` | les agents au travail, chacun avec son état (`running`, `waiting`, `done`) et son lien |
-| `links` | `items: [{text, link}]` | « ta fiche mémoire sur la porte », « la tâche essai-auto » |
-| `stat` | `items: [{label, value, unit?}]` | les dépenses du mois et le plafond |
+| `links` | une liste de liens | `items: [{text, link}]` |
+| `table` | un tableau | `columns`, `rows` (une cellule : texte ou `{text, link}`) |
+| `action_card` | une carte avec ses actions | `title`, `subtitle?`, `status?`, `link?`, `actions?` |
+| `choice_menu` | un menu à choix, qui surgit | `question`, `options: [{label, says}]` |
+| `folder_picker` | un sélecteur de dossier, sans chemin tapé | `candidates: [{name, path, why?}]`, `allow_new` |
+| `machine_state` | l'état de la machine | ce que rend l'outil `machine_state` (dépôts, agents, tâches, accords en attente, index) |
+| `spending` | les dépenses | `items: [{label, value, unit?, hint?}]`, le plafond |
+| `memory_cards` | des fiches de la mémoire | `items: [{title, summary, link}]` |
 
-**Les règles du contrat** :
-- **rien d'inventé** : un bloc ne montre que ce qu'un outil vient de rendre dans le même tour (`machine_state`, la
-  mémoire, `create_code_agent`). L'hôte vérifie que chaque `link` est une route de l'IDE (`/ide/…`) ou une fiche de la
-  mémoire, et retire le reste en le disant ;
-- **une action n'agit jamais d'elle-même** : un bouton de carte (`actions: [{label, says}]`) envoie à l'agent la phrase
-  `says` comme si l'utilisatrice l'avait écrite, par elle et signée humain ; aucun bouton n'appelle un outil en direct ;
-- **le rendu est à la page** (recherche) : la forme visuelle des blocs, leurs couleurs d'état, le lien qui ouvre la bonne
-  vue. Les blocs sont du JSON ; l'agent ne produit jamais de HTML.
+Les états d'un `status` sont `running`, `waiting` (« attend ton accord »), `done`, `failed` et `idle` (un agent arrêté
+sans erreur). Un `hint` est une phrase courte sous un chiffre.
 
-## 6 ter. Un novice, sans dossier tapé
+**Les règles** :
+- **rien d'inventé** : `data` ne porte que ce qu'un outil vient de rendre dans le même tour. Un `link` est une route de
+  l'IDE (`/ide/…`) ou une fiche de la mémoire ; l'hôte retire le reste, en le disant ;
+- **une action n'agit jamais d'elle-même** : un bouton (`actions`, `options`) envoie à l'agent sa phrase `says`, comme
+  un message de l'utilisatrice, signé humain ; aucun bouton n'appelle un outil en direct. Le `folder_picker` envoie
+  « ce dossier : <name> » ;
+- **un gabarit inconnu ou une `data` hors schéma est refusé**, et l'outil dit lequel et pourquoi : l'agent corrige ou
+  répond en texte ;
+- **un gabarit neuf est un lot** : son schéma, sa description, son rendu et son témoin navigateur. Le catalogue ne
+  grandit pas au fil d'une conversation.
+
+## 8. L'agent d'accueil est la page d'accueil
+
+Tout ce qu'une barre latérale d'accueil offrirait à un utilisateur avancé passe par lui, en composants : les projets
+(`folder_picker`, `table`), les agents et leurs tâches (`action_card`), les accords en attente (`action_card` en
+`waiting`), les dépenses (`spending`), l'état des index et des hôtes (`machine_state`), la mémoire (`memory_cards`). La
+barre gauche des agents reste pour la navigation : passer d'un agent à l'autre.
+
+À l'arrivée, sans un mot de l'utilisatrice, il ouvre par un `machine_state` court et un `choice_menu` : « Tes projets
+récents », « Un projet neuf », « Cloner un dépôt », « Ce qui attend ton accord » (s'il y en a).
+
+## 9. Un novice, sans dossier tapé
 
 Le novice ne connaît ni chemin ni réglage. L'agent d'accueil s'en charge :
-- **à l'arrivée**, un premier message court, puis un `cards` : « Tes projets récents » (ce que `machine_state` trouve sous
-  `~/git_workspaces`, par date), « Commencer un projet neuf », « Cloner un dépôt » ;
+- **à l'arrivée**, un premier message court, puis un `choice_menu` : « Tes projets récents » (ce que `machine_state`
+  trouve sous `~/git_workspaces`, par date, dans un `folder_picker`), « Commencer un projet neuf », « Cloner un dépôt » ;
 - **un projet neuf** : il propose un nom, crée le dossier sous `~/git_workspaces/<nom>` (`open_folder`, la racine de
   création ne demande pas de carte), puis un agent de code dessus ;
 - **un projet existant** : il le reconnaît à son nom (« mon jeu », « le site ») parmi les dépôts de la machine, et demande
@@ -138,7 +165,7 @@ Le novice ne connaît ni chemin ni réglage. L'agent d'accueil s'en charge :
 - **jamais un réglage à faire à la main** : le modèle, le mode auto, l'index sont des défauts ; l'agent les dit s'ils
   comptent pour la demande (« je n'ai pas encore indexé ce projet ; je le fais ? »).
 
-## 7. La maquette de l'écran
+## 10. La maquette de l'écran
 
 *Section de recherche.* Un seul écran : le chat au centre, toujours ; la barre des agents à gauche, l'accueil toujours
 en tête. Il n'y a plus de page de formulaires ; la plomberie est derrière « Avancé ».
@@ -217,8 +244,8 @@ en tête. Il n'y a plus de page de formulaires ; la plomberie est derrière « A
 
 1. La déclaration, l'ouverture par l'hôte au démarrage, `machine_state` en lecture seule, la mémoire en lecture, et son
    témoin : l'agent répond « pas d'outils de code » à une demande de code, sur un faux modèle.
-1 bis. `show` et ses quatre blocs, avec le contrôle des liens (un lien hors de l'IDE retiré en le disant) et ses témoins ;
-   le rendu dans le fil (recherche).
+1 bis. Le catalogue des gabarits (`templates/chat-components/`), l'outil `show(component, data)` qui les remplit sous
+   leur schéma, le contrôle des liens, et ses témoins (archi) ; leur rendu et leurs témoins navigateur (recherche).
 2. `open_folder` et `create_code_agent` (rend le lien), avec leurs témoins.
 3. `clone_repository`, toujours sous une carte, avec un témoin qui refuse une URL à jeton.
 4. L'IDE : l'accueil en tête de la barre, l'écran d'arrivée (recherche) ; le terminal (tty).
