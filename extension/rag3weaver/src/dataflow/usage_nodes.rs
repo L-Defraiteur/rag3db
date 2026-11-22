@@ -83,9 +83,21 @@ pub struct Item {
     pub line: Option<i64>,
 }
 
+/// **Un site d'usage** : la ligne et la colonne d'une occurrence du nom chez son usager, comptées à partir de 1 (la
+/// colonne en octets depuis le début de la ligne, comme un compilateur l'écrit).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Site {
+    pub line: i64,
+    pub column: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Usage {
     pub user: Item,
+    /// **Chaque site du nom chez cet usager** (`occurs` du gabarit : une arête par site, lot 2 de l'intra-scope),
+    /// dans l'ordre du fichier ; vide quand le graphe ne les porte pas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<Site>,
     /// Le genre retenu (`call`, `type`, …) ; `other` quand l'arête n'en dit rien.
     pub usage: String,
     pub usages: Vec<String>,
@@ -339,7 +351,7 @@ pub fn virtual_usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &Usag
             let ambigu = cfg.edge_mark.is_doubtful(&marque);
             if let Some(b) = out.iter_mut().find(|b| b.base.uuid == def) {
                 if !b.callers.iter().any(|c| c.user.uuid == user.uuid && c.user.line == user.line) {
-                    b.callers.push(Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
+                    b.callers.push(Usage { user, sites: Vec::new(), usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
                 }
             }
         }
@@ -363,7 +375,7 @@ pub fn virtual_markdown(bases: &[VirtualBase], limit: usize) -> String {
         out.push_str(&format!("\n### {} {} — {}\n", b.base.kind, b.base.title, lieu(&b.base)));
         for u in b.callers.iter().take(limit) {
             let devine = if u.guessed { " (par le nom)" } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
-            out.push_str(&format!("- {} {} — {}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
+            out.push_str(&format!("- {} {} — {}{devine}\n", u.user.kind, u.user.title, lieu_d_usage(u)));
         }
         if b.callers.len() > limit {
             out.push_str(&format!("… {} de plus\n", b.callers.len() - limit));
@@ -510,13 +522,13 @@ pub fn usages_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig
 
 /// [`usages_of`] borné à une portée : les définitions et les usagers hors de
 /// `scope` sont écartés et comptés ; l'ambiguïté se juge dans la portée.
-pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str, scope: &QueryScope) -> Result<UsagesReport, String> {
+/// Les uuids des pivots d'un nom (le nom seul, sans qualifiant) : par son uuid déterministe quand la clé est son
+/// identité, sinon par une sélection.
+fn pivots_of(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str) -> Result<Vec<String>, String> {
     let err = |e: CatalogError| format!("UsagesNode: {e}");
-    let nom_demande = name;
-    let (name, qualifiant) = lire_le_nom(name, cfg);
     let entity = catalog.entity_config(&cfg.pivot).ok_or_else(|| format!("UsagesNode: entité inconnue « {} »", cfg.pivot))?;
     // Le pivot : par son uuid déterministe quand la clé est son identité.
-    let pivots: Vec<String> = if entity.hashsafe.as_deref() == Some(std::slice::from_ref(&cfg.key)) {
+    Ok(if entity.hashsafe.as_deref() == Some(std::slice::from_ref(&cfg.key)) {
         let data = BTreeMap::from([(cfg.key.clone(), CypherValue::String(name.to_string()))]);
         vec![catalog.entity_uuid(&cfg.pivot, &data).map_err(err)?]
     } else {
@@ -529,7 +541,51 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
             .map_err(|e| format!("UsagesNode: {e}"))?;
         let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("name", CypherValue::String(name.to_string()))]).map_err(err)?;
         rows.rows.iter().map(|r| texte(r.first())).filter(|u| !u.is_empty()).collect()
-    };
+    })
+}
+
+/// **Les sites de chaque usager** (lot 2 de l'intra-scope) : un saut entrant par `occurs` depuis les pivots du nom,
+/// une arête par site (sa ligne, sa colonne, comptées par le parseur à partir de 1 et de 0), rangés sous l'usage de
+/// leur scope. Sans cette relation au catalogue, rien n'est posé : un graphe qui ne porte pas les sites rend ses
+/// usages comme avant.
+pub fn attach_sites(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, occurs: &str, name: &str, report: &mut UsagesReport) -> Result<(), String> {
+    if catalog.get_relation_def(occurs).is_none() || report.usages.is_empty() {
+        return Ok(());
+    }
+    let rel = rel_info(catalog, occurs)?;
+    let (name, _) = lire_le_nom(name, cfg);
+    let pivots = pivots_of(catalog, cfg, name)?;
+    if pivots.is_empty() {
+        return Ok(());
+    }
+    let mut hop = rag3weaver_ir::Hop::new(&cfg.pivot, &rel.name, &rel.from, rag3weaver_ir::Direction::Incoming);
+    hop.returns = vec![
+        rag3weaver_ir::Column::Node("_uuid".into()),
+        rag3weaver_ir::Column::Edge("line".into()),
+        rag3weaver_ir::Column::Edge("column".into()),
+    ];
+    let rows = super::graph_walk::run_hop(catalog, &hop, &[super::graph_walk::uuid_param(&pivots)]).map_err(|e| format!("UsagesNode: {e}"))?;
+    let mut par_usager: HashMap<String, Vec<Site>> = HashMap::new();
+    for r in &rows.rows {
+        let (Some(line), Some(column)) = (r.get(2).and_then(|v| v.as_i64()), r.get(3).and_then(|v| v.as_i64())) else { continue };
+        par_usager.entry(texte(r.get(1))).or_default().push(Site { line, column: column + 1 });
+    }
+    for u in &mut report.usages {
+        if let Some(sites) = par_usager.get(&u.user.uuid) {
+            let mut sites = sites.clone();
+            sites.sort();
+            sites.dedup();
+            u.sites = sites;
+        }
+    }
+    Ok(())
+}
+
+pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesConfig, name: &str, path_prefix: &str, scope: &QueryScope) -> Result<UsagesReport, String> {
+    let err = |e: CatalogError| format!("UsagesNode: {e}");
+    let nom_demande = name;
+    let (name, qualifiant) = lire_le_nom(name, cfg);
+    let pivots = pivots_of(catalog, cfg, name)?;
 
     // Les définitions.
     let mut definitions: Vec<Item> = Vec::new();
@@ -613,7 +669,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                 let marque = texte(r.get(debut + 3));
                 let guessed = cfg.edge_mark.is_guessed(&marque);
                 let ambigu = cfg.edge_mark.is_doubtful(&marque);
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
+                ajouter(&mut usages, &mut vus, Usage { user, sites: Vec::new(), usage, usages: ensemble, relation: rel.name.clone(), definition: Some(def), guessed, ambigu, invisible: false });
             }
         }
     }
@@ -641,7 +697,7 @@ pub fn usages_of_in(catalog: &dyn crate::read_view::ReadCatalog, cfg: &UsagesCon
                 }
                 // Le rendez-vous n'a rien relié : attribué au seul définisseur
                 // pour le rangement, mais par le nom seul — dit tel.
-                ajouter(&mut usages, &mut vus, Usage { user, usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true, ambigu: false, invisible: false });
+                ajouter(&mut usages, &mut vus, Usage { user, sites: Vec::new(), usage, usages: ensemble, relation: rel.name.clone(), definition: unique.clone(), guessed: true, ambigu: false, invisible: false });
             }
         }
     }
@@ -729,6 +785,14 @@ fn ajouter(usages: &mut Vec<Usage>, vus: &mut HashMap<(String, Option<String>), 
 }
 
 // ─── Rendu ───────────────────────────────────────────────────────────────────
+
+/// Où est un usage : chacun de ses sites (`fichier:ligne:colonne`) quand le graphe les porte, sinon sa ligne.
+fn lieu_d_usage(u: &Usage) -> String {
+    if u.sites.is_empty() {
+        return lieu(&u.user);
+    }
+    u.sites.iter().map(|s| format!("{}:{}:{}", u.user.path, s.line, s.column)).collect::<Vec<_>>().join(", ")
+}
 
 fn lieu(i: &Item) -> String {
     match i.line {
@@ -844,7 +908,7 @@ impl UsagesReport {
                 } else if u.guessed {
                     " (par le nom)"
                 } else if u.ambigu { " (ambigu : un des homonymes)" } else { "" };
-                out.push_str(&format!("- {} {} — {}{cible}{devine}\n", u.user.kind, u.user.title, lieu(&u.user)));
+                out.push_str(&format!("- {} {} — {}{cible}{devine}\n", u.user.kind, u.user.title, lieu_d_usage(u)));
             }
             if v.len() > limit {
                 out.push_str(&format!("… {} de plus\n", v.len() - limit));
@@ -881,6 +945,8 @@ pub struct UsagesNode {
     declarations: Option<DeclarationsConfig>,
     /// L'envoi virtuel (`virtual_path`), quand le gabarit le dit.
     virtuel: Option<VirtualConfig>,
+    /// La relation qui porte chaque site d'un usage (`occurs`), quand le gabarit la nomme.
+    occurs: Option<String>,
 }
 
 impl Node for UsagesNode {
@@ -911,7 +977,10 @@ impl Node for UsagesNode {
             }
             Ok((source, status)) => {
                 let cat = source.get();
-                let report = usages_of_in(cat, &self.cfg, &self.name, &self.path, &self.scope)?;
+                let mut report = usages_of_in(cat, &self.cfg, &self.name, &self.path, &self.scope)?;
+                if let Some(occurs) = &self.occurs {
+                    attach_sites(cat, &self.cfg, occurs, &self.name, &mut report)?;
+                }
                 let declarations = match &self.declarations {
                     Some(d) => declarations_of(cat, &self.cfg, d, &self.name, &report.definitions)?,
                     None => Vec::new(),
@@ -1021,10 +1090,15 @@ impl NodeFactory for UsagesNodeFactory {
             }
             None => None,
         };
+        let occurs = s("occurs").filter(|v| !v.is_empty());
+        if let Some(x) = occurs.as_ref().filter(|x| !x.chars().all(|c| c.is_alphanumeric() || c == '_')) {
+            return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
+        }
         Ok(Box::new(UsagesNode {
             node_name: name.to_string(),
             cfg,
             virtuel,
+            occurs,
             name: requis("name")?,
             path: s("path").unwrap_or_default(),
             scope: QueryScope::parse(&s("scope").unwrap_or_default(), &s("language").unwrap_or_default()),
@@ -1083,6 +1157,7 @@ impl NodeFactory for UsagesNodeFactory {
                 p("edge_field", S, false, Some(serde_json::json!("")), "Champ d'arête qui dit comment elle a été posée (ex. resolution)"),
                 p("edge_guessed", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête devinée (ex. nom), séparées par |"),
                 p("edge_doubtful", S, false, Some(serde_json::json!("")), "Valeurs de ce champ pour une arête douteuse, suivie mais dite (ex. ambigu), séparées par |"),
+                p("occurs", S, false, Some(serde_json::json!("")), "Relation qui porte chaque site d'un usage (une arête par site : line, column) ; vide : les usages rendent leur ligne seule"),
                 format,
             ],
         }
