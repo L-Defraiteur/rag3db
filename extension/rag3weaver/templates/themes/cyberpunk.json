@@ -202,5 +202,9 @@
     "en_ligne": "#7affce",
     "cadre": "#8a7fb0"
   },
-  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main",
+  "labels": {
+    "welcome_agent": "l'opérateur",
+    "welcome_greeting": "Connexion établie. J'ai l'état de toute la machine : quel agent je te branche ?"
+  }
 }

@@ -231,5 +231,9 @@
     "en_ligne": "#ff996c",
     "cadre": "#666666"
   },
-  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main",
+  "labels": {
+    "welcome_agent": "le magicien du chaos",
+    "welcome_greeting": "Te voilà. Je vois tout ce qui tourne sur cette machine ; dis-moi ce que tu veux réveiller."
+  }
 }
