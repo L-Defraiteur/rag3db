@@ -23,3 +23,10 @@ fn a_global_install_and_a_publication_stay_judged() {
         assert_ne!(rule_class(ligne, d.path()), "read", "`{ligne}`");
     }
 }
+
+#[test]
+fn an_install_says_what_it_installed_in_one_line() {
+    let s = super::install_summary("npm install three webpack", "npm warn deprecated x\n\nadded 412 packages, and audited 413 packages in 9s\n\nfound 0 vulnerabilities\n");
+    assert_eq!(s.as_deref(), Some("npm install : added 412 packages, and audited 413 packages in 9s"));
+    assert_eq!(super::install_summary("ls -la", "total 0"), None);
+}

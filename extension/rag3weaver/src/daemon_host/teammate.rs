@@ -1290,6 +1290,13 @@ impl StepTools<'_> {
                 }
             }
         }
+        // **An install says what it installed** (c7, 22 Nov 2026): one host line, visible without blocking.
+        if call.name == "run_command" && !turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
+            let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+            if let Some(resume) = args["command"].as_str().and_then(|l| super::gate::install_summary(l, &turn.content)) {
+                let _ = self.step.files.append("host", "report", None, &resume);
+            }
+        }
         if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
             let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
             if let Some(ligne) = args["command"].as_str() {

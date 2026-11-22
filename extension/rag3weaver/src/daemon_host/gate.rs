@@ -106,13 +106,24 @@ fn class_of(c: &crate::commande::Commande, racine: &Path) -> String {
         "gh" => if matches!(verbe, "pr" | "repo" | "release" | "issue" | "api" | "gist") && !a.iter().any(|x| matches!(*x, "list" | "view" | "status" | "diff" | "checks")) { "outbound".into() } else { "read".into() },
         "curl" | "wget" => if has("-X") || has("--request") || has("-d") || has("--data") || has("-T") || has("--upload-file") || has("-F") || has("--form") { "outbound".into() } else { "read".into() },
         "npm" | "pnpm" | "yarn" | "cargo" | "twine" | "gem" if verbe == "publish" => "outbound".into(),
-        // **An install of packages is judged** (Lucie, 21 Nov 20 h): it passes only if the user asked for it in so
-        // many words; « prépare-moi un projet React » alone is not an install's consent. The network and many files
-        // written: the outbound class, which the judge weighs with P3's explicit-install rule.
-        "npm" | "pnpm" | "yarn" | "bun" if matches!(verbe, "install" | "i" | "add" | "ci" | "update" | "upgrade") => "outbound".into(),
-        "npx" | "pnpx" | "bunx" => "outbound".into(),
-        "pip" | "pip3" | "pipx" | "uv" | "poetry" | "conda" if matches!(verbe, "install" | "add" | "sync" | "update" | "upgrade") => "outbound".into(),
-        "cargo" if matches!(verbe, "install" | "add" | "update") => "outbound".into(),
+        // **A local install in the task's tree is a local write** (c7, 22 Nov 2026, the terminal's night; it replaces
+        // the rule of 21 Nov 20 h for local installs): it downloads, but sends nothing of the user out of the machine.
+        // A global install, `sudo`, `cargo install` and a publication stay judged (banc's install rule keeps them).
+        "sudo" | "doas" => "system".into(),
+        "npm" | "pnpm" | "yarn" | "bun" if matches!(verbe, "install" | "i" | "add" | "ci" | "update" | "upgrade") => {
+            if has("-g") || has("--global") { "system".into() } else { "write_local".into() }
+        }
+        "npx" | "pnpx" | "bunx" => "write_local".into(),
+        "uv" | "poetry" if matches!(verbe, "add" | "sync" | "install" | "lock") => "write_local".into(),
+        "pip" | "pip3" if matches!(verbe, "install" | "uninstall") => {
+            let venv = Path::new(&c.programme).components().any(|p| matches!(p.as_os_str().to_str(), Some(".venv" | "venv")))
+                || racine.join(".venv").is_dir()
+                || racine.join("venv").is_dir();
+            if venv && !has("--user") { "write_local".into() } else { "outbound".into() }
+        }
+        "pipx" | "conda" if matches!(verbe, "install" | "add" | "update" | "upgrade") => "system".into(),
+        "cargo" if matches!(verbe, "add" | "update" | "build" | "test" | "run" | "check" | "fetch") => "write_local".into(),
+        "cargo" if verbe == "install" => "outbound".into(),
         "gem" | "go" if verbe == "install" || verbe == "get" => "outbound".into(),
         "git" => match verbe {
             "push" => "outbound".into(),
@@ -190,6 +201,26 @@ fn last_human_turn(files: &TeammateFiles) -> Option<Value> {
 /// The last turn of the agent: the reason it gave, shown on a protected folder's card.
 fn last_agent_turn(files: &TeammateFiles) -> String {
     files.mailbox().into_iter().rev().find(|l| l["from"] == "teammate").and_then(|l| l["text"].as_str().map(str::to_string)).unwrap_or_default()
+}
+
+/// **What a local install installed, in one line** (c7, 22 Nov 2026: visible without blocking): the summary line of
+/// npm, pnpm, yarn, pip or uv, prefixed by the command's head; `None` when the line is not an install.
+pub fn install_summary(ligne: &str, sortie: &str) -> Option<String> {
+    if !install_command(ligne) && !ligne.contains("npx ") && !ligne.starts_with("npx") {
+        return None;
+    }
+    let tete: String = ligne.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
+    let resume = sortie
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|l| {
+            let l = l.to_lowercase();
+            (l.contains("added ") && l.contains("package")) || l.starts_with("successfully installed") || l.contains("packages in") || (l.starts_with("installed ") && l.contains("package"))
+        })
+        .map(str::to_string)
+        .unwrap_or_else(|| "fait".to_string());
+    Some(format!("{tete} : {resume}"))
 }
 
 /// A package manager's install (banc's `INSTALL_CMD`, word for word).
