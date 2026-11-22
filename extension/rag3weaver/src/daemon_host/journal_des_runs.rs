@@ -195,9 +195,7 @@ struct EnGrace {
 
 /// `RAG3WEAVER_RUNS_DIR`, sinon `~/.local/share/rag3weaver/runs`.
 pub fn racine_par_defaut() -> PathBuf {
-    std::env::var_os("RAG3WEAVER_RUNS_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/share/rag3weaver/runs")
-    })
+    crate::daemon_lifecycle::data_roots().runs
 }
 
 fn reglage(nom: &str, defaut: u64) -> u64 {

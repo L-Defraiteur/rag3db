@@ -319,7 +319,12 @@ fn l_equipier_joue_une_demande_de_bout_en_bout_sur_faux_modele() {
     let config = manifeste.ancestors().find(|p| p.join(".git").exists()).unwrap().to_path_buf();
     git(&config, &["add", "-A"]);
     git(&config, &["commit", "-q", "-m", "le faux modèle et la porte"]);
-    let host = Arc::new(DaemonHost::new().with_runs_root(d.path().join("runs")));
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_runs_root(d.path().join("runs"))
+            .with_chats_root(d.path().join("chats"))
+            .with_racine_des_taches(d.path().join("taches")),
+    );
     let id = heberger(&host, &manifeste);
     let r = host
         .post_to_teammate(&id, "doc", "c7", "request", None, "Écris DOC.md : une phrase sur la bibliothèque.", &json!({ "expects": "none" }))
