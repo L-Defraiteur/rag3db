@@ -180,7 +180,11 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
         })}
       </p>
       <h1 className="text-xl font-semibold mb-2 break-all">{path}</h1>
-      {error ? <p className="text-destructive" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="text-destructive" role="alert">
+          {/no such file in/.test(error) ? `Ce fichier n'existe pas dans ${backend ? displayName(backend) : "ce dépôt"} : ${path}.` : error}
+        </p>
+      ) : null}
       {read ? (
         <>
           <p className="barre flex items-center gap-3 mb-2">

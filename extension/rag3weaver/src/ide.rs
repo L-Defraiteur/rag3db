@@ -941,6 +941,21 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        ("POST", "/ide/chemins") => {
+            // **The paths cited in the chat** (`daemon_host::chemins_cites`): a link only of a path that exists.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => {
+                    let paths: Vec<String> = c["paths"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+                    match host.chemins_cites(c["backend"].as_str().unwrap_or_default(), &paths) {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    }
+                }
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/symboles") => {
             // **Les symboles cités dans le chat** (`daemon_host::symboles_cites`) : la page
             // les envoie en lot, l'index dit où chacun est défini.
