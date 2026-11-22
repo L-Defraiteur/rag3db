@@ -158,3 +158,37 @@ fn a_protected_card_says_it_opens_for_this_command_only_and_why() {
     assert!(s.contains("ouvre un dossier protégé, pour cette commande seulement"), "{s}");
     assert!(s.contains("« lire le port de l'hôte »"), "{s}");
 }
+
+/// **A root granted is said as lasting** (archi, 22 November 2026: unlike a line's grant, it outlives the command, and
+/// Lucie must see it); a protected folder is opened for this command only.
+#[test]
+fn a_granted_root_is_said_lasting_and_a_protected_grant_for_this_command_only() {
+    let mut v = Vue::new(260, true);
+    root_card(&mut v, json!({ "command": "ls /home/lucied/projet", "root": "/home/lucied/projet", "mode": "write" }));
+    written(&mut v);
+    v.ligne_de_boite(&line(2, "user", "answer", json!({ "reply_to": "a1/doc:1", "approved": true })));
+    let w = written(&mut v);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].ends_with("racine accordée par toi : /home/lucied/projet (écriture), durable"), "{w:?}");
+    let mut p = Vue::new(260, true);
+    p.ligne_de_boite(&line(1, "teammate", "approval", json!({ "tool": "run_command", "args": { "command": "cat secret.env", "reason": "lire la clé" }, "command": "cat secret.env", "class": "protected", "scope": "once" })));
+    written(&mut p);
+    p.ligne_de_boite(&line(2, "user", "answer", json!({ "reply_to": "a1/doc:1", "approved": true })));
+    let w = written(&mut p);
+    assert!(w[0].ends_with("accordé par toi, pour cette commande seulement : cat secret.env"), "{w:?}");
+}
+
+/// **A root the judge granted is said** (archi's host report `root_granted`): « › racine accordée par le juge : … ».
+#[test]
+fn a_root_granted_by_the_judge_is_said() {
+    let mut v = Vue::new(260, true);
+    v.ligne_de_boite(&line(1, "host", "root_granted", json!({ "root": "/home/lucied/projet", "mode": "read", "by": "judge", "quote": "regarde mon projet", "text": "racine accordée par le juge : /home/lucied/projet (read), sur ta phrase « regarde mon projet »" })));
+    let w = written(&mut v);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("racine accordée par le juge : /home/lucied/projet (lecture), sur ta phrase « regarde mon projet »"), "{w:?}");
+    // The same, as a host report that carries the root and the judge.
+    let mut r = Vue::new(260, true);
+    r.ligne_de_boite(&line(1, "host", "report", json!({ "root": "/home/lucied/projet", "mode": "write", "by": "judge", "quote": "corrige-le", "text": "…" })));
+    let w = written(&mut r);
+    assert!(w.iter().any(|l| l.contains("racine accordée par le juge : /home/lucied/projet (écriture)")), "{w:?}");
+}
