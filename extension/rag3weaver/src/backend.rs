@@ -5554,10 +5554,13 @@ impl Backend {
                 && attachment.harness.after.is_empty()
                 && attachment.harness.on_accept.is_empty()
             {
-                return Err(errors[0]["message"]
-                    .as_str()
-                    .unwrap_or("invalid input")
-                    .into());
+                // The refusal names the field it is about (its path in the input), not only what is wrong with it
+                // (22 November 2026: « "" is shorter than 1 character » left the caller guessing which field).
+                let message = errors[0]["message"].as_str().unwrap_or("invalid input");
+                return Err(match errors[0]["path"].as_str().filter(|p| !p.is_empty()) {
+                    Some(path) => format!("{path}: {message}"),
+                    None => message.to_string(),
+                });
             }
             return Ok(
                 json!({"validation":{"accepted":false,"errors":errors,"warnings":[]},"stage":"input_schema","executed":false}),
