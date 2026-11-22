@@ -177,6 +177,12 @@ pub fn judge_input(files: &TeammateFiles, ligne: &str, class: &str) -> Value {
 /// message, one token, its logprobs; p(Y) = Y / (Y + N). Below the threshold, a mass under 0.5, a
 /// mute server or a timeout: not authorized, which is the card, never a grant.
 pub fn served_judge(conf: &Value) -> Option<GateJudge> {
+    served_judge_with(conf, crate::usage_ledger::user_ledger())
+}
+
+/// [`served_judge`] writing to `ledger` (the witnesses' own).
+pub fn served_judge_with(conf: &Value, ledger: Arc<crate::usage_ledger::Ledger>) -> Option<GateJudge> {
+    let _ = &ledger;
     let adresse = conf["address"].as_str()?.to_string();
     let prompt = std::fs::read_to_string(conf["prompt_file"].as_str()?).ok()?;
     let seuil = conf["threshold"].as_f64().unwrap_or(0.5);
@@ -277,3 +283,8 @@ impl DaemonHost {
 pub fn default_gate_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".config/rag3weaver/gate")
 }
+
+/// Witnesses: the served judge goes through the spending ledger (c7 and ED, 22 Nov 2026).
+#[cfg(test)]
+#[path = "gate_ledger_tests.rs"]
+mod ledger_tests;
