@@ -12187,6 +12187,9 @@ mod tests {
     /// The witnesses of the lot `search-text-constraints` (22 November 2026), in a file of their own.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     mod search_text_constraints;
+    /// The witness of the lot `name-within-a-typo` (22 November 2026), in a file of its own.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    mod a_name_with_a_typo;
 
     /// The witness of the lot `token-count-only-for-chunking` without the feature, in a file of its own.
     #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]

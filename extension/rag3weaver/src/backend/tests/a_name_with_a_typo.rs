@@ -1,0 +1,47 @@
+//! The witness of the lot `name-within-a-typo` (22 November 2026): a name typed with one typo gives its declaration
+//! first, as a name typed exactly does (c7's decision (B) of 20 November, extended to one typo on the bench of banc:
+//! « FuseResultNode », « BM25SerchNode », « sync_sorce », « reingest_fiel » ranked first by the dense, buried by the
+//! fusion under the usages that the whole query finds by substring).
+use super::*;
+
+/// A struct `FuseResultsNode` among forty functions that use it: the query « FuseResultNode » (one letter missing)
+/// gives the declaration first.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_name_typed_with_one_typo_gives_its_declaration_first() {
+    let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+    let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+        m["tools"]["search_code"] =
+            json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+    });
+    drop(p);
+    std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+    let mut usages = String::new();
+    for i in 0..40 {
+        usages.push_str(&format!("pub fn build_fusion_{i}() -> FuseResultsNode {{\n    FuseResultsNode::new(\"fuse_{i}\")\n}}\n\n"));
+    }
+    let declaration = "pub struct FuseResultsNode {\n    strategy: u8,\n    rrf_k: f64,\n}\n";
+    let fichiers = vec![("usages.rs".to_string(), usages), ("fusion.rs".to_string(), declaration.to_string())];
+    for (f, texte) in &fichiers {
+        std::fs::write(dir.path().join(format!("sources/{f}")), texte).unwrap();
+    }
+    let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest loads");
+    let backend = backend_de_code(dir.path(), prepared);
+    backend.catalog.lock().unwrap().ingest_code(&crate::code::analyze("/banc", fichiers.clone())).expect("the ingestion");
+    let names = |query: &str| -> Vec<String> {
+        let r = backend.call("search_code", json!({"query": query, "options": {"limit": 3, "format": "json"}})).expect("search_code");
+        r["result"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|l| format!("{}@{}", l["data"]["name"].as_str().unwrap_or(""), l["data"]["file_path"].as_str().unwrap_or("")))
+            .collect()
+    };
+    let exact = names("FuseResultsNode");
+    assert!(exact.first().is_some_and(|n| n.starts_with("FuseResultsNode@") && n.ends_with("fusion.rs")), "typed exactly: {exact:?}");
+    let typo = names("FuseResultNode");
+    assert!(
+        typo.first().is_some_and(|n| n.starts_with("FuseResultsNode@") && n.ends_with("fusion.rs")),
+        "with one typo, the declaration is not first: {typo:?}"
+    );
+}
