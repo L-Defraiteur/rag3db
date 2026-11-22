@@ -143,17 +143,24 @@ calmes, la carte en dernier recours.
 │   catalog.rs              │
 │ ○ relecteur  fini         │
 │                           │
-│ AVEC QUI IL A PARLÉ       │   dans l'heure qui précède, pas à lui
+│ EN CONTACT                │   dans l'heure qui précède, pas à lui
 │ ● lucivy                  │
-│   il y a 12 min · répond  │
-│   sur la 4.5.1            │
+│   12 min · ← c'est vert,  │   le dernier message échangé, coupé,
+│   12 tests                │   → envoyé, ← reçu
+│ ○ banc                    │
+│   40 min · → peux-tu      │
+│   relire le diff…         │
 └───────────────────────────┘
 ```
 
 - **« ← Retour »** ramène à la liste de l'accueil, avec une pastille si un agent hors de ce voisinage t'attend.
-- **Ses sous-agents** (ceux qu'il a fait surgir), puis **les agents qui ne sont pas à lui mais avec qui il a parlé dans
-  l'heure** ; mêmes lignes à deux niveaux.
+- **Ses sous-agents** (ceux qu'il a fait surgir), puis **« En contact »** : les agents qui ne sont pas à lui mais avec
+  qui il a parlé dans l'heure.
+- **La seconde ligne** (Lucie : « un petit trim du dernier message, ou de la dernière commande, selon communication ou
+  agent ») : dans la liste des agents et sous « Ses sous-agents », **sa dernière action** en phrase courte ; sous « En
+  contact », **le dernier message échangé avec lui**, coupé, avec son sens (« → peux-tu relire le diff… »,
+  « ← c'est vert, 12 tests ») et son heure.
 
 **Ce que la barre lit de l'hôte** (archi, arbre) : `/ide/agents` rend, par agent, l'état, le poste, le parent, les
-enfants, la dernière activité (heure, phrase courte, commande exacte), les non-lus, et les agents contactés avec l'heure
-du dernier message.
+enfants, la dernière activité (heure, phrase courte, commande exacte), les non-lus, et les agents contactés :
+`contacts: [{id, last_message_at, last_message: {from, text}}]`.
