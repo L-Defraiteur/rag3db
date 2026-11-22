@@ -490,6 +490,8 @@ fn entete<'a>(request: &'a tiny_http::Request, nom: &'static str) -> Option<&'a 
 /// Le jeton porté par le cookie de l'IDE, s'il y en a un.
 /// The user cookie (the title of a human), set by the entry with a one-use code.
 const COOKIE_USER: &str = "rag3weaver_user";
+/// **The user's title lasts in her browser** (c7, 22 Nov 2026: entering as a human is one gesture): a year.
+const TITRE_DURE_S: u64 = 365 * 24 * 3600;
 
 /// A cookie of the request by its name.
 fn cookie(request: &tiny_http::Request, nom: &str) -> Option<String> {
@@ -560,7 +562,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
     if method == "GET" && path == "/ide/entrer" && param("code").is_some() {
         let r = match param("code").and_then(|c| host.redeem_entry_code(&c)) {
             Some(u) => {
-                let cookie = format!("{COOKIE_USER}={u}; HttpOnly; SameSite=Strict; Path={PREFIX}");
+                let cookie = format!("{COOKIE_USER}={u}; HttpOnly; SameSite=Strict; Path={PREFIX}; Max-Age={TITRE_DURE_S}");
                 tiny_http::Response::from_string(String::new())
                     .with_status_code(303)
                     .with_header(tiny_http::Header::from_bytes(&b"Location"[..], &b"/ide/"[..]).expect("en-tête littéral"))
@@ -582,7 +584,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 .with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], cookie.as_bytes()).expect("cookie ASCII"));
             // An entry with the user's own token is hers: her title too (in service it differs from the host's token).
             if host.is_user_token(Some(&jeton)) {
-                let humain = format!("{COOKIE_USER}={jeton}; HttpOnly; SameSite=Strict; Path={PREFIX}");
+                let humain = format!("{COOKIE_USER}={jeton}; HttpOnly; SameSite=Strict; Path={PREFIX}; Max-Age={TITRE_DURE_S}");
                 r.with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], humain.as_bytes()).expect("cookie ASCII"))
             } else {
                 r

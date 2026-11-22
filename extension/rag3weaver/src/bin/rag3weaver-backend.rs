@@ -496,7 +496,23 @@ fn gabarits_livres(args: &[String]) -> Result<(), String> {
 /// **L'URL d'entrée de l'IDE** : celle de l'hôte qui tourne, avec son jeton
 /// local, que l'entrée pose en cookie (page 05 §2). À ouvrir dans le
 /// navigateur ; les fenêtres suivantes n'ont plus besoin du jeton.
-fn entrer_dans_l_ide() -> Result<(), String> {
+/// **The desktop entry** (`$XDG_DATA_HOME/applications/rag3weaver.desktop`, else `~/.local/share/applications/`):
+/// one click opens the IDE already titled.
+fn poser_le_lanceur() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| format!("le chemin du binaire : {e}"))?;
+    let dossier = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share")))
+        .ok_or("ni XDG_DATA_HOME ni HOME : où poser le lanceur ?")?
+        .join("applications");
+    std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    let chemin = dossier.join("rag3weaver.desktop");
+    std::fs::write(&chemin, rag3weaver::daemon_lifecycle::desktop_entry(&exe)).map_err(|e| format!("{} : {e}", chemin.display()))?;
+    println!("lanceur posé : {}", chemin.display());
+    Ok(())
+}
+
+fn entrer_dans_l_ide(ouvrir: bool) -> Result<(), String> {
     let hote = rag3weaver::daemon_lifecycle::read()
         .ok_or("aucun hôte ne tourne (daemon.json absent) : lancer `rag3weaver-backend daemon`, ou ouvrir un client MCP qui le lance")?;
     // A one-use code, asked with the user's token: the URL never carries a lasting secret.
@@ -509,7 +525,13 @@ fn entrer_dans_l_ide() -> Result<(), String> {
     let texte = reponse.into_body().read_to_string().map_err(|e| format!("le code d'entrée de l'IDE : {e}"))?;
     let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| format!("le code d'entrée de l'IDE : {e}"))?;
     let code = v["code"].as_str().ok_or_else(|| format!("le code d'entrée de l'IDE : {v}"))?;
-    println!("http://{}/ide/entrer?code={code}", hote.address);
+    let url = format!("http://{}/ide/entrer?code={code}", hote.address);
+    if ouvrir {
+        // The browser opens already titled; the title then lasts in it (a durable cookie).
+        std::process::Command::new("xdg-open").arg(&url).spawn().map_err(|e| format!("ouvrir le navigateur (xdg-open) : {e} ; l'adresse : {url}"))?;
+        return Ok(());
+    }
+    println!("{url}");
     eprintln!("(valable {} s, une seule fois)", v["expires_in_s"]);
     Ok(())
 }
@@ -1041,7 +1063,11 @@ fn run() -> Result<(), String> {
         return ranger_une_lib(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("ide") {
-        return entrer_dans_l_ide();
+        // `--install-launcher`: the desktop entry « rag3weaver », which runs `ide --open`.
+        if tous[1..].iter().any(|a| a == "--install-launcher") {
+            return poser_le_lanceur();
+        }
+        return entrer_dans_l_ide(tous[1..].iter().any(|a| a == "--open"));
     }
     // **`mail`** : la boîte de l'hôte depuis le shell d'un agent (lot 5, le pont).
     // **`canal`** : le serveur MCP que Claude Code charge comme canal (page 07 § 4).

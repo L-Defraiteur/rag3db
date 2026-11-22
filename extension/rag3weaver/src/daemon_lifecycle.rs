@@ -300,8 +300,10 @@ fn renew_token_dans(dossier: &Path) -> Result<String, String> {
 /// **The desktop entry « rag3weaver »** (`~/.local/share/applications/rag3weaver.desktop`): it opens the IDE already
 /// titled, `<exe> ide --open`.
 pub fn desktop_entry(exe: &Path) -> String {
-    let _ = exe;
-    String::new()
+    format!(
+        "[Desktop Entry]\nType=Application\nName=rag3weaver\nComment=Talk to your agents\nExec={} ide --open\nTerminal=false\nCategories=Development;\n",
+        exe.display()
+    )
 }
 
 pub fn user_token() -> Result<String, String> {
