@@ -1,6 +1,6 @@
 # Un point de reprise automatique meurt dans le dictionnaire d'une colonne de chaînes
 
-- **État** : ouvert (14 novembre 2026, cœur c++)
+- **État** : fermé le 22 novembre 2026 (cœur c++), non reproduit depuis la correction de la course des pages libres (`2c4bddcd3c`) ; à rouvrir s'il réapparaît
 - **Famille** : moteur
 - **Gravité** : plantage (SIGSEGV du processus entier)
 - **Atteignable en service** : à établir. Il faut un point de reprise automatique, demandé par un
@@ -322,4 +322,28 @@ s'y rangent : le débordement de `appendString` du core du 20 (un dictionnaire r
 Le lien n'est pas encore prouvé. La preuve prévue : la même série sondée, vingt tours, sur la branche de hotfixs qui
 verrouille `PageManager::finalizeCheckpoint` et `rollbackCheckpoint`. Sans le verrou, la sonde déclenche dès le
 premier tour ; si elle ne déclenche plus en vingt tours avec le verrou, le lien est fait.
+
+## Fermé (22 novembre 2026)
+
+**Forme compatible avec la course de l'allocateur, corrigée.** Le point de reprise vidait
+`uncheckpointedFreePageRanges` sans `mtx` (`FreeSpaceManager::finalizeCheckpoint`), pendant qu'un fil qui détruit un
+vieux morceau y faisait `push_back` sous `mtx`. Ticket et témoin de hotfixs : rouge sur la base en Release
+(« free(): double free detected in tcache 2 », abort sur 3 essais), course nommée sous TSan ; correctif sur master
+en `2c4bddcd3c` (branche `fsm-finalize-lock`, `mtx` dans `PageManager::finalizeCheckpoint` et `rollbackCheckpoint`).
+Les deux formes de C1 s'y rangent : un tampon de chaînes écrasé (core du 20) et des pages d'offsets réécrites sur
+disque (sonde du 21).
+
+**Le lien n'est pas prouvé par une série.** Sur la base récente (`1619434d76`), la référence sans le verrou n'a rien
+détecté : 0 sur 4 tours à 16 Mio, 0 sur 10 à 1 Mio (`SCENARIO_CHECKPOINT_THRESHOLD`). Sur l'ancienne base
+(`437e8a841f`, où la sonde avait déclenché au premier tour le 21), 3 tours complets sans détection ; les tours 4 à 9
+sont invalides : disque de luciepc saturé, la migration `ADD b` échoue et le scénario tombe sur « Cannot find
+property b ». La série du correctif n'a pas été jouée : sans référence qui déclenche, elle ne prouverait rien. La
+série a été arrêtée parce qu'elle coûtait trop au poste pour ce qu'elle apprenait.
+
+**Ce qui reste sur master** : la garde du dictionnaire de hotfixs (`4fcbe09fc3`), qui refuse par nom un dictionnaire
+relu ou écrit incohérent (« Corrupted string dictionary … ») au lieu de déborder. Si C1 réapparaît, ce message le
+dira, avec l'offset fautif et les octets : rouvrir ce ticket.
+
+Journaux à luciepc : `~/.cache/rag3db-moteur-notes/c1-compare/` (base-16mio, base-1mio, fix-1mio, old-ref), `c1-scan/`,
+`c1-boucle/`, `c1-asan/`. Cores et binaires de mesure effacés le 22 (ménage du disque de luciepc).
 
