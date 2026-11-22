@@ -104,6 +104,28 @@ function decision(closing: Line): string {
 
 const STAGES: Record<string, string> = { opened: "ouverte", recall: "rappel d'une autorisation", appeal: "appel de l'agent", waiting_survivor: "attente du survivant", survivor: "le survivant tranche" };
 
+const MODES: Record<string, string> = { read: "lecture", write: "écriture", read_write: "lecture et écriture" };
+
+/** The root a card opens, in plain words (c7, 22 November 2026): the root, its mode, and the warning of a wide root in
+ * sight, or the reason of a protected one. */
+function RootOfCard({ root, args }: { root: string; args: Record<string, unknown> }) {
+  const mode = typeof args.mode === "string" ? MODES[args.mode] ?? args.mode : null;
+  return (
+    <div className="card-root-details grid gap-1">
+      <p>
+        Racine : <code className="card-root font-mono">{root}</code>
+        {mode ? <span className="card-mode text-muted-foreground"> · en {mode}</span> : null}
+      </p>
+      {typeof args.warning === "string" && args.warning ? (
+        <p role="alert" className="card-warning rounded-md border border-amber-500/60 bg-amber-500/10 px-2.5 py-1.5 font-medium">
+          ⚠ {args.warning}
+        </p>
+      ) : null}
+      {typeof args.reason === "string" && args.reason ? <p className="card-reason text-muted-foreground">Pourquoi : {args.reason}</p> : null}
+    </div>
+  );
+}
+
 function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; waitingId: string | null; onAnswer: (line: Line, approved: boolean) => void }) {
   const cards = cardsOf(mailbox);
   if (!cards.length) return null;
@@ -115,6 +137,8 @@ function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; wait
         const until = current?.until ? Number(current.until) : null;
         const left = until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : null;
         const command = c.opening.command ? String(c.opening.command) : null;
+        const args = (c.opening.args ?? {}) as Record<string, unknown>;
+        const root = typeof args.root === "string" ? args.root : null;
         return (
           <div
             key={c.id}
@@ -127,9 +151,10 @@ function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; wait
           >
             <p>
               {open ? "L'agent attend ton accord" : "Accord"} : {String(c.opening.tool ?? "run_command")}{" "}
-              <code className="font-mono">{command ?? JSON.stringify(c.opening.args ?? {})}</code>
+              {root ? null : <code className="font-mono">{command ?? JSON.stringify(c.opening.args ?? {})}</code>}
               {c.opening.class ? <span className="text-xs text-muted-foreground"> · {String(c.opening.class)}{c.opening.scope ? `, ${String(c.opening.scope)}` : ""}</span> : null}
             </p>
+            {root ? <RootOfCard root={root} args={args} /> : null}
             <ol className="timeline flex flex-wrap gap-x-3 text-xs text-muted-foreground">
               <li data-stage="opened">{STAGES.opened}</li>
               {c.states.map((s, k) => (
