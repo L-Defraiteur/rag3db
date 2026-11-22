@@ -5,7 +5,7 @@ use crate::usage_ledger::{Caller, Ledger, MeteredLlm, Tokens};
 /// **Past the monthly cap, the user's own chat turn passes and is counted; a turn the host does not sign
 /// as a human's is refused, said so.** The month is at its cap before either turn.
 #[test]
-fn a_humans_chat_turn_passes_the_cap_and_an_unsigned_one_is_refused() {
+fn a_humans_chat_turn_goes_past_the_cap_and_an_unsigned_one_is_refused() {
     let d = tempfile::tempdir().unwrap();
     std::fs::write(
         d.path().join("prices.json"),
