@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **La carte d'accord d'une racine dit ce qu'elle ouvre.** Dans l'IDE, une demande d'ouvrir une
+  racine montre la racine et son mode en clair, l'avertissement d'une racine large bien en vue (« cette racine contient
+  aussi : … »), ou la raison d'une racine protégée — plus le JSON brut des arguments.
 - 22 novembre 2026 — **Remplacer des vecteurs coûte dix fois moins.** Une ligne qui porte déjà un vecteur et en
   reçoit un neuf (un contenu changé, un modèle changé) ne passe plus par NULL une ligne à la fois : tout le paquet part
   en une instruction, comme les lignes nées sans vecteur. Le défaut du moteur qui l'imposait depuis le 3 octobre (un
