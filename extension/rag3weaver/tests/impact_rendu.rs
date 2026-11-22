@@ -24,6 +24,7 @@ fn atteint(uuid: &str, title: &str, path: &str, level: usize, group: &str) -> Re
         by_name: false,
         ambigu: false,
         by_also: false,
+        by_member: false,
         hub: None,
         through_hub: None,
     }
