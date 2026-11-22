@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Les dépenses du mois se lisent, et alertent.** L'outil MCP `usage_report` rend le mois (le
+  total contre le plafond, la projection, puis par modèle, par jour et par appelant) ; `daemon_status` en donne la
+  ligne ; « À intervenir » prévient à 50 %, à 80 %, au plafond, ou dès que la projection le dépasse. Un tour de chat
+  que Lucie envoie elle-même passe le plafond et se compte, signé par l'hôte. Les scripts de mesure écrivent au même
+  registre par `rag3weaver-backend usage record`, et demandent avant un appel payant par `usage check`.
 - 22 novembre 2026 — **Remplacer des vecteurs coûte dix fois moins.** Une ligne qui porte déjà un vecteur et en
   reçoit un neuf (un contenu changé, un modèle changé) ne passe plus par NULL une ligne à la fois : tout le paquet part
   en une instruction, comme les lignes nées sans vecteur. Le défaut du moteur qui l'imposait depuis le 3 octobre (un
