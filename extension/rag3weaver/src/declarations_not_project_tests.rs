@@ -2,7 +2,7 @@
 //! nothing, the agent called list_declarations and showed its own manifest's files as the project's). Its answer and its
 //! description say these are the backend's declarations, not the project's files. A module of its own.
 
-use super::backend_reload_tests::toy;
+use super::reload_tests::toy;
 use crate::agent::ToolBox;
 use crate::llm::{ToolCall, Turn};
 use serde_json::json;
