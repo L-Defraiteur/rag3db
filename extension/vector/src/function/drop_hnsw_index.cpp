@@ -1,4 +1,5 @@
 #include "catalog/catalog.h"
+#include "common/string_utils.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "function/hnsw_index_functions.h"
@@ -76,9 +77,9 @@ static std::string dropHNSWIndexTables(main::ClientContext& context,
     query += common::stringFormat("CALL _DROP_HNSW_INDEX('{}', '{}');",
         dropHNSWIndexBindData->tableEntry->getName(), dropHNSWIndexBindData->indexName);
     query += common::stringFormat("DROP TABLE {};",
-        HNSWIndexUtils::getUpperGraphTableName(nodeTableID, dropHNSWIndexBindData->indexName));
+        common::StringUtils::quoteIdentifier(HNSWIndexUtils::getUpperGraphTableName(nodeTableID, dropHNSWIndexBindData->indexName)));
     query += common::stringFormat("DROP TABLE {};",
-        HNSWIndexUtils::getLowerGraphTableName(nodeTableID, dropHNSWIndexBindData->indexName));
+        common::StringUtils::quoteIdentifier(HNSWIndexUtils::getLowerGraphTableName(nodeTableID, dropHNSWIndexBindData->indexName)));
     if (requireNewTransaction) {
         query += "COMMIT;";
     }
