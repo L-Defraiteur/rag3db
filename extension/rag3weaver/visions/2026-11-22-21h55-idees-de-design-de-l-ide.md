@@ -327,3 +327,192 @@ Deux lots en sortent, à faire tôt parce qu'ils servent la sûreté autant que 
 
 L'ordre retenu avec recherche : d'abord les réparations de son audit, avec (6), (3), les boutons de (13) et (1)
 fondus dedans ; puis (2) et (5) après `show` ; puis (8) et (11) sur la carte d'accord ; puis (15) ; puis (7).
+
+---
+
+## Les fonctions devenues des contraintes
+
+*Ajout du 22 novembre, 22 h 45. Lucie : « identifie tout ce qu'on a fait comme fonctionnalité, mais qui s'est
+transformé en contrainte d'UX plutôt qu'en expressivité latente, et enrichis le plan : comment les amener dans un IDE
+non bloquant pour l'utilisateur. »*
+
+Une fonction est **latente** quand elle agit sans rien demander, et qu'on la découvre le jour où on en a besoin. Elle
+est devenue une **contrainte** quand il faut la connaître, la régler ou la nommer avant de pouvoir avancer. L'essai
+du 22 au soir a buté sur sept d'entre elles en une heure.
+
+### Six règles du non bloquant
+
+1. **Rien à préparer avant la première phrase.** Aucun fichier à modifier, aucun commit, aucun serveur à lancer,
+   aucun nom à donner.
+2. **Une exigence devient une proposition.** Ce que le produit exige (une tâche, une racine, un prix, un domaine),
+   l'agent le propose sur une carte, avec un bouton. Jamais un formulaire, jamais une commande à taper à côté.
+3. **Le défaut est sûr, et il marche.** L'hôte choisit une valeur prudente et continue. Le réglage existe, il n'est
+   pas un péage.
+4. **Ce qui est long se fait en fond.** L'index, une repasse, un bâti : on continue de parler, et une ligne calme dit
+   où ça en est.
+5. **Un refus offre le geste.** Il dit en une phrase ce qui manque, et propose de le faire. Ou l'agent se corrige
+   seul, sans montrer le refus.
+6. **Jamais de panne muette.** Quand une protection ou une fonction n'est pas active (le juge éteint, une entrée non
+   humaine), l'écran le dit.
+
+Et la plomberie reste lisible, pour qui la cherche, dans « Avancé ».
+
+Pour chaque fonction : ce qu'elle exige aujourd'hui, ce qu'elle devient, et son premier lot. « Vu » : vécu à l'essai
+du 22 ou relevé par l'audit de recherche. « À vérifier » : je le déduis, sans l'avoir joué.
+
+### I. Avant la première phrase
+
+**1. La signature humaine.** Vu.
+- *Exige* : lancer `rag3weaver-backend ide` dans un terminal pour obtenir une adresse à usage unique. Entrer
+  autrement marche, mais vos oui ne valent plus accord, sans que rien ne le dise.
+- *Devient* : ouvrir l'IDE depuis sa propre session est humain d'office (un lanceur du bureau, un cookie qui dure).
+  Si l'entrée n'est pas humaine, un bandeau le dit, avec « c'est bien moi ».
+- *Premier lot* : le bandeau « tes réponses ne compteront pas », puis le lanceur. (archi)
+
+**2. Ouvrir un projet.** Vu.
+- *Exige* : taper un chemin absolu, sans `~`. Puis rien ne se passe. Un dossier créé par l'IDE n'a pas de commit, et
+  la suite réclame `git commit --allow-empty`.
+- *Devient* : on parle, et l'agent d'accueil propose le dossier (récents, dépôts trouvés, sélecteur). L'hôte fait le
+  premier commit. Ouvrir mène au chat.
+- *Premier lot* : en passe (`~`, ouvrir mène au chat, premier commit, sélecteur). (recherche)
+
+**3. La tâche.** Vu.
+- *Exige* : savoir que le chat d'un projet ne code pas, trouver « tâches », donner un nom, cliquer « Ouvrir », puis
+  parler dans une autre page.
+- *Devient* : la branche de travail isolée reste, mais elle s'ouvre seule à la première demande de code, nommée par
+  l'hôte. Le mot « tâche » n'apparaît que dans la barre des agents. À la fin : « Garder » ou « Jeter ».
+- *Premier lot* : `open_code_task` et la bascule dans le même fil. (archi, recherche)
+
+**4. Le terminal.** Vu.
+- *Exige* : `--repo` et `--task`. Tant que la tâche n'existe pas, il montre le fil d'un autre agent et refuse les
+  réponses.
+- *Devient* : `rag3weaver-tty` dans un dossier, et on parle. `--continue` reprend la dernière conversation.
+- *Premier lot* : en cours (`cx-tty-task-only`, puis le départ sans argument). (tty)
+
+**5. Un modèle branché.** À vérifier.
+- *Exige* : un régime de modèle déclaré et des identifiants posés à la main. Une nouvelle venue n'en a pas, et
+  l'agent d'accueil lui-même a besoin d'un modèle pour lui répondre.
+- *Devient* : au premier lancement, un écran sans modèle (le seul) propose trois voies : un modèle local, s'il y en a
+  un ; une clé d'un fournisseur ; notre inférence. Ensuite, changer de modèle se dit à l'agent.
+- *Premier lot* : jouer une arrivée sur un poste neuf, sans rien, et écrire ce qui manque. (recherche, archi)
+
+### II. Pour que l'agent ait le droit d'agir
+
+**6. Le mode auto.** Vu.
+- *Exige* : modifier `workspace.commands` dans un fichier de réglages, puis faire un commit dans un dépôt à part.
+  Sans le commit, rien ne change, et rien ne le dit.
+- *Devient* : le cadran d'autonomie (idée 12). Un projet neuf part sur « fais, et demande pour ce qui casse ou ce qui
+  sort ». Changer est une carte.
+- *Premier lot* : la posture par défaut d'un projet neuf, et la carte qui la change. (archi)
+
+**7. Le juge.** Vu.
+- *Exige* : un fichier `rules.json` posé à la main et un serveur de modèle lancé à la main, qui s'éteint à l'heure de
+  son délai. Sans lui, toute commande jugée devient une carte, sans explication.
+- *Devient* : un service de l'hôte, déclaré, démarré à la demande et arrêté au repos. S'il manque, la carte le dit :
+  « le juge est éteint, je te demande donc ».
+- *Premier lot* : la ligne « juge éteint » sur la carte ; puis le juge en service de l'hôte. (archi, optimiseur)
+
+**8. Le bac, les racines, les dossiers protégés.** Vu.
+- *Exige* : rien, quand ça marche. Mais un `git status` a été classé « protégé », et une carte ne disait pas sa
+  commande.
+- *Devient* : l'agent demande la racine du projet une fois, avec sa raison. La carte dit la commande, la racine, le
+  mode, et l'avertissement d'une racine large.
+- *Premier lot* : en passe (`task-root-not-protected`, les cartes de racine). (archi, recherche, tty)
+
+**9. Les domaines du navigateur.** À vérifier.
+- *Exige* : déclarer à la main les domaines que l'agent peut lire.
+- *Devient* : une carte au premier besoin : « je veux lire `localhost:5173`, ton app. Pour cette conversation, ou
+  toujours ? »
+- *Premier lot* : la carte de classe navigateur. (archi)
+
+**10. Le plafond et les prix.** Connu.
+- *Exige* : un prix déclaré pour chaque modèle. Un modèle sans prix est refusé net.
+- *Devient* : le refus offre le geste : « ce modèle n'a pas de prix. Je le cherche sur la page du fournisseur, ou tu
+  le donnes ? » Le plafond approché se dit dans le fil, avant de bloquer.
+- *Premier lot* : le refus d'un modèle sans prix devient une carte. (everything declarative)
+
+### III. Pour que l'agent sache
+
+**11. L'index.** Vu.
+- *Exige* : comprendre « index : à jour », « catalogue tenu », « repasse de l'analyse », et trois avertissements en
+  tête d'une recherche.
+- *Devient* : l'agent propose l'index avec sa durée et travaille depuis le disque en attendant. Une repasse est une
+  ligne calme, « je relis le projet, 40 % », jamais un pavé.
+- *Premier lot* : les avertissements de la recherche repliés sous « comment j'ai cherché ». (recherche)
+
+**12. La recherche.** Vu.
+- *Exige* : lire « bm25 n°61 (11.020) · bm25_exact n°1 », cocher « reclasser ».
+- *Devient* : « par le sens », « par les mots », « nom exact ». La relecture se déclenche seule sur une question en
+  phrases. La recherche est d'abord un outil de l'agent ; sa page est dans « Avancé ».
+- *Premier lot* : les étiquettes humaines des signaux. (recherche)
+
+**13. Les vues.** Connu.
+- *Exige* : ouvrir, choisir et fermer une vue pour lire le projet tel qu'une branche de travail le voit.
+- *Devient* : une vue s'ouvre quand un agent travaille dans une branche, et se ferme à son atterrissage. Pour
+  l'utilisatrice, ce sont les calques (idée 7).
+- *Premier lot* : la vue d'une tâche ouverte et fermée par l'hôte. (arbre principal)
+
+**14. La mémoire.** Connu.
+- *Exige* : une trentaine d'outils (fiche, source, apport, sujet, ancrer, scinder, rejoindre…).
+- *Devient* : trois gestes, « souviens-toi », « oublie », « qu'est-ce qu'on sait sur… ». L'archiviste range. Le
+  carnet (idée 20) montre le reste.
+- *Premier lot* : la puce « je note ça » et sa correction. (mémoire)
+
+**15. Le service d'embarquement.** À vérifier.
+- *Exige* : un service de vecteurs en marche, avec ses réglages de carte graphique.
+- *Devient* : l'hôte le démarre à la demande, retombe sur un petit modèle sans carte graphique, et dit la vitesse
+  attendue avant d'indexer.
+- *Premier lot* : jouer un index sur un poste sans carte graphique. (embarquement)
+
+### IV. Pour que le travail aboutisse
+
+**16. Les déclarations.** Vu.
+- *Exige* : rien, en principe. Mais l'agent du projet a présenté ses réglages comme les fichiers du projet, et a
+  « proposé » un README de sa propre machinerie.
+- *Devient* : les réglages sont un sujet à part, qu'on aborde en le demandant (« change ta façon de travailler »).
+  Le graphe de l'agent se regarde par « voir comment il réfléchit ».
+- *Premier lot* : en passe (`declarations-not-project`, `chat-project-first`). (archi)
+
+**17. La preuve.** Vu.
+- *Exige* : lire « Témoins », « Fusionner », « Équipier », « Boîte aux lettres » sur la page d'une tâche.
+- *Devient* : l'agent trouve les tests du projet et propose de les lancer avant de finir. Un badge, « preuve : vu
+  rouge, puis vert ». Sans tests, il le dit, sans rien exiger.
+- *Premier lot* : les mots de la page d'une tâche (idée 13 : « Garder », « Jeter »). (recherche)
+
+**18. Les commandes de fond.** Connu.
+- *Exige* : pour l'agent, un délai, une borne, une seule commande par ligne.
+- *Devient* : un refus de ce genre ne remonte jamais à l'utilisatrice : l'agent se corrige. Elle voit les tuiles
+  « en cours », « prêt », « arrêtée après 10 min ».
+- *Premier lot* : les tuiles des commandes de fond et des services. (tty, recherche)
+
+### V. Pour que la machine tourne
+
+**19. La pose de l'hôte.** Vu.
+- *Exige* : attendre un hôte neuf pour avoir une nouveauté, une coupure des bases, une repasse, des clients à
+  relancer.
+- *Devient* : l'hôte se met à jour au repos et le dit en une ligne. Une conversation en cours n'est jamais coupée.
+- *Premier lot* : la mise à jour au repos, sans coupure visible. (optimiseur)
+
+**20. Plusieurs postes.** Connu.
+- *Exige* : des options `ssh` et un tunnel pour parler à l'autre poste depuis le terminal.
+- *Devient* : les lieux (idée 24). Un poste se déclare une fois, par son nom.
+- *Premier lot* : `--host <nom>` au terminal, lu dans la liste des hôtes. (tty, optimiseur)
+
+**21. La plomberie à l'accueil.** Vu.
+- *Exige* : traverser les sessions, leurs numéros de processus, les orphelines, les gabarits locaux.
+- *Devient* : « Avancé ».
+- *Premier lot* : en cours (les orphelines hors du chat, l'accueil en chat). (recherche)
+
+### Ce que ça change à l'ordre
+
+Avant le socle des idées, un palier : **la première minute**. Tant qu'il n'est pas franchi, aucune idée ne se voit.
+
+1. En passe ce soir : la tâche qui s'ouvre seule (3), le projet proposé (2), le terminal sans argument (4), les
+   réglages qui ne passent plus pour le projet (16), `git status` sans carte (8).
+2. À lancer ensuite : l'entrée humaine d'office et son bandeau (1), la posture par défaut et son cadran (6), le juge
+   en service de l'hôte (7), l'arrivée sur un poste neuf, sans modèle (5).
+3. Puis les refus qui offrent le geste : un prix manquant (10), un domaine (9), l'index (11).
+
+Le critère : **une personne qui n'a jamais vu le produit lance une commande ou ouvre une page, écrit une demande de
+code, et voit l'agent travailler puis lui demander un accord, sans rien avoir tapé d'autre.** Ce parcours se joue
+dans le vrai navigateur et dans le vrai terminal, sur un poste neuf, avant de dire « prêt ».
