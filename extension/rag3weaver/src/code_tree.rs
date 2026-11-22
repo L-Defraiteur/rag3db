@@ -491,7 +491,8 @@ pub fn retirer(address: &str, manifest: &Path, close_tasks: bool) -> Result<Valu
 /// what is needed posed first. Gives the host's answer.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub fn open_folder(endpoint: &crate::daemon_client::Endpoint, dossier: &Path) -> Result<Value, String> {
-    let chemin = std::path::absolute(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    // `~` is left to the host, which unfolds it towards the user's home; any other relative path is the caller's.
+    let chemin = if dossier.starts_with("~") { dossier.to_path_buf() } else { std::path::absolute(dossier).map_err(|e| format!("{} : {e}", dossier.display()))? };
     let r = crate::daemon_client::session_call(endpoint, "rag3weaver-backend open", "/dossiers/ouvrir", serde_json::json!({ "path": chemin }))?;
     if r["ok"] != serde_json::json!(true) {
         return Err(r["error"].as_str().map(str::to_string).unwrap_or_else(|| r.to_string()));

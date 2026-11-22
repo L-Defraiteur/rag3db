@@ -146,7 +146,7 @@ function OpenFolder() {
           name="chemin"
           value={path}
           onChange={(e) => setPath(e.target.value)}
-          placeholder="/home/vous/projets/mon-projet (absent ou vide : créé, avec git init)"
+          placeholder="~/projets/mon-projet (absent ou vide : créé, avec git init)"
           className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm font-mono"
         />
         <Button type="submit" disabled={busy || !path.trim()}>
