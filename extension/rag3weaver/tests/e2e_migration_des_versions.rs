@@ -261,3 +261,45 @@ fn a_base_held_by_another_does_not_move_to_generations() {
     let refus = rag3weaver::migration_des_versions::migrate_base_to_generations(&base).expect_err("une base tenue monte");
     assert!(refus.contains("tenue"), "le refus ne dit pas que la base est tenue : {refus}");
 }
+
+/// **Under the shared texts, the migration puts every vector it takes over on its text too**
+/// (lot L2b, c7 : before L5) : after the migration, each chunk of a version points to its text,
+/// and every text carries the model's vector, without a call to the model.
+#[test]
+#[ignore]
+fn under_the_shared_texts_the_migration_puts_its_vectors_on_the_texts() {
+    let dir = tempfile::tempdir().unwrap();
+    let ouvrir_partage = |dir: &Path| -> (Catalog, Arc<Mutex<Vec<String>>>) {
+        let conn = Rag3dbConnection::new(dir.join("code.rag3db")).unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+        let texts = Arc::new(Mutex::new(Vec::new()));
+        let mut cat = Catalog::new(Box::new(conn), Box::new(Compteur { inner: HashEmbedder::new(8), texts: texts.clone() }), CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, shared_text_vectors: true, ..Default::default()
+        });
+        cat.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: dir.join("code.rag3db.fts").to_string_lossy().into_owned() });
+        cat.initialize().unwrap();
+        (cat, texts)
+    };
+    {
+        let (mut cat, _) = ouvrir_partage(dir.path());
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
+        let source = Snapshot::new("ancre", [
+            ("a.rs".to_string(), PARTAGEE.to_string()),
+            ("b.rs".to_string(), format!("\n\n{PARTAGEE}")),
+            ("c.rs".to_string(), SEULE.to_string()),
+        ]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    }
+    let (mut cat, texts) = ouvrir_partage(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    texts.lock().unwrap().clear();
+    migrer_vers_les_versions(&mut cat, default_scope_chunking()).unwrap_or_else(|e| panic!("la migration refuse : {e}"));
+    assert_eq!(texts.lock().unwrap().len(), 0, "la migration a appelé le modèle : {:?}", texts.lock().unwrap());
+    let morceaux = compte(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(c)");
+    assert!(morceaux > 0, "aucun morceau de version");
+    assert_eq!(compte(&cat, "MATCH (c:ScopeContent_Chunk)-[:ScopeContent_HAS_TEXT]->(:ScopeContent_Text) RETURN count(c)"), morceaux, "un morceau de version sans son texte");
+    let colonne = cat.vector_storage("ScopeContent_Text").unwrap().column;
+    let textes = compte(&cat, "MATCH (t:ScopeContent_Text) RETURN count(t)");
+    assert!(textes > 0, "aucun texte");
+    assert_eq!(compte(&cat, &format!("MATCH (t:ScopeContent_Text) WHERE t.`{colonne}` IS NOT NULL RETURN count(t)")), textes, "un texte sans le vecteur repris");
+}

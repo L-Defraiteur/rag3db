@@ -159,3 +159,47 @@ fn a_second_writer_on_the_base_is_refused_by_the_shared_text_writes() {
     drop(reader);
     assert!(conn.sole_writer().is_ok(), "the sister gone, the writes go through");
 }
+
+/// **Undoing an insertion removes the texts its chunks leave orphan** (lot L2b, c7 : the same
+/// bounded removal as the four ways chunks are deleted) : a chunk inserted with a new text,
+/// then undone, takes its text with it ; a chunk inserted on a text another chunk shares, then
+/// undone, leaves that text to its other owner.
+#[test]
+fn undoing_an_insertion_removes_the_texts_its_chunks_leave_orphan() {
+    use crate::dataflow::node::{Node, NodeContext};
+    use crate::dataflow::port::{BatchPayload, PortType, PortValue};
+    use crate::dataflow::record_nodes::InsertRecordNode;
+    use crate::dataflow::services::ServiceRegistry;
+    use crate::records::EntityRecord;
+    use crate::refs::EntityRef;
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut catalog = catalog(&seen);
+    catalog.ingest_entities("Document", vec![document("first", BODY)]).unwrap();
+    let (text, rel, hash, table) = names(&catalog);
+    let mut services = ServiceRegistry::new();
+    services.register("conn", catalog.conn_arc());
+    services.register("dialect", catalog.dialect_arc());
+    services.register("node_id_cache", Arc::new(std::sync::RwLock::new(crate::node_id_cache::NodeIdCache::new())));
+    services.register(crate::shared_text::SERVICE_SHARED_TEXT_TABLES, crate::shared_text::SharedTextTables::new(catalog.shared_text_tables()));
+    let mut ctx = NodeContext::with_services(Arc::new(services));
+    let chunk = |uuid: &str, text_hash: &str| {
+        let (entity_ref, resolver) = EntityRef::new(&table);
+        let data = BTreeMap::from([
+            ("_uuid".to_string(), CypherValue::String(uuid.into())),
+            ("_text_hash".to_string(), CypherValue::String(text_hash.into())),
+        ]);
+        EntityRecord::new(table.clone(), data, resolver, entity_ref)
+    };
+    ctx.set_input("entities", PortValue::new(BatchPayload::new(PortType::Entities, vec![chunk("undo-fresh", "hash-of-a-fresh-text"), chunk("undo-shared", &hash)])));
+    let mut node = InsertRecordNode::new("chunks");
+    node.execute(&mut ctx).expect("the insertion");
+    let texts = |h: &str| count(&catalog, &format!("MATCH (t:`{text}`) WHERE t._text_hash = '{h}' RETURN count(*)"));
+    assert_eq!(texts("hash-of-a-fresh-text"), 1, "the insertion attached its chunk to a fresh text");
+    let undo = node.undo_context().expect("an undo context");
+    node.undo(undo).expect("the undo");
+    assert_eq!(texts("hash-of-a-fresh-text"), 0, "the undone chunk took its orphan text with it");
+    assert_eq!(texts(&hash), 1, "the shared text stays");
+    assert!(text_vector(&catalog, &text, &hash).is_some(), "with its vector");
+    assert_eq!(count(&catalog, &format!("MATCH ()-[e:`{rel}`]->(t:`{text}`) WHERE t._text_hash = '{hash}' RETURN count(e)")), 1, "its other owner's edge");
+}
