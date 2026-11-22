@@ -118,6 +118,8 @@ mod e2e_class_users;
 mod e2e_include_members;
 #[path = "../e2e_occurrences.rs"]
 mod e2e_occurrences;
+#[path = "../e2e_type_sites.rs"]
+mod e2e_type_sites;
 #[path = "../e2e_compose_restart.rs"]
 mod e2e_compose_restart;
 #[path = "../e2e_contrat_transactions.rs"]
