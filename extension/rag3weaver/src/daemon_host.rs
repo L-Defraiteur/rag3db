@@ -4137,6 +4137,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// Witnesses: the IDE's routes that grant answer only a human (22 Nov 2026).
+#[cfg(all(test, unix, feature = "code"))]
+mod human_routes;
 /// Les images du README : un générateur `#[ignore]`, pas un témoin.
 #[cfg(all(test, unix, feature = "code", feature = "daemon"))]
 mod captures_du_readme;
