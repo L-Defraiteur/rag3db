@@ -1,5 +1,5 @@
 %% tool: usages
-%% description: Tous les usages d'un nom, et sa ou ses définitions : qui l'appelle, qui s'en sert comme type, qui l'importe, qui en hérite — groupés par genre, chacun avec fichier et ligne. Un nom défini plusieurs fois montre toutes ses définitions, sans choisir ; `path` restreint celles qu'on regarde.
+%% description: Tous les usages d'un nom, et sa ou ses définitions : qui l'appelle, qui s'en sert comme type, qui l'importe, qui en hérite — groupés par genre, chacun avec fichier et ligne. Un nom défini plusieurs fois montre toutes ses définitions, sans choisir ; `path` restreint celles qu'on regarde. Pour « qui utilise une classe ou ses méthodes », prenez impact avec include_members: true (usages ne dit que qui nomme ce nom).
 %% param: name string! -- Le nom cherché (fonction, type, méthode…), tel qu'écrit dans le code.
 %% param: path string = "" -- Ne montrer que les définitions sous ce chemin (préfixe de fichier), pour lever une ambiguïté.
 %% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Ce qui est hors portée est compté, pas montré.
