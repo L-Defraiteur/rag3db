@@ -206,3 +206,17 @@ fn an_install_the_user_did_not_ask_for_opens_the_card() {
     assert_eq!(card["class"], json!("outbound"), "{card}");
     assert!(v.judged.lock().unwrap().is_empty(), "the install rule sends it to the card before the judge");
 }
+
+/// 7. **The grant quotes the line word for word** (the dry run of 22 Nov 2026: the note rejoined the parts with « ; »,
+/// the agent replayed that text, which no grant covered, and a second card opened for the same command).
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn the_grant_quotes_the_line_word_for_word() {
+    let v = v1(vec!["echo un && rm vieux.txt"], "Lis le README.");
+    let card = v.wait("the card", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    let card = card.iter().find(|l| l["kind"] == "approval").unwrap().clone();
+    v.host.post_to_teammate(&v.id, "doc", "lucie", "answer", None, "oui", &json!({ "reply_to": card["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).unwrap();
+    let b = v.wait("the grant", &|b| b.iter().any(|l| l["granted"].is_string()));
+    let granted = b.iter().find_map(|l| l["granted"].as_str()).unwrap().to_string();
+    assert!(granted.contains("`echo un && rm vieux.txt`"), "the agent replays what it reads: {granted}");
+}
