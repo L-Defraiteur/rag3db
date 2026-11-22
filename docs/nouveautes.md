@@ -1,5 +1,20 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un texte copié se retrouve tel quel.** La passe de la requête entière cherche une phrase de
+  plusieurs mots à distance 0 : un `contains` flou ignorait les séparateurs et cherchait la phrase collée en un seul
+  mot, à une faute près. Un jeton seul garde sa distance 1 ; une faute dans une phrase revient à la recherche par mots.
+- 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
+  n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
+  `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
+  le comptent à côté de `failed` (`dangling_links`). Leur cause est corrigée : une fermeture ou une compréhension
+  repliée dans sa fonction ne fabrique plus de liens partant d'elle, et ce qu'elle appelle reste porté par la
+  fonction. **Deux indexations des mêmes fichiers posent aussi les mêmes liens** : une paire venue deux fois prenait
+  l'une ou l'autre valeur selon les passes.
+- 21 novembre 2026 — **Un nœud déclaré peut s'écrire en WebAssembly** (feature `wasm-nodes`, à l'essai, hors du
+  service). Son `.node.json` désigne un `.wasm` qui exporte `memory`, `alloc` et `run`, et échange du JSON. Il n'a accès
+  à rien : un module qui importe un fichier, le réseau ou une horloge est refusé en le nommant. Chaque appel est une
+  instance neuve, sous le plafond de mémoire de l'hôte et un carburant déterministe. Préparé une fois, un appel coûte
+  0,37 ms, le tiers d'un nœud TypeScript.
 - 21 novembre 2026 — **La requête de `search_code` n'est que du texte.** Aucun caractère n'y est un opérateur :
   `--save-dev`, `-test`, un guillemet, `AND` ou une parenthèse sont cherchés tels quels. Une phrase reste pesée mot à
   mot (un « contient » par mot et par champ), construite par rag3weaver ; aucun analyseur de requêtes de lucivy ne
