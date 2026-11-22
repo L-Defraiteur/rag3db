@@ -83,8 +83,12 @@ pub fn dossier_journaux() -> std::path::PathBuf {
     static DOSSIER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     DOSSIER
         .get_or_init(|| {
+            // The lib's witnesses keep theirs in their process's temporary folder, never in the user's cache
+            // (22 Nov 2026: 54 968 index journals there); run_e2e.sh gives each e2e suite its own.
+            let des_temoins = cfg!(test).then(|| std::env::temp_dir().join(format!("rag3weaver-commandes-witnesses-{}", std::process::id())));
             let d = std::env::var_os("RAG3WEAVER_JOURNAUX_DIR")
                 .map(std::path::PathBuf::from)
+                .or(des_temoins)
                 .or_else(|| crate::commande::dossier_de_cache().map(|c| c.join("rag3weaver").join("commandes")))
                 .unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-commandes"));
             menager(&d, jours_gardes());

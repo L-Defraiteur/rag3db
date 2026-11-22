@@ -982,6 +982,8 @@ for ligne in open(sys.argv[1]):
     # dossier, et un témoin y en a écrit cinq). Les tâches, les chats, les runs, les arbres de code et le registre
     # des racines accordées en dérivent (daemon_lifecycle::data_roots).
     export RAG3WEAVER_DATA_DIR="$E2E_DISQUE_PARENT/$nom/data"
+    # Les journaux des commandes et des index aussi (54 968 dans ~/.cache/rag3weaver/commandes à luciepc, 22 nov.).
+    export RAG3WEAVER_JOURNAUX_DIR="$E2E_DISQUE_PARENT/$nom/journaux"
     unset RAG3WEAVER_TACHES_DIR RAG3WEAVER_CHATS_DIR RAG3WEAVER_RUNS_DIR
     # L'heure de départ de chaque suite : un pic du journal de charge
     # (échange, carte) s'attribue à la suite qui tournait.
