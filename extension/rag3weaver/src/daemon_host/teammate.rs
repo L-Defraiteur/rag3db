@@ -171,6 +171,36 @@ pub struct TeammateFiles {
     pub nom: Option<String>,
 }
 
+/// The `AgentMessage` of a mailbox line written between agents, or `None`: a `message` or an `answer` whose sender or
+/// recipient is another agent (`agent:<key>`); `teammate` is the task's own key (`cle`).
+pub fn agent_message(line: &Value, cle: Option<&str>, parent: &str, task: &str) -> Option<Value> {
+    let kind = line["kind"].as_str()?;
+    if !matches!(kind, "message" | "answer") {
+        return None;
+    }
+    let qui = |v: &Value| -> Option<String> {
+        match v.as_str()? {
+            "teammate" => cle.map(str::to_string),
+            autre => Some(autre.to_string()),
+        }
+    };
+    let (from, to) = (qui(&line["from"])?, qui(&line["to"])?);
+    if !from.starts_with("agent:") || !to.starts_with("agent:") {
+        return None;
+    }
+    Some(json!({
+        "kind": "AgentMessage",
+        "from": from,
+        "to": to,
+        "parent": parent,
+        "task": task,
+        "id": line["id"],
+        "text": line["text"],
+        "reply_to": line["reply_to"],
+        "at": line["at"],
+    }))
+}
+
 /// **Le relais d'une boîte** vers le flux de l'IDE (sujet `mailbox`) : appelé
 /// avec chaque ligne écrite (page 07-novembre-2026-everything-declarative/01, § 2).
 #[derive(Clone)]
@@ -1611,10 +1641,17 @@ impl DaemonHost {
         // objet : l'IDE, le terminal et le hook la voient sans sonder la boîte.
         // Le `backend` de la trame est le manifeste de la tâche (son worktree), comme
         // pour ses autres événements : un client filtre le flux d'une tâche par lui seul.
+        let cle = t.agent_key.clone();
         let (flux, backend, p, t) = (Arc::downgrade(self.ide_flux()), t.manifest.display().to_string(), parent.to_string(), task.to_string());
         files.relay = Some(MailboxRelay(Arc::new(move |line: &Value| {
             if let Some(flux) = flux.upgrade() {
                 flux.publier("mailbox", &backend, json!({ "kind": "MailboxLine", "parent": p, "task": t, "line": line }));
+                // **A message between agents** (c7 for Lucie, 22 November 2026: « des agents qui se parlent »): a line
+                // from or to another agent (`agent:<key>`) is also an `AgentMessage` on the subject `agents`, its sender
+                // and recipient as agent keys, the task's `teammate` said by the task's own key.
+                if let Some(message) = agent_message(line, cle.as_deref(), &p, &t) {
+                    flux.publier("agents", &backend, message);
+                }
             }
         })));
         Ok(files)
