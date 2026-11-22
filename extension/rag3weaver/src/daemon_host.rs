@@ -466,6 +466,10 @@ pub mod user_title;
 mod land;
 /// A price written on the user's yes, and looked up for a proposal (22 Nov 2026).
 pub mod prices;
+
+/// The page says when it is not entered as the user (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_not_human_tests;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;
