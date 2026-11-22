@@ -241,3 +241,28 @@ fn no_paid_client_is_built_outside_the_metered_paths() {
     }
     assert!(offenders.is_empty(), "a paid model built around the spending ledger:\n{}", offenders.join("\n"));
 }
+
+/// **The gate's local judge goes through the ledger at price zero** (c7, 22 November 2026): a model declared at a
+/// loopback or private address (the gate's Qwen at 127.0.0.1:8096, a service at luciepc) is metered, written as free,
+/// and never refused for want of a price, under the prices shipped with the crate. Were it refused, every class the
+/// gate judges would go to the card without saying why.
+#[cfg(feature = "openai-llm")]
+#[test]
+fn the_gates_local_judge_goes_through_the_ledger_at_price_zero() {
+    for address in ["http://127.0.0.1:8096/v1", "http://luciepc:7983/v1"] {
+        let (_d, l) = ledger(None);
+        let declaration: crate::model_source::ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "compatible", "model": "qwen3.5-9b", "address": address
+        }))
+        .unwrap();
+        let (llm, _) = crate::model_source::connect_llm_with_vertex(&declaration, l.clone(), |_, _, _| unreachable!()).unwrap();
+        // Nothing answers at that address: the call fails on the network, never on the ledger.
+        let opts = GenOptions { max_tokens: 8, ..Default::default() }.with_retry_budget(std::time::Duration::from_millis(1));
+        if let Err(e) = llm.generate(&[Turn::user("bonjour")], &opts, &mut StringSink::default()) {
+            let e = e.to_string();
+            assert!(!e.contains("spending cap") && !e.contains("no price"), "{address}: refused by the ledger: {e}");
+        }
+        let (lines, _) = l.lines(&month());
+        assert!(!lines.is_empty() && lines.iter().all(|x| x.free && x.slug == "qwen3.5-9b"), "{address}: {lines:?}");
+    }
+}
