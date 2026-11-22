@@ -275,6 +275,27 @@ pub fn read_for_tool<'a>(
     entity: &str,
     cell: Option<&crate::scope::Scope>,
 ) -> CatalogRead<'a> {
+    // **A repass of the analysis in progress, said** with every answer (c7, 22 November 2026): it reads the analysis
+    // of before, and is not to be taken for a fault of the new one.
+    let lecture = read_for_tool_sans_la_repasse(catalog, view, entity, cell);
+    #[cfg(feature = "code")]
+    if let Some(ligne) = crate::dataflow::index_nodes::analysis_repass_line(catalog) {
+        let ajoute = |status: Option<String>| Some(status.map(|s| format!("{s}\n{ligne}")).unwrap_or_else(|| ligne.clone()));
+        return match lecture {
+            CatalogRead::Ready { catalog, status } => CatalogRead::Ready { catalog, status: ajoute(status) },
+            CatalogRead::View { view, status } => CatalogRead::View { view, status: ajoute(status) },
+            refus => refus,
+        };
+    }
+    lecture
+}
+
+fn read_for_tool_sans_la_repasse<'a>(
+    catalog: &'a Arc<Mutex<Catalog>>,
+    view: Option<&Arc<crate::read_view::ReadViewCell>>,
+    entity: &str,
+    cell: Option<&crate::scope::Scope>,
+) -> CatalogRead<'a> {
     let vue = view.and_then(|c| c.current());
     let Some(vue) = vue.filter(|v| cell.is_none_or(|c| *c == v.scope)) else {
         return read_catalog_in(catalog, entity, cell);

@@ -7131,6 +7131,17 @@ impl Backend {
             if let Some(etat) = w.provenance_state.lock().unwrap_or_else(|p| p.into_inner()).clone() {
                 v["fallback"] = json!(etat);
             }
+            // The repass of the analysis in progress (c7, 22 November 2026): how far, and that the answers read the
+            // analysis of before.
+            // Copied out of its lock first: the line below takes it again.
+            let repasse = *w.analysis_repass.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some((passes, total)) = repasse {
+                v["analysis_repass"] = json!({
+                    "files_passed": passes,
+                    "files_total": total,
+                    "say": crate::dataflow::index_nodes::analysis_repass_line(&self.catalog),
+                });
+            }
             v
         }).filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
         // Ce que coûtent les montres, par phase : où passe le temps au repos.

@@ -323,6 +323,15 @@ pub fn indexings_running(catalog: &Arc<Mutex<Catalog>>) -> usize {
     crate::catalog_threads::running(catalog, est_un_index)
 }
 
+/// **The repass of the analysis in progress, said** (c7, 22 November 2026): while the latest index of this catalogue
+/// rewrites files analysed under another version, the line the index's state and a search's answer carry; `None`
+/// otherwise. Read outside the catalogue's lock, which the pass holds.
+pub fn analysis_repass_line(catalog: &Arc<Mutex<Catalog>>) -> Option<String> {
+    let watch = embed_watch_of(catalog)?;
+    let (passes, total) = (*watch.analysis_repass.lock().unwrap_or_else(|e| e.into_inner()))?;
+    Some(format!("Index : repasse de l'analyse en cours : {passes}/{total} fichiers — la réponse porte sur l'analyse d'avant."))
+}
+
 /// **Le suivi de la dernière indexation de ce catalogue** : le lot qu'elle
 /// embarque en ce moment, les morceaux restés sans réponse, les échecs. Lu
 /// sans le verrou du catalogue, que la passe tient : c'est ce que l'état de
