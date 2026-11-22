@@ -189,7 +189,14 @@ fn last_human_turn(files: &TeammateFiles) -> Option<Value> {
 
 /// The last turn of the agent: the reason it gave, shown on a protected folder's card.
 pub(crate) fn last_agent_turn(files: &TeammateFiles) -> String {
-    files.mailbox().into_iter().rev().find(|l| l["from"] == "teammate").and_then(|l| l["text"].as_str().map(str::to_string)).unwrap_or_default()
+    // Its own words (a report, a question), never a card it opened before (recherche's audit).
+    files
+        .mailbox()
+        .into_iter()
+        .rev()
+        .find(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question")))
+        .and_then(|l| l["text"].as_str().map(str::to_string))
+        .unwrap_or_default()
 }
 
 /// A package manager's install (banc's `INSTALL_CMD`, word for word).
@@ -348,7 +355,18 @@ impl DaemonHost {
             }
             let Some(juge) = &juge else { return GateOutcome::Card { class } };
             let verdict = juge(&entree);
-            if matches!(verdict["label"].as_str(), Some("explicit" | "covered")) { accorder("judge") } else { GateOutcome::Card { class } }
+            if !matches!(verdict["label"].as_str(), Some("explicit" | "covered")) {
+                return GateOutcome::Card { class };
+            }
+            let issue = accorder("judge");
+            if matches!(issue, GateOutcome::Pass { .. }) {
+                // **Said in the mailbox** (c7, 22 Nov 2026: a pass by the judge left no trace): the command, its class,
+                // and the user's words it rests on.
+                let citation = verdict["quote"].as_str().map(str::to_string).or_else(|| last_human_turn(&files).and_then(|t| t["text"].as_str().map(str::to_string))).unwrap_or_default();
+                let texte = format!("commande accordée par le juge : {ligne} ({class}), sur ta phrase « {citation} »");
+                let _ = files.append_with("host", "command_granted", None, &texte, &json!({ "command": ligne, "class": class, "by": "judge", "quote": citation }));
+            }
+            issue
         }))
     }
 
