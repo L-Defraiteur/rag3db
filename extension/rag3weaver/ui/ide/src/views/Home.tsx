@@ -1,7 +1,7 @@
 import { FolderOpen, FolderTree, Server, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { displayName, type Backend, type HostState } from "@/lib/host";
+import { displayName, fetchState, type Backend, type HostState } from "@/lib/host";
 import { SearchBox } from "@/components/SearchBox";
 import { Agents } from "@/views/Agents";
 import { Button } from "@/components/ui/button";
@@ -118,6 +118,18 @@ function OpenFolder() {
       })).json();
       if (r.ok) {
         const o: Opened = r.result;
+        // **Opening leads to the chat of the project** (Lucie, 22 November 2026: « ça me sert à quoi ? »): the folder
+        // found among the host's repositories, the page goes to its chat, which says what was opened.
+        const kind = o.created ? "cree" : o.git === false ? "dossier" : "git";
+        for (let k = 0; k < 20; k++) {
+          const s = await fetchState().catch(() => null);
+          const b = s?.backends.find((x) => !x.tache && x.repo && (x.repo === o.path || x.repo.replace(/\/+$/, "") === String(o.path).replace(/\/+$/, "")));
+          if (b) {
+            location.assign(`/ide/code/${b.id}/chat?ouvert=${kind}`);
+            return;
+          }
+          await new Promise((res) => setTimeout(res, 250));
+        }
         setSaid({
           ok: true,
           text: o.created

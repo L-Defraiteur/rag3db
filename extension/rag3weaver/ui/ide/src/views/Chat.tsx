@@ -343,12 +343,39 @@ function movedToTask(p: Part): MovedToTask | null {
   }
 }
 
+/** **The welcome of an empty chat** (Lucie, 22 November 2026, « ça me sert à quoi ? »): in a project, what was opened
+ * (`?ouvert=cree|dossier|git`, set by « Ouvrir un dossier ») and what the agent can do here. */
+function Welcome({ id, state }: { id: string; state: HostState }) {
+  const b = state.backends.find((x) => x.id === id);
+  if (!b?.repo) return <p className="empty text-muted-foreground mt-[12vh]">Une question, une recherche, une idée à explorer.</p>;
+  const name = displayName(b);
+  const ouvert = new URLSearchParams(location.search).get("ouvert");
+  const what =
+    ouvert === "cree"
+      ? `${name} : dossier créé, git init fait (aucun distant, rien de poussé), ouvert.`
+      : ouvert === "dossier"
+        ? `${name} : dossier ouvert.`
+        : ouvert === "git"
+          ? `${name} : dépôt git ouvert.`
+          : `${name} est ouvert.`;
+  return (
+    <div className="empty chat-accueil text-muted-foreground mt-[12vh] space-y-2">
+      <p className="text-foreground font-medium">{what}</p>
+      <p>Je suis prêt. Ici, je peux lire et chercher dans le projet, t'expliquer le code, modifier des fichiers et lancer des commandes ; je te demande ton accord avant ce qui sort du dossier.</p>
+    </div>
+  );
+}
+
 export function Chat({ id, state }: { id: string; state: HostState }) {
   const backend = state.backends.find((b) => b.id === id);
   // Le rag de chaque dépôt, tel que l'état de l'hôte le tient (les cartes relues s'en servent).
   const ragDesDepots = new Map<string, Rag>();
   for (const s of [...(state.chat_sessions ?? []).flatMap((c) => c.spaces), ...(state.tasks ?? []).flatMap((t) => t.spaces), ...(state.available_repos ?? [])]) ragDesDepots.set(s.backend, s.rag);
   const [chat, setChat] = useState<ChatState | null>(null);
+  // **The agent ready** (22 November 2026): the input takes the focus as soon as the chat is on.
+  useEffect(() => {
+    if (chat?.on) input.current?.focus();
+  }, [chat?.on]);
   const [items, setItems] = useState<Item[]>([]);
   // **The page follows the request to its task** (22 November 2026): a `moved_to_task` that arrives while the page is
   // open (not one read back from the history) takes the page to the task, once.
@@ -940,7 +967,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             stuck.current = m.scrollHeight - m.scrollTop - m.clientHeight < 40;
           }}
         >
-          {items.length ? null : <p className="empty text-muted-foreground mt-[12vh]">Une question, une recherche, une idée à explorer.</p>}
+          {items.length ? null : <Welcome id={id} state={state} />}
           <RagDesDepots.Provider value={ragDesDepots}>
           {items.map((it, k) =>
             it.kind === "info" ? (
@@ -1031,6 +1058,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               disabled={!chat?.on}
               placeholder="Que voulez-vous explorer ?"
               ref={input}
+              autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
