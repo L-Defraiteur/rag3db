@@ -15,6 +15,19 @@ mod background;
 mod card;
 mod mode_auto_v1;
 mod human_yes_only;
+
+/// **A witness of the approval card** declares the approval mode, committed (since 22 Nov 2026 a new project's
+/// template is in the auto mode, where every command the sandbox runs passes).
+pub(super) fn en_approbation(manifeste: &std::path::Path) {
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(manifeste).unwrap()).unwrap();
+    m["workspace"]["commands"] = json!("approval");
+    std::fs::write(manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let decl = manifeste.ancestors().find(|p| p.join(".git").exists()).unwrap().to_path_buf();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode approbation"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(&decl).status().unwrap().success());
+    }
+}
+
 mod posture_auto;
 mod land_each_turn;
 mod judge_all;
@@ -804,6 +817,7 @@ fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
     use std::time::{Duration, Instant};
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    en_approbation(&manifeste);
     let vus = Arc::new(Mutex::new(Vec::<String>::new()));
     let model: ChatModel = {
         let vus = vus.clone();

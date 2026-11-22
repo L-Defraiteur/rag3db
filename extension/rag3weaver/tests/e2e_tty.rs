@@ -307,6 +307,16 @@ fn faux_equipier_qui_demande() -> rag3weaver::daemon_host::chat::ChatModel {
 fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
     let d = tempfile::tempdir().unwrap();
     let manifeste = depot_inscrit(d.path());
+    // The approval card is this witness's subject: the approval mode, committed (a new project is in auto since 22 Nov 2026).
+    {
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["workspace"]["commands"] = json!("approval");
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let decl = manifeste.ancestors().find(|p| p.join(".git").exists()).unwrap().to_path_buf();
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode approbation"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(&decl).status().unwrap().success());
+        }
+    }
     let host = Arc::new(
         DaemonHost::new()
             .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
