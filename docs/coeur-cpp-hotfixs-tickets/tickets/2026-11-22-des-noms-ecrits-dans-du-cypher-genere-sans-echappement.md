@@ -17,8 +17,13 @@
    `StringUtils::quoteIdentifier`.
 2. **Un nom de paramètre entre accents graves** (`` $`p` ``) est pris brut par `transform_expression.cpp:471`
    (`ctx.oC_SymbolicName()->getText()`), sans passer par `transformSymbolicName` : ses accents graves restent.
-3. **Des noms écrits sans accents graves dans du Cypher généré** : les tables de relations d'un index vectoriel
-   (`create_hnsw_index.cpp:478`, `:480`, `:494-505`, `drop_hnsw_index.cpp:76-80`) ; les noms des paramètres d'une
+3. **Des noms écrits sans accents graves dans du Cypher généré** :
+   - ~~les tables de relations d'un index vectoriel (`create_hnsw_index.cpp:478`, `:480`, `drop_hnsw_index.cpp:78-81`)~~ :
+     **réglé le 23 novembre 2026** (branche `vector-index-special-names`). Le `CREATE REL TABLE` et le `DROP TABLE`
+     réécrits passent par `quoteIdentifier`. Témoin `VectorIndexSpecialNames` (une table « my ` docs », un index
+     « idx-1 `b »), rouge sur 03e649c42c (« mismatched input '-' »), vert avec le correctif. Les appels
+     `_CREATE_HNSW_NOTE('{}', …)` de la même réécriture relèvent du point 4 (les apostrophes) ;
+   - les noms des paramètres d'une
    macro (`scalar_macro_function.cpp:62-66`) ; les champs de struct dans la chaîne de type
    (`property_definition_collection.cpp:100`, `transform_ddl.cpp:346`).
 4. **Des noms écrits entre apostrophes**, qu'une apostrophe dans le nom casserait : `nextval('{}')`
