@@ -2193,7 +2193,9 @@ mod tests {
                 let debut = std::time::Instant::now();
                 let mut libre = verrou.lock().unwrap_or_else(|p| p.into_inner());
                 while !*libre {
-                    let reste = std::time::Duration::from_secs(30).saturating_sub(debut.elapsed());
+                    // 300 s of a shut gate: the witness frees it once its assertions are done, which a loaded machine
+                    // (a whole lib at the pusher, with reindexings) slows; the bound only keeps it from hanging.
+                    let reste = std::time::Duration::from_secs(300).saturating_sub(debut.elapsed());
                     if reste.is_zero() { return Err(crate::embedder::EmbedError::Timeout); }
                     libre = reveil.wait_timeout(libre, reste).unwrap_or_else(|p| p.into_inner()).0;
                 }
@@ -2244,7 +2246,10 @@ mod tests {
         // Déclaré après l'hôte : une panique libère avant son arrêt/join.
         let liberation = Libere(porte);
         host.chat_turn(&h.id, &format!("Ouvre le worktree {}", depot.display())).expect("le tour");
-        entre_rx.recv_timeout(std::time::Duration::from_secs(10)).expect("la vraie passe de vecteurs a atteint la barrière");
+        // The event awaited: the real vector pass enters the controlled embedder. Before it come the attach and the whole
+        // full text, which took more than 10 s under three reindexings at the pusher (ticket
+        // arbre-principal/tickets/2026-11-22-la-carte-de-progression-tombe-sous-la-charge.md): 120 s only keeps it from hanging.
+        entre_rx.recv_timeout(std::time::Duration::from_secs(120)).expect("la vraie passe de vecteurs a atteint la barrière");
         assert!(host.with_backend(&lie, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0);
 
         let etat = host.chat_state(&h.id).unwrap();
@@ -2264,7 +2269,7 @@ mod tests {
         drop(liberation);
         let debut = std::time::Instant::now();
         while host.with_backend(&lie, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
-            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "l'index doit finir après libération");
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index doit finir après libération");
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         host.chat_turn(&h.id, "Montre l'état du dépôt dont l'index est terminé.").unwrap();
