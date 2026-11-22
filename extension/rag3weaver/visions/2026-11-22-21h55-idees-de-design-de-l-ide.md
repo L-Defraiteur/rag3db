@@ -519,3 +519,45 @@ Avant le socle des idées, un palier : **la première minute**. Tant qu'il n'est
 Le critère : **une personne qui n'a jamais vu le produit lance une commande ou ouvre une page, écrit une demande de
 code, et voit l'agent travailler puis lui demander un accord, sans rien avoir tapé d'autre.** Ce parcours se joue
 dans le vrai navigateur et dans le vrai terminal, sur un poste neuf, avant de dire « prêt ».
+
+---
+
+## Le leitmotiv : des agents ultra autonomes
+
+*Ajout du 22 novembre, 23 h 20. Lucie : « arrêtons d'abuser sur la sécurité. Je vous ai laissé beaucoup en mettre
+pour que ça en soit des points de validation pour le mode auto, pas pour que ça devienne un truc où l'utilisateur est
+censé être là 24 h sur 24. Nouveau leitmotiv : des agents ultra autonomes, qui savent faire surgir d'autres sessions,
+qui savent communiquer entre elles. »*
+
+Ce que ça corrige dans cette page :
+
+- **La sécurité est ce qui permet de laisser faire.** Les classes, le juge et le survivant existent pour décider sans
+  humain. Une carte humaine est le dernier recours, pas l'étape normale. La partie C (« montrer la confiance ») se lit
+  ainsi : montrer **qui a tranché**, en une ligne calme (« accordé par le juge », « tranché par le survivant »), plutôt
+  que demander.
+- **Un agent agit, même réveillé par un événement.** J'avais écrit qu'un tour sans humain n'aurait que des outils de
+  lecture : c'est retiré. L'agent d'accueil, comme tout agent, peut en créer un autre, lui parler, relancer un
+  travail.
+- **Faire surgir et se parler sont des outils de tous les agents** : `spawn_agent` (une session neuve, avec un brief
+  et un dossier) et `message_agent` (un message dans la boîte d'un autre). Un agent qui en lance un autre se voit :
+  le nouveau paraît dans la barre, relié à son parent.
+- **Le survivant passe devant.** C'est lui qui remplace l'humain absent. Un projet neuf part en mode auto.
+- **Une seule garde reste ferme** : un oui humain doit être humain (`human-yes-only`). Sans elle, un agent cliquerait
+  son propre accord, et la porte ne validerait plus rien. Elle ne bloque pas : sans humain, c'est le survivant qui
+  tranche.
+
+Deux gestes pour reprendre un agent, au terminal comme dans la barre de l'IDE :
+
+- **`--pop-agent`** (« Reprendre ») : la liste de tous les agents déjà lancés une fois ; on en choisit un, on arrive
+  dans sa session, même si elle est ouverte ailleurs.
+- **`--fork-agent`** (« Dupliquer ») : la même liste, mais on arrive dans une **copie indépendante** : son histoire
+  jusqu'ici, puis deux chats qui ne se voient plus.
+
+Idées qui en sortent, à ranger avec les autres :
+
+- **28. L'arbre des lignées.** La barre montre qui a fait naître qui. On replie une lignée, on la suit, on l'arrête
+  d'un geste.
+- **29. La nuit de travail.** « Continue sans moi jusqu'à demain » : l'agent avance, en lance d'autres, et le matin
+  l'accueil raconte ce qui s'est décidé sans toi, et par qui (le juge, le survivant).
+- **30. La salle des agents.** Un fil commun où les agents d'un projet se parlent, lisible comme une conversation
+  d'équipe ; on y entre pour dire un mot à tous.
