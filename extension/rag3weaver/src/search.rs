@@ -351,8 +351,10 @@ impl BM25Mode {
     pub fn resolve(self, query: &str) -> Self {
         match self {
             Self::Auto => {
+                // **The fourth side of banc's measure** (22 November 2026, measure only, never to land as is): a phrase
+                // goes to lucivy's `contains_split`, with its error budget per document.
                 if query.split_whitespace().take(2).count() > 1 {
-                    Self::Parse
+                    Self::ContainsSplit
                 } else {
                     Self::Contains
                 }
