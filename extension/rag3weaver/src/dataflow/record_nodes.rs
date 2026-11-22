@@ -2459,29 +2459,19 @@ const REUSE_PACKET: usize = 20_000;
 /// **Poser des vecteurs sur des lignes qui existent** — le seul endroit qui
 /// le fait. `items` : des maps `uuid`, `hash`, `emb`.
 ///
-/// CONTOURNEMENT D'UN DÉFAUT DU MOTEUR, à enlever ici et nulle part ailleurs
-/// quand il sera corrigé : dans rag3db, **remplacer un vecteur par un autre
-/// par `SET` perd des lignes dans l'index HNSW** (969 joignables sur 1000
-/// ligne à ligne, 532 par lots de 512 — rapport de la session cœur C++,
-/// `docs/3-octobre-2026-23h31/coeur-cpp/01-rapport-de-session.md`, annexe
-/// `set-de-vecteur/`). Ce qui est sûr, mesuré au même endroit : `SET` depuis
-/// NULL, par lots ; et repasser par NULL **ligne à ligne** (1000 sur 1000 ;
-/// par lots de 512 il en reste 599).
+/// **Une seule instruction pour tout le paquet**, qu'une ligne soit née sans
+/// vecteur ou qu'elle en porte déjà un. Le contournement du 3 octobre 2026
+/// (repasser par NULL ligne à ligne, parce qu'un `SET` qui remplaçait un vecteur
+/// perdait des lignes du HNSW) est retiré le 22 novembre 2026 : la session cœur
+/// C++ (hotfixs) a rejoué tous les cas de remplacement du moteur, en Release, au
+/// code HNSW de la lib épinglée (45 contrôles, 0 ligne perdue, 0 coupure du
+/// graphe), plus 20 000 remplacements par lots de 512 sur 127 000 vrais vecteurs
+/// (0 injoignable). Le remplacement ligne à ligne coûtait deux instructions de
+/// 70 à 80 ms par vecteur ; un lot de 64 lignes ou plus coûte 7 à 10 ms par
+/// vecteur. Le juge du remplacement reste `e2e_invariant_des_vecteurs`.
 ///
-/// Donc : les lignes sans vecteur — le chemin principal, la dette — gardent
-/// le `SET` par lot. Celles qui en portent déjà un passent une à une par
-/// NULL : deux instructions par ligne au lieu d'une par lot, plus une lecture
-/// par lot pour les reconnaître. La ligne reste en place, donc ses relations,
-/// son plein texte et son décalage dans l'index creux aussi — ce que
-/// « supprimer puis réinsérer » aurait obligé à reposer. Le marqueur se vide
-/// avec le vecteur : un arrêt entre les deux instructions laisse une dette,
-/// pas un mensonge.
-///
-/// Un gros rattrapage ne paie pas ce prix : au-delà du seuil,
-/// `Catalog::ajuster_l_index_pour_le_retard` retire l'index le temps de poser.
-///
-/// Le jour où le défaut est corrigé : le corps redevient le seul `embed_set`,
-/// et `e2e_invariant_des_vecteurs` doit rester vert.
+/// Un gros rattrapage retire toujours l'index le temps de poser
+/// (`Catalog::ajuster_l_index_pour_le_retard`).
 pub(crate) fn write_vectors(
     conn: &dyn DbConnection,
     dialect: &dyn crate::dialect::SchemaDialect,
@@ -2493,45 +2483,8 @@ pub(crate) fn write_vectors(
     if items.is_empty() {
         return Ok(());
     }
-    let uuid_of = |item: &CypherValue| match item {
-        CypherValue::Map(m) => m.get("uuid").and_then(|v| v.as_str()).map(str::to_string),
-        _ => None,
-    };
-    let carrying: HashSet<String> = match dialect.embed_carrying_vector(table, column) {
-        None => HashSet::new(),
-        Some(query) => {
-            let uuids = items
-                .iter()
-                .filter_map(uuid_of)
-                .map(|u| CypherValue::Map(BTreeMap::from([("uuid".to_string(), CypherValue::String(u))])))
-                .collect();
-            conn.execute_with_params(&query, &[QueryParam { name: "items".into(), value: CypherValue::List(uuids) }])
-                .map_err(|e| e.to_string())?
-                .rows
-                .iter()
-                .filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string))
-                .collect()
-        }
-    };
-    let (replaced, fresh): (Vec<CypherValue>, Vec<CypherValue>) =
-        items.into_iter().partition(|item| uuid_of(item).is_some_and(|u| carrying.contains(&u)));
-    let set = dialect.embed_set(table, column, marker);
-    if !fresh.is_empty() {
-        conn.execute_with_params(&set, &[QueryParam { name: "items".into(), value: CypherValue::List(fresh) }])
-            .map_err(|e| e.to_string())?;
-    }
-    if replaced.is_empty() {
-        return Ok(());
-    }
-    let clear = dialect.embed_clear(table, column, marker);
-    for item in replaced {
-        let Some(uuid) = uuid_of(&item) else { continue };
-        let cle = CypherValue::Map(BTreeMap::from([("uuid".to_string(), CypherValue::String(uuid))]));
-        conn.execute_with_params(&clear, &[QueryParam { name: "items".into(), value: CypherValue::List(vec![cle]) }])
-            .map_err(|e| e.to_string())?;
-        conn.execute_with_params(&set, &[QueryParam { name: "items".into(), value: CypherValue::List(vec![item]) }])
-            .map_err(|e| e.to_string())?;
-    }
+    conn.execute_with_params(&dialect.embed_set(table, column, marker), &[QueryParam { name: "items".into(), value: CypherValue::List(items) }])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

@@ -1221,19 +1221,6 @@ pub trait SchemaDialect: Send + Sync {
     /// un chunk réputé fait qui ne répondra jamais.
     fn embed_set(&self, table: &str, embedding_col: &str, marker: &str) -> String;
 
-    /// **Parmi les lignes citées, celles qui portent déjà un vecteur** — ou
-    /// `None` si ce moteur remplace un vecteur par un autre sans rien perdre.
-    ///
-    /// N'existe que pour le contournement de
-    /// `record_nodes::write_vectors` : l'index HNSW de rag3db perd des lignes
-    /// quand un `SET` remplace un vecteur. PostgreSQL n'a pas ce défaut.
-    fn embed_carrying_vector(&self, _table: &str, _embedding_col: &str) -> Option<String> {
-        None
-    }
-
-    /// Remet à NULL le vecteur des lignes citées, et vide leur marqueur : la
-    /// ligne redevient une dette honnête. Même contournement.
-    fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String;
 
     /// SET le marqueur dense et rend item.uuid + décalage de ligne (pour le
     /// handle sparse).
@@ -2823,25 +2810,6 @@ impl SchemaDialect for Rag3dbDialect {
         )
     }
 
-    fn embed_carrying_vector(&self, table: &str, embedding_col: &str) -> Option<String> {
-        let t = self.quote(table);
-        Some(format!(
-            "{} WHERE n.{} IS NOT NULL RETURN n._uuid",
-            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
-            self.quote(embedding_col)
-        ))
-    }
-
-    fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String {
-        let t = self.quote(table);
-        format!(
-            "{} SET n.{} = NULL, n.{} = ''",
-            unwind_par_cle("items", &[par_uuid("n", Some(&t), "uuid")], "MATCH"),
-            self.quote(embedding_col),
-            self.quote(marker)
-        )
-    }
-
     fn embed_set_hash_returning_offset(&self, table: &str, marker: &str) -> String {
         let offset = self.node_offset_expr("n");
         let t = self.quote(table);
@@ -4379,15 +4347,6 @@ impl SchemaDialect for PostgresDialect {
         format!(
             "UPDATE {table} SET {embedding_col} = v.emb, {marker} = v.hash \
              FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT, emb vector, hash TEXT) \
-             WHERE {table}._uuid = v.uuid"
-        )
-    }
-
-    fn embed_clear(&self, table: &str, embedding_col: &str, marker: &str) -> String {
-        let (table, embedding_col, marker) = (self.quote(table), self.quote(embedding_col), self.quote(marker));
-        format!(
-            "UPDATE {table} SET {embedding_col} = NULL, {marker} = '' \
-             FROM jsonb_to_recordset($items::text::jsonb) AS v(uuid TEXT) \
              WHERE {table}._uuid = v.uuid"
         )
     }
