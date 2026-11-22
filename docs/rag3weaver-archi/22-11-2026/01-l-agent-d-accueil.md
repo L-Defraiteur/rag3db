@@ -128,9 +128,22 @@ sa version, son schéma JSON, sa description pour le modèle). Le rendu est à r
 | `machine_state` | l'état de la machine | ce que rend l'outil `machine_state` (dépôts, agents, tâches, accords en attente, index) |
 | `spending` | les dépenses | `items: [{label, value, unit?, hint?}]`, le plafond |
 | `memory_cards` | des fiches de la mémoire | `items: [{title, summary, link}]` |
+| `briefing` | ce qui a bougé depuis la dernière visite (idée 1 de c7) | `since`, `items: [{text, link?, status?}]`, `actions` |
+| `activity` | le travail d'un pas, raconté (idée 3) | `items: [{text, detail_link?}]`, lu au journal des runs, pas dans la boîte |
+| `plan` | le plan d'un agent, en liste cochée (idée 5) | `items: [{text, status}]`, `current?` |
+| `impact` | le rayon d'impact d'une carte (idée 8) | `symbols`, `callers`, `files`, `untested?`, `link?` |
+| `grants` | ce que l'utilisatrice a autorisé, ses phrases citées (idée 11) | `items: [{quote, at, opened, agent, by, link?}]` |
+| `recap` | le retour d'absence (idée 22) | `where_we_were`, `while_you_were_away` |
 
 Les états d'un `status` sont `running`, `waiting` (« attend ton accord »), `done`, `failed` et `idle` (un agent arrêté
 sans erreur). Un `hint` est une phrase courte sous un chiffre.
+
+**Un composant vivant, et l'épingle** (idée 2 de c7) : un composant peut porter **sa source** (`source: {tool, args}`)
+et un intervalle (`every_s`). L'hôte refait alors l'appel et remplit de nouveau le composant. **Seul un outil en lecture
+peut être une source** (`machine_state`, la mémoire, l'état d'une tâche, le registre) ; un outil qui écrit, lance ou
+envoie est refusé comme source. L'outil `pin(component_id)` passe un composant du fil dans le bord droit, propre à
+l'utilisatrice ; il y reste vivant par sa source, et se retire d'un geste. Le gabarit ne porte pas de champ `refresh` :
+c'est l'instance qui dit d'où elle vient.
 
 **Les règles** :
 - **rien d'inventé** : `data` ne porte que ce qu'un outil vient de rendre dans le même tour. Un `link` est une route de
