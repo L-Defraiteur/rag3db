@@ -60,18 +60,52 @@ pub(crate) fn sending_of(action: &Action, tache: &Tache) -> Option<Sending> {
 /// a card of another mailbox showed in a terminal opened on a task not yet open). Before the task's worktree is known,
 /// nothing is the task's; after, only its worktree's frames. A declarations proposal of the main repository passes
 /// either way: it is answered from here (tty-16).
-pub(crate) fn frame_is_the_tasks(_v: &Value, _filter: Option<&str>, _main: &str) -> bool {
-    true
+pub(crate) fn frame_is_the_tasks(v: &Value, filter: Option<&str>, main: &str) -> bool {
+    if v["evenement"]["kind"] == "PropositionChanged" && v["backend"].as_str() == Some(main) {
+        return true;
+    }
+    filter.is_some_and(|f| v["backend"].as_str() == Some(f))
 }
 
 /// **A refusal said as a sentence**, not as plumbing: without the route, the ids or the HTTP status.
-pub(crate) fn refusal_in_words(e: &str) -> String {
-    e.to_string()
+pub fn refusal_in_words(e: &str) -> String {
+    let mut s = e.trim();
+    // « POST /route : … » or « GET /route?… : … »: the route is plumbing.
+    if let Some((verb, rest)) = s.split_once(' ') {
+        if matches!(verb, "GET" | "POST" | "PUT" | "DELETE") && rest.starts_with('/') {
+            if let Some((_, after)) = rest.split_once(" : ") {
+                s = after;
+            }
+        }
+    }
+    // « … (200) »: the HTTP status.
+    if let Some(i) = s.rfind(" (") {
+        let code = &s[i + 2..];
+        if code.len() == 4 && code.ends_with(')') && code[..3].bytes().all(|b| b.is_ascii_digit()) {
+            s = &s[..i];
+        }
+    }
+    // « … sur 884c34949e2c … »: a repository's id.
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(i) = rest.find(" sur ") {
+        let after = &rest[i + 5..];
+        let id_len = after.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+        if id_len == 12 && !after[id_len..].starts_with(|c: char| c.is_alphanumeric()) {
+            out.push_str(&rest[..i]);
+            rest = &after[id_len..];
+        } else {
+            out.push_str(&rest[..i + 5]);
+            rest = after;
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// What the terminal says while the task does not exist yet.
-pub(crate) fn task_not_open_yet(_task: &str) -> Option<String> {
-    None
+pub(crate) fn task_not_open_yet(task: &str) -> Option<String> {
+    Some(format!("la tâche « {task} » n'est pas encore ouverte : tape ta demande, elle l'ouvrira"))
 }
 
 /// The request given on the command line (`--request`): never typed, so never with the user's token.
@@ -85,8 +119,13 @@ pub(crate) fn request_sending(tache: &Tache, texte: &str) -> Sending {
 fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<Option<String>>, tx: &mpsc::Sender<Msg>) {
     let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
     let worktree = client::lire(agent, ep, &chemin).ok().and_then(|v| v["backend"].as_str().map(str::to_string));
-    if let Some(m) = &worktree {
-        *filtre.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone());
+    match &worktree {
+        Some(m) => *filtre.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone()),
+        None => {
+            if let Some(n) = task_not_open_yet(&tache.task) {
+                let _ = tx.send(Msg::Note(n));
+            }
+        }
     }
     let manifeste = worktree.unwrap_or_else(|| tache.depot.manifest.clone());
     if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
@@ -163,7 +202,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                         // La demande ouvre la tâche : son worktree existe désormais.
                         Ok(_) => connaitre(&agent, &ep, &tache, &filtre, &tx2),
                         Err(e) => {
-                            let _ = tx2.send(Msg::Note(format!("la demande est refusée : {e}")));
+                            let _ = tx2.send(Msg::Note(format!("la demande est refusée : {}", refusal_in_words(&e))));
                         }
                     }
                 }
@@ -178,11 +217,9 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                 } else if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
                     // Une proposition de déclarations du dépôt principal passe aussi (tty-16) : c'est
                     // sur lui que les déclarations attendent un accord.
-                    let du_principal = v["evenement"]["kind"] == "PropositionChanged" && v["backend"].as_str() == Some(principal.as_str());
-                    if let Some(f) = filtre.lock().unwrap_or_else(|p| p.into_inner()).as_deref() {
-                        if v["backend"].as_str() != Some(f) && !du_principal {
-                            return flux::Suite::Continuer;
-                        }
+                    // **Only the task's frames** (Lucie's trial, 22 November 2026): none before it opens.
+                    if !frame_is_the_tasks(&v, filtre.lock().unwrap_or_else(|p| p.into_inner()).as_deref(), &principal) {
+                        return flux::Suite::Continuer;
                     }
                     if v["evenement"]["kind"] == "MailboxLine" {
                         boite_au_flux.store(true, Ordering::SeqCst);
@@ -196,9 +233,11 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
             }
         })
     };
-    // La boîte, relue tant que le flux ne la relaie pas.
+    // La boîte, relue tant que le flux ne la relaie pas ; et le filtre posé dès que la tâche existe, quelle que soit
+    // la ligne qui l'a ouverte.
     {
-        let (ep, tx, arret, boite_au_flux, agent) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone());
+        let (ep, tx, arret, boite_au_flux, agent, filtre) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone(), filtre.clone());
+        let tache_du_releve = tache.clone();
         let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
         let (parent, task) = (tache.depot.id.clone(), tache.task.clone());
         std::thread::spawn(move || {
@@ -211,6 +250,9 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                     }
                 }
                 if let Ok(v) = client::lire(&agent, &ep, &chemin) {
+                    if v["backend"].is_string() && filtre.lock().unwrap_or_else(|p| p.into_inner()).is_none() {
+                        connaitre(&agent, &ep, &tache_du_releve, &filtre, &tx);
+                    }
                     let lignes = v["mailbox"].as_array().cloned().unwrap_or_default();
                     for l in lignes.iter().skip(lues) {
                         if !boite_au_flux.load(Ordering::SeqCst) && tx.send(Msg::Boite(l.clone())).is_err() {
@@ -361,7 +403,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     garder(&texte);
                     let s = sending_of(&Action::Envoyer(texte.clone(), kind), tache).expect("a message is sent");
                     if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
-                        vue.note(&format!("refusé : {e}"));
+                        vue.note(&format!("refusé : {}", refusal_in_words(&e)));
                     }
                 }
                 Some(Action::Repondre { attente, texte, accord }) => {
@@ -371,13 +413,13 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     }
                     let s = sending_of(&Action::Repondre { attente, texte, accord }, tache).expect("an answer is sent");
                     if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
-                        vue.note(&format!("la réponse est refusée : {e}"));
+                        vue.note(&format!("la réponse est refusée : {}", refusal_in_words(&e)));
                     }
                 }
                 Some(Action::Arreter) => {
                     let s = sending_of(&Action::Arreter, tache).expect("a stop is sent");
                     if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
-                        vue.note(&format!("l'arrêt est refusé : {e}"));
+                        vue.note(&format!("l'arrêt est refusé : {}", refusal_in_words(&e)));
                     } else {
                         vue.note("arrêt demandé");
                     }
