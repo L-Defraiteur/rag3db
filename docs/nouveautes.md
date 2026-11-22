@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un nom de type est un usage, à sa place, dans tous les langages.** En TypeScript, C, C++ et
+  Go, le type écrit dans un paramètre, un retour, une locale ou un cast n'était relevé nulle part avec sa position :
+  `usages` et `impact` ne voyaient pas les usages de type des corps, et ceux des signatures arrivaient sans colonne.
+  En C#, une déclaration (`Widget x = w;`) cachait chaque `Widget` de sa méthode. `usages` d'un type rend maintenant
+  chacun de ses sites, `fichier:ligne:colonne`. Les règles de l'analyse passent à 19.
 - 22 novembre 2026 — **La carte du terminal dit la racine demandée et le dossier protégé.** Quand l'agent veut un
   dossier hors de ses racines, la carte nomme la racine et son mode (« demande la racine … en écriture ») ; une racine
   large porte son avertissement en rouge vif (« ⚠ cette racine contient aussi : … »). Un oui s'inscrit « racine

@@ -730,7 +730,11 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 18 (22 novembre 2026) : chaque référence dit sa plage d'octets, lue sur son nœud (codeparsers), et chaque site
 // d'usage sa colonne et sa plage ; le graphe porte une arête `OCCURS` par site (Scope → Symbol, clée par la plage), et
 // `usages` rend chaque site, `fichier:ligne:colonne`. Un appel Python ne fait plus deux références au même octet.
-pub const REGLES_DE_L_ANALYSE: u32 = 18;
+// 19 (22 novembre 2026) : un nom de type est une référence avec sa place — en TypeScript, JavaScript, C, C++ et Go, le
+// type d'un paramètre, d'un retour, d'une locale ou d'un cast est relevé sur son nœud ; en C#, une déclaration ne fait
+// plus de son type une locale, et un paramètre se lit par ses champs ; le trait d'un en-tête `impl` est placé sur son
+// nœud (codeparsers).
+pub const REGLES_DE_L_ANALYSE: u32 = 19;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
