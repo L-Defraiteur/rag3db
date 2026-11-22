@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
+  index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
+  Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
+  recherche l'adoptera dans son propre lot, après la mesure du banc. Rien ne change par défaut.
+
 - 22 novembre 2026 — **La carte du terminal dit la racine demandée et le dossier protégé.** Quand l'agent veut un
   dossier hors de ses racines, la carte nomme la racine et son mode (« demande la racine … en écriture ») ; une racine
   large porte son avertissement en rouge vif (« ⚠ cette racine contient aussi : … »). Un oui s'inscrit « racine
