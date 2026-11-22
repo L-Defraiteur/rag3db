@@ -225,5 +225,9 @@
     "en_ligne": "#fbf85a",
     "cadre": "#55836a"
   },
-  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main",
+  "labels": {
+    "welcome_agent": "l'émissaire",
+    "welcome_greeting": "Salutations. J'observe tout ce qui vit sur cette machine ; quel agent veux-tu rencontrer ?"
+  }
 }

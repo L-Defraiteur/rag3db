@@ -208,5 +208,9 @@
     "en_ligne": "#e1c56e",
     "cadre": "#5f6e58"
   },
-  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main",
+  "labels": {
+    "welcome_agent": "le gardien de la forêt",
+    "welcome_greeting": "Bienvenue sous les arbres. Je connais chaque sentier de cette machine ; où allons-nous ?"
+  }
 }
