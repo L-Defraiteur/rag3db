@@ -66,8 +66,43 @@ BM25 seul sur 46.
 1. **Prendre (a)+(b)** (branche `whole-phrase-exact` de recherche, plus les champs en un seul `contains`). Gain net, aucun
    recul, plus rapide.
 2. **Ne pas prendre (c)** : le chemin des mots en `contains_split` dégrade le BM25 sur la recherche de code.
-3. **Aucun budget d'erreurs par défaut dans rag3weaver.** Pour lucivy elle-même, le défaut reste à lucivy et à Lucie ; sur
+3. **Aucun budget d'erreurs par défaut dans rag3weaver** (confirmé au correctif de lucivy, section suivante). Pour lucivy elle-même, le défaut reste à lucivy et à Lucie ; sur
    la recherche de code, le budget coûte quelle que soit la variante.
+
+## Correction du soir : les budgets rejoués au correctif de lucivy
+
+**Le classement des budgets ci-dessus était faussé.** lucivy l'a trouvé : dans 4.5.0, `ErrorBudgetQuery` et `contains`
+à `fields` (`BestFieldQuery`) ne voyaient que le premier fragment d'un index à plusieurs fragments, alors que le booléen
+sans budget les voyait tous. La comparaison avantageait donc « sans budget ».
+
+Le tout est rejoué au correctif `61c32a6` (lucivy, PR #67), sur une base neuve au master `408c38bae5`. Elle contient les
+docs remises à leur item (codeparsers, `3dc00c176c`) et la phrase entière exacte, (a), déjà atterrie. Elle est indexée
+par un binaire de ce même master, sans repasse d'analyse. Jeu v2, même juge, aucune erreur HTTP :
+
+| | or premier | rappel@10 | BM25 seul (rappel@10) | temps médian |
+|---|---|---|---|---|
+| master `408c38bae5` | 15 | 24 | 18 | 734 ms |
+| + noms à une faute (`name-within-a-typo-2`) | 20 | 29 | 23 | 607 ms |
+| **+ noms + `fields`** (`typo-fields-measure-3`) | **19** | **29** | **23** | **638 ms** |
+| + noms + `fields` + (c), sans budget | 15 | 31 | 12 | 1 204 ms |
+| + (c) + `flat` | 8 | 29 | 9 | 1 270 ms |
+| + (c) + `idf` | 9 | 30 | 10 | 1 342 ms |
+| + (c) + `window` | 8 | 29 | 9 | 1 377 ms |
+| + (c) + `soft` | 9 | 31 | 11 | 1 319 ms |
+
+- **Aucun budget par défaut : le verdict tient.** Chaque variante perd 6 à 7 premiers sur la même branche sans budget,
+  et le BM25 seul met 21 à 24 pages entières en tête. **Nuance** : avec tous les fragments vus, le rappel@10 ne recule
+  plus (`soft` garde 31). Le défaut de 4.5.0 exagérait la perte de rappel, pas celle des premiers.
+- **(c) est un échange.** Contre noms + `fields`, il donne +2 dans le top 10, mais −4 premiers, un BM25 seul presque
+  divisé par deux et un temps doublé.
+- **La décision, de c7 (22 nov., au mot de Lucie « tranchez ») :**
+  - la pile est **noms + `fields`** ;
+  - **aucun budget par défaut**, le budget restant une option qu'une requête peut poser ;
+  - **(c) n'est pas prise** : un agent lit d'abord le premier résultat. Elle reste une piste, avec ce tableau.
+- `recherche-contains-fields` part sur cette pile quand la 4.5.1 de lucivy sera publiée, au mot de Lucie.
+
+Les chiffres de la section précédente restent valables pour (a)+(b) contre master sur leur base. Ceux des budgets sont
+remplacés par ceux-ci.
 
 ## Ce qui reste raté, et pourquoi
 
