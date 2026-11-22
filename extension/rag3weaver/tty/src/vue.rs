@@ -573,6 +573,12 @@ impl Vue {
         if l["kind"] == "approval_state" {
             return;
         }
+        // A root the judge granted lasts: it is said, whatever the steps shown (archi, 22 November 2026).
+        if let Some(t) = crate::boite::judge_granted_root(l) {
+            self.clore();
+            self.valider_avec_tete(Genre::Boite, "› ", &t);
+            return;
+        }
         // **A closing that came too late** (archi, 21 November 2026): the host keeps it without effect and says who had
         // closed the card; the terminal says it, whatever the steps shown.
         if l["from"] == "host" && l["kind"] == "report" && l.get("late_from").is_some() {
@@ -1035,14 +1041,29 @@ impl Vue {
             None => {
                 let rouge = anim::couleur(&self.theme.couleurs.texte, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
                 let texte = self.ligne_d_etat();
-                match ["[ Oui ]", "[ Non ]"].iter().find_map(|b| texte.find(b).map(|i| (i, i + b.len()))) {
-                    Some((i, j)) if self.accord_en_cours().is_some() => Line::from(vec![
-                        Span::styled(texte[..i].to_string(), rouge),
-                        Span::styled(texte[i..j].to_string(), rouge.add_modifier(Modifier::REVERSED)),
-                        Span::styled(texte[j..].to_string(), rouge),
-                    ]),
-                    _ => Line::from(Span::styled(texte, rouge)),
+                // A wide root's warning (« ⚠ … », up to the buttons) jumps to the eye: bright red, apart.
+                let alerte = Style::default().fg(ratatui::style::Color::LightRed).add_modifier(Modifier::BOLD);
+                let mut parts: Vec<Span<'static>> = Vec::new();
+                let boutons = ["[ Oui ]", "[ Non ]"].iter().find_map(|b| texte.find(b).map(|i| (i, i + b.len())));
+                let fin_du_texte = boutons.map_or(texte.len(), |(i, _)| i);
+                match texte[..fin_du_texte].find(" ⚠ ") {
+                    Some(w) => {
+                        parts.push(Span::styled(texte[..w + 1].to_string(), rouge));
+                        let avant_boutons = texte[w + 1..fin_du_texte].trim_end().len() + w + 1;
+                        parts.push(Span::styled(texte[w + 1..avant_boutons].to_string(), alerte));
+                        parts.push(Span::styled(texte[avant_boutons..fin_du_texte].to_string(), rouge));
+                    }
+                    None => parts.push(Span::styled(texte[..fin_du_texte].to_string(), rouge)),
                 }
+                match boutons {
+                    Some((i, j)) if self.accord_en_cours().is_some() => {
+                        parts.push(Span::styled(texte[i..j].to_string(), rouge.add_modifier(Modifier::REVERSED)));
+                        parts.push(Span::styled(texte[j..].to_string(), rouge));
+                    }
+                    Some((i, _)) => parts.push(Span::styled(texte[i..].to_string(), rouge)),
+                    None => {}
+                }
+                Line::from(parts)
             }
         };
         let occupe: usize = ligne.spans.iter().map(|s| colonnes(&s.content)).sum();

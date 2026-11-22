@@ -67,16 +67,26 @@ impl Attente {
     /// What the open card asks for, with why it opens (its class, in plain words: archi, 21 November 2026) and
     /// « pour cet envoi seulement » when its scope is `once`.
     pub fn asked(&self) -> String {
-        let once = self.card.as_ref().is_some_and(|c| c.scope.as_deref() == Some("once"));
-        let why = self.card.as_ref().and_then(|c| c.class.as_deref()).map(|k| match k {
+        let class = self.card.as_ref().and_then(|c| c.class.as_deref());
+        let args = self.card.as_ref().map(|c| &c.args);
+        let arg = |k: &str| args.and_then(|a| a[k].as_str()).filter(|v| !v.is_empty());
+        // A protected folder is opened for this command only: its own words say the scope.
+        let once = self.card.as_ref().is_some_and(|c| c.scope.as_deref() == Some("once")) && class != Some("protected");
+        let why = class.map(|k| match k {
             "destroy_local" => "supprime un fichier qui n'est sur aucun distant".to_string(),
             "outbound" => "envoie hors de la machine ou installe des paquets".to_string(),
             "database" => "touche une base".to_string(),
             "system" => "touche le système".to_string(),
-            "open_root" => "lit hors des worktrees".to_string(),
+            "open_root" => match arg("root") {
+                Some(root) => format!("demande la racine {root} {}", in_mode(arg("mode"))),
+                None => "lit hors des worktrees".to_string(),
+            },
+            "protected" => format!("ouvre un dossier protégé, pour cette commande seulement{}", arg("reason").map(|r| format!(" — « {r} »")).unwrap_or_default()),
             autre => autre.to_string(),
         });
-        format!("{}{}{}", self.what(), why.map(|w| format!(" — {w}")).unwrap_or_default(), if once { " — pour cet envoi seulement" } else { "" })
+        // A wide root's warning comes last, after « ⚠ », so that the view says it apart (in bright red).
+        let warning = arg("warning").map(|w| format!(" ⚠ {w}")).unwrap_or_default();
+        format!("{}{}{}{warning}", self.what(), why.map(|w| format!(" — {w}")).unwrap_or_default(), if once { " — pour cet envoi seulement" } else { "" })
     }
 
     /// The card's state as said beside it, with the countdown of its wait at `now_ms`.
@@ -87,6 +97,31 @@ impl Attente {
             None => st.text.clone(),
         })
     }
+}
+
+/// A mode in words: « en lecture », « en écriture ».
+fn in_mode(mode: Option<&str>) -> String {
+    format!("en {}", mode_word(mode))
+}
+
+/// `read` → « lecture », `write` → « écriture »; anything else as it is.
+pub fn mode_word(mode: Option<&str>) -> String {
+    match mode {
+        Some("read") | None => "lecture".into(),
+        Some("write") => "écriture".into(),
+        Some(autre) => autre.into(),
+    }
+}
+
+/// **A root the judge granted** (archi's host line `root_granted`, or a host report carrying `root` and `by: judge`):
+/// « racine accordée par le juge : <root> (<mode>), sur ta phrase « … » ». `None` for any other line.
+pub fn judge_granted_root(l: &Value) -> Option<String> {
+    let root = l["root"].as_str()?;
+    if l["from"] != "host" || !(l["kind"] == "root_granted" || (l["kind"] == "report" && l["by"] == "judge")) {
+        return None;
+    }
+    let quote = l["quote"].as_str().map(|q| format!(", sur ta phrase « {q} »")).unwrap_or_default();
+    Some(format!("racine accordée par le juge : {root} ({}){quote}", mode_word(l["mode"].as_str())))
 }
 
 /// **The closing line of a card**: who decided, and on what — the user, an authorization recalled (its quote), the
@@ -109,7 +144,18 @@ pub fn closing_line(a: &Attente, answer: &Value) -> Option<String> {
             let alt = answer["alternative"]["text"].as_str().map(|t| format!(" — il propose : {t}")).unwrap_or_default();
             format!("{verb} par le vérificateur{model}{reasons} — {what}{alt}")
         }
-        _ => format!("{verb} par toi : {what}"),
+        _ => {
+            let class = a.card.as_ref().and_then(|c| c.class.as_deref());
+            let root = a.card.as_ref().and_then(|c| c.args["root"].as_str());
+            match (class, root, approved) {
+                // A root granted lasts beyond the command (archi, 22 November 2026): Lucie must see it.
+                (Some("open_root"), Some(root), true) => {
+                    format!("racine accordée par toi : {root} ({}), durable", mode_word(a.card.as_ref().and_then(|c| c.args["mode"].as_str())))
+                }
+                (Some("protected"), _, true) => format!("accordé par toi, pour cette commande seulement : {what}"),
+                _ => format!("{verb} par toi : {what}"),
+            }
+        }
     })
 }
 
