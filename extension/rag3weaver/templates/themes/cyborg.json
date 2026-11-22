@@ -219,5 +219,9 @@
     "en_ligne": "#fcce65",
     "cadre": "#8b949e"
   },
-  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main",
+  "labels": {
+    "welcome_agent": "l'interface",
+    "welcome_greeting": "Interface active. État de la machine chargé : je t'oriente vers un agent ou j'en prépare un."
+  }
 }
