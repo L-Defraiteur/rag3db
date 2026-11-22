@@ -122,7 +122,7 @@
     },
     "run_command": {
       "graph": "../../tools/run.mmd",
-      "description": "Lancer une commande dans le workspace, derrière la porte : la liste sûre passe, le reste demande à l'humain. Lance `git status`, `git diff` ou `git log` nus : n'invente pas d'option pour contourner une erreur (`git -c …`), dis-la.",
+      "description": "Lancer une commande dans le workspace, dans le bac (la porte du lancement dit ce qui passe). Avant le premier commit d'un projet, écris un .gitignore adapté à ce que tu installes. Lance `git status`, `git diff` ou `git log` nus : n'invente pas d'option pour contourner une erreur (`git -c …`), dis-la.",
       "policy": {
         "run_commands": true
       }

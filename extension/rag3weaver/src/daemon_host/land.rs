@@ -12,6 +12,9 @@ use super::taches::Tache;
 use super::teammate::TeammateFiles;
 use super::DaemonHost;
 
+/// Past this many files, a turn is held and said rather than landed.
+const TOO_MANY_FILES: usize = 300;
+
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| e.to_string())?;
     if o.status.success() {
@@ -53,6 +56,11 @@ impl DaemonHost {
         }
         let commits = git(dossier, &["rev-list", "--count", &format!("{sien}..{tache}")]).unwrap_or_default();
         let fichiers = git(dossier, &["diff", "--name-only", &sien, &tache]).map(|s| s.lines().count()).unwrap_or(0);
+        // **Hundreds of files at once are said, not landed in silence** (c7, 23 Nov 2026): an install committed with
+        // its dependencies, most often.
+        if fichiers > TOO_MANY_FILES {
+            return retenu(format!("{fichiers} fichiers d'un coup (une installation commitée avec ses dépendances ? vois le .gitignore)"));
+        }
         match git(dossier, &["merge", "--ff-only", "-q", &tache]) {
             Ok(_) => {
                 let texte = format!("{fichiers} fichier(s) dans ton dossier {} ({commits} commit(s) de la branche {branche})", dossier.display());
