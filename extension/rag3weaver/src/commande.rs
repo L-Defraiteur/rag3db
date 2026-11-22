@@ -357,6 +357,23 @@ fn refus_d_identite_git(c: &Commande) -> Option<Verdict> {
 /// **Showing a secret is refused, whatever the grant** (page 07 of rag3weaver-archi, the hard guards): reading
 /// a secret file to the output (`.env*`, `*.pem`, a private key, anything under `.vault/`), or printing a
 /// variable whose name says a secret. The refusal says how to use the secret without showing it.
+/// **A secret file**, by its name: `.env*` (not `.example`, `.sample`), `*.pem`, `*.key`, a private key (`id_rsa*`,
+/// `id_ed25519*`, `id_ecdsa*`), anything under `.vault/`. The read tools refuse to show it (22 Nov 2026: the dry run
+/// showed a `.env` through `read_file`, the command guard only saw `cat`).
+pub fn secret_file(path: &str) -> bool {
+    let _ = path;
+    false
+}
+
+/// What a refusal to show a secret says, and how to use it without showing it.
+pub fn secret_refusal(what: &str) -> String {
+    format!(
+        "`{what}` : showing a secret is refused, whatever the grant. Use it without printing it: pass its file to the \
+         program (`--env-file .env`, `set -a; . ./.env; set +a` in a script that prints nothing), or keep it in the vault \
+         with secret_store and point at its path."
+    )
+}
+
 pub fn refus_d_afficher_un_secret(c: &Commande) -> Option<Verdict> {
     let programme = std::path::Path::new(&c.programme).file_name()?.to_str()?.to_string();
     let nom_secret = |n: &str| {

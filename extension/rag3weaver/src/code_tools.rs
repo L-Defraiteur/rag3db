@@ -699,6 +699,9 @@ pub fn read_file_with(
     offset: usize,
     limit: usize,
 ) -> Result<ReadResult, String> {
+    if crate::commande::secret_file(path) {
+        return Err(crate::commande::secret_refusal(path));
+    }
     let mut outside = false;
     let content = match source.read(path)? {
         Some(c) => c,
@@ -1007,6 +1010,11 @@ pub fn grep_files(
             if Path::new(&path).extension().and_then(|e| e.to_str()) != Some(ext.trim_start_matches('.')) {
                 continue;
             }
+        }
+        // A secret file is never searched: its lines would show its value.
+        if crate::commande::secret_file(&path) {
+            files_skipped += 1;
+            continue;
         }
         let Some(content) = source.read(&path)? else { continue };
         if content.len() > MAX_GREP_FILE_BYTES {
@@ -1459,6 +1467,9 @@ pub struct RawRead {
 /// Lit `path` en entier, sans numéros ni coupes, résolu comme [`read_file_with`] ;
 /// refus nommé au-delà de [`RAW_READ_MAX_BYTES`].
 pub fn read_file_raw(source: &dyn FileSource, access: &RootPolicy, path: &str) -> Result<RawRead, String> {
+    if crate::commande::secret_file(path) {
+        return Err(crate::commande::secret_refusal(path));
+    }
     let (content, outside) = match source.read(path)? {
         Some(c) => (c, false),
         None if Path::new(path).is_absolute() => {
@@ -2204,3 +2215,8 @@ mod cwd_tests {
         assert_eq!(p.roots().len(), 2);
     }
 }
+
+/// Witnesses: the read tools never show a secret file (22 Nov 2026, the dry run of the auto mode).
+#[cfg(test)]
+#[path = "code_tools_secret_reads_tests.rs"]
+mod secret_reads_tests;
