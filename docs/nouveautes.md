@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un dossier créé par l'IDE reçoit une tâche tout de suite.** À la création, l'hôte fait le
+  `git init` et le premier commit, vide (« Début du projet ») ; une tâche peut partir de là sans commande à taper.
 - 22 novembre 2026 — **Le chat ne lie que les fichiers qui existent.** Un chemin cité dans le chat n'est un lien que
   si l'hôte l'a trouvé dans les fichiers du dépôt (`POST /ide/chemins`) ; un autre reste du texte. Un fichier introuvable
   se dit « Ce fichier n'existe pas dans … », plus « ReadFileNode ».

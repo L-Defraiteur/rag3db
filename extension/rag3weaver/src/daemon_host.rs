@@ -1385,11 +1385,23 @@ impl DaemonHost {
                     Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
                 }
             };
+            // **The first commit, made by the host** (the audit of 22 November 2026: a task starts from a commit, and a
+            // newcomer was sent to type `git commit --allow-empty`): empty, under the machine's git identity, or under
+            // the host's name when none is set. Never a remote, never a push.
+            let premier_commit = |dans: &Path| -> Result<String, String> {
+                let identite = git(dans, &["config", "user.email"]).map(|e| !e.is_empty()).unwrap_or(false);
+                if identite {
+                    git(dans, &["commit", "-q", "--allow-empty", "-m", "Début du projet"])
+                } else {
+                    git(dans, &["-c", "user.name=rag3weaver", "-c", "user.email=rag3weaver@localhost", "commit", "-q", "--allow-empty", "-m", "Début du projet"])
+                }
+            };
             // A new folder, or an empty one, is created and gets git init (never a remote, never a push).
             let mut cree = false;
             if !lettre.exists() {
                 std::fs::create_dir_all(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?;
                 git(&lettre, &["init", "-q"])?;
+                premier_commit(&lettre)?;
                 cree = true;
             } else if git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_err() {
                 // **A folder with files that is not a git repository opens as it is** (Lucie, 21 November 2026,
@@ -1398,6 +1410,7 @@ impl DaemonHost {
                 let vide = std::fs::read_dir(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?.next().is_none();
                 if vide {
                     git(&lettre, &["init", "-q"])?;
+                    premier_commit(&lettre)?;
                     cree = true;
                 }
             }
