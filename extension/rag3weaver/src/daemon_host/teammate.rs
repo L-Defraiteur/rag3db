@@ -1244,10 +1244,8 @@ impl StepTools<'_> {
     fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
         // **judge_all** (page 07, « suite »): the sandbox stopped a path outside its roots; the judge's yes grants the
         // root and the command is replayed now, anything else is a card whose yes grants it.
-        let marque = crate::dataflow::run_nodes::OPEN_ROOT_MARKER;
-        if let (Some(i), Some(gate)) = (turn.content.find(marque), &self.step.open_root) {
-            let demande = serde_json::Deserializer::from_str(&turn.content[i + marque.len()..]).into_iter::<Value>().next().and_then(Result::ok);
-            if let Some(m) = demande {
+        if let (Some(m), Some(gate)) = (open_root_request(&turn.content), &self.step.open_root) {
+            {
                 match gate(&m) {
                     super::gate::OpenRootOutcome::Granted => return self.inner.call(call),
                     super::gate::OpenRootOutcome::Card { class, args } => {
@@ -1298,6 +1296,16 @@ impl StepTools<'_> {
     fn after(&self, _call: &ToolCall, turn: Turn) -> Turn {
         turn
     }
+}
+
+/// The sandbox's `open_root` request in a tool's result: the backend's tools return the node's error as
+/// `{"error": "open_root: {…}"}`, its quotes escaped; a direct text carries it as is.
+#[cfg(feature = "code")]
+fn open_root_request(content: &str) -> Option<Value> {
+    let marque = crate::dataflow::run_nodes::OPEN_ROOT_MARKER;
+    let texte = serde_json::from_str::<Value>(content).ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_else(|| content.to_string());
+    let i = texte.find(marque)?;
+    serde_json::Deserializer::from_str(&texte[i + marque.len()..]).into_iter::<Value>().next()?.ok()
 }
 
 impl StepTools<'_> {
