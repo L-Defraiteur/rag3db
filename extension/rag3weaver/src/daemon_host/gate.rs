@@ -399,8 +399,14 @@ impl DaemonHost {
                 at: tour["at"].as_u64(),
                 turn: tour["id"].as_str().map(str::to_string),
             };
+            let citation = preuve.quote.clone();
             match h.grant_root(&agent, &root, preuve, "judge", &mode) {
-                Ok(_) => OpenRootOutcome::Granted,
+                Ok(_) => {
+                    // Said in the mailbox: unlike a line's grant, a root lasts, and the user sees what it rests on.
+                    let texte = format!("racine accordée par le juge : {} ({mode}), sur ta phrase « {citation} »", root.display());
+                    let _ = files.append_with("host", "root_granted", None, &texte, &json!({ "root": root, "mode": mode, "by": "judge", "quote": citation }));
+                    OpenRootOutcome::Granted
+                }
                 Err(_) => carte(args),
             }
         }))
