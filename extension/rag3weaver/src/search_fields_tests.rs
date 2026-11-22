@@ -48,7 +48,8 @@ fn every_document_with_the_word_in_a_field_is_found() {
     use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
     let dir = tempfile::tempdir().unwrap();
     let fields = vec!["content".to_string(), "name".to_string()];
-    let config = crate::fts_handle::build_schema_config(&fields, &[], 1).unwrap();
+    // Four shards: lucivy 4.5.0 prescanned the fields of a `BestFieldQuery` on shard 0 only (lucivy, 22 November).
+    let config = crate::fts_handle::build_schema_config(&fields, &[], 4).unwrap();
     let storage = BlobShardStorage::new(std::sync::Arc::new(MemBlobStore::new()), crate::fts_handle::fts_index_name("Union"), dir.path());
     let handle = ShardedHandle::create_with_storage(Box::new(storage), &config).expect("the index");
     for (offset, suffix) in [(1_u64, "lower"), (2, "title"), (3, "upper"), (4, "plain"), (5, "frob"), (6, "phrase")] {
