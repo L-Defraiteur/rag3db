@@ -21,6 +21,7 @@ fn boundary(turns: &[Turn]) -> String {
 fn a_background_command_that_ends_is_told_at_the_next_step() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    super::en_approbation(&manifeste);
     std::fs::write(depot.join("fond.sh"), "sleep 2\necho fini-de-fond\n").unwrap();
     for args in [&["add", "fond.sh"][..], &["commit", "-q", "-m", "fond"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
@@ -84,6 +85,7 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
 fn background_commands_are_bounded_in_number_and_time() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    super::en_approbation(&manifeste);
     std::fs::write(depot.join("dort.sh"), "echo je-dors\nsleep 30\n").unwrap();
     for args in [&["add", "dort.sh"][..], &["commit", "-q", "-m", "dort"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
