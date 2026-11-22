@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Ouvrir un dossier mène au chat de ce projet.** Après « Ouvrir », l'IDE va droit au chat du
+  dossier ouvert, la saisie prête, avec un mot d'accueil qui dit ce qui vient d'être ouvert et ce que l'agent peut y
+  faire (lire, chercher, expliquer, modifier, lancer des commandes, en demandant avant ce qui sort du dossier).
 - 22 novembre 2026 — **« Ouvrir un dossier » comprend `~`.** `~/essai-auto` s'ouvre dans le dossier personnel, dans
   l'IDE comme par `rag3weaver-backend open` ; un chemin relatif est refusé avec les deux formes attendues
   (`~/essai-auto` ou le chemin entier).
