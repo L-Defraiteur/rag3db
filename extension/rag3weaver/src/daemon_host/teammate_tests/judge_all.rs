@@ -101,3 +101,28 @@ fn a_root_the_judge_grants_is_said_in_the_mailbox() {
     assert_eq!(dit["by"], json!("judge"), "{dit}");
     assert!(dit["text"].as_str().unwrap_or_default().contains("racine accordée par le juge"), "{dit}");
 }
+
+/// **A command the judge lets through is said in the mailbox** (c7, 22 Nov 2026: a pass by the judge left no trace, an
+/// audit's hole): a host line `command_granted`, with the command, its class, by judge, and the words it rests on.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn a_command_the_judge_lets_through_is_said_in_the_mailbox() {
+    let v = super::mode_auto_v1::v1_with(|_| (vec!["rm vieux.txt".to_string()], "Supprime vieux.txt, il ne sert plus.".to_string()), &["supprime vieux.txt"]);
+    let b = v.wait("the task ends", &ended);
+    let dit = b.iter().find(|l| l["from"] == "host" && l["kind"] == "command_granted").unwrap_or_else(|| panic!("the pass is said: {b:#?}"));
+    assert_eq!(dit["command"], json!("rm vieux.txt"), "{dit}");
+    assert_eq!(dit["class"], json!("destroy_local"), "{dit}");
+    assert_eq!(dit["by"], json!("judge"), "{dit}");
+    assert!(dit["quote"].as_str().unwrap_or_default().contains("Supprime vieux.txt"), "{dit}");
+}
+
+/// **A protected folder's card gives the agent's own reason**, never the text of a card before it (recherche's audit).
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn the_agents_reason_is_never_a_card() {
+    let d = tempfile::tempdir().unwrap();
+    let f = crate::daemon_host::teammate::TeammateFiles::new(d.path().to_path_buf(), "p/t");
+    f.append_with("teammate", "report", None, "Je vais lire le dépôt.", &json!({})).unwrap();
+    f.append_with("teammate", "approval", None, "commande en attente d'accord : git status", &json!({ "command": "git status" })).unwrap();
+    assert_eq!(crate::daemon_host::gate::last_agent_turn(&f), "Je vais lire le dépôt.");
+}

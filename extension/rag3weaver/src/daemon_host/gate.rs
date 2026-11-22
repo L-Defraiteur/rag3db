@@ -188,7 +188,7 @@ fn last_human_turn(files: &TeammateFiles) -> Option<Value> {
 }
 
 /// The last turn of the agent: the reason it gave, shown on a protected folder's card.
-fn last_agent_turn(files: &TeammateFiles) -> String {
+pub(crate) fn last_agent_turn(files: &TeammateFiles) -> String {
     files.mailbox().into_iter().rev().find(|l| l["from"] == "teammate").and_then(|l| l["text"].as_str().map(str::to_string)).unwrap_or_default()
 }
 
