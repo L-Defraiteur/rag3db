@@ -45,3 +45,26 @@ correspondance pleine. « L'exact devant le flou » ne tient plus qu'à pertinen
 devant. Les trois peuvent vivre derrière une option de requête (`budget`: `"flat" | "idf" | "window" | "soft"`), sans
 changer le comportement par défaut, pour que le banc les mesure sur ses quatre jeux sans une version par variante. Rien
 n'est publié avant le mot de Lucie.
+
+## Le même geste pour les champs : `contains` sur `fields`, un seul budget
+
+Besoin de recherche (relayé par c7) : la passe de la requête entière (règle de Lucie du 25 octobre : la phrase entière,
+l'exact devant) émet un `contains` flou **par champ** (`content`, `name`…) dans un booléen. Un document qui contient la
+phrase avec une faute dans deux champs paie −2000, contre −1000 s'il ne l'a que dans un. C'est l'avertissement « plusieurs
+`contains` flous dans un booléen » vu sur 17 requêtes sur 17.
+
+**La proposition** : `contains` accepte `fields` (pluriel), avec **un seul compte d'erreurs par document**. C'est le geste
+de `contains_split`, appliqué aux champs au lieu des mots. Deux variantes du combinateur :
+- **(f1) le meilleur champ** : le score du document est celui de son meilleur champ (le moins de fautes, puis le meilleur
+  BM25), comme un `disjunction_max` qui saurait lire les paliers. C'est le plus sûr : un champ de plus ne change rien ;
+- **(f2) les fautes du meilleur champ, les BM25 de tous** : le compte d'erreurs est le minimum sur les champs trouvés,
+  et le BM25 la somme des champs trouvés. Un document qui contient la phrase dans son nom et dans son contenu passe
+  devant celui qui ne l'a que dans son contenu, sans payer deux fois la même faute.
+
+Ma recommandation : (f2), qui récompense la présence dans plusieurs champs sans la punir. Il n'y a ici pas de mot absent,
+puisqu'un champ n'est pas un mot de la requête : les champs sans correspondance ne coûtent rien, seule la meilleure faute
+compte.
+
+C'est une extension d'API (`fields` lu par `contains`, qui l'ignore aujourd'hui avec un avertissement). Avec les
+corrections ci-dessus, cela fait **une seule version, plutôt 4.5.0** que 4.4.2. Le banc mesure le tout ensemble. Rien
+n'est publié avant le mot de Lucie.
