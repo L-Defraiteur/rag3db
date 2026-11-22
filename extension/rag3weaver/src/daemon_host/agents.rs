@@ -77,6 +77,18 @@ impl DaemonHost {
     /// item, its views, and the last line of its mailbox.
     fn agent_task(&self, t: &super::taches::Tache) -> Value {
         let files = self.teammate_files(&t.parent, &t.nom).ok();
+        // The step of its plan (the left bar's second line): the item doing, else the first not done.
+        let etape = files.as_ref().and_then(|f| {
+            let plans = f.read_plans();
+            let plan = plans.active()?;
+            let (n, item) = plan
+                .items
+                .iter()
+                .enumerate()
+                .find(|(_, i)| i.status == super::teammate::Status::Doing)
+                .or_else(|| plan.items.iter().enumerate().find(|(_, i)| i.status != super::teammate::Status::Done))?;
+            Some(json!({ "current": n + 1, "total": plan.items.len(), "title": item.text }))
+        });
         let doing = files.as_ref().and_then(|f| {
             let plans = f.read_plans();
             let plan = plans.active()?;
@@ -100,7 +112,7 @@ impl DaemonHost {
             _ => 0,
         };
         let unread = files.as_ref().and_then(|f| f.supervisor().map(|s| f.pending_for(&s).len())).unwrap_or(0);
-        json!({
+        let mut rendu = json!({
             "id": id,
             "state": if pause { "paused" } else if running { "active" } else { "waiting" },
             "machine": machine(),
@@ -122,7 +134,11 @@ impl DaemonHost {
             "last_line": last_line,
             "agent_key": t.agent_key,
             "forked_from": t.forked_from,
-        })
+        });
+        if let Some(e) = etape {
+            rendu["plan"] = e;
+        }
+        rendu
     }
 }
 
@@ -202,19 +218,43 @@ fn last_activity(derniere: Option<&Value>, at: u64) -> Value {
 
 /// The agents `own` exchanged lines with (a line from or to an `agent:` key other than its own), the latest first.
 fn contacts(lignes: &[Value], own: &str) -> Value {
-    let mut derniers: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    // By contact: the time and the line of the last message exchanged (a later line replaces an earlier one).
+    let mut derniers: std::collections::BTreeMap<String, (u64, &Value)> = std::collections::BTreeMap::new();
     for l in lignes {
         let at = l["at"].as_u64().unwrap_or(0);
         for k in ["from", "to"] {
             if let Some(autre) = l[k].as_str().filter(|a| a.starts_with("agent:") && *a != own) {
-                let e = derniers.entry(autre.to_string()).or_insert(0);
-                *e = (*e).max(at);
+                let e = derniers.entry(autre.to_string()).or_insert((0, l));
+                if at >= e.0 {
+                    *e = (at, l);
+                }
             }
         }
     }
-    let mut v: Vec<(String, u64)> = derniers.into_iter().collect();
-    v.sort_by_key(|(_, at)| std::cmp::Reverse(*at));
-    json!(v.into_iter().map(|(id, at)| json!({ "id": id, "last_message_at": at })).collect::<Vec<_>>())
+    let mut v: Vec<(String, (u64, &Value))> = derniers.into_iter().collect();
+    v.sort_by_key(|(_, (at, _))| std::cmp::Reverse(*at));
+    json!(v
+        .into_iter()
+        .map(|(id, (at, l))| {
+            // The sender of the last message: `teammate` is the agent itself.
+            let from = match l["from"].as_str() {
+                Some("teammate") => own.to_string(),
+                Some(f) => f.to_string(),
+                None => String::new(),
+            };
+            json!({ "id": id, "last_message_at": at, "last_message": { "from": from, "text": couper(l["text"].as_str().unwrap_or_default(), 120) } })
+        })
+        .collect::<Vec<_>>())
+}
+
+/// `texte` cut at `n` characters, an ellipsis said when it was longer.
+fn couper(texte: &str, n: usize) -> String {
+    let texte = texte.trim();
+    if texte.chars().count() <= n {
+        texte.to_string()
+    } else {
+        format!("{}…", texte.chars().take(n).collect::<String>().trim_end())
+    }
 }
 
 /// The fields of the left bar's contract, described in the answer (one name a field, in English).
@@ -228,7 +268,8 @@ fn fields() -> Value {
         "children": "the ids of the agents it launched",
         "last_activity": "{at: ms, phrase: a short phrase of its last action, command: the command of that action or null}",
         "unread": "the lines of its mailbox awaiting its supervisor (a question, a report not yet seen)",
-        "contacts": "the agents it exchanged messages with, [{id, last_message_at}], the latest first",
+        "contacts": "the agents it exchanged messages with, [{id, last_message_at, last_message: {from, text}}], the latest first; text cut at 120 characters, from the sender's id",
+        "plan": "{current, total, title}: its plan's step doing (else its first not done), its number among the plan's items and its text; absent without a plan",
         "pending": "while paused, the lines of its mailbox after its reading cursor; else 0",
     })
 }
