@@ -529,6 +529,9 @@ pub struct Step {
     /// The `judge_all` gate: a path outside the sandbox's roots (page 07 of rag3weaver-archi, « suite »).
     #[cfg(feature = "code")]
     pub open_root: Option<super::gate::StepOpenRoot>,
+    /// The task's gate level (`bac`, `judge`, `cards`), when it has one (22 Nov 2026).
+    #[cfg(feature = "code")]
+    pub gate_level: Option<String>,
     /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
@@ -706,6 +709,8 @@ impl Step {
             gate: None,
             #[cfg(feature = "code")]
             open_root: None,
+            #[cfg(feature = "code")]
+            gate_level: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
             background_policy: crate::backend::BackgroundPolicy::default(),
@@ -1268,6 +1273,23 @@ impl StepTools<'_> {
 
     #[cfg(feature = "code")]
     fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+        // **At `bac`, a line the parser cannot reduce runs through `sh -c`** (c7, 23 Nov 2026): the parser refuses a
+        // redirection, a substitution, an expansion or a glob; the sandbox bounds what the line reaches, and the gate
+        // lets the shell through at this level. Said in the result.
+        if call.name == "run_command" && self.step.gate_level.as_deref() == Some("bac") && turn.content.contains("**Commande refusée.**") {
+            let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+            if let (Some(ligne), false) = (args["command"].as_str(), args["background"] == true) {
+                use codeparsers::shell::Refus;
+                if matches!(codeparsers::shell::decomposer(ligne), Err(Refus::Redirection | Refus::Substitution | Refus::Expansion | Refus::Joker)) {
+                    let mut a = args.clone();
+                    a["command"] = json!(format!("sh -c '{}'", ligne.replace('\'', "'\\''")));
+                    let par_le_shell = ToolCall { arguments: a.to_string(), ..call.clone() };
+                    let mut t = self.after(&par_le_shell, self.inner.call(&par_le_shell));
+                    t.content = format!("_À la porte `bac`, la ligne passe par `sh -c` : le parseur ne réduit pas ce qu'elle contient ; le bac borne ce qu'elle touche._\n\n{}", t.content);
+                    return t;
+                }
+            }
+        }
         // **judge_all** (page 07, « suite »): the sandbox stopped a path outside its roots; the judge's yes grants the
         // root and the command is replayed now, anything else is a card whose yes grants it.
         if let (Some(m), Some(gate)) = (open_root_request(&turn.content), &self.step.open_root) {
@@ -2236,6 +2258,7 @@ impl DaemonHost {
                     let racine = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
                     step.gate = self.step_gate(&t.id, &files, racine);
                     step.open_root = self.step_open_root(&t.id, &files);
+                    step.gate_level = self.gate_level(&t.id, &files);
                 }
             }
             step.woke_by = woke_by.take();
