@@ -6,6 +6,12 @@
   dérivait au fil du travail. Un fichier décide maintenant seul, par sa langue et les dépendances que déclare son
   dépôt. Sur l'index de rag3db, les rendez-vous sont identiques en paquets de 2 048 et de 128. Les règles de l'analyse
   passent à 20.
+- 22 novembre 2026 — **`rag3weaver-tty` démarre dans son dossier, sans argument.** Lancé sans `--repo`, il prend la
+  racine git du dossier courant (ou le dossier), l'ouvre auprès de l'hôte s'il ne le connaît pas, et part dans une
+  conversation neuve nommée par sa date ; `--continue` reprend la dernière, `--task` en nomme une. Il ne montre plus
+  que la tâche demandée (ni le chat du dépôt, ni la carte d'une autre boîte), dit « tape ta demande, elle l'ouvrira »
+  tant qu'elle n'existe pas, et dit ses refus en une phrase, tout de suite. En `--plain`, une carte qu'il ne peut pas
+  répondre se dit, et il s'arrête au lieu d'attendre.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
