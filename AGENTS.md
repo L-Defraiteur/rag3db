@@ -6,8 +6,13 @@ Instructions for any coding agent working in this repository (Claude Code, Codex
 
 What we are building, in Lucie's words (22 November 2026):
 
-> **Lâchez une équipe d'agents sur vos projets. Vous garderez le fil.**
+> **Become the hive mind. Control entire swarms of agents.**
 
+A **swarm** is a group of agents working on one goal, each with a role, led by an orchestrator. The **hive** is all
+of a user's swarms, on every machine and project. The user is the hive mind: not one team to follow, but several
+swarms to command, and still everything understood. In French:
+
+- « Lâchez une équipe d'agents sur vos projets. Vous garderez le fil. »
 - « Ils travaillent seuls. Vous savez toujours où ils en sont. »
 - « Une horde d'agents au travail, et vous comprenez tout. »
 - « Vos agents travaillent toute la nuit. Le matin, vous savez tout. »

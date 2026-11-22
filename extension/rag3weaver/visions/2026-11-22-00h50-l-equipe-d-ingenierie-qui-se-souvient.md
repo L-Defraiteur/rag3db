@@ -24,6 +24,20 @@ La tension à dire : beaucoup d'agents qui travaillent seuls, partout, et pourta
 « Plusieurs machines, plusieurs équipes, plusieurs projets » va dans la ligne du dessous, comme preuve, pas dans la
 promesse.
 
+### Le leitmotiv : la ruche (Lucie, 22 nov., 22 h 50)
+
+> **Become the hive mind. Control entire swarms of agents.**
+
+« Des swarms d'agents, appelons ça swarm plutôt qu'équipe, c'est plus stylé, ou hive. » L'accent : on ne contrôle
+pas une équipe d'agents, mais plusieurs. Le vocabulaire qui en sort :
+
+- un **swarm** : un groupement d'agents sur un but, chacun avec son rôle, mené par un orchestrateur (ce que nous
+  appelions « équipe ») ;
+- la **hive** : tous les swarms de quelqu'un, sur toutes ses machines et tous ses projets ;
+- le **hive mind** : la personne. Elle commande plusieurs swarms et comprend tout.
+
+Les phrases françaises du dessus restent, comme lignes d'appui.
+
 ## Ce qui existe déjà et fait la différence
 
 Chaque brique prise seule a des concurrents (Devin, Cursor, Factory…). La valeur, c'est l'intégration :
