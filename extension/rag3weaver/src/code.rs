@@ -1654,7 +1654,7 @@ pub fn analyze_in_project_avec(
                     if mention == &g.name {
                         continue; // un nom ne se mentionne pas lui-même
                     }
-                    vus.entry(mention.as_str()).or_default().push(UsageSite { usage: UsageKind::Call, line: Some(*ligne) });
+                    vus.entry(mention.as_str()).or_default().push(UsageSite::at_line(UsageKind::Call, Some(*ligne)));
                 }
                 for (mention, sites) in vus {
                     analysis.pending.push((key.clone(), mention.to_string(), "CONSUMES".to_string()));
@@ -1992,7 +1992,7 @@ pub fn analyze_in_project_avec(
                         _ => r.qualifier_type.clone(),
                     };
                     if let Some(p) = proprietaire.filter(|p| !p.is_empty()) {
-                        let site = UsageSite { usage: u, line: Some(r.line) };
+                        let site = UsageSite { usage: u, ..UsageSite::of_reference(r) };
                         let liste = verrous.entry(format!("{p}::{}", r.identifier)).or_default();
                         if !liste.contains(&site) {
                             liste.push(site);
@@ -2056,7 +2056,7 @@ pub fn analyze_in_project_avec(
                         continue;
                     }
                 }
-                let site = UsageSite { usage: r.usage.clone().unwrap_or(UsageKind::Other), line: Some(r.line) };
+                let site = UsageSite::of_reference(r);
                 let liste = sites.entry(id.to_string()).or_default();
                 if !liste.contains(&site) {
                     liste.push(site);
@@ -2170,7 +2170,7 @@ pub fn analyze_in_project_avec(
                         continue;
                     }
                     analysis.pending.push((key.clone(), t.clone(), kind.to_string()));
-                    let site = UsageSite { usage: UsageKind::Inheritance, line: Some(sc.signature_start_line) };
+                    let site = UsageSite::at_line(UsageKind::Inheritance, Some(sc.signature_start_line));
                     let liste = sites.entry(t.clone()).or_default();
                     if !liste.contains(&site) {
                         liste.push(site);
@@ -2185,7 +2185,7 @@ pub fn analyze_in_project_avec(
                     analysis.pending.push((key.clone(), nom.clone(), "CONSUMES".to_string()));
                 }
                 if let Some(l) = ligne {
-                    let site = UsageSite { usage: UsageKind::Import, line: Some(*l) };
+                    let site = UsageSite::at_line(UsageKind::Import, Some(*l));
                     let liste = sites.entry(nom.clone()).or_default();
                     if !liste.iter().any(|s| s.line == Some(*l)) {
                         liste.push(site);
@@ -3108,7 +3108,7 @@ impl Catalog {
         if !self.declared_lock_calls().is_empty() {
             let declarees: BTreeSet<&str> = self.declared_lock_calls().iter().map(String::as_str).collect();
             let en_verrou = |sites: &[UsageSite]| -> Vec<UsageSite> {
-                sites.iter().filter(|x| x.usage == UsageKind::Call).map(|x| UsageSite { usage: UsageKind::Lock, line: x.line }).collect()
+                sites.iter().filter(|x| x.usage == UsageKind::Call).map(|x| UsageSite { usage: UsageKind::Lock, ..x.clone() }).collect()
             };
             let nom_de: HashMap<&str, &str> = analysis.scopes.iter().map(|sc| (sc.key.as_str(), sc.name.as_str())).collect();
             let mut appels: Vec<(&str, &str, Vec<UsageSite>)> = Vec::new();
@@ -3181,7 +3181,7 @@ impl Catalog {
             // l'arête recopiera.
             let mut props = sites_of.get(&(scope_key.as_str(), name.as_str())).map_or_else(BTreeMap::new, |v| usage_properties(v));
             if props.is_empty() {
-                props = usage_properties(&[UsageSite { usage: UsageKind::Other, line: None }]);
+                props = usage_properties(&[UsageSite::at_line(UsageKind::Other, None)]);
             }
             props.insert("kind".to_string(), s(kind));
             // Vide, pas nul, quand le type ne se lit pas partout.
@@ -5464,7 +5464,7 @@ mod tests {
     /// une arête qui appelle une fois et nomme le type trois fois est un appel.
     #[test]
     fn l_usage_retenu_est_le_plus_fort_present() {
-        let site = |usage, line| UsageSite { usage, line: Some(line) };
+        let site = |usage, line| UsageSite::at_line(usage, Some(line));
         let props = usage_properties(&[
             site(UsageKind::Type, 4),
             site(UsageKind::Type, 5),
@@ -5474,7 +5474,7 @@ mod tests {
         assert_eq!(props.get("usage"), Some(&s("call")));
         assert_eq!(props.get("usages"), Some(&s("call,other,type")));
         assert_eq!(props.get("line"), Some(&CypherValue::Int(2)));
-        let sans_ligne = usage_properties(&[UsageSite { usage: UsageKind::Import, line: None }]);
+        let sans_ligne = usage_properties(&[UsageSite::at_line(UsageKind::Import, None)]);
         assert_eq!(sans_ligne.get("line"), Some(&CypherValue::Null), "la clé reste, pour le chemin COPY");
     }
 
