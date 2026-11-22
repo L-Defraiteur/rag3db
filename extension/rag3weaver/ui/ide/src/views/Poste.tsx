@@ -43,6 +43,16 @@ export function Poste() {
         <Server className="size-5" /> Poste {poste.machine}
       </h1>
       {error ? <p className="text-destructive text-sm mb-3">{error} (dernier état gardé)</p> : null}
+      {poste.orphan_tasks?.length ? (
+        <details className="orphan-tasks text-sm mb-4">
+          <summary className="cursor-pointer text-muted-foreground">
+            {poste.orphan_tasks.length === 1 ? "1 tâche orpheline" : `${poste.orphan_tasks.length} tâches orphelines`} (leur manifeste a disparu, jamais rouvertes) — voir
+          </summary>
+          <ul className="mt-1 pl-4 list-disc text-xs text-muted-foreground">
+            {poste.orphan_tasks.map((o, k) => <li key={k}>{o.pourquoi ?? ""}</li>)}
+          </ul>
+        </details>
+      ) : null}
       <div className="grid gap-4">
         <Section id="agents" icon={<Bot className="size-4" />} title={`Agents (${vivants.length} actifs, ${inactifs.length} inactifs)`}>
           <ul className="space-y-1 text-sm">

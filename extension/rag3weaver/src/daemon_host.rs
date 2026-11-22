@@ -2895,6 +2895,8 @@ impl DaemonHost {
             .collect();
         json!({
             "machine": machine,
+            // The chat sessions whose manifest went (plumbing: « Avancé » says them, the chat no more).
+            "orphan_tasks": self.orphan_chats.lock().unwrap_or_else(|p| p.into_inner()).clone(),
             "sessions": sessions,
             "folders": folders,
             "open_views": open_views,

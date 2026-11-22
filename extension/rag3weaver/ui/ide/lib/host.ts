@@ -67,6 +67,7 @@ export type Poste = {
   repositories: { id: string; repo?: string | null; name?: string | null; manifest: string; root?: string | null }[];
   available?: Space[];
   tasks: SessionTask[];
+  orphan_tasks?: { pourquoi?: string }[];
 };
 
 export async function fetchPoste(): Promise<Poste> {

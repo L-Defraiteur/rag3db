@@ -924,11 +924,6 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             </span>
           </nav>
         </header>
-        {chat?.orphans?.length ? (
-          <p className="alerte text-destructive text-xs px-6 py-2" id="chat-orphelines">
-            {chat.orphans.length} session(s) orpheline(s), jamais rouvertes : {chat.orphans.map((o) => o.pourquoi).join(" ; ")}
-          </p>
-        ) : null}
         <section
           id="messages"
           ref={messages}
