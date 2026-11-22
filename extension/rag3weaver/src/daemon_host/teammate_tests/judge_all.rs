@@ -81,3 +81,23 @@ fn a_root_broader_than_a_project_goes_to_the_card_with_its_warning() {
     assert!(warning.contains("un") && warning.contains("deux"), "the card says what the root holds: {card}");
     assert!(v.judged.lock().unwrap().iter().all(|i| i["class"] != "open_root"), "a broad root never goes to the judge");
 }
+
+/// **A root the judge grants is said in the mailbox** (tty and archi, 22 Nov 2026): unlike a line's grant, it lasts;
+/// the user sees it, with the root, its mode and the words it rests on.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn a_root_the_judge_grants_is_said_in_the_mailbox() {
+    let mut root = std::path::PathBuf::new();
+    let v = v1_with(
+        |d| {
+            root = ailleurs(d);
+            (vec![format!("cat {}", root.join("notes.txt").display())], format!("Lis les notes dans {}.", root.display()))
+        },
+        &["les notes"],
+    );
+    let b = v.wait("the task ends", &ended);
+    let dit = b.iter().find(|l| l["from"] == "host" && l["kind"] == "root_granted").unwrap_or_else(|| panic!("the grant is said: {b:#?}"));
+    assert_eq!(dit["root"], json!(root.display().to_string()), "{dit}");
+    assert_eq!(dit["by"], json!("judge"), "{dit}");
+    assert!(dit["text"].as_str().unwrap_or_default().contains("racine accordée par le juge"), "{dit}");
+}
