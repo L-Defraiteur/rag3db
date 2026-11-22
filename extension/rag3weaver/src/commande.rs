@@ -1629,8 +1629,11 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
         }
     }
 
-    // Le target partagé : son verrou, tenu jusqu'à la fin de la commande.
-    let verrou = match atelier.bac_a_sable.as_ref().and_then(|b| b.cible_partagee.as_deref().map(|c| (c, b.attente_verrou))) {
+    // Le target partagé : son verrou, tenu jusqu'à la fin de la commande, **par cargo seul**, à qui il appartient
+    // (archi, 23 novembre 2026) : un serveur lancé en fond le gardait toute sa vie, et chaque commande suivante
+    // attendait son délai.
+    let de_cargo = std::path::Path::new(&a.0.programme).file_name().is_some_and(|n| n == "cargo");
+    let verrou = match atelier.bac_a_sable.as_ref().filter(|_| de_cargo).and_then(|b| b.cible_partagee.as_deref().map(|c| (c, b.attente_verrou))) {
         Some((c, attente)) => Some(tenir_la_cible(c, attente).map_err(ExecErreur::Atelier)?),
         None => None,
     };
@@ -2475,8 +2478,9 @@ mod tests {
         assert!(!variables_du_poste_hors_du_bac(poste, &declare).contains(&"RUSTC_WRAPPER".to_string()));
     }
 
-    /// **Le target partagé tenu par une autre commande se dit** : la commande attend son
-    /// verrou au plus `attente_verrou`, puis rend une erreur qui le nomme, sans s'être lancée.
+    /// **Le target partagé tenu par une autre commande se dit** : cargo attend son verrou au
+    /// plus `attente_verrou`, puis rend une erreur qui le nomme, sans s'être lancé. Une commande
+    /// qui n'est pas cargo ne l'attend pas (23 novembre 2026 : un serveur de fond le gardait).
     #[cfg(all(feature = "code", target_os = "linux"))]
     #[test]
     fn a_held_shared_target_is_said_instead_of_blocking() {
@@ -2487,17 +2491,26 @@ mod tests {
             return;
         }
         bac.attente_verrou = std::time::Duration::from_secs(1);
+        // Un faux cargo, à qui le target appartient : il pose `lance`.
+        std::fs::create_dir_all(domaine.path().join("bin")).unwrap();
+        let cargo = domaine.path().join("bin/cargo");
+        std::fs::write(&cargo, "#!/bin/sh\nexec /bin/touch lance\n").unwrap();
+        std::fs::set_permissions(&cargo, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
         let _tenu = prendre_le_verrou(cible.path(), std::time::Duration::from_secs(1)).expect("le verrou");
         let atelier = Atelier::dans(domaine.path()).avec_bac_a_sable(bac);
         let g = Garde::new(Mode::Auto);
         let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
-        let laissez = g.autoriser(&Commande::new("/bin/touch", ["lance"]), &accorde).unwrap();
+        // Ce qui n'est pas cargo ne l'attend pas.
+        let laissez = g.autoriser(&Commande::new("/bin/touch", ["autre"]), &accorde).unwrap();
+        let debut = std::time::Instant::now();
+        assert!(executer(laissez, &atelier).expect("touch tourne").a_reussi() && debut.elapsed() < std::time::Duration::from_secs(1), "not cargo: no wait");
+        let laissez = g.autoriser(&Commande::new(cargo.to_str().unwrap(), ["build"]), &accorde).unwrap();
         let debut = std::time::Instant::now();
         let e = executer(laissez, &atelier).expect_err("le verrou est tenu");
         assert!(e.to_string().contains("est tenu par une autre commande"), "{e}");
         assert!(debut.elapsed() >= std::time::Duration::from_secs(1) && !domaine.path().join("lance").exists(), "attendu, puis rien lancé");
         drop(_tenu);
-        let laissez = g.autoriser(&Commande::new("/bin/touch", ["lance"]), &accorde).unwrap();
+        let laissez = g.autoriser(&Commande::new(cargo.to_str().unwrap(), ["build"]), &accorde).unwrap();
         assert!(executer(laissez, &atelier).expect("libre, elle tourne").a_reussi());
     }
 
