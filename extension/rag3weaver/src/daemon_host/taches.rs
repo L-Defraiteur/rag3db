@@ -1323,7 +1323,7 @@ pub fn nom_d_enfant(session: &str, nom: &str) -> String {
 
 /// A name as a task name: lowercase, a Latin accent dropped, any other character a single `-`, no
 /// `-` at either end.
-fn slug(texte: &str) -> String {
+pub(super) fn slug(texte: &str) -> String {
     let mut out = String::new();
     for c in texte.chars().flat_map(char::to_lowercase) {
         let base = match c {
