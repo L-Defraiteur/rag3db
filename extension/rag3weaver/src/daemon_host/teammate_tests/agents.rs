@@ -82,3 +82,61 @@ fn the_agents_say_their_last_activity_and_their_closed_agents() {
     assert!(finie["last_activity_ms"].as_u64() >= finie["closed_ms"].as_u64(), "a closed task's last activity is its closing: {finie}");
     assert_eq!(finie["reopenable"], json!(true), "{finie}");
 }
+
+/// **The contract of the IDE's left bar** (c7 for Lucie, 22 November 2026, mocked by recherche): each agent of the tree,
+/// root or task, says `id`, `name`, `state` (active, paused, stopped, waiting), `machine`, `parent`, `children`,
+/// `last_activity: {at, phrase, command}`, `unread`, `contacts: [{id, last_message_at}]` and `pending`; the answer
+/// describes its fields. A task is paused by `<its folder>/paused.json` (archi's form); a closed task is stopped.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_agents_give_the_contract_of_the_left_bar() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model here".into()) });
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let corps = json!({ "client": "mcp (pid 1)", "claude": { "session_id": "S-archi", "name": "archi" } }).to_string();
+    let _ = host.handle("POST", "/session", None, corps.as_bytes());
+    for nom in ["archi-a", "archi-b", "archi-c"] {
+        host.ouvrir_une_tache(&h.id, nom).expect("la tâche s'ouvre");
+        host.donner_les_vues(&h.id, nom, "archi", vec!["backend".into()], Some("backend".into())).unwrap();
+    }
+    let a = host.teammate_files(&h.id, "archi-a").unwrap();
+    a.append_with("teammate", "message", None, "Tu as fini la porte ?", &json!({ "to": "agent:autre-123" })).unwrap();
+    let reponse = a.append_with("agent:autre-123", "message", None, "Oui, elle est posée.", &json!({ "to": "teammate" })).unwrap();
+    let b = host.teammate_files(&h.id, "archi-b").unwrap();
+    b.append("supervisor", "request", None, "Première.").unwrap();
+    b.append("supervisor", "request", None, "Seconde.").unwrap();
+    std::fs::write(b.dir.join("paused.json"), json!({ "since_ms": 1, "by": "user" }).to_string()).unwrap();
+    host.rejeter_une_tache(&h.id, "archi-c", "le témoin la ferme").unwrap();
+
+    let tout = host.agents();
+    for champ in ["id", "name", "state", "machine", "parent", "children", "last_activity", "unread", "contacts", "pending"] {
+        assert!(tout["fields"][champ].as_str().is_some_and(|t| !t.is_empty()), "the answer does not describe {champ}: {}", tout["fields"]);
+    }
+    let racine = &tout["roots"][0];
+    assert_eq!(racine["id"], json!("session:archi"), "{racine}");
+    assert_eq!(racine["state"], json!("active"), "a live root is active: {racine}");
+    let taches = racine["tasks"].as_array().unwrap();
+    let par_nom = |n: &str| taches.iter().find(|t| t["name"] == n).unwrap_or_else(|| panic!("{n} is not in the tree: {tout:#}")).clone();
+    let (ta, tb, tc) = (par_nom("archi-a"), par_nom("archi-b"), par_nom("archi-c"));
+    let enfants: Vec<&Value> = racine["children"].as_array().expect("the root's children").iter().collect();
+    for t in [&ta, &tb, &tc] {
+        assert!(t["id"].as_str().is_some_and(|i| i.starts_with("agent:")), "an agent's id is its key: {t}");
+        assert_eq!(t["parent"], json!("session:archi"), "{t}");
+        assert_eq!(t["children"], json!([]), "{t}");
+        assert!(t["machine"].as_str().is_some_and(|m| !m.is_empty()), "{t}");
+        assert!(enfants.contains(&&t["id"]), "the root does not name {} among its children: {racine}", t["id"]);
+        assert!(t["last_activity"]["phrase"].as_str().is_some_and(|p| !p.is_empty()), "no phrase: {t}");
+        assert!(t["last_activity"].get("command").is_some(), "{t}");
+    }
+    assert_eq!(ta["state"], json!("waiting"), "an open task with no step running waits: {ta}");
+    assert_eq!(ta["last_activity"]["at"], reponse["at"], "{ta}");
+    assert_eq!(ta["contacts"], json!([{ "id": "agent:autre-123", "last_message_at": reponse["at"] }]), "{ta}");
+    assert_eq!(tb["state"], json!("paused"), "{tb}");
+    assert_eq!(tb["pending"], json!(2), "a paused agent counts the lines after its reading cursor: {tb}");
+    assert_eq!(ta["pending"], json!(0), "{ta}");
+    assert_eq!(tc["state"], json!("stopped"), "a closed agent is stopped: {tc}");
+    assert!(ta["unread"].as_u64().is_some(), "{ta}");
+}
