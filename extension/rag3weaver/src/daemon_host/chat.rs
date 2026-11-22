@@ -173,8 +173,20 @@ pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode:
 /// backend's declarations as « ce projet », and proposed a README of internal manifests). Said to a code backend's chat:
 /// the person's project is its folder; the declarations are the IDE's machinery around it.
 pub fn project_first(racine: Option<&Path>, dans_une_tache: bool) -> String {
-    let _ = (racine, dans_une_tache);
-    String::new()
+    let projet = match racine {
+        Some(r) => format!("The person's project is the folder {}: that is what they mean by « ce projet », « le README », « le code ».", r.display()),
+        None => "The person's project is this backend's folder: that is what they mean by « ce projet », « le README », « le code ».".to_string(),
+    };
+    let changer = if dans_une_tache {
+        "A change to the project is made here, in the task's tree, with the edit tools."
+    } else {
+        "A change to the project (a file to create or edit) goes through open_code_task, never through propose."
+    };
+    format!(
+        "{projet} This backend's declarations (list_declarations, read_declaration, propose, declare) are the IDE's \
+         machinery around it, not the project: never describe them as the project, and change them only when the person \
+         asks about the backend itself. {changer}"
+    )
 }
 
 /// The chat's tool that opens a code task (a repository's chat, outside a task).
