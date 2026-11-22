@@ -19,7 +19,7 @@
   "workspace": {
     "source": "working_tree",
     "root": "workspace",
-    "commands": "approval",
+    "commands": "auto",
     "index": "code",
     "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576},
     "sandbox": {
