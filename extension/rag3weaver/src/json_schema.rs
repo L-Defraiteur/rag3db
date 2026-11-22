@@ -466,7 +466,7 @@ fn validate_filter_value(ty: &FieldType, value: &crate::filter::FilterValue) -> 
                     O::Eq(v) | O::Neq(v) => check(ty,v)?,
                     O::In(vs) | O::NotIn(vs) => vs.iter().try_for_each(|v|check(ty,v))?,
                     O::Between(a,b) => { check(ty,a)?; check(ty,b)?; }
-                    O::Contains(_) | O::ContainsFold(_) | O::StartsWith(_) if !matches!(ty,FieldType::String|FieldType::Text) => return Err("text operator on non-text".into()),
+                    O::Contains(_) | O::ContainsFold(_) | O::WithinEdits { .. } | O::StartsWith(_) if !matches!(ty,FieldType::String|FieldType::Text) => return Err("text operator on non-text".into()),
                     O::ValuesCount {..} | O::IsEmpty | O::IsNotEmpty if !matches!(ty,FieldType::List(_) | FieldType::String | FieldType::Text) => return Err("size operator on scalar".into()),
                     _ => (),
                 }

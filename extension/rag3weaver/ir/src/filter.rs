@@ -33,6 +33,9 @@ pub enum FilterOp {
     /// `Contains` without the case: the field and the value, both in lower case (22 November 2026, the words of
     /// `search_code`'s `exclude`, `must` and `phrase`).
     ContainsFold(String),
+    /// The whole value within `max` edits of `value` (Levenshtein; 22 November 2026, a name typed with one typo). A
+    /// dialect that cannot say it admits nothing: the filter never opens.
+    WithinEdits { value: String, max: u8 },
     ValuesCount {
         min: Option<usize>,
         max: Option<usize>,
