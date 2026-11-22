@@ -28,6 +28,11 @@
   humain passe et se compte. Les prix vivent dans `~/.config/rag3weaver/prices.json`, écrit au premier appel depuis
   les pages officielles des fournisseurs (relevé du 21 novembre, la hausse d'Argon au 1er décembre comprise) ; un
   modèle sans prix est refusé, jamais compté à zéro. C'est la condition d'entrée de tout fournisseur payant neuf.
+- 22 novembre 2026 — **Une commande de fond de l'équipier lui dit quand elle a fini.** Lancée par `run_command`
+  avec `background: true`, elle appartient à la tâche et non plus au pas : elle survit à la fin du pas et ne meurt
+  qu'à la fermeture de la tâche. Quand elle finit, sa fin arrive dans la boîte de l'équipier (sa poignée, son code,
+  sa durée, la fin de sa sortie) et le réveille s'il attendait : il n'a plus à interroger le journal, et une
+  installation ne finit plus dans le vide.
 - 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
   d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
   rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
