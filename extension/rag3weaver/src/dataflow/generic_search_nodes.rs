@@ -2060,19 +2060,9 @@ impl Node for SparseSearchNode {
 
 // ─── FuseResultsNode ─────────────────────────────────────────────────────────
 
-/// Fusion N-aire de signaux étiquetés.
-///
-/// Entrées : les trois ports historiques `vector`, `bm25`, `sparse` (une liste
-/// chacun, étiquetée par le nom du port), et le port `signals` en **fan-in** :
-/// tout ce qui y arrive est regroupé par `UnifiedResult::signal`, dans l'ordre
-/// de première apparition. Une étiquette présente des deux côtés est fusionnée
-/// en une seule liste.
-///
-/// Poids : `weights` par étiquette ; sans entrée, `vector`/`bm25`/`sparse`
-/// gardent les défauts de [`FusionConfig`] (0,7 / 0,3 / 0,2) et toute autre
-/// étiquette vaut 1,0. `boost` nomme les étiquettes en rôle `Boost` : elles ne
-/// participent pas à la fusion mais modulent le score fusionné — c'est ainsi
-/// qu'un [`RerankNode`] se **mélange** au lieu de remplacer.
+/// Ce que [`FuseResultsNode`] fait d'un résultat venu par plusieurs signaux. `Merge` (le défaut) en rend une ligne,
+/// ses étiquettes jointes (`ability+text`) et ses enfants réunis ; `Keep` rend chaque venue avec l'étiquette de sa
+/// branche, toutes au score fusionné de l'objet.
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DuplicatePolicy {
@@ -2089,6 +2079,19 @@ enum WeightSource {
     Engine,
 }
 
+/// Fusion N-aire de signaux étiquetés.
+///
+/// Entrées : les trois ports historiques `vector`, `bm25`, `sparse` (une liste
+/// chacun, étiquetée par le nom du port), et le port `signals` en **fan-in** :
+/// tout ce qui y arrive est regroupé par `UnifiedResult::signal`, dans l'ordre
+/// de première apparition. Une étiquette présente des deux côtés est fusionnée
+/// en une seule liste.
+///
+/// Poids : `weights` par étiquette ; sans entrée, `vector`/`bm25`/`sparse`
+/// gardent les défauts de [`FusionConfig`] (0,7 / 0,3 / 0,2) et toute autre
+/// étiquette vaut 1,0. `boost` nomme les étiquettes en rôle `Boost` : elles ne
+/// participent pas à la fusion mais modulent le score fusionné — c'est ainsi
+/// qu'un [`RerankNode`] se **mélange** au lieu de remplacer.
 pub struct FuseResultsNode {
     duplicates: DuplicatePolicy,
     node_name: String,
@@ -3056,9 +3059,6 @@ impl Node for ResolveParentNode {
 /// Les vecteurs de la requête, quand la source les a embarqués.
 type VecteursDeRequete = (Option<Vec<f32>>, Option<crate::sparse_index::SparseVector>);
 
-/// Ce qu'un nœud de signal reçoit : une requête à chercher, ou l'ordre de se
-/// taire — le mode balayage répond par les fichiers, pas par l'index, et la
-/// cible peut même ne pas être résolue (catalogue occupé).
 /// **The rows whose name is the whole query, read by the name** (c7, 20 November 2026; the bench on the tablet's depot:
 /// `lib`, `result`, `con`, `__all__`, `PORT` absent from the top 10, while a search bounded to their file gave them
 /// first). The promotion of the exact name (`FuseResultsNode`'s `exact_name`) only sees the fused list, bounded
@@ -3190,6 +3190,9 @@ impl Node for ExactNameNode {
     }
 }
 
+/// Ce qu'un nœud de signal reçoit : une requête à chercher, ou l'ordre de se
+/// taire — le mode balayage répond par les fichiers, pas par l'index, et la
+/// cible peut même ne pas être résolue (catalogue occupé).
 enum SignalInput {
     Scan,
     Query(String, SearchTarget, crate::search::SearchOptions, VecteursDeRequete),

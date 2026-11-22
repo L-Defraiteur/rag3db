@@ -17,9 +17,6 @@ use super::checkpoint::{
 
 // ─── CypherCheckpointStore ──────────────────────────────────────────────────
 
-/// Checkpoint store backed by Cypher queries against the graph database.
-///
-/// Uses MERGE for upserts (idempotent) and parameterized queries for JSON data.
 /// **Les lots d'un checkpoint vivent dans des fichiers**, pas dans une ligne
 /// de la base : un fichier par lot, horodaté, sous
 /// `<dossier>/<exécution>/<horodatage>-<nœud>-<port>.{entree,sortie}.bin`,
@@ -239,6 +236,9 @@ impl Spiller {
     }
 }
 
+/// Checkpoint store backed by Cypher queries against the graph database.
+///
+/// Uses MERGE for upserts (idempotent) and parameterized queries for JSON data.
 pub struct CypherCheckpointStore {
     conn: Arc<dyn DbConnection>,
     spiller: Spiller,

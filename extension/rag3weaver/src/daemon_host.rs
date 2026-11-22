@@ -501,10 +501,6 @@ mod empreintes;
 const BACKGROUND_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl DaemonHost {
-    /// **Ce qui retient l'hôte de s'arrêter pour inactivité**, s'il y a quelque
-    /// chose : un run en fond vivant, un appel en cours sur un backend (son verrou
-    /// tenu), ou le travail d'un backend ([`Backend::travail_en_cours`] : index,
-    /// montre). Ne bloque jamais.
     /// **La maintenance nocturne du plein texte** (15 novembre 2026, c7) : pour chaque backend ouvert
     /// dont la politique (`fts.maintenance` du manifeste, active à 03:30 par défaut) est due — l'heure
     /// passée, pas encore jouée cette nuit —, le slot en écriture puis le catalogue, s'il est libre (une
@@ -550,6 +546,10 @@ impl DaemonHost {
         faits
     }
 
+    /// **Ce qui retient l'hôte de s'arrêter pour inactivité**, s'il y a quelque
+    /// chose : un run en fond vivant, un appel en cours sur un backend (son verrou
+    /// tenu), ou le travail d'un backend ([`Backend::travail_en_cours`] : index,
+    /// montre). Ne bloque jamais.
     pub fn travail_en_cours(&self) -> Option<String> {
         let vivants = self.background.alive();
         if !vivants.is_empty() {
@@ -3768,9 +3768,6 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
     prepared.open_on_disk()
 }
 
-/// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
-/// puis fermer tous ses backends proprement. Sans jeton : les témoins qui
-/// lancent un hôte à la main ; le binaire passe par [`DaemonServer`].
 /// Les fils du moteur qu'aura chaque base ouverte, dit au `/sante` : `RAG3WEAVER_DB_THREADS`, sinon le quota du
 /// cgroup (sans le moteur natif, rien à dire).
 fn fils_du_moteur() -> Value {
@@ -3780,6 +3777,9 @@ fn fils_du_moteur() -> Value {
     return Value::Null;
 }
 
+/// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
+/// puis fermer tous ses backends proprement. Sans jeton : les témoins qui
+/// lancent un hôte à la main ; le binaire passe par [`DaemonServer`].
 pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize) {
     DaemonServer::new(server, threads).serve(host, None)
 }

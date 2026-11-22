@@ -1338,23 +1338,6 @@ fn read_threads() -> u64 {
         }
     }
 
-    /// Détruit l'index FTS d'une table via `ShardedHandle::drop_index`.
-    ///
-    /// Nécessaire au reindex : le schéma de l'index est **figé à sa création**,
-    /// alors que celui de l'entité évolue (`register_entity` v2). Sans
-    /// destruction, un champ ajouté serait silencieusement filtré par
-    /// `index_document` et resterait introuvable à la recherche.
-    ///
-    /// `drop_index` **consomme** le handle : il faut donc en détenir l'unique
-    /// référence. S'il en reste d'autres (registre de services d'un graphe
-    /// encore vivant), on refuse plutôt que de détruire sous leurs pieds — un
-    /// `close()` suivi d'une destruction partielle laisse un index incohérent,
-    /// et c'est ce qui provoquait un SIGSEGV à la réouverture.
-    /// **Vérifier le plein texte en fichiers** avant d'écrire : ouvre l'index
-    /// de chaque entité ; un dossier dont la génération n'est pas celle de la
-    /// base est rebâti depuis les lignes. À appeler hors transaction (la
-    /// synchronisation d'une source le fait en tête). Sans effet hors du mode
-    /// `FtsStorage::Files`.
     /// Ouvre l'index de chaque entité en mode fichiers, sans rien rebâtir :
     /// ce qui est à rebâtir est seulement reconnu (et, chez un écrivain, le
     /// dossier jeté et la marque durable posée).
@@ -1518,6 +1501,11 @@ fn read_threads() -> u64 {
         self.read_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
     }
 
+    /// **Vérifier le plein texte en fichiers** avant d'écrire : ouvre l'index
+    /// de chaque entité ; un dossier dont la génération n'est pas celle de la
+    /// base est rebâti depuis les lignes. À appeler hors transaction (la
+    /// synchronisation d'une source le fait en tête). Sans effet hors du mode
+    /// `FtsStorage::Files`.
     pub fn verify_fts_files(&mut self) {
         if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
             return;
@@ -1538,6 +1526,18 @@ fn read_threads() -> u64 {
         }
     }
 
+    /// Détruit l'index FTS d'une table via `ShardedHandle::drop_index`.
+    ///
+    /// Nécessaire au reindex : le schéma de l'index est **figé à sa création**,
+    /// alors que celui de l'entité évolue (`register_entity` v2). Sans
+    /// destruction, un champ ajouté serait silencieusement filtré par
+    /// `index_document` et resterait introuvable à la recherche.
+    ///
+    /// `drop_index` **consomme** le handle : il faut donc en détenir l'unique
+    /// référence. S'il en reste d'autres (registre de services d'un graphe
+    /// encore vivant), on refuse plutôt que de détruire sous leurs pieds — un
+    /// `close()` suivi d'une destruction partielle laisse un index incohérent,
+    /// et c'est ce qui provoquait un SIGSEGV à la réouverture.
     pub fn drop_fts_index(&mut self, table: &str) {
         let Some(handle) = self.fts_handles.remove(table) else { return };
         // **La vue de lecture tient une copie de la poignée** (L2) : sans une
@@ -10111,10 +10111,6 @@ fn read_threads() -> u64 {
         });
     }
 
-    /// Push buffered index blobs to the database, at a commit boundary.
-    ///
-    /// Return failures to the caller as well as emitting an event. Retaining
-    /// pending blobs permits retry but does not mean the index is durable.
     /// L'index plein texte ouvert dont le dossier porte ce nom (la clé de sa marque en base).
     fn handle_of_folder(&self, key: &str) -> Option<Arc<lucivy_core::sharded_handle::ShardedHandle>> {
         self.fts_handles
@@ -10147,6 +10143,10 @@ fn read_threads() -> u64 {
         }
     }
 
+    /// Push buffered index blobs to the database, at a commit boundary.
+    ///
+    /// Return failures to the caller as well as emitting an event. Retaining
+    /// pending blobs permits retry but does not mean the index is durable.
     fn flush_blob_store(&self, context: &str) -> Result<(), CatalogError> {
         // Dans un lot en transaction : rien à synchroniser, le plein texte
         // attend le COMMIT (`commit_lot`).
