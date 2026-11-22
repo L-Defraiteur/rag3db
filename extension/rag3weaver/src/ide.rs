@@ -599,6 +599,14 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         return;
     }
 
+    // **Who calls** (c7, 22 Nov 2026): the user's title (her cookie, or the terminal's header after a keystroke) makes a
+    // human; the host's token alone, which an agent may hold, does not. The routes that grant ask for a human.
+    let humain = host.is_user_token(cookie(&request, COOKIE_USER).as_deref()) || host.is_user_token(entete(&request, "X-Rag3weaver-User"));
+    let refus_humain = || json!({ "ok": false, "error": "réservé à une réponse humaine : ouvre l'IDE depuis ta session (ton lanceur), ou réponds dans le terminal" });
+    if !humain && matches!(path.as_str(), "/ide/propositions/appliquer" | "/ide/taches/fusionner") && method == "POST" {
+        let _ = request.respond(json_(403, &refus_humain()));
+        return;
+    }
     match (method.as_str(), path.as_str()) {
         ("GET", "/ide/flux") => {
             let sujets = param("sujets").map(|s| s.split(',').filter(|x| !x.is_empty()).map(str::to_string).collect::<HashSet<_>>());
@@ -877,6 +885,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
                 Ok(c) => match c["decision"].as_str() {
+                    Some("accorder") if !humain => refus_humain(),
                     Some(d @ ("accorder" | "refuser")) => match host.decider_accord(c["id"].as_str().unwrap_or_default(), d == "accorder", "l'utilisatrice, dans l'IDE") {
                         Ok(v) => json!({ "ok": true, "result": v }),
                         Err(e) => json!({ "ok": false, "error": e }),
