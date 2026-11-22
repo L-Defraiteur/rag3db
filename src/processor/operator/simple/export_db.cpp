@@ -59,7 +59,7 @@ static std::string getTablePropertyDefinitions(const TableCatalogEntry* entry) {
         if (property.getType() == LogicalType::INTERNAL_ID()) {
             continue;
         }
-        columns += "`" + property.getName() + "`";
+        columns += StringUtils::quoteIdentifier(property.getName());
         columns += propertyIdx == properties.size() ? "" : ",";
     }
     return columns;
@@ -78,11 +78,11 @@ static void writeCopyNodeStatement(stringstream& ss, const TableCatalogEntry* en
     }
     auto copyOptionsCypher = CSVOption::toCypher(csvConfig.option.toOptionsMap(useParallelReader));
     if (columns.empty()) {
-        ss << stringFormat("COPY `{}` FROM \"{}\" {};\n", entry->getName(), fileName,
-            copyOptionsCypher);
+        ss << stringFormat("COPY {} FROM \"{}\" {};\n",
+            StringUtils::quoteIdentifier(entry->getName()), fileName, copyOptionsCypher);
     } else {
-        ss << stringFormat("COPY `{}` ({}) FROM \"{}\" {};\n", entry->getName(), columns, fileName,
-            copyOptionsCypher);
+        ss << stringFormat("COPY {} ({}) FROM \"{}\" {};\n",
+            StringUtils::quoteIdentifier(entry->getName()), columns, fileName, copyOptionsCypher);
     }
 }
 
@@ -110,11 +110,11 @@ static void writeCopyRelStatement(stringstream& ss, const ClientContext* context
         copyOptionsMap["to"] = stringFormat("'{}'", toTableName);
         auto copyOptions = CSVOption::toCypher(copyOptionsMap);
         if (columns.empty()) {
-            ss << stringFormat("COPY `{}` FROM \"{}\" {};\n", entry->getName(), fileName,
-                copyOptions);
+            ss << stringFormat("COPY {} FROM \"{}\" {};\n",
+                StringUtils::quoteIdentifier(entry->getName()), fileName, copyOptions);
         } else {
-            ss << stringFormat("COPY `{}` ({}) FROM \"{}\" {};\n", entry->getName(), columns,
-                fileName, copyOptions);
+            ss << stringFormat("COPY {} ({}) FROM \"{}\" {};\n",
+                StringUtils::quoteIdentifier(entry->getName()), columns, fileName, copyOptions);
         }
     }
 }

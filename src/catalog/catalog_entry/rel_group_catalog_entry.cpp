@@ -1,4 +1,5 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
+#include "common/string_utils.h"
 
 #include <sstream>
 
@@ -126,7 +127,7 @@ static std::string getFromToStr(const NodeTableIDPair& pair, const Catalog* cata
     const transaction::Transaction* transaction) {
     auto srcTableName = catalog->getTableCatalogEntry(transaction, pair.srcTableID)->getName();
     auto dstTableName = catalog->getTableCatalogEntry(transaction, pair.dstTableID)->getName();
-    return stringFormat("FROM `{}` TO `{}`", srcTableName, dstTableName);
+    return stringFormat("FROM {} TO {}", common::StringUtils::quoteIdentifier(srcTableName), common::StringUtils::quoteIdentifier(dstTableName));
 }
 
 std::string RelGroupCatalogEntry::toCypher(const ToCypherInfo& info) const {
@@ -134,7 +135,7 @@ std::string RelGroupCatalogEntry::toCypher(const ToCypherInfo& info) const {
     auto catalog = Catalog::Get(*relGroupInfo.context);
     auto transaction = transaction::Transaction::Get(*relGroupInfo.context);
     std::stringstream ss;
-    ss << stringFormat("CREATE REL TABLE `{}` (", getName());
+    ss << stringFormat("CREATE REL TABLE {} (", common::StringUtils::quoteIdentifier(getName()));
     KU_ASSERT(!relTableInfos.empty());
     ss << getFromToStr(relTableInfos[0].nodePair, catalog, transaction);
     for (auto i = 1u; i < relTableInfos.size(); ++i) {

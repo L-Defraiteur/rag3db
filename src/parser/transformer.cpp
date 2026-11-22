@@ -189,8 +189,19 @@ std::string Transformer::transformSymbolicName(CypherParser::OC_SymbolicNameCont
     if (ctx.EscapedSymbolicName()) {
         std::string escapedSymbolName = ctx.EscapedSymbolicName()->getText();
         // escapedSymbolName symbol will be of form "`Some.Value`". Therefore, we need to sanitize
-        // it such that we don't store the symbol with escape character.
-        return escapedSymbolName.substr(1, escapedSymbolName.size() - 2);
+        // it such that we don't store the symbol with escape character. Inside, a doubled backtick
+        // stands for one: `a``b` names a`b (generated Cypher doubles it back,
+        // StringUtils::quoteIdentifier).
+        auto name = escapedSymbolName.substr(1, escapedSymbolName.size() - 2);
+        std::string unescaped;
+        unescaped.reserve(name.size());
+        for (size_t i = 0; i < name.size(); ++i) {
+            unescaped += name[i];
+            if (name[i] == '`' && i + 1 < name.size() && name[i + 1] == '`') {
+                ++i;
+            }
+        }
+        return unescaped;
     } else {
         KU_ASSERT(ctx.HexLetter() || ctx.UnescapedSymbolicName() || ctx.kU_NonReservedKeywords());
         return ctx.getText();

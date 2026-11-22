@@ -1,4 +1,5 @@
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
+#include "common/string_utils.h"
 
 #include "binder/ddl/bound_create_sequence_info.h"
 #include "common/exception/catalog.h"
@@ -155,11 +156,11 @@ std::unique_ptr<SequenceCatalogEntry> SequenceCatalogEntry::deserialize(
 }
 
 std::string SequenceCatalogEntry::toCypher(const ToCypherInfo& /* info */) const {
-    return stringFormat("DROP SEQUENCE IF EXISTS `{}`;\n"
-                        "CREATE SEQUENCE IF NOT EXISTS `{}` START {} INCREMENT {} MINVALUE {} "
+    return stringFormat("DROP SEQUENCE IF EXISTS {};\n"
+                        "CREATE SEQUENCE IF NOT EXISTS {} START {} INCREMENT {} MINVALUE {} "
                         "MAXVALUE {} {} CYCLE;\n"
                         "RETURN nextval('{}');",
-        getName(), getName(), sequenceData.currVal, sequenceData.increment, sequenceData.minValue,
+        common::StringUtils::quoteIdentifier(getName()), common::StringUtils::quoteIdentifier(getName()), sequenceData.currVal, sequenceData.increment, sequenceData.minValue,
         sequenceData.maxValue, sequenceData.cycle ? "" : "NO", getName());
 }
 
