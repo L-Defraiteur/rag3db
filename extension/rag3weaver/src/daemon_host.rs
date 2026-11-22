@@ -4158,6 +4158,10 @@ mod chat_closed_tasks;
 /// Witnesses: a request for code in a repository's chat opens the code task (22 Nov 2026).
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_open_code_task;
+
+/// The page follows a request for code to its task (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod chat_moves_to_task_tests;
 /// Le relais contextuel : cible effective, clic et reprise dans le navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_contextuel;
