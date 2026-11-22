@@ -47,12 +47,14 @@ fn a_folder_opens_from_the_ide_and_is_listed() {
         n.commande("Input.insertText", json!({ "text": chemin.to_string_lossy() }));
         // The previous result, left to React: the new one is waited for by its text.
         let avant = n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? ''");
+        let _ = avant;
         n.evaluer("document.querySelector('#ouvrir').requestSubmit()");
-        n.attendre(
-            &format!("(document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? '') !== '' && document.querySelector('#ouvrir .ouvrir-resultat').innerText !== {avant}"),
-            "the result said under the field",
-        );
-        n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat').innerText").as_str().unwrap_or_default().to_string()
+        // **Opening leads to the chat of the project** (Lucie, 22 November 2026: « ça me sert à quoi ? »): its welcome
+        // says what was opened.
+        n.attendre("location.pathname.endsWith('/chat') && (document.querySelector('.chat-accueil')?.innerText ?? '') !== ''", "the chat of the folder opened");
+        let dit = n.evaluer("document.querySelector('.chat-accueil').innerText").as_str().unwrap_or_default().to_string();
+        n.aller(&format!("{racine}/ide/"), "!!document.querySelector('#ouvrir input[name=chemin]')");
+        dit
     };
 
     let neuf = d.path().join("projets/mon-projet");
@@ -67,7 +69,7 @@ fn a_folder_opens_from_the_ide_and_is_listed() {
     // A folder with files that is not a git repository opens as it is since Lucie's word of 21 November 2026 (9 h 5x,
     // lot non-git-folder): no git init, no index. This witness expected the former refusal.
     let dit = ouvrir(&mut n, &plein);
-    assert!(dit.contains("Ouvert") && !dit.contains("pas un dépôt git"), "the page does not say the folder is opened: {dit}");
+    assert!(dit.contains("dossier ouvert") && !dit.contains("pas un dépôt git"), "the page does not say the folder is opened: {dit}");
     assert!(!plein.join(".git").exists(), "a folder with files got git init");
     n.attendre("[...document.querySelectorAll('#dossiers-ouverts .dossier')].some(e => e.innerText.includes('plein'))", "the folder with files among the open folders");
 
@@ -104,12 +106,12 @@ fn the_opening_says_git_only_for_a_git_repository() {
         browser.evaluer("document.querySelector('#ouvrir input[name=chemin]').value = ''");
         browser.evaluer("document.querySelector('#ouvrir input[name=chemin]').focus()");
         browser.commande("Input.insertText", json!({ "text": path.to_string_lossy() }));
+        let _ = before;
         browser.evaluer("document.querySelector('#ouvrir').requestSubmit()");
-        browser.attendre(
-            &format!("(document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? '') !== '' && document.querySelector('#ouvrir .ouvrir-resultat').innerText !== {before}"),
-            "the result said under the field",
-        );
-        browser.evaluer("document.querySelector('#ouvrir .ouvrir-resultat').innerText").as_str().unwrap_or_default().to_string()
+        browser.attendre("location.pathname.endsWith('/chat') && (document.querySelector('.chat-accueil')?.innerText ?? '') !== ''", "the chat of the folder opened");
+        let said = browser.evaluer("document.querySelector('.chat-accueil').innerText").as_str().unwrap_or_default().to_string();
+        browser.aller(&format!("{base}/ide/"), "!!document.querySelector('#ouvrir input[name=chemin]')");
+        said
     };
 
     let plain = dir.path().join("photos");
