@@ -1411,10 +1411,9 @@ impl<'a> OutilsDuChat<'a> {
         self
     }
 
-    /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
-    #[cfg(feature = "code")]
     /// **A request for code opens the task** (the dry run of 22 Nov 2026): `open_code_task` is offered, and `ouvrir`
     /// opens it.
+    #[cfg(feature = "code")]
     pub(crate) fn avec_l_ouverture_de_tache(mut self, ouvrir: impl Fn(Option<&str>) -> Result<Value, String> + Send + Sync + 'a) -> Self {
         self.ouvrir_la_tache = Some(Box::new(ouvrir));
         self
@@ -1431,6 +1430,8 @@ impl<'a> OutilsDuChat<'a> {
         Some(crate::llm::Turn::tool_result(&call.id, &call.name, rendu.to_string()))
     }
 
+    /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
+    #[cfg(feature = "code")]
     pub(crate) fn avec_les_cartes_rattachees(mut self, rattacher: impl Fn(&str) + Send + Sync + 'a) -> Self {
         self.rattacher = Some(Box::new(rattacher));
         self
