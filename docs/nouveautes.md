@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Le chat ne lie que les fichiers qui existent.** Un chemin cité dans le chat n'est un lien que
+  si l'hôte l'a trouvé dans les fichiers du dépôt (`POST /ide/chemins`) ; un autre reste du texte. Un fichier introuvable
+  se dit « Ce fichier n'existe pas dans … », plus « ReadFileNode ».
 - 22 novembre 2026 — **Les tâches orphelines quittent le chat.** Le chat d'un dépôt ne montre plus les anciennes
   sessions dont le manifeste a disparu ; « Avancé » le dit en une ligne, « N tâches orphelines — voir ».
 - 22 novembre 2026 — **Ouvrir un dossier mène au chat de ce projet.** Après « Ouvrir », l'IDE va droit au chat du
