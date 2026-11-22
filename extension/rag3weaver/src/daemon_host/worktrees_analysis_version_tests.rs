@@ -41,15 +41,18 @@ fn a_base_analysed_under_another_version_repasses_on_open() {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     };
+    // The first index made under an analysis of before, as a base indexed under older rules: the rows carry that
+    // version, and their content hash is the one of that version (a row only edited would not be rewritten by the
+    // writer, which compares the hash).
+    host.with_backend(&h, |b| b.catalog.lock().unwrap().version_de_l_analyse = "an-analysis-of-before".to_string()).unwrap();
     host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
     wait_for_no_indexing("the first index");
-    assert_eq!(files_of_another_analysis(), 0, "the first index writes the current analysis");
-
-    // The rows of an analysis of before, as a base indexed under older rules.
-    host.with_backend(&h, |b| b.catalog.lock().unwrap().execute_raw("MATCH (f:File) SET f.analyse = 'an-analysis-of-before'").map(|_| ()))
-        .unwrap()
+    let avant = host
+        .with_backend(&h, |b| {
+            let cat = b.catalog.lock().unwrap();
+            cat.execute_raw("MATCH (f:File) WHERE f.analyse = 'an-analysis-of-before' RETURN count(f)").unwrap().rows[0][0].as_i64().unwrap()
+        })
         .unwrap();
-    let avant = files_of_another_analysis();
     assert!(avant > 0, "the decor has rows of another analysis");
     let s = host.open_session("the witness", None, Vec::new(), None);
     assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
