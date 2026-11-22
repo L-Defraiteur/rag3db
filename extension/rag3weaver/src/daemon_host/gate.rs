@@ -45,6 +45,11 @@ pub struct GateRules {
     pub judge: Option<Value>,
     /// The survivor's option (Lucie, 21 Nov 20 h 35): it would judge a broad root. Not in v1: the card decides, and says so.
     pub dangerous_standalone_survivor: bool,
+    /// **The judge in the auto mode** (Lucie, 22 Nov 2026, 23 h 25: « au moins l'agent de code va au bout de son
+    /// truc »): off by default, every command the sandbox runs passes in the auto mode, the sandbox being the night's
+    /// only safety (bounded writes, no sudo, the protected folders) with the hard refusals (a secret shown, a git
+    /// identity). On, the classes and the judge decide, as in the v1.
+    pub judge_in_auto: bool,
 }
 
 impl GateRules {
@@ -63,6 +68,7 @@ impl GateRules {
             judged,
             judge: v.get("judge").filter(|j| j.is_object()).cloned(),
             dangerous_standalone_survivor: v["dangerous_standalone_survivor"].as_bool().unwrap_or(false),
+            judge_in_auto: v["judge_in_auto"].as_bool().unwrap_or(false),
         }
     }
 }
@@ -328,7 +334,7 @@ impl DaemonHost {
         let juge = self.gate_judge.clone().or_else(|| rules.judge.as_ref().and_then(served_judge));
         let files = files.clone();
         Some(Arc::new(move |ligne: &str| -> GateOutcome {
-            let class = rule_class(ligne, &racine);
+            let class = if rules.judge_in_auto { rule_class(ligne, &racine) } else { "auto".to_string() };
             let accorder = |by: &str| -> GateOutcome {
                 let ctx = crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine: Some(racine.clone()) };
                 match garde.accorder_ligne(ligne, &ctx) {
@@ -336,6 +342,10 @@ impl DaemonHost {
                     Err(_) => GateOutcome::Card { class: class.clone() },
                 }
             };
+            // The auto mode trusts the sandbox, unless rules.json turns the judge on.
+            if !rules.judge_in_auto {
+                return accorder("auto");
+            }
             if !rules.judged.iter().any(|c| *c == class) {
                 return accorder("rules");
             }
