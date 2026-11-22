@@ -1,6 +1,6 @@
 # Le témoin de la carte de progression tombe sous la charge d'une lib entière
 
-- **État** : ouvert (22 novembre 2026), arbre principal ; lot `progress-card-fiable`.
+- **État** : corrigé (22 novembre 2026), arbre principal, lot `progress-card-fiable` : l'événement attendu garde sa preuve, les bornes de temps (120 s, 300 s) ne servent qu'à ne pas pendre.
 - **Famille** : produit
 - **Gravité** : un faux rouge au pousseur. Le lot `recherche-search-words-built` est tombé à 07 h 01 sur ce seul test,
   sans y toucher, et chaque lot Rust de la nuit peut retomber dessus.
