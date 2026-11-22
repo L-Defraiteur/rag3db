@@ -1,3 +1,7 @@
 # Known red cases of the e2e suites (19 Nov. 2026, form of c7): <suite>\t<case>\t<path of its open ticket>.
 # The pinned pass plays the whole suite; a listed red case is said « rouge connu », a listed case that passes « à lever ».
 # A line whose ticket is missing, closed or in closed/ refuses the pass. The lot that fixes a case removes its line.
+e2e_lectures	un_outil_de_lecture_ne_prend_jamais_le_mutex_du_catalogue	docs/tickets/2026-11-22-e2e-lectures-rougit-sur-master-quatre-cas.md
+e2e_lectures	le_creux_ne_s_embarque_qu_au_surlignage	docs/tickets/2026-11-22-e2e-lectures-rougit-sur-master-quatre-cas.md
+e2e_lectures	la_requete_entiere_passe_devant_les_mots	docs/tickets/2026-11-22-e2e-lectures-rougit-sur-master-quatre-cas.md
+e2e_lectures	le_creux_se_surligne_par_le_chemin_de_l_hote	docs/tickets/2026-11-22-e2e-lectures-rougit-sur-master-quatre-cas.md
