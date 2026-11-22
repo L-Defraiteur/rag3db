@@ -2095,6 +2095,23 @@ pub fn whole_query_distance(query: &str) -> u8 {
     if !several_words && query.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 }
 }
 
+/// **A name typed with a typo is read from this many characters** (22 November 2026): below, one edit makes another
+/// short name (« con », « cos », « col »), not a typo. The bench's typos are 10 to 14 characters long.
+pub const MIN_TYPO_NAME_CHARS: usize = 6;
+
+/// **`name` is `query` typed with a typo**: a single token of at least [`MIN_TYPO_NAME_CHARS`], searched within a typo
+/// by the whole query, and the name within that many edits — but not the same letters in another case, which is
+/// another name (`Beta` is not `beta`, c7's decision (B)).
+pub fn typo_of(name: &str, query: &str) -> bool {
+    let distance = whole_query_distance(query);
+    distance > 0
+        && !query.contains(char::is_whitespace)
+        && query.chars().count() >= MIN_TYPO_NAME_CHARS
+        && name != query
+        && name.to_lowercase() != query.to_lowercase()
+        && within_edits(name, query, distance as usize)
+}
+
 /// **`a` within `max` edits of `b`** (Levenshtein, by characters, case included): the rule of a name typed with a
 /// typo, the same as rag3db's `levenshtein(a, b) <= max`.
 pub fn within_edits(a: &str, b: &str, max: usize) -> bool {

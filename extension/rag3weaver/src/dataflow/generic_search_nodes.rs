@@ -2501,12 +2501,9 @@ impl Node for FuseResultsNode {
             let nom = |u: &UnifiedResult| u.data.as_ref().and_then(|d| d.get(champ)).and_then(|v| v.as_str()).map(str::to_string);
             // **Within a typo** (c7, 22 November 2026): when no result is named the query, a query of one token
             // brings first the names within as many edits as the whole query searches it (`whole_query_distance`).
-            let distance = crate::search::whole_query_distance(q);
             let aucun_exact = !fused.iter().any(|u| feuille(u) && nom(u).as_deref() == Some(q));
-            let a_une_faute = aucun_exact && distance > 0 && !q.contains(char::is_whitespace);
             let nomme = |u: &UnifiedResult| {
-                feuille(u)
-                    && nom(u).is_some_and(|n| n == q || (a_une_faute && crate::search::within_edits(&n, q, distance as usize)))
+                feuille(u) && nom(u).is_some_and(|n| n == q || (aucun_exact && crate::search::typo_of(&n, q)))
             };
             let (devant, reste): (Vec<UnifiedResult>, Vec<UnifiedResult>) = fused.into_iter().partition(nomme);
             fused = devant.into_iter().chain(reste).collect();
@@ -3128,7 +3125,7 @@ impl Node for ExactNameNode {
         let sait = ctx
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
             .is_some_and(|d| d.filter_within_edits("n", "p", 1).is_some());
-        if uuids.is_empty() && distance > 0 && !nom.contains(char::is_whitespace) && sait {
+        if uuids.is_empty() && distance > 0 && !nom.contains(char::is_whitespace) && nom.chars().count() >= crate::search::MIN_TYPO_NAME_CHARS && sait {
             uuids = admitted(
                 ctx,
                 FilterCondition::Field {
