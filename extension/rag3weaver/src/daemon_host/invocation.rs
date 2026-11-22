@@ -313,6 +313,11 @@ mod tests {
     }
 
     fn une_vue_ouverte(lot: &str) -> VueOuverte {
+        une_vue_ouverte_avec(lot, |_| ())
+    }
+
+    /// [`une_vue_ouverte`], `avant` given the host before the view opens (a witness's gate).
+    fn une_vue_ouverte_avec(lot: &str, avant: impl FnOnce(&crate::daemon_host::DaemonHost)) -> VueOuverte {
         let d = tempfile::tempdir().unwrap();
         let a = atelier(d.path());
         let depot = petit_depot(&d.path().join("B"));
@@ -327,6 +332,7 @@ mod tests {
         let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
         let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
         let s = r["session"].as_str().unwrap().to_string();
+        avant(&a.host);
         let r = a.host.open_view(Some(&s), &manifeste, lot, None);
         assert_eq!(r["ok"], json!(true), "{r}");
         assert!(a.host.attendre_l_ecriture_des_vues(std::time::Duration::from_secs(120)), "the view's layer is not written");

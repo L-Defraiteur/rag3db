@@ -47,3 +47,26 @@ fn a_view_at_rest_runs_no_signature() {
     let tours = v.a.host.view_follower_turns(&v.couche).unwrap() - avant;
     assert!(tours <= 1, "a view at rest ran {tours} signatures in 5 s");
 }
+
+/// **A write made the moment the view is said written is seen by the kernel's events** (c7, 22 November 2026: red at
+/// the pusher on a sound disk, lot secret-reads at 12 h 55). The view was said written before its kernel watch was
+/// posed: a write in that window made no event, and only the slow poll of 30 s caught it. The witness holds the
+/// follower right after the view is said written, writes, then lets it go: the rewrite must come from a kernel event.
+#[test]
+fn a_write_the_moment_the_view_is_written_is_seen_by_a_kernel_event() {
+    let mut porte = None;
+    let v = une_vue_ouverte_avec("guet", |h| porte = Some(h.retenir_le_guet_des_vues()));
+    let (evenements, releves) = v.a.host.view_follower_rewrites(&v.couche).expect("the view does not follow its worktree");
+    std::fs::write(v.chemin.join("src/lib.rs"), "pub fn un() -> u32 {\n    1\n}\n\npub fn ecrite_dans_la_fenetre() -> u32 {\n    3\n}\n").unwrap();
+    porte.expect("the gate").relacher();
+    let debut = std::time::Instant::now();
+    let reecrite = loop {
+        let (e, r) = v.a.host.view_follower_rewrites(&v.couche).unwrap();
+        if e + r > evenements + releves {
+            break (e - evenements, r - releves);
+        }
+        assert!(debut.elapsed() < std::time::Duration::from_secs(40), "the view's layer is not rewritten within 40 s of a write in its worktree");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(reecrite, (1, 0), "a write made the moment the view is said written is not seen by a kernel event (by event, by poll): {reecrite:?}");
+}
