@@ -266,15 +266,17 @@ fn une_tache_ouverte_survit_a_l_arret_de_l_hote_et_se_fusionne() {
     let racine_des_taches = d.path().join("taches");
     let lancer = || {
         let r = racine_des_taches.clone();
-        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(r).avec_les_taches_relues());
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(r).avec_les_taches_relues().with_user_token("u".to_string()));
         (format!("http://{adresse}"), fil)
     };
     let appeler = |racine: &str, route: &str, corps: Option<Value>| -> Value {
         let a = crate::daemon::agent_de_temoin();
         let mut r = match corps {
+            // The person, with her title: applying and merging are hers (human-yes-only, 22 Nov 2026).
             Some(c) => a
                 .post(format!("{racine}{route}"))
                 .header("Cookie", "rag3weaver_ide=j")
+                .header("X-Rag3weaver-User", "u")
                 .header("content-type", "application/json")
                 .send(c.to_string())
                 .unwrap(),

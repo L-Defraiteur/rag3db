@@ -858,7 +858,7 @@ fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
         assert!(!vus[0].contains("en attente") && !vus[0].contains("refusée"), "ls passe par la liste sûre : {}", vus[0]);
         assert!(vus[1].contains(crate::dataflow::run_nodes::EN_ATTENTE) && vus[1].contains("dans la boîte du superviseur"), "{}", vus[1]);
     }
-    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": question["id"], "approved": true })).expect("le oui");
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": question["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("le oui");
     let boite = attendre("la commande jouée après l'accord", &|b| b.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true));
     assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("commande accordée pour la tâche : echo accorde-moi")), "{boite:#?}");
     let vus = vus.lock().unwrap();
@@ -1662,7 +1662,7 @@ fn a_request_that_expects_approval_does_not_end_without_it() {
     assert!(!boite.iter().any(|l| l["kind"] == "ended"), "sans accord, pas de fin : {boite:#?}");
     assert!(dit_par_l_hote(&boite, "fait sans le livrable demandé (l'accord du superviseur) : j'attends le superviseur"), "{boite:#?}");
     let report = boite.iter().find(|l| l["from"] == "teammate" && l["kind"] == "report").expect("le report").clone();
-    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "d'accord", &json!({ "reply_to": report["id"], "approved": true })).expect("l'accord");
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "d'accord", &json!({ "reply_to": report["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("l'accord");
     let boite = attendre_dans(&files, "la fin après l'accord", &|b| b.iter().any(|l| l["kind"] == "ended"));
     assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
 }

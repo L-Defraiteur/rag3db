@@ -2,7 +2,7 @@
 //! the card all the same; the answer's branch never read `by.kind`). A yes signed by an agent, or by no one, is kept in the
 //! mailbox but grants nothing, and says why; the same card, answered by the human, runs. A module of its own.
 
-use super::mode_auto_v1::{ended, v1_with};
+use super::mode_auto_v1::v1_with;
 use super::*;
 use std::time::{Duration, Instant};
 
@@ -12,7 +12,7 @@ fn a_yes_that_is_not_human_grants_nothing_and_says_why() {
     let v = v1_with(|_| (vec!["rm vieux.txt".to_string()], "Lis le README.".to_string()), &["supprime vieux.txt"]);
     let b = v.wait("the card", &|b| b.iter().any(|l| l["kind"] == "approval"));
     let card = b.iter().find(|l| l["kind"] == "approval").unwrap().clone();
-    v.wait("the step ends", &ended);
+    v.wait("the step waits for the supervisor", &|b| b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("en attente du superviseur"))));
     v.host
         .post_to_teammate(&v.id, "doc", "agent", "answer", None, "oui", &json!({ "reply_to": card["id"], "approved": true, "by": { "kind": "agent", "client": "mcp" } }))
         .unwrap();

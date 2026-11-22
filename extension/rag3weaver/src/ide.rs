@@ -576,10 +576,17 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         let jeton = param("jeton").unwrap_or_default();
         let r = if juste(&jeton) {
             let cookie = format!("{COOKIE}={jeton}; HttpOnly; SameSite=Lax; Path={PREFIX}");
-            tiny_http::Response::from_string(String::new())
+            let r = tiny_http::Response::from_string(String::new())
                 .with_status_code(303)
                 .with_header(tiny_http::Header::from_bytes(&b"Location"[..], &b"/ide/"[..]).expect("en-tête littéral"))
-                .with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], cookie.as_bytes()).expect("cookie ASCII"))
+                .with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], cookie.as_bytes()).expect("cookie ASCII"));
+            // An entry with the user's own token is hers: her title too (in service it differs from the host's token).
+            if host.is_user_token(Some(&jeton)) {
+                let humain = format!("{COOKIE_USER}={jeton}; HttpOnly; SameSite=Strict; Path={PREFIX}");
+                r.with_header(tiny_http::Header::from_bytes(&b"Set-Cookie"[..], humain.as_bytes()).expect("cookie ASCII"))
+            } else {
+                r
+            }
         } else {
             json_(403, &json!({ "ok": false, crate::daemon_host::BAD_TOKEN: true, "error": "jeton absent ou faux : l'URL d'entrée est donnée par `rag3weaver-backend ide`" }))
         };
