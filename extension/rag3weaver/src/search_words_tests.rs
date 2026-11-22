@@ -21,11 +21,12 @@ fn no_query_goes_to_a_parser_of_lucivy() {
 
 #[test]
 fn every_character_of_the_query_is_text() {
-    // `--daemon` and `-test` are searched as they are, a quote is a character.
+    // `--daemon` and `-test` are searched as they are, a quote is a character: the whole text goes to lucivy as a
+    // value, split on spaces only.
     let v = built("adresse --daemon", &["content"]).to_string();
-    assert!(v.contains("\"--daemon\"") && v.contains("\"adresse\""), "{v}");
+    assert!(v.contains("\"adresse --daemon\""), "{v}");
     let v = built("daemon -test", &["content"]).to_string();
-    assert!(v.contains("\"-test\""), "« -test » is no longer a negation, it is searched: {v}");
+    assert!(v.contains("\"daemon -test\""), "« -test » is no longer a negation, it is searched: {v}");
     assert!(!v.contains("must_not"), "{v}");
     let v = built("say \"hi\"", &["content"]);
     assert!(v.to_string().contains(r#"\"hi\""#), "a quote is a character of the searched word: {v}");
