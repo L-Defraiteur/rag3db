@@ -15,6 +15,7 @@ mod background;
 mod card;
 mod mode_auto_v1;
 mod judge_all;
+mod prompt_roots;
 mod attente_commande;
 mod browser_read;
 mod nom_d_enfant;
