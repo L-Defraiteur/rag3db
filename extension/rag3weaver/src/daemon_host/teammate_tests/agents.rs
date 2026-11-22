@@ -178,3 +178,41 @@ fn the_agents_give_their_last_message_by_contact_and_their_plan_step() {
     assert!(tb.get("plan").is_none(), "an agent without a plan gives a plan: {tb}");
     assert!(tout["fields"]["plan"].as_str().is_some() && tout["fields"]["contacts"].as_str().is_some_and(|t| t.contains("last_message")), "{}", tout["fields"]);
 }
+
+/// **A repository's chat is an agent of the bar, and each node says where a click opens it** (recherche for Lucie,
+/// 22 November 2026: « le chat d'un dépôt est un agent, c'est là qu'elle parle d'abord »): the answer gives `chats`, a
+/// node per repository's chat (not a task's), `{id: "chat:<backend>", name, state, last_activity, unread, link}`; a
+/// task's `link` is its page, a chat's is its chat, and a Claude Code root's is null.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_repositorys_chat_is_a_node_and_each_node_gives_its_link() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model here".into()) });
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "archi-a").expect("la tâche s'ouvre");
+    host.donner_les_vues(&h.id, "archi-a", "archi", vec!["backend".into()], Some("backend".into())).unwrap();
+    let t = host.tache(&h.id, "archi-a").unwrap();
+    let session = |texte: &str| crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant(texte)] };
+    std::fs::create_dir_all(d.path().join("chats")).unwrap();
+    for (id, m, texte) in [(&h.id, &manifeste, "Le dépôt répond."), (&t.id, &t.manifest, "La tâche répond.")] {
+        std::fs::write(d.path().join("chats").join(format!("{id}.json")), json!({ "manifest": m, "session": session(texte), "last_call": null }).to_string()).unwrap();
+    }
+    host.reread_chats();
+    let tout = host.agents();
+    let chats = tout["chats"].as_array().unwrap_or_else(|| panic!("no chats in the answer: {tout:#}"));
+    assert_eq!(chats.len(), 1, "a node per repository's chat, not a task's: {chats:?}");
+    let c = &chats[0];
+    assert_eq!(c["id"], json!(format!("chat:{}", h.id)), "{c}");
+    assert_eq!(c["link"], json!(format!("/ide/code/{}/chat", h.id)), "{c}");
+    assert!(c["name"].as_str().is_some_and(|n| !n.is_empty()), "{c}");
+    assert_eq!(c["state"], json!("waiting"), "{c}");
+    assert!(c["last_activity"]["phrase"].as_str().is_some_and(|p| p.contains("Le dépôt répond.")), "the chat's last turn is not its phrase: {c}");
+    assert!(c["unread"].as_u64().is_some(), "{c}");
+    let racine = &tout["roots"][0];
+    assert_eq!(racine["link"], Value::Null, "a Claude Code root has no chat in the IDE: {racine}");
+    assert_eq!(racine["tasks"][0]["link"], json!(format!("/ide/code/{}/taches/archi-a", h.id)), "{}", racine["tasks"][0]);
+    assert!(tout["fields"]["link"].as_str().is_some() && tout["fields"]["chats"].as_str().is_some(), "{}", tout["fields"]);
+}
