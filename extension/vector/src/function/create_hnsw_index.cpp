@@ -1,4 +1,5 @@
 #include <algorithm>
+#include "common/string_utils.h"
 #include <thread>
 
 #include "catalog/catalog_entry/function_catalog_entry.h"
@@ -475,10 +476,16 @@ static std::string rewriteCreateHNSWQuery(main::ClientContext& context,
     auto indexName = hnswBindData->indexName;
     auto tableName = hnswBindData->tableEntry->getName();
     auto tableID = hnswBindData->tableEntry->getTableID();
+    // The names between backticks, theirs doubled: a space, a hyphen or a backtick in the table or
+    // the index name broke these statements (ticket 2026-11-22-des-noms-ecrits-dans-du-cypher-genere-
+    // sans-echappement).
+    const auto quotedTable = common::StringUtils::quoteIdentifier(tableName);
     query += stringFormat("CREATE REL TABLE {} (FROM {} TO {}) WITH (storage_direction='fwd');",
-        HNSWIndexUtils::getUpperGraphTableName(tableID, indexName), tableName, tableName);
+        common::StringUtils::quoteIdentifier(HNSWIndexUtils::getUpperGraphTableName(tableID, indexName)), quotedTable,
+        quotedTable);
     query += stringFormat("CREATE REL TABLE {} (FROM {} TO {}) WITH (storage_direction='fwd');",
-        HNSWIndexUtils::getLowerGraphTableName(tableID, indexName), tableName, tableName);
+        common::StringUtils::quoteIdentifier(HNSWIndexUtils::getLowerGraphTableName(tableID, indexName)), quotedTable,
+        quotedTable);
     std::string params;
     auto& config = hnswBindData->config;
     params += stringFormat("mu := {}, ", config.mu);
