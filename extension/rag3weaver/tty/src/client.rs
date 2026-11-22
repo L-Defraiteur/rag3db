@@ -45,6 +45,23 @@ pub fn post_typed(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Valu
     post_with(agent, ep, chemin, corps, ep.user_token.as_deref())
 }
 
+/// **Open a folder on the host** (`POST /dossiers/ouvrir`, as the IDE's « Ouvrir un dossier »): a host session first
+/// (`POST /session`), whose header the route asks for. Gives the host's answer.
+pub fn open_folder(agent: &ureq::Agent, ep: &Endpoint, path: &str) -> Result<Value, String> {
+    let s = poster_brut(agent, ep, "/session", &serde_json::json!({}))?;
+    let session = s["session"].as_str().ok_or_else(|| format!("l'hôte n'a pas ouvert de session : {s}"))?.to_string();
+    let mut r = agent
+        .post(format!("{}/dossiers/ouvrir", ep.base()))
+        .header("Authorization", &format!("Bearer {}", ep.token))
+        .header("X-Rag3weaver-Session", &session)
+        .header("content-type", "application/json")
+        .send(serde_json::json!({ "path": path }).to_string())
+        .map_err(|e| format!("l'hôte {} ne répond pas : {e}", ep.address))?;
+    let statut = r.status().as_u16();
+    let texte = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+    rendu(statut, &texte, "POST /dossiers/ouvrir")
+}
+
 /// `GET <chemin et requête>`.
 pub fn lire(agent: &ureq::Agent, ep: &Endpoint, chemin: &str) -> Result<Value, String> {
     let mut r = agent
