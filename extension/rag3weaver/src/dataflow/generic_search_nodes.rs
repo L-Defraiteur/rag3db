@@ -635,6 +635,27 @@ impl Node for SearchSourceNode {
             }
         }
 
+        // **The words to exclude, to require, and the phrases** (22 November 2026): composed in `Must` like the
+        // scope, on the target's text, so every signal sees them before its limit.
+        if let Some(text) = {
+            let fields = champs_de(&self.target_name);
+            if options.text.is_empty() {
+                None
+            } else if fields.as_ref().is_some_and(|s| s.contains("content")) {
+                options.text.to_filter("content")
+            } else {
+                return Err(format!(
+                    "SearchSourceNode: exclude, must et phrase cherchent dans le champ « content », que {} n'a pas",
+                    self.target_name
+                ));
+            }
+        } {
+            options.filter_condition = Some(match options.filter_condition.take() {
+                Some(appelant) => crate::filter::FilterCondition::Must(vec![appelant, text]),
+                None => text,
+            });
+        }
+
         // **La consigne de cohérence, enfin appliquée sur ce chemin.** Elle
         // vivait dans le corps de `Catalog::search`, que ce graphe
         // n'empruntait pas : l'outil `search` des agents traversait zéro des trois

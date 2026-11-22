@@ -664,6 +664,12 @@ impl NodeFactory for EmbedNodeFactory {
 // ─── Generic search node factories ──────────────────────────────────────────
 
 /// Factory for SearchSourceNode (config: target_name, query, options).
+/// The help of `exclude`, `must`, `phrase` and `exact`, the same in the three search tools.
+pub const EXCLUDE_HELP: &str = "Écarter les résultats dont le texte contient l'un de ces mots (liste, [\"test\"]) ; sans tenir compte de la casse, sauf exact. Avant la limite, pour chaque signal.";
+pub const MUST_HELP: &str = "Ne garder que les résultats dont le texte contient chacun de ces mots (liste) ; sans tenir compte de la casse, sauf exact.";
+pub const PHRASE_HELP: &str = "Ne garder que les résultats dont le texte contient chacune de ces phrases, telles quelles (liste) ; sans tenir compte de la casse, sauf exact.";
+pub const EXACT_HELP: &str = "true : exclude, must et phrase tiennent compte de la casse.";
+
 pub struct SearchSourceNodeFactory;
 
 impl NodeFactory for SearchSourceNodeFactory {
@@ -749,6 +755,18 @@ impl NodeFactory for SearchSourceNodeFactory {
         // callees.
         let texte = |k: &str| config.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
         options.portee = crate::work_domain::QueryScope::parse(&texte("scope"), &texte("language"));
+        // The words to exclude, to require, and the phrases (22 November 2026).
+        let words = |k: &str| crate::work_domain::TextConstraints::words(k, config.get(k)).map_err(|e| format!("SearchSourceNode: {e}"));
+        options.text = crate::work_domain::TextConstraints {
+            exclude: words("exclude")?,
+            must: words("must")?,
+            phrase: words("phrase")?,
+            exact: match config.get("exact") {
+                Some(serde_json::Value::Bool(b)) => *b,
+                Some(serde_json::Value::String(s)) => s == "true",
+                _ => false,
+            },
+        };
         let mut node = SearchSourceNode::new(name, target_name, query, options);
         if let Some(m) = config.get("mode").and_then(|v| v.as_str()).filter(|m| !m.is_empty()) {
             node = node.with_mode(
@@ -824,6 +842,42 @@ impl NodeFactory for SearchSourceNodeFactory {
                     required: false,
                     default: Some(serde_json::json!("")),
                     description: crate::dataflow::usage_nodes::LANGUAGE_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "exclude".into(),
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: Some(serde_json::json!([])),
+                    description: EXCLUDE_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "must".into(),
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: Some(serde_json::json!([])),
+                    description: MUST_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "phrase".into(),
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: Some(serde_json::json!([])),
+                    description: PHRASE_HELP.into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "exact".into(),
+                    param_type: ConfigParamType::Bool,
+                    required: false,
+                    default: Some(serde_json::json!(false)),
+                    description: EXACT_HELP.into(),
                     choices: None,
                     json_schema: None,
                 },

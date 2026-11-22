@@ -423,6 +423,96 @@ impl QueryScope {
     }
 }
 
+/// **Words to exclude, to require, and phrases** (`exclude`, `must`, `phrase`, `exact` of `search_code`; Lucie, 21
+/// November 2026: « tout doit être un paramètre optionnel ; les agents ont besoin de contrats clairs »). A filter on
+/// the text of each result, composed in `Must` with the caller's filter and the scope: applied before the limit, for
+/// every signal. Without the case unless `exact`. Empty: nothing.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TextConstraints {
+    pub exclude: Vec<String>,
+    pub must: Vec<String>,
+    pub phrase: Vec<String>,
+    pub exact: bool,
+}
+
+impl TextConstraints {
+    /// A list of words as a tool receives it: a JSON list of strings, a JSON list written as a string, or one word.
+    pub fn words(name: &str, value: Option<&serde_json::Value>) -> Result<Vec<String>, String> {
+        let list = match value {
+            None | Some(serde_json::Value::Null) => return Ok(Vec::new()),
+            Some(serde_json::Value::String(s)) if s.trim().is_empty() => return Ok(Vec::new()),
+            Some(serde_json::Value::String(s)) => match serde_json::from_str::<serde_json::Value>(s) {
+                Ok(v @ serde_json::Value::Array(_)) => v,
+                _ => serde_json::Value::Array(vec![serde_json::Value::String(s.clone())]),
+            },
+            Some(v) => v.clone(),
+        };
+        let serde_json::Value::Array(items) = list else {
+            return Err(format!("{name} : une liste de mots attendue, par exemple [\"test\"]"));
+        };
+        items
+            .into_iter()
+            .map(|v| v.as_str().map(str::to_string).ok_or_else(|| format!("{name} : une liste de mots attendue, reçu {v}")))
+            .filter(|w| !matches!(w, Ok(w) if w.is_empty()))
+            .collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exclude.is_empty() && self.must.is_empty() && self.phrase.is_empty()
+    }
+
+    /// The condition on `text_field` (`None` if empty): each word of `must` and each phrase contained, no word of
+    /// `exclude` contained.
+    pub fn to_filter(&self, text_field: &str) -> Option<FilterCondition> {
+        if self.is_empty() {
+            return None;
+        }
+        let has = |w: &String| FilterCondition::Field {
+            key: text_field.to_string(),
+            value: FilterValue::Ops(vec![if self.exact { FilterOp::Contains(w.clone()) } else { FilterOp::ContainsFold(w.clone()) }]),
+        };
+        let mut all: Vec<FilterCondition> = self.must.iter().chain(&self.phrase).map(has).collect();
+        if !self.exclude.is_empty() {
+            all.push(FilterCondition::MustNot(self.exclude.iter().map(has).collect()));
+        }
+        Some(FilterCondition::Must(all))
+    }
+
+    /// The same rule on a text in memory (the scan of the files).
+    pub fn admits(&self, text: &str) -> bool {
+        let folded = (!self.exact).then(|| text.to_lowercase());
+        let has = |w: &String| match &folded {
+            Some(t) => t.contains(&w.to_lowercase()),
+            None => text.contains(w.as_str()),
+        };
+        self.must.iter().chain(&self.phrase).all(has) && !self.exclude.iter().any(has)
+    }
+
+    /// **The line of what was searched**: `cherché : « alpha » ; sans « test » ; …` (`None` without constraint).
+    pub fn describe(&self, query: &str) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        let quoted = |ws: &[String]| ws.iter().map(|w| format!("« {w} »")).collect::<Vec<_>>().join(", ");
+        let mut parts = vec![format!("cherché : « {query} »")];
+        if !self.must.is_empty() {
+            parts.push(format!("avec {}", quoted(&self.must)));
+        }
+        if !self.phrase.is_empty() {
+            parts.push(format!("{} {}", if self.phrase.len() > 1 { "les phrases" } else { "la phrase" }, quoted(&self.phrase)));
+        }
+        if !self.exclude.is_empty() {
+            parts.push(format!("sans {}", quoted(&self.exclude)));
+        }
+        parts.push(if self.exact { "casse exacte".to_string() } else { "sans tenir compte de la casse".to_string() });
+        Some(parts.join(" ; "))
+    }
+}
+
+#[cfg(test)]
+#[path = "work_domain_text_tests.rs"]
+mod text_tests;
+
 impl QueryScope {
     /// La condition de recherche de la portée (`None` si elle est vide) :
     /// les langages, et l'un des préfixes sur `path_field` — la même

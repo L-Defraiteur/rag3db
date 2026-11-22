@@ -16,7 +16,8 @@
 -#}
 {%- if count == 0 -%}
 **No results.**
-{% if status %}_{{ status }}_
+{% if searched %}_{{ searched }}_
+{% endif %}{% if status %}_{{ status }}_
 {% endif %}{%- if warnings %}
 {% for w in warnings %}
 ⚠️ {{ w }}
@@ -26,7 +27,8 @@ _The engine did not search what you may think it did. Rephrase, or set an explic
 {% endif -%}
 {%- else -%}
 {%- if query %}# Search: "{{ query }}"{% if target %} — `{{ target }}`{% endif %}
-{% if status %}_{{ status }}_
+{% if searched %}_{{ searched }}_
+{% endif %}{% if status %}_{{ status }}_
 {% endif %}
 {% endif -%}
 **Results:** {{ count }}

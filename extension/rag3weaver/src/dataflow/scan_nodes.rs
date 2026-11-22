@@ -168,6 +168,9 @@ impl Node for ScanFilesNode {
                 continue;
             }
             scanned += 1;
+            if !qp.options.text.is_empty() && !qp.options.text.admits(&content) {
+                continue;
+            }
             if let Some(hit) = scan_file(path, &content, &words) {
                 hits.push(hit);
             }
