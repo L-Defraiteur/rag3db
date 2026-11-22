@@ -179,10 +179,13 @@ fn dire_la_fin_de(poignee: &str, f: &Fin, fin_du_run: bool) -> String {
         (None, Some(s), _) => format!("tuée par le signal {s}"),
         (None, None, _) => "fin inconnue".to_string(),
     };
-    let mut t = format!(
-        "**`#{poignee}` a fini** : {comment} · {:.1?} · {} octets en sortie, {} en erreur.\n",
-        f.duree, f.octets_stdout, f.octets_stderr
-    );
+    let secs = f.duree.as_secs();
+    let mut t = if f.delai_atteint {
+        let apres = if secs < 120 { format!("{secs} s") } else { format!("{} min", secs / 60) };
+        format!("**`#{poignee}` arrêtée après {apres} (délai atteint)** · {} octets en sortie, {} en erreur.\n", f.octets_stdout, f.octets_stderr)
+    } else {
+        format!("**`#{poignee}` a fini** : {comment} · {:.1?} · {} octets en sortie, {} en erreur.\n", f.duree, f.octets_stdout, f.octets_stderr)
+    };
     if !f.fin_stdout.trim().is_empty() {
         t.push_str(&format!("\nFin de la sortie :\n```\n{}\n```\n", f.fin_stdout.trim_end()));
     }

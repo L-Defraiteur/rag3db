@@ -528,6 +528,8 @@ pub struct Step {
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
     fetch: crate::backend::FetchPolicy,
+    /// The bounds of the task's background commands (`teammate.background`).
+    background_policy: crate::backend::BackgroundPolicy,
     /// The teammate's search by Gemini's grounding (`teammate.web_search`).
     web_search: crate::backend::WebSearchPolicy,
     /// Les plans clos pendant ce pas (à ranger en L1).
@@ -699,6 +701,7 @@ impl Step {
             gate: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
+            background_policy: crate::backend::BackgroundPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
         }
     }
@@ -744,6 +747,7 @@ impl Step {
         self.cut_relaunch = (policy.cut_relaunch_text.clone(), policy.cut_relaunches_per_step.min(10));
         self.fetch = policy.fetch.clone();
         self.web_search = policy.web_search.clone();
+        self.background_policy = policy.background.clone();
         self
     }
 
@@ -1222,17 +1226,37 @@ impl StepTools<'_> {
     /// **A background command belongs to the task, not to the step** (Lucie, 21 November 2026): the backend's tools
     /// reach the graph through `Backend::call`, which sees no invocation of the loop; for a background `run_command`,
     /// the task's (its scope, its bus and mailbox, whose ends wake the teammate) is set for the call's thread.
-    fn in_task(&self, call: &ToolCall, handle: Option<&str>, f: impl FnOnce() -> Turn) -> Turn {
-        let task_inv = match &self.step.background {
-            Some(bg) if call.name == "run_command" && serde_json::from_str::<Value>(&call.arguments).is_ok_and(|a| a["background"] == true) => Some(crate::backend::TaskInvocation {
-                handle: handle.map_or_else(|| format!("#run_command-{}", self.step.number), str::to_string),
-                bus: bg.bus.clone(),
-                inbox: bg.inbox.clone(),
-                scope: bg.scope.clone(),
-            }),
-            _ => None,
+    ///
+    /// **Its bounds** (Lucie, 22 November 2026, `teammate.background`): at most `max` at once in the task; no
+    /// `timeout_s` is the default time (10 minutes); none above `max_timeout_s`; « never » (`timeout_s: 0`) is for a
+    /// service, not a command. A refusal is said before anything runs.
+    fn in_task(&self, call: &ToolCall, handle: Option<&str>, f: impl FnOnce(&ToolCall) -> Turn) -> Turn {
+        let mut args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+        let (Some(bg), true) = (&self.step.background, call.name == "run_command" && args["background"] == true) else {
+            return f(call);
         };
-        crate::backend::with_task_invocation(task_inv, f)
+        let policy = &self.step.background_policy;
+        let refuse = |why: String| Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": why }).to_string());
+        match args["timeout_s"].as_u64() {
+            Some(0) => return refuse("timeout_s: 0 (jamais) n'est permis qu'à un service, pas à une commande de fond : donne un délai, ou lance un service (start_service)".into()),
+            Some(t) if t > policy.max_timeout_s => {
+                return refuse(format!("timeout_s: {t} dépasse le plafond de {} s (teammate.background.max_timeout_s) : donne-en moins, ou lance un service", policy.max_timeout_s));
+            }
+            Some(_) => {}
+            None => args["timeout_s"] = json!(policy.default_timeout_s),
+        }
+        let running = crate::dataflow::background::registry().alive().iter().filter(|a| a.kind == crate::dataflow::background::Kind::Command && a.caller.as_deref() == Some(bg.inbox.as_str())).count();
+        if running >= policy.max {
+            return refuse(format!("{running} commande(s) de fond tournent déjà dans cette tâche, la borne est {} (teammate.background.max) : attends la fin d'une, elle te sera dite", policy.max));
+        }
+        let call = ToolCall { arguments: args.to_string(), ..call.clone() };
+        let task_inv = Some(crate::backend::TaskInvocation {
+            handle: handle.map_or_else(|| format!("#run_command-{}", self.step.number), str::to_string),
+            bus: bg.bus.clone(),
+            inbox: bg.inbox.clone(),
+            scope: bg.scope.clone(),
+        });
+        crate::backend::with_task_invocation(task_inv, || f(&call))
     }
 
     #[cfg(feature = "code")]
@@ -1281,13 +1305,13 @@ impl StepTools<'_> {
 
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, || self.inner.call(call)))))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, |c| self.inner.call(c)))))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, || self.inner.call_in(call, run)))))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, |c| self.inner.call_in(c, run)))))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, Some(&inv.handle), || self.inner.call_with(call, run, inv)))))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, Some(&inv.handle), |c| self.inner.call_with(c, run, inv)))))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
