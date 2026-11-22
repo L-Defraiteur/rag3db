@@ -1,6 +1,16 @@
 # Sous IGNORE_ERRORS, laquelle de deux lignes de même clé un COPY garde dépend des fils
 
-- **État** : ouvert — confort (session cœur C++ et orchestration, 10 octobre 2026)
+- **État** : fermé (22 novembre 2026, hotfixs), corrigé sur la branche `copy-first-line-wins` (3bc15502f2 avant
+  la repose) : la première ligne du fichier gagne. Au conflit de clé, sous le verrou de la partition de l'index,
+  `IndexBuilderGlobalQueues::maybeConsumeIndex` compare la position des deux lignes (fichier, bloc, ligne du bloc,
+  déjà portée sous `IGNORE_ERRORS`). Si le titulaire de la clé est plus tardif, il est écarté : sa ligne est
+  supprimée, sa propre ligne signalée, son entrée locale retirée, et l'entrée réessayée. Une clé tenue par une ligne
+  d'avant le COPY garde sa ligne, comme avant. La preuve : `CopyFirstLineWinsTest.TheFirstLineOfTheFileKeepsItsKey`
+  (30 COPY à 8 fils de 20 000 lignes, trois clés reprises en fin de fichier), **rouge sur master 3895334012 : 28
+  COPY sur 30 gardaient une ligne tardive**, **vert avec le correctif, 30 sur 30**. Le témoin du journal
+  (`ForcedTransactionJournalTest.OrdinaryWritesBeforeACopyThatSkipsRowsCommittedThenDead`) attend désormais la
+  première ligne. Le coût : la position de chaque ligne du COPY est gardée jusqu'à sa fin, sous `IGNORE_ERRORS`
+  seulement.
 - **Gravité** : réponse non déterministe (aucune perte : une seule des deux lignes reste, juste)
 - **Atteignable en service** : oui, par un `COPY … (IGNORE_ERRORS=true)` à plusieurs fils qui
   porte deux fois une même clé

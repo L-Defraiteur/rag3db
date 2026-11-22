@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un COPY qui ignore les erreurs garde la première ligne d'une clé en double.** Sous `IGNORE_ERRORS`, quand deux lignes d'un fichier portent la même clé, le COPY garde maintenant toujours la première du fichier et signale l'autre ; il gardait celle que le fil de lecture le plus rapide avait apportée.
 - 22 novembre 2026 — **Remplacer des vecteurs coûte dix fois moins.** Une ligne qui porte déjà un vecteur et en
   reçoit un neuf (un contenu changé, un modèle changé) ne passe plus par NULL une ligne à la fois : tout le paquet part
   en une instruction, comme les lignes nées sans vecteur. Le défaut du moteur qui l'imposait depuis le 3 octobre (un
