@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un secret n'est vu par personne.** Le résultat d'un outil passe par le masque des secrets
+  dès sa sortie, au point unique accordé avec archi (`MaskedTools`, l'enveloppe de la boîte d'outils du tour). Le
+  modèle, le travail du pas de l'équipier, la carte, le journal, le flux et l'IDE ne lisent donc qu'un
+  `[masked secret: <nom>]`. Rien d'un secret n'entre non plus dans une fiche, une Source ou un Apport, ni dans leurs
+  miroirs `.md` (`writes.mask_secrets`). Les motifs se déclarent au manifeste (`secrets.patterns`) ; sinon, c'est la
+  liste livrée (`templates/secrets/patterns.json`). L'identité déclarée de l'utilisatrice n'est pas un secret : elle
+  passe telle quelle. Une valeur sans forme reconnue attend le coffre d'archi (ticket ouvert).
+
 - 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
   le dossier `nodes/` d'un backend ouvert, l'appel suivant recharge le backend et sert la nouvelle version, sans
   redémarrer l'hôte. Un appel sans changement ne relit aucun fichier, et une édition cassée laisse servir la version
