@@ -602,6 +602,21 @@ impl DaemonHost {
     /// validé avant toute ouverture, puis gardé au registre (`Tache::nom_de_l_agent`), et le backend de la
     /// tâche le lit par ses surcharges. Sans nom, celui du backend.
     pub fn ouvrir_une_tache_nommee(&self, parent: &str, nom: &str, nom_de_l_agent: Option<&str>, persona: Option<&str>) -> Result<Tache, String> {
+        self.ouvrir_une_tache_depuis(parent, nom, nom_de_l_agent, persona, None, None)
+    }
+
+    /// [`DaemonHost::ouvrir_une_tache_nommee`], its branch starting from `depuis` (a commit; `None`: the repository's
+    /// `HEAD`) and its agent key given (`None`: declared or struck): an agent reopened or forked (22 November 2026)
+    /// takes back its head and its key, or the head of the task it copies.
+    pub fn ouvrir_une_tache_depuis(
+        &self,
+        parent: &str,
+        nom: &str,
+        nom_de_l_agent: Option<&str>,
+        persona: Option<&str>,
+        depuis: Option<&str>,
+        cle: Option<String>,
+    ) -> Result<Tache, String> {
         nom_valide(nom)?;
         let nom_de_l_agent = nom_de_l_agent.map(crate::backend::valider_le_nom_de_l_agent).transpose()?;
         let persona_de_l_agent = persona.map(crate::backend::valider_la_persona_de_l_agent).transpose()?.flatten();
@@ -701,7 +716,13 @@ impl DaemonHost {
                 return Err(format!("la branche {branche} existe déjà dans {} : une tâche de ce nom n'a pas été fermée", d.display()));
             }
         }
-        let depart = if sans_depot { String::new() } else { commit_de_depart(&depot)? };
+        let depart = match (sans_depot, depuis) {
+            (true, _) => String::new(),
+            (false, Some(c)) => git(&depot, &["rev-parse", "--verify", "-q", &format!("{c}^{{commit}}")])
+                .map(|o| o.trim().to_string())
+                .map_err(|e| format!("tâche « {nom} » : le commit de départ {c} n'est pas dans {} : {e}", depot.display()))?,
+            (false, None) => commit_de_depart(&depot)?,
+        };
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         let defaire = |etape: &str, e: String| -> String {
             if !sans_depot {
@@ -789,7 +810,7 @@ impl DaemonHost {
             modele: None,
             nom_de_l_agent,
             persona_de_l_agent,
-            agent_key: Some(agent_key_for(&manifest, nom)),
+            agent_key: Some(cle.unwrap_or_else(|| agent_key_for(&manifest, nom))),
             parent_session: None,
             vues: None,
             vue_active: None,
@@ -1147,10 +1168,76 @@ impl DaemonHost {
         Ok(json!({ "removed": h.id, "manifest": h.manifest, "closed_tasks": fermees }))
     }
 
-    /// **Reopen a closed agent** (`--pop-agent`, 22 November 2026): RED STUB.
-    #[allow(unused_variables)]
+    /// **Reopen a closed agent** (`--pop-agent`, c7 for Lucie, 22 November 2026): the latest closed task of `parent`
+    /// named `nom` (or whose archive ends with `nom`) becomes a new task, named `new_name` or its own name: its branch
+    /// starts at the closed head, it carries the same agent key, its root and its views, and takes back from the archive
+    /// its mailbox, its plans and its conversation. The archive stays; the closed record says it was reopened.
     pub fn reopen_agent(&self, parent: &str, nom: &str, new_name: Option<&str>) -> Result<Tache, String> {
-        Err("rouvrir un agent : pas encore".into()) // RED STUB.
+        let fermee = self
+            .taches_fermees
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|t| t["parent"] == parent && (t["nom"] == nom || t["archive"].as_str().is_some_and(|a| a.ends_with(nom))))
+            .max_by_key(|t| t["closed_ms"].as_u64().unwrap_or(0))
+            .cloned()
+            .ok_or_else(|| format!("rouvrir « {nom} » : aucune tâche fermée de ce nom sur {parent}"))?;
+        let archive = fermee["archive"].as_str().map(PathBuf::from).ok_or_else(|| format!("rouvrir « {nom} » : la tâche fermée n'a pas d'archive"))?;
+        if !archive.is_dir() {
+            return Err(format!("rouvrir « {nom} » : son archive {} n'est plus là", archive.display()));
+        }
+        let ancien = fermee["nom"].as_str().unwrap_or(nom).to_string();
+        let neuf = new_name.unwrap_or(&ancien).to_string();
+        let t = self.ouvrir_une_tache_depuis(parent, &neuf, None, None, fermee["head"].as_str(), fermee["agent_key"].as_str().map(str::to_string))?;
+        self.reprendre_le_travail(parent, &t, &archive, &ancien)?;
+        if let Some(session) = fermee["parent_session"].as_str().filter(|s| !s.is_empty()) {
+            let vues: Vec<String> = fermee["views"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            self.donner_les_vues(parent, &neuf, session, vues, fermee["active_view"].as_str().map(str::to_string))?;
+        }
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        if let Some(f) = self
+            .taches_fermees
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter_mut()
+            .find(|f| f["archive"] == fermee["archive"])
+        {
+            match f["reopened"].as_array_mut() {
+                Some(l) => l.push(json!({ "name": neuf, "at_ms": ms })),
+                None => f["reopened"] = json!([{ "name": neuf, "at_ms": ms }]),
+            }
+        }
+        self.ecrire_le_registre()?;
+        self.tache(parent, &neuf).ok_or_else(|| format!("rouvrir « {nom} » : la tâche {neuf} n'est plus ouverte"))
+    }
+
+    /// The working memory of a task taken back into the new task `t` from the folder `source` (an archive, or the
+    /// folder of the task it copies): its mailbox and what was read of it, its plans, and its conversation, which lives
+    /// under the id of the source task (`ancien`, a task of the same parent).
+    pub(crate) fn reprendre_le_travail(&self, parent: &str, t: &Tache, source: &Path, ancien: &str) -> Result<(), String> {
+        let dossier = t.arbre.parent().map(Path::to_path_buf).ok_or("la tâche n'a pas de dossier")?;
+        for f in ["mailbox.jsonl", "mailbox.read", "plan.json", "pending.seen.json"] {
+            if source.join(f).is_file() {
+                std::fs::copy(source.join(f), dossier.join(f)).map_err(|e| format!("{} : {e}", source.join(f).display()))?;
+            }
+        }
+        if let Ok(plans) = std::fs::read_dir(source.join("plans")) {
+            std::fs::create_dir_all(dossier.join("plans")).map_err(|e| e.to_string())?;
+            for p in plans.flatten().filter(|p| p.path().is_file()) {
+                std::fs::copy(p.path(), dossier.join("plans").join(p.file_name())).map_err(|e| format!("{} : {e}", p.path().display()))?;
+            }
+        }
+        // The source task's manifest: the same path, under the source task's folder (`<racine>/<parent>/<ancien>/…`).
+        let ancien_manifeste = t
+            .manifest
+            .ancestors()
+            .find(|a| a.file_name().is_some_and(|n| n == t.nom.as_str()) && a.parent().and_then(Path::file_name).is_some_and(|n| n == parent))
+            .and_then(|a| t.manifest.strip_prefix(a).ok().map(|r| a.with_file_name(ancien).join(r)));
+        if let Some(m) = ancien_manifeste {
+            let ancien_id = blake3::hash(m.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
+            self.reprendre_la_conversation(&ancien_id, &t.id, &t.manifest)?;
+        }
+        Ok(())
     }
 
     /// Les tâches fermées d'un backend (fusionnées ou rejetées), dans l'ordre.
