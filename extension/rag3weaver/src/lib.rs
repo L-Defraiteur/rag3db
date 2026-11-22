@@ -240,6 +240,8 @@ pub mod serve;
 /// clients minces sur la boucle locale.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
 pub mod daemon_host;
+/// The `PATH` of the user's login shell, for the host's commands (23 Nov 2026).
+pub mod login_path;
 /// L'IDE servi par l'hôte : la page, l'entrée par jeton, `/ide/call` et le
 /// flux du bus (`/ide/flux`).
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
