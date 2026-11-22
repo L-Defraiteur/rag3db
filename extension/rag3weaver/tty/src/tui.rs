@@ -56,6 +56,24 @@ pub(crate) fn sending_of(action: &Action, tache: &Tache) -> Option<Sending> {
     }
 }
 
+/// **Whether a frame of the host's stream is the task's** (Lucie's trial, 22 November 2026: the repository's chat and
+/// a card of another mailbox showed in a terminal opened on a task not yet open). Before the task's worktree is known,
+/// nothing is the task's; after, only its worktree's frames. A declarations proposal of the main repository passes
+/// either way: it is answered from here (tty-16).
+pub(crate) fn frame_is_the_tasks(_v: &Value, _filter: Option<&str>, _main: &str) -> bool {
+    true
+}
+
+/// **A refusal said as a sentence**, not as plumbing: without the route, the ids or the HTTP status.
+pub(crate) fn refusal_in_words(e: &str) -> String {
+    e.to_string()
+}
+
+/// What the terminal says while the task does not exist yet.
+pub(crate) fn task_not_open_yet(_task: &str) -> Option<String> {
+    None
+}
+
 /// The request given on the command line (`--request`): never typed, so never with the user's token.
 pub(crate) fn request_sending(tache: &Tache, texte: &str) -> Sending {
     Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "request", "text": texte }), typed: false }
@@ -862,6 +880,31 @@ pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B
 
 #[cfg(test)]
 mod tests {
+
+    /// **A terminal opened on a task shows only the task** (Lucie's trial, 22 November 2026): before the task is open,
+    /// no frame is its own (the repository's chat, a card of another mailbox); after, only its worktree's; a
+    /// declarations proposal of the main repository passes either way.
+    #[test]
+    fn only_the_tasks_frames_are_shown_and_none_before_it_opens() {
+        let chat = json!({ "backend": "/d/main.json", "evenement": { "kind": "MailboxLine", "line": { "kind": "approval", "command": "git status" } } });
+        let token = json!({ "backend": "/d/main.json", "evenement": { "kind": "Token", "text": "Ce projet est un backend déclaratif" } });
+        let proposal = json!({ "backend": "b", "evenement": { "kind": "PropositionChanged" } });
+        let task = json!({ "backend": "/wt/essai/m.json", "evenement": { "kind": "Token", "text": "bonjour" } });
+        assert!(!frame_is_the_tasks(&chat, None, "b"), "a card of another mailbox, before the task opens");
+        assert!(!frame_is_the_tasks(&token, None, "b"), "the repository's chat, before the task opens");
+        assert!(frame_is_the_tasks(&proposal, None, "b"), "a proposal of the main repository is answered from here");
+        assert!(frame_is_the_tasks(&task, Some("/wt/essai/m.json"), "b"));
+        assert!(!frame_is_the_tasks(&token, Some("/wt/essai/m.json"), "b"), "the repository's chat, after");
+        assert_eq!(task_not_open_yet("essai").as_deref(), Some("la tâche « essai » n'est pas encore ouverte : tape ta demande, elle l'ouvrira"));
+    }
+
+    /// **A refusal is a sentence**: no route, no id, no HTTP status.
+    #[test]
+    fn a_refusal_is_said_without_plumbing() {
+        let e = "POST /ide/teammate/mailbox : pas de tâche « essai » sur 884c34949e2c : une request l'ouvre (200)";
+        assert_eq!(refusal_in_words(e), "pas de tâche « essai » : une request l'ouvre");
+        assert_eq!(refusal_in_words("GET /ide/etat : l'hôte 127.0.0.1:7970 ne répond pas : connexion refusée"), "l'hôte 127.0.0.1:7970 ne répond pas : connexion refusée");
+    }
 
     /// **A typed message or answer goes with the user's token; the command line's request never does** (the mode auto's
     /// human title, 21 November 2026): only what the user typed may make an approval.
