@@ -4154,6 +4154,10 @@ mod chat_contextuel;
 /// The approval card in the IDE (21 November 2026), its witnesses in their file.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_card_tests;
+
+/// The card of a root in the IDE (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_card_root_tests;
 /// L'accueil en arbre des agents (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_agents_tests;
