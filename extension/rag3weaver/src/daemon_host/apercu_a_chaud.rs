@@ -84,6 +84,7 @@ fn monter(paquets: &std::path::Path, fichiers: &[(&str, &str)]) -> Banc {
         let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/describe"))
             .header("Cookie", "rag3weaver_ide=j")
+            .header("X-Rag3weaver-User", "j")
             .header("content-type", "application/json")
             .send(json!({ "manifest": manifeste }).to_string())
             .unwrap();
@@ -518,6 +519,7 @@ fn une_tache_se_relit_puis_se_fusionne_dans_l_ide() {
         let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}{route}"))
             .header("Cookie", "rag3weaver_ide=j")
+            .header("X-Rag3weaver-User", "j")
             .header("content-type", "application/json")
             .send(corps.to_string())
             .unwrap();
@@ -665,6 +667,7 @@ fn l_agent_de_l_ide_propose_un_gabarit_sur_gemini() {
             let mut r = crate::daemon::agent_de_temoin()
                 .post(format!("{racine}{route}"))
                 .header("Cookie", "rag3weaver_ide=j")
+                .header("X-Rag3weaver-User", "j")
                 .header("content-type", "application/json")
                 .send(corps.to_string())
                 .unwrap();
