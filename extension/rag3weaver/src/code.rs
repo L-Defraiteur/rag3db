@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 14] = [
+pub const RELATIONS: [(&str, &str, &str); 15] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -68,7 +68,14 @@ pub const RELATIONS: [(&str, &str, &str); 14] = [
     // déclaré désigne — et le nom qu'une classe enregistre.
     ("QUERIES", SCOPE, SYMBOL),
     ("REGISTERS", SCOPE, SYMBOL),
+    // **Chaque site d'un nom** (lot 2 de l'intra-scope, règles 18) : une arête par occurrence, du scope qui l'écrit
+    // vers le symbole du nom, avec sa ligne, sa colonne, sa plage d'octets et son rôle. Clée par la plage : deux
+    // sites d'un même scope restent deux arêtes. Ni plein texte, ni morceau, ni vecteur (Lucie, 20 novembre 2026).
+    ("OCCURS", SCOPE, SYMBOL),
 ];
+
+/// La clé d'`OCCURS` : la plage d'octets du site.
+pub const OCCURS_KEY: [&str; 2] = ["byte_start", "byte_end"];
 
 /// Répertoires qu'on ne parse jamais.
 pub const SKIPPED_DIRS: [&str; 8] = ["target", "node_modules", ".git", "dist", "build", ".venv", "venv", "__pycache__"];
@@ -720,7 +727,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 17 (22 novembre 2026) : une référence appartient au scope qui la contient — une classe, une interface ou un bloc
 // `impl` ne garde plus les références du corps de ses méthodes, et rien n'est recopié des méthodes vers une classe de
 // même nom (codeparsers, ticket de recherche `2026-11-21-usages-rend-une-classe-comme-usage-de-type-d-une-fonction`).
-pub const REGLES_DE_L_ANALYSE: u32 = 17;
+// 18 (22 novembre 2026) : chaque référence dit sa plage d'octets, lue sur son nœud (codeparsers), et chaque site
+// d'usage sa colonne et sa plage ; le graphe porte une arête `OCCURS` par site (Scope → Symbol, clée par la plage), et
+// `usages` rend chaque site, `fichier:ligne:colonne`. Un appel Python ne fait plus deux références au même octet.
+pub const REGLES_DE_L_ANALYSE: u32 = 18;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
@@ -749,13 +759,22 @@ pub fn schema_configs(scope_chunking: ChunkingConfig) -> (BTreeMap<String, Entit
             from: from.to_string(),
             to: to.to_string(),
             properties: Some(code_relation_properties(name)),
-            key: Vec::new(),
+            key: if name == "OCCURS" { OCCURS_KEY.iter().map(|k| k.to_string()).collect() } else { Vec::new() },
         })
     }).collect();
     (entities, relations)
 }
 
 fn code_relation_properties(rel: &str) -> HashMap<String, crate::config::FieldDef> {
+    if rel == "OCCURS" {
+        return HashMap::from([
+            ("line".to_string(), field_def(FieldType::Int64)),
+            ("column".to_string(), field_def(FieldType::Int64)),
+            ("byte_start".to_string(), field_def(FieldType::Int64)),
+            ("byte_end".to_string(), field_def(FieldType::Int64)),
+            ("role".to_string(), field_def(FieldType::String)),
+        ]);
+    }
     if rel == "MENTIONS" {
         // Le rendez-vous porte le **genre** de l'arête à poser quand la
         // cible arrivera : sans lui, un `IMPLEMENTS` dont l'interface est
@@ -3200,6 +3219,43 @@ impl Catalog {
         }
         let mentionneurs_du_lot: std::collections::HashSet<String> = mentions.iter().map(|(f, _, _)| f.clone()).collect();
         self.mettre_en_file_les_liens("MENTIONS", mentions)?;
+        // **Chaque site, son arête OCCURS** (lot 2 de l'intra-scope) : les sites des rendez-vous (vers le symbole du
+        // nom, ou de l'export par défaut, comme MENTIONS) et ceux des usages résolus d'un scope (vers le symbole du nom
+        // de leur cible). Seuls les sites dont codeparsers a lu la plage d'octets : un type lu dans le texte d'une
+        // signature n'en a pas, il reste à l'arête agrégée.
+        let nom_de: HashMap<&str, &str> = analysis.scopes.iter().map(|sc| (sc.key.as_str(), sc.name.as_str())).collect();
+        let mut par_site: Vec<(&str, &str, &UsageSite)> = Vec::new();
+        for (scope_key, name, sites) in &analysis.pending_sites {
+            let cible = defaults.get(&(scope_key.as_str(), name.as_str())).copied().unwrap_or(name.as_str());
+            par_site.extend(sites.iter().map(|x| (scope_key.as_str(), cible, x)));
+        }
+        for r in analysis.relations.iter().filter(|r| r.from_entity == SCOPE && r.to_entity == SCOPE && USAGE_RELATIONS.contains(&r.rel.as_str())) {
+            if let Some(nom) = nom_de.get(r.to_key.as_str()) {
+                par_site.extend(r.sites.iter().map(|x| (r.from_key.as_str(), *nom, x)));
+            }
+        }
+        let mut uuids_des_scopes: HashMap<&str, String> = HashMap::new();
+        let mut vus_occurrences: std::collections::HashSet<(&str, usize)> = std::collections::HashSet::new();
+        let mut occurrences = Vec::new();
+        for (scope_key, nom, site) in par_site {
+            let (Some(debut), Some(fin)) = (site.start_byte, site.end_byte) else { continue };
+            if !vus_occurrences.insert((scope_key, debut)) {
+                continue;
+            }
+            if !uuids_des_scopes.contains_key(scope_key) {
+                let u = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
+                uuids_des_scopes.insert(scope_key, u);
+            }
+            let props = BTreeMap::from([
+                ("line".to_string(), site.line.map_or(CypherValue::Null, |l| CypherValue::Int(l as i64))),
+                ("column".to_string(), site.column.map_or(CypherValue::Null, |c| CypherValue::Int(c as i64))),
+                ("byte_start".to_string(), CypherValue::Int(debut as i64)),
+                ("byte_end".to_string(), CypherValue::Int(fin as i64)),
+                ("role".to_string(), s(usage_name(&site.usage))),
+            ]);
+            occurrences.push((uuids_des_scopes[scope_key].clone(), symbol_uuid(self, nom)?, props));
+        }
+        self.mettre_en_file_les_liens("OCCURS", occurrences)?;
         etape("symboles · mise en file DEFINES/MENTIONS", &mut t);
         if let Some(noms) = differes {
             // Le chemin de masse : les rendez-vous restent en file, la
@@ -5364,7 +5420,7 @@ mod tests {
             assert_eq!(serde_json::to_value(&entities[name]).unwrap(), serde_json::to_value(expected).unwrap(), "{name}");
         }
         assert_eq!(entities.len(), 4);
-        assert_eq!(relations.len(), 14);
+        assert_eq!(relations.len(), 15);
         for (name, from, to) in RELATIONS {
             let relation = &relations[name];
             assert_eq!((&*relation.from, &*relation.to), (from, to));
@@ -5372,13 +5428,15 @@ mod tests {
                 "MENTIONS" => &["usage", "usages", "line", "kind", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"],
                 "LOCKS" => &["usage", "usages", "line", "via"],
                 "QUERIES" => &["via"],
+                "OCCURS" => &["line", "column", "byte_start", "byte_end", "role"],
                 "CONSUMES" | "CONSUMED_BY" | "INHERITS_FROM" | "IMPLEMENTS" | "DECORATES" | "USES_LIBRARY" => &["usage", "usages", "line", "resolution", "visibility", "provenances"],
                 _ => &[],
             };
             let properties = relation.properties.as_ref().unwrap();
             assert_eq!(properties.len(), expected.len(), "{name}");
             for property in expected {
-                let expected = field_def(if *property == "line" { FieldType::Int64 } else { FieldType::String });
+                let entier = matches!(*property, "line" | "column" | "byte_start" | "byte_end");
+                let expected = field_def(if entier { FieldType::Int64 } else { FieldType::String });
                 assert_eq!(serde_json::to_value(&properties[*property]).unwrap(), serde_json::to_value(expected).unwrap(), "{name}.{property}");
             }
         }
