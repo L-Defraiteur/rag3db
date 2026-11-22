@@ -158,6 +158,10 @@ pub struct Reached {
     pub ambigu: bool,
     /// Atteint par le départ supplémentaire.
     pub by_also: bool,
+    /// **Atteint par un membre du départ** (`include_members`, 22 novembre 2026) : une méthode de la classe demandée,
+    /// et non la classe elle-même.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_member: bool,
     /// Un carrefour : son degré, et il n'a pas été traversé vers le code.
     pub hub: Option<usize>,
     /// Atteint à travers un carrefour, dont c'est le titre : seuls les nœuds
@@ -262,6 +266,7 @@ fn reached_from(row: &[CypherValue], debut: usize, cfg: &NeighborhoodConfig) -> 
         by_name: false,
         ambigu: false,
         by_also: false,
+        by_member: false,
         hub: None,
         through_hub: None,
     }
@@ -548,6 +553,26 @@ pub fn neighborhood_of(
     neighborhood_of_in(catalog, cfg, name, path_prefix, depth, budget, max_degree, &QueryScope::default())
 }
 
+/// [`neighborhood_of_in`] **avec les membres du départ** (`include_members`, 22 novembre 2026, Lucie par c7) : une
+/// référence n'appartient qu'au scope le plus étroit, si bien qu'une classe n'utilise plus ce que ses méthodes
+/// appellent. « Tout ce que la classe et ses méthodes utilisent » (ou, en entrant, « qui utilise la classe ou ses
+/// méthodes ») se demande ici : les membres de chaque définition (`PARENT_OF` sortant, deux niveaux) sont des départs
+/// aussi, et ce qu'ils atteignent porte `by_member`.
+#[allow(clippy::too_many_arguments)]
+pub fn neighborhood_of_in_with(
+    catalog: &dyn crate::read_view::ReadCatalog,
+    cfg: &NeighborhoodConfig,
+    name: &str,
+    path_prefix: &str,
+    depth: usize,
+    budget: usize,
+    max_degree: usize,
+    scope: &QueryScope,
+    members: bool,
+) -> Result<NeighborhoodReport, String> {
+    voisinage(catalog, cfg, name, path_prefix, depth, budget, max_degree, scope, members)
+}
+
 /// [`neighborhood_of`] borné à une portée : le parcours est le même (un nœud
 /// hors portée reste un relais), seuls le départ et le rendu sont bornés, et
 /// le compte des écartés est rendu.
@@ -561,6 +586,21 @@ pub fn neighborhood_of_in(
     budget: usize,
     max_degree: usize,
     scope: &QueryScope,
+) -> Result<NeighborhoodReport, String> {
+    voisinage(catalog, cfg, name, path_prefix, depth, budget, max_degree, scope, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn voisinage(
+    catalog: &dyn crate::read_view::ReadCatalog,
+    cfg: &NeighborhoodConfig,
+    name: &str,
+    path_prefix: &str,
+    depth: usize,
+    budget: usize,
+    max_degree: usize,
+    scope: &QueryScope,
+    members: bool,
 ) -> Result<NeighborhoodReport, String> {
     let depth = depth.clamp(1, MAX_DEPTH);
     let rels: Vec<RelInfo> = cfg.relations.iter().map(|r| rel_info(catalog, r)).collect::<Result<_, _>>()?;
@@ -590,6 +630,25 @@ pub fn neighborhood_of_in(
     if !aussi.is_empty() {
         for (de, m) in moteur.saut(&aussi)? {
             premiers.push(Reached { by_also: true, from: Some(de), ..m });
+        }
+    }
+    // Les membres du départ (`include_members`) : départs à leur tour, deux niveaux de `PARENT_OF`.
+    let mut vus = vus;
+    if members {
+        let depuis: Vec<(String, String)> = usages.definitions.iter().map(|d| (d.uuid.clone(), d.title.clone())).collect();
+        let contient = [Step::new("PARENT_OF", Direction::Outgoing)];
+        let premiers_membres = follow_also(catalog, &contient, "", &depuis)?;
+        let seconds = follow_also(catalog, &contient, "", &premiers_membres)?;
+        let mut membres: Vec<String> = Vec::new();
+        for (u, _) in premiers_membres.into_iter().chain(seconds) {
+            if vus.insert(u.clone()) {
+                membres.push(u);
+            }
+        }
+        if !membres.is_empty() {
+            for (de, m) in moteur.saut(&membres)? {
+                premiers.push(Reached { by_member: true, from: Some(de), ..m });
+            }
         }
     }
     // Les usages par le nom seul (nom ambigu), qu'aucune arête directe ne
@@ -1013,6 +1072,9 @@ impl NeighborhoodReport {
             if let Some(d) = r.hub {
                 extra.push_str(&format!(" — carrefour, {d} usages, non suivi"));
             }
+            if r.by_member {
+                extra.push_str(" — par un membre");
+            }
             out.push_str(&format!("- {} {} — {}{extra}\n", r.kind, r.title, lieu(&r.path, r.line)));
         };
         for l in 1..=self.depth {
@@ -1108,6 +1170,8 @@ pub struct NeighborhoodNode {
     rest_title: String,
     /// Les usages par le nom seul listés au lieu d'être comptés à part.
     include_by_name: bool,
+    /// Les membres de chaque définition partent aussi (`neighborhood_of_in_with`).
+    include_members: bool,
     /// Le titre du rendu (`# impact: nom`).
     heading: String,
     json: bool,
@@ -1142,7 +1206,7 @@ impl Node for NeighborhoodNode {
                 let r = if self.name.is_empty() {
                     neighborhood_of_file(cat, &self.cfg, &self.file, self.depth, self.budget, self.max_degree)?
                 } else {
-                    neighborhood_of_in(cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope)?
+                    neighborhood_of_in_with(cat, &self.cfg, &self.name, &self.path, self.depth, self.budget, self.max_degree, &self.scope, self.include_members)?
                 };
                 (r, status)
             }
@@ -1326,6 +1390,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
             group_title: s("group_title").unwrap_or_else(|| "Groupés".into()),
             rest_title: s("rest_title").unwrap_or_else(|| "Touchés".into()),
             include_by_name: config.get("include_by_name").and_then(|v| v.as_bool()).unwrap_or(false),
+            include_members: config.get("include_members").and_then(|v| v.as_bool()).unwrap_or(false),
             heading: s("heading").unwrap_or_else(|| "impact".into()),
             json,
         }))
@@ -1389,6 +1454,7 @@ impl NodeFactory for NeighborhoodNodeFactory {
                 p("rest_title", S, false, Some(serde_json::json!("Touchés")), "Titre des sections par niveau"),
                 p("heading", S, false, Some(serde_json::json!("impact")), "Titre du rendu markdown (`# impact: nom`)"),
                 p("include_by_name", Bool, false, Some(serde_json::json!(false)), "Lister les usages trouvés par le nom seul (non attribués), au lieu de les compter à part"),
+                p("include_members", Bool, false, Some(serde_json::json!(false)), "Partir aussi des membres de chaque définition (les méthodes d'une classe, d'un bloc impl) : ce que la classe et ses méthodes utilisent, ou qui les utilise"),
                 p("name", S, false, Some(serde_json::json!("")), "Le nom de départ (ou `file`)"),
                 p("summary_group", S, false, Some(serde_json::json!("")), "Résumé : la seule valeur du groupe à compter et nommer (ex. case)"),
                 p("file", S, false, Some(serde_json::json!("")), "Mode par fichier : départ de toutes les lignes dont un champ de chemin vaut ce chemin ; ce qui est dans le fichier ne compte pas"),
