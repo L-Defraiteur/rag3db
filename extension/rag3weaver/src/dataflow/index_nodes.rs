@@ -491,7 +491,21 @@ fn indexer_et_dire(
 ) -> String {
     let (catalog, journal) = (catalog.clone(), journal.to_path_buf());
     // La ligne de fin est rendue, pas écrite : l'appelant l'écrit en dernier.
-    match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, watch) {
+    let fin = indexer_et_publier(&catalog, source, &journal, kept_bytes, generated, watch);
+    // Its generation published (or the index stopped): the answers no longer read an analysis of before.
+    *watch.analysis_repass.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    fin
+}
+
+fn indexer_et_publier(
+    catalog: &Arc<Mutex<Catalog>>,
+    source: Arc<dyn FileSource>,
+    journal: &std::path::Path,
+    kept_bytes: u64,
+    generated: GeneratedPolicy,
+    watch: &Arc<EmbedWatch>,
+) -> String {
+    match run_index(catalog, source.as_ref(), journal, kept_bytes, generated, watch) {
         Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
             let arbre = crate::workspace_path::worktree_root(&source.cursor()).map(|root| {
@@ -580,6 +594,7 @@ fn run_index(
                 // montée des règles, repasse tous ses fichiers ; un index de trois quarts d'heure ne doit pas
                 // ressembler à une panne.
                 if p.repasses_pour_l_analyse > 0 {
+                    *watch.analysis_repass.lock().unwrap_or_else(|e| e.into_inner()) = Some((p.files_done, p.files_total));
                     let reste = p.files_total.saturating_sub(p.files_done);
                     let estimation = if p.files_done > 0 {
                         let par_fichier = debut_des_noeuds.elapsed().as_secs_f64() / p.files_done as f64;

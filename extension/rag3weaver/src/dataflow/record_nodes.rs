@@ -2407,6 +2407,10 @@ pub struct EmbedWatch {
     pub truncated: Mutex<Vec<(String, String)>>,
     /// How many of them the index journal has already named.
     pub truncated_reported: std::sync::atomic::AtomicUsize,
+    /// **The repass of the analysis in progress** (ticket of 22 November 2026, « une montée des règles n'est vue qu'à
+    /// un index entier »): the files passed and the files of the pass, while a full index rewrites files analysed
+    /// under another version; `None` once its generation is published. Read outside the catalogue's lock.
+    pub analysis_repass: Mutex<Option<(usize, usize)>>,
 }
 
 impl EmbedWatch {

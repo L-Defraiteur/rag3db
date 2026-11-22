@@ -78,3 +78,38 @@ fn a_base_analysed_under_another_version_repasses_on_open() {
     let s = host.open_session("the witness", None, Vec::new(), None);
     assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
 }
+
+/// **A repass in progress says so** (c7, 22 November 2026): while a full index rewrites files analysed under another
+/// version, the answers read the analysis of before; the index's state and a search's answer say it, with how far it
+/// is (`n/N`), so that an answer of before is not taken for a fault of the new analysis.
+#[test]
+fn a_repass_in_progress_says_so_in_the_state_and_the_answers() {
+    let d = tempfile::tempdir().unwrap();
+    let (manifeste, _arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+    let manifeste = PathBuf::from(manifeste);
+    let host = Arc::new(crate::daemon_host::tests::hote_isole());
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+    let debut = std::time::Instant::now();
+    while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+        assert!(debut.elapsed() < std::time::Duration::from_secs(120), "the index did not finish in 120 s");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    // An index in its repass, as the index holds it: 1 file of 3 passed. Its thread waits for the end of the witness.
+    let watch = Arc::new(crate::dataflow::record_nodes::EmbedWatch::default());
+    *watch.analysis_repass.lock().unwrap() = Some((1, 3));
+    let (fini, finir) = std::sync::mpsc::channel::<()>();
+    let fil = std::thread::spawn(move || {
+        let _ = finir.recv();
+    });
+    host.with_backend(&h, |b| {
+        crate::catalog_threads::register(&b.catalog, watch.stop.clone(), crate::catalog_threads::ThreadKind::Index(watch.clone()), fil)
+    })
+    .unwrap();
+    let etat = host.with_backend(&h, |b| b.index_states()).unwrap().expect("the state").to_string();
+    let usages = host.with_backend(&h, |b| b.call("usages", json!({ "name": "double" })).map(|v| v.to_string()).unwrap_or_else(|e| e)).unwrap();
+    fini.send(()).unwrap();
+    let ligne = "repasse de l'analyse en cours : 1/3";
+    assert!(etat.contains(ligne), "the index's state does not say the repass in progress: {etat}");
+    assert!(usages.contains(ligne) && usages.contains("analyse d'avant"), "a search's answer does not say it reads the analysis of before: {usages}");
+}
