@@ -1199,7 +1199,9 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let _ = request.respond(json_(statut, &v));
         }
         ("GET", "/ide/etat") => {
-            let (statut, v) = host.handle("GET", "/etat", None, &[]);
+            let (statut, mut v) = host.handle("GET", "/etat", None, &[]);
+            // **Whether the page is entered as the user** (`human-yes-only`): the page says it at its head when not.
+            v["human"] = json!(humain);
             let _ = request.respond(json_(statut, &v));
         }
         ("POST", "/ide/call" | "/ide/describe") => {
