@@ -64,6 +64,11 @@ fn new_conversation_name(_day: u32, _month0: u32, _hour: u32, _minute: u32) -> S
     String::new()
 }
 
+/// **A card the plain mode cannot answer**: what it says, for an approval of the teammate; `None` for any other line.
+fn plain_cannot_answer(_l: &Value) -> Option<String> {
+    None
+}
+
 /// The last conversation of a repository in the host's list of teammates.
 fn last_conversation(_list: &Value, _parent: &str) -> Option<String> {
     None
@@ -406,5 +411,20 @@ mod launch_from_a_folder_tests {
         ] });
         assert_eq!(last_conversation(&list, "b1").as_deref(), Some("derniere"));
         assert_eq!(last_conversation(&list, "b3"), None);
+    }
+}
+
+#[cfg(test)]
+mod plain_approval_tests {
+    use super::*;
+
+    /// **The plain mode says a card it cannot answer, and stops** (c7, 22 Nov.: 600 s waiting on an approval with no
+    /// way to answer it).
+    #[test]
+    fn a_card_the_plain_mode_cannot_answer_is_said() {
+        let card = serde_json::json!({ "from": "teammate", "kind": "approval", "command": "python3 fizzbuzz.py", "text": "commande en attente d'accord : python3 fizzbuzz.py" });
+        let said = plain_cannot_answer(&card).expect("an approval is said");
+        assert!(said.contains("python3 fizzbuzz.py") && said.contains("sans --plain"), "{said}");
+        assert_eq!(plain_cannot_answer(&serde_json::json!({ "from": "teammate", "kind": "report", "text": "fait" })), None);
     }
 }
