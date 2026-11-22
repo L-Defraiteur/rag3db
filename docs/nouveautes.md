@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un index vectoriel se crée et se supprime sur une table au nom spécial.** Une espace, un tiret ou un accent grave dans le nom de la table ou de l'index faisait échouer `CREATE_VECTOR_INDEX` et `DROP_VECTOR_INDEX` ; ces noms sont maintenant protégés dans les instructions que le moteur écrit.
 - 22 novembre 2026 — **La carte du terminal dit la racine demandée et le dossier protégé.** Quand l'agent veut un
   dossier hors de ses racines, la carte nomme la racine et son mode (« demande la racine … en écriture ») ; une racine
   large porte son avertissement en rouge vif (« ⚠ cette racine contient aussi : … »). Un oui s'inscrit « racine
