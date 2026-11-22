@@ -184,6 +184,50 @@ function demanderLesSymboles() {
       });
   }
 }
+/// **The cited paths, resolved by the host** (Lucie, 22 November 2026: « pourquoi ça s'affiche comme un lien si nous on
+/// sait pas résoudre ? »): a path is a link only once the host said it exists in the repository's files
+/// (`POST /ide/chemins`); before, and if it does not, it stays text.
+const chemins = new Map<string, { ok: boolean; jusqu_a: number }>();
+const cheminsEnVol = new Set<string>();
+const cheminsADemander = new Map<string, Set<string>>();
+function demanderLesChemins() {
+  const lots = [...cheminsADemander.entries()];
+  cheminsADemander.clear();
+  for (const [backend, paths] of lots) {
+    const liste = [...paths];
+    for (const p of liste) cheminsEnVol.add(`${backend}\u0000${p}`);
+    const finir = () => liste.forEach((p) => cheminsEnVol.delete(`${backend}\u0000${p}`));
+    fetch("/ide/chemins", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ backend, paths: liste }) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((v: { ok?: boolean; result?: { paths?: Record<string, boolean>; why?: string } }) => {
+        const lus = v.result?.paths ?? {};
+        const lu = v.ok === true && !v.result?.why;
+        const vie = lu ? VIE : VIE_SANS_LECTURE;
+        for (const p of liste) chemins.set(`${backend}\u0000${p}`, { ok: lus[p] === true, jusqu_a: Date.now() + vie });
+        finir();
+        if (Object.keys(lus).length) prevenir();
+      })
+      .catch(() => {
+        for (const p of liste) chemins.set(`${backend}\u0000${p}`, { ok: false, jusqu_a: Date.now() + VIE_SANS_LECTURE });
+        finir();
+      });
+  }
+}
+/// The reference of a cited path, only once the host resolved it; otherwise, the question asked, `null`.
+export function resolvedPathRef(code: string, backendId: string): { path: string; line?: number } | null {
+  const ref = pathRef(code);
+  if (!ref || !backendId) return null;
+  const cle = `${backendId}\u0000${ref.path}`;
+  const c = chemins.get(cle);
+  if (c && c.jusqu_a > Date.now()) return c.ok ? ref : null;
+  if (cheminsEnVol.has(cle)) return null;
+  const lot = cheminsADemander.get(backendId) ?? new Set<string>();
+  if (![...cheminsADemander.values()].some((s) => s.size)) queueMicrotask(demanderLesChemins);
+  lot.add(ref.path);
+  cheminsADemander.set(backendId, lot);
+  return null;
+}
+
 /// Oublier les symboles d'un dépôt (un fichier y a changé) : le rendu suivant redemande.
 /// `cause` (le fichier changé) va au relevé des témoins.
 export function forgetSymbols(backendId: string, cause = "") {
@@ -217,7 +261,7 @@ export function symbolRef(code: string, backendId: string): { href: string; name
 /// Le code en ligne en HTML : un chemin cité devient un lien vers sa vue, un symbole
 /// connu, un lien vers sa définition.
 export function inlineCodeHtml(code: string, backendId: string): string {
-  const ref = pathRef(code);
+  const ref = resolvedPathRef(code, backendId);
   const inner = `<code>${echapper(code)}</code>`;
   if (ref) return `<a class="code-ref" href="${fileLink(backendId, ref.path, ref.line)}" data-path="${echapper(ref.path)}">${inner}</a>`;
   const s = symbolRef(code, backendId);
@@ -231,7 +275,7 @@ export function withInlineCode(texte: string, backendId: string): ReactNode[] {
   return morceaux.map((m, k) => {
     if (m.length > 2 && m.startsWith("`") && m.endsWith("`")) {
       const code = m.slice(1, -1);
-      const ref = pathRef(code);
+      const ref = resolvedPathRef(code, backendId);
       const el = <code key={k}>{code}</code>;
       if (ref)
         return (
