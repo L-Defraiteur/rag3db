@@ -1720,10 +1720,6 @@ pub fn build_bm25_query(
         BM25Mode::ContainsSplit => split_query(query, fields, distance),
         // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
         // requête part sous sa seule forme (le doublement du 25 octobre 2026 est retiré).
-        // **Measure only** (banc, 22 November 2026): under `RAG3WEAVER_BM25_BUDGET_WHOLE=1`, the whole query over
-        // several fields goes to `contains_split` too, so that no boolean of fuzzy `contains` stays — at the price of
-        // splitting the phrase into words. Absent, the whole query keeps its path, even under `RAG3WEAVER_BM25_BUDGET`.
-        BM25Mode::Contains if measure_whole() && fields.len() > 1 && distance > 0 => split_query(query, fields, distance),
         BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
         BM25Mode::Regex => build_contains_clauses(query, fields, distance, true, false),
         // distance is forced to 0: lucivy treats any distance > 0 as relaxed,
@@ -1756,11 +1752,6 @@ fn split_query(query: &str, fields: &[String], distance: u8) -> serde_json::Valu
 /// **The error budget of lucivy 4.4.2 under measure** (banc, 22 November 2026): `RAG3WEAVER_BM25_BUDGET` = `flat`,
 /// `idf`, `window` or `soft` adds `"budget"` to each `contains_split`; empty or absent, nothing (the boolean of
 /// 4.4.1). A measure branch only, never for master.
-/// The whole query to `contains_split` too, measured apart (`RAG3WEAVER_BM25_BUDGET_WHOLE=1`).
-fn measure_whole() -> bool {
-    std::env::var("RAG3WEAVER_BM25_BUDGET_WHOLE").is_ok_and(|v| v == "1")
-}
-
 fn measure_budget() -> Option<String> {
     let v = std::env::var("RAG3WEAVER_BM25_BUDGET").ok()?;
     matches!(v.as_str(), "flat" | "idf" | "window" | "soft").then_some(v)
@@ -1803,6 +1794,10 @@ fn build_contains_clauses(
 
     if fields.len() == 1 {
         make_clause(&fields[0])
+    } else if distance > 0 && !regex && !strict_separators {
+        // lucivy 4.4.2 (22 November 2026): one fuzzy `contains` over several `fields`, one error budget per document
+        // (the errors of the best field, the BM25 of all) — a typo in two fields is not paid twice.
+        serde_json::json!({ "type": "contains", "fields": fields, "value": value, "distance": distance })
     } else {
         let clauses: Vec<serde_json::Value> = fields.iter().map(|f| make_clause(f)).collect();
         serde_json::json!({

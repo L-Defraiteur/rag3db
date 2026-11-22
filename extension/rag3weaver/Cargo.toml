@@ -523,11 +523,11 @@ debug = false
 # lucivy 4.4.2 under measure (22 November 2026): `contains_split` with a distance counts one error budget per document.
 # Branch `fuzzy-error-budget` of lucivy; this patch goes when 4.4.2 is published, at Lucie's word. Its four crates
 # from the same rev: `sparse-vector` and `lucistore` too, or two `BlobStore` traits cross (banc, 22 November).
-lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "71b72e6b467b" }
-ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "71b72e6b467b" }
-lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "71b72e6b467b" }
-sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "71b72e6b467b" }
-luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "71b72e6b467b" }
+lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "f2723734e0c5" }
+ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "f2723734e0c5" }
+lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "f2723734e0c5" }
+sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "f2723734e0c5" }
+luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "f2723734e0c5" }
 burn = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-autodiff = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-backend = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
