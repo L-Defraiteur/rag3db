@@ -566,7 +566,7 @@ Idées qui en sortent, à ranger avec les autres :
 
 ## L'ambition d'origine, retrouvée
 
-*Ajout du 23 novembre, 0 h 20. Lucie : « retrouve mes plus anciennes visions ; il y a peut-être des idées naïves qui
+*Ajout du 22 novembre, vers 22 h 30. Lucie : « retrouve mes plus anciennes visions ; il y a peut-être des idées naïves qui
 nous rappelleraient l'ambition initiale pour l'UX. On a la technique, on a beaucoup perdu ce qu'on voulait en UX. »*
 
 Les sources, lues en entier : le premier dossier de visions (25 août 2026, aujourd'hui
