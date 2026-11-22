@@ -4195,6 +4195,10 @@ mod open_folder_tilde_tests;
 /// Opening a folder leads to its chat (22 November 2026), its witness in its file.
 #[cfg(all(test, unix, feature = "code"))]
 mod open_folder_chat_tests;
+
+/// The orphan tasks out of the chat (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod orphans_out_of_chat_tests;
 /// La page « Poste » (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_poste_tests;
