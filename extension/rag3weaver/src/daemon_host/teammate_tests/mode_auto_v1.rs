@@ -34,6 +34,8 @@ fn mode_auto(d: &std::path::Path) -> (PathBuf, PathBuf, PathBuf) {
     }
     let gate = d.join("gate");
     std::fs::create_dir_all(&gate).unwrap();
+    // The v1's witnesses try the classes and the judge: on in their gate's rules (off by default since 22 Nov 2026).
+    std::fs::write(gate.join("rules.json"), r#"{"judge_in_auto": true}"#).unwrap();
     (depot, manifeste, gate)
 }
 
