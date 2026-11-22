@@ -841,6 +841,10 @@ impl WorktreeHost for HoteDesWorktrees {
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
+#[path = "worktrees_analysis_version_tests.rs"]
+mod analysis_version_tests;
+
+#[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::super::chat::ChatModel;
     use super::super::chat_qui_code::hote;
@@ -1840,7 +1844,7 @@ mod tests {
         }
     }
 
-    fn service_granite() -> String {
+    pub(super) fn service_granite() -> String {
         servir(Arc::new(Granite))
     }
 
