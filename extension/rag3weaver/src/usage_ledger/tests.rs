@@ -315,3 +315,29 @@ fn a_scripts_call_is_checked_without_writing_and_recorded_without_refusal() {
     assert!((spent.total - 1.2).abs() < 1e-9 && spent.open == 0, "{spent:?}");
     assert_eq!(spent.unpriced, vec!["gemini-unknown".to_string()]);
 }
+
+/// **The month's alert** (« À intervenir »): nothing under 50 % with a projection under the cap; 50 %, then 80 %, then
+/// the cap reached; and a projection past the cap alerts before 50 %.
+#[test]
+fn the_months_alert_says_the_threshold_passed_or_the_projection() {
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":100,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
+    let spend = |usd: u64| {
+        let k = Tokens { output: usd * 1_000_000, ..Default::default() };
+        let r = l.reserve_on("2026-11-01".into(), "paid", "vertex", false, k, &Caller { human: true, ..Default::default() }, false).unwrap();
+        l.settle(&r, Some(k)).unwrap();
+    };
+    // On the 30th of a month of 30 days, the projection is the total.
+    assert_eq!(l.alert_on("2026-11-30"), serde_json::Value::Null);
+    spend(10);
+    assert_eq!(l.alert_on("2026-11-30"), serde_json::Value::Null, "10 %");
+    let early = l.alert_on("2026-11-02");
+    assert_eq!((early["threshold"].clone(), early["projection_over"].clone()), (serde_json::Value::Null, json!(true)), "10 in 2 days: 150 projected: {early:#}");
+    spend(45);
+    assert_eq!(l.alert_on("2026-11-30")["threshold"], json!(50.0));
+    spend(30);
+    assert_eq!(l.alert_on("2026-11-30")["threshold"], json!(80.0));
+    spend(20);
+    let at_cap = l.alert_on("2026-11-30");
+    assert_eq!(at_cap["threshold"], json!(100.0));
+    assert!(at_cap["text"].as_str().unwrap().contains("cap is reached"), "{at_cap:#}");
+}
