@@ -4182,6 +4182,9 @@ mod chat_qui_code;
 /// Witnesses: a closed task's chat is put away, not called an orphan (22 Nov 2026).
 #[cfg(test)]
 mod chat_closed_tasks;
+/// Witnesses: a request for code in a repository's chat opens the code task (22 Nov 2026).
+#[cfg(all(test, unix, feature = "code"))]
+mod chat_open_code_task;
 /// Le relais contextuel : cible effective, clic et reprise dans le navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_contextuel;
