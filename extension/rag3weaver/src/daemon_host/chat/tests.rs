@@ -3170,3 +3170,6 @@ fn the_pages_of_a_repository_speak_git() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// The witness of the lot `billing-views`, in a file of its own.
+mod human_turn_past_the_cap;
