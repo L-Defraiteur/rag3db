@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Chaque appel de modèle payant est compté, et le mois a un plafond.** Tout modèle déclaré, et
+  celui du régime, passe par le registre des dépenses (`~/.local/state/rag3weaver/usage/<mois>.jsonl`) : avant
+  l'appel, sa borne haute est réservée sous verrou ; après, elle est soldée par les jetons que le fournisseur rapporte,
+  le cache écrit et lu à part. Au-delà de 200 USD dans le mois, un appel d'agent est refusé en le disant, celui d'un
+  humain passe et se compte. Les prix vivent dans `~/.config/rag3weaver/prices.json`, écrit au premier appel depuis
+  les pages officielles des fournisseurs (relevé du 21 novembre, la hausse d'Argon au 1er décembre comprise) ; un
+  modèle sans prix est refusé, jamais compté à zéro. C'est la condition d'entrée de tout fournisseur payant neuf.
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
