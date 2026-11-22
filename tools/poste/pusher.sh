@@ -192,6 +192,9 @@ enqueue() {
   rang=$(awk -F'\t' -v id="$id" -v now="$(date +%s)" '$2 == id && now - $1 <= 3600 {r = $3} END {print r}' "$D/rendus.tsv" 2>/dev/null)
   [ -n "$rang" ] && again=" (redéposé dans l'heure : rang $rang, celui du rendu)"
   ( flock 9
+    # The id checked again under the queue's lock, with the write (22 Nov. 2026, 01:32: two deposits of user-token-2
+    # twelve seconds apart both passed the check above, made without the lock, and the queue held the lot twice).
+    in_queue "$id" && { echo "refusé : l'id $id est déjà dans la file (déposé en même temps)" >&2; exit 3; }
     line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9" "$vue")
     if [ -n "$rang" ]; then
       awk -F'\t' -v rang="$rang" -v line="$line" -v parent="$parent" '
@@ -241,7 +244,7 @@ enqueue() {
             print a[i]
           }
         }' "$Q" > "$Q.new" && mv "$Q.new" "$Q"
-    fi ) 9> "$D/queue.lock"
+    fi ) 9> "$D/queue.lock" || return 1
   log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
   # The warnings first, « déposé » last: the scripts read it with tail -1 (21 Nov., c7).
   french_identifiers "$id" "$full" "$parent" "$9"

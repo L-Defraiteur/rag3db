@@ -884,4 +884,11 @@ touch "$POSTE_RELAY_DOWN"; PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
   && ok "verrou de push toujours injoignable : rien de poussé, le lot reste en tête, jamais rouge" \
   || ko "verrou toujours injoignable : $(on_master vi-2 && echo POUSSÉ || echo 'pas poussé'), tête de file $(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1) ; $(grep -P '\tvi-2\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
 rm -f "$POSTE_RELAY_DOWN"; P dequeue vi-2 > /dev/null 2>&1; unset POSTE_RELAY_DOWN PUSHER_LOCK_WAIT PUSHER_LOCK_POLL
+# 49. Two deposits of the same id at the same moment (22 Nov., 01:32: tty and G deposited user-token-2 twelve seconds
+# apart, and the queue held it twice). The id check is made under the queue's lock, with the write: one line, never two.
+h=$(lot dup-1 docs/dup1.md '# dup')
+for i in 1 2 3 4 5 6; do ( P enqueue dup-1 dup-1 "$h" docs - - - - author-a > /dev/null 2>&1 ) & done; wait
+n=$(grep -v '^#' "$D/pusher/queue.tsv" | awk -F'\t' '$1 == "dup-1"' | wc -l)
+[ "$n" = 1 ] && ok "six dépôts simultanés du même id : une seule ligne en file" || ko "six dépôts simultanés du même id : $n lignes en file"
+P dequeue dup-1 > /dev/null 2>&1
 exit $red
