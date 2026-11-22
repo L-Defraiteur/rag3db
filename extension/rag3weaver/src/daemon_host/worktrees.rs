@@ -874,6 +874,10 @@ impl WorktreeHost for HoteDesWorktrees {
 #[path = "worktrees_analysis_version_tests.rs"]
 mod analysis_version_tests;
 
+#[cfg(all(test, feature = "rag3db-native", feature = "code"))]
+#[path = "worktrees_index_cost_measure.rs"]
+mod index_cost_measure;
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::super::chat::ChatModel;
