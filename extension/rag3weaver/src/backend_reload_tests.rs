@@ -29,7 +29,7 @@ fn write(dir: &Path, name: &str, text: &str) {
 }
 
 /// Un backend « toy » déclaré dans un dossier temporaire, monté sans base.
-fn toy() -> (tempfile::TempDir, Backend) {
+pub(super) fn toy() -> (tempfile::TempDir, Backend) {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "backend.json", MANIFEST);
     write(dir.path(), "echo.mmd", GRAPH);
