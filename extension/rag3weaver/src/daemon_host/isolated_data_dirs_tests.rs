@@ -48,6 +48,7 @@ fn in_service_nothing_moves() {
 /// **The commands' journals too** (c7, 22 Nov 2026, 08 h: 54 968 index journals in `~/.cache/rag3weaver/commandes`
 /// at luciepc, written by the witnesses' indexes). Under the lib's witnesses, without `RAG3WEAVER_JOURNAUX_DIR`, the
 /// journals' folder is not the user's cache.
+#[cfg(feature = "code")]
 #[test]
 fn the_witnesses_journals_stay_out_of_the_users_cache() {
     if std::env::var_os("RAG3WEAVER_JOURNAUX_DIR").is_some() {
