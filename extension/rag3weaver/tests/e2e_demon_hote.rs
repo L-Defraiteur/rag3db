@@ -1160,7 +1160,9 @@ fn le_releve_a_blanc_compte_un_orphelin_sans_le_purger() {
         let catalog = b.catalog.lock().unwrap();
         let handle = catalog.fts_handle("Fiche").expect("le plein texte de la fiche");
         handle.add_document_json(ORPHELIN, &json!({"titre": "orpheline", "corps": "sans ligne dans le graphe"})).unwrap();
-        handle.commit().unwrap();
+        // A tagged full-text index (lucivy 4.4, (A)) commits a document outside every version under its current
+        // generation: `commit()` is refused there.
+        handle.commit_keeping_generation().unwrap();
     }).unwrap();
     let r = route_maintenance(&host, &s, "/backend/maintain", json!({"manifest": m, "table": "Fiche", "dry_run": true}));
     let r = ok(&r);
@@ -1195,7 +1197,9 @@ fn orphelins(host: &DaemonHost, id: &str, ids: std::ops::Range<u64>) {
         for i in ids {
             handle.add_document_json(i, &json!({"titre": format!("orpheline {i}"), "corps": "sans ligne"})).unwrap();
         }
-        handle.commit().unwrap();
+        // A tagged full-text index (lucivy 4.4, (A)) commits a document outside every version under its current
+        // generation: `commit()` is refused there.
+        handle.commit_keeping_generation().unwrap();
     }).unwrap();
 }
 
