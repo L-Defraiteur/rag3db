@@ -1147,6 +1147,12 @@ impl DaemonHost {
         Ok(json!({ "removed": h.id, "manifest": h.manifest, "closed_tasks": fermees }))
     }
 
+    /// **Reopen a closed agent** (`--pop-agent`, 22 November 2026): RED STUB.
+    #[allow(unused_variables)]
+    pub fn reopen_agent(&self, parent: &str, nom: &str, new_name: Option<&str>) -> Result<Tache, String> {
+        Err("rouvrir un agent : pas encore".into()) // RED STUB.
+    }
+
     /// Les tâches fermées d'un backend (fusionnées ou rejetées), dans l'ordre.
     pub fn taches_fermees_de(&self, parent: &str) -> Vec<Value> {
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|t| t["parent"] == parent).cloned().collect()
