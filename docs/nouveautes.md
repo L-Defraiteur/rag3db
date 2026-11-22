@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 22 novembre 2026 — **`usages` rend chaque site d'un nom, avec sa colonne.** Le graphe gardait une ligne par
+  usager : la plus petite de ses sites, sans colonne. Chaque référence dit maintenant sa plage d'octets, lue sur son
+  nœud par codeparsers, et le graphe porte une arête `OCCURS` par site. `usages` écrit chaque site
+  `fichier:ligne:colonne` (la colonne comptée à partir de 1, comme la ligne), et le JSON les donne dans `sites`. C'est
+  vrai en Rust, Python, TypeScript, Go, C, C++ et C#. Un type lu dans le texte d'une signature n'a pas de plage : il
+  garde sa ligne. Un appel Python ne compte plus deux fois. Les règles de l'analyse passent à 18 : l'hôte repasse les
+  bases à leur ouverture.
 - 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
   auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
   distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,
