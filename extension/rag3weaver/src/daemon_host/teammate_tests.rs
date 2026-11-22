@@ -15,6 +15,7 @@ mod background;
 mod card;
 mod mode_auto_v1;
 mod posture_auto;
+mod land_each_turn;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
