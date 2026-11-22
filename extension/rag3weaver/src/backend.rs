@@ -12199,6 +12199,10 @@ mod tests {
 #[cfg(test)]
 #[path = "backend_reload_tests.rs"]
 mod reload_tests;
+/// Witnesses: list_declarations says its paths are the backend's declarations, not the project's files (22 Nov 2026).
+#[cfg(test)]
+#[path = "declarations_not_project_tests.rs"]
+mod declarations_not_project_tests;
 
 #[path = "backend_schema.rs"]
 mod backend_schema;
