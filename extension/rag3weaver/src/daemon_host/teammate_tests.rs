@@ -31,6 +31,7 @@ pub(super) fn en_approbation(manifeste: &std::path::Path) {
 mod posture_auto;
 mod land_each_turn;
 mod gate_level;
+mod bac_shell_lines;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
