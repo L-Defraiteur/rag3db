@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **lucivy 4.5.0.** Le moteur de plein texte sait compter un seul budget de fautes pour les mots
+  d'une requête floue (trois mots trouvés avec une faute chacun passent devant un seul mot exact), et une seule faute
+  pour une phrase cherchée dans plusieurs champs. Rien ne change encore dans la recherche : elle les adoptera dans son
+  propre lot, après la mesure du banc. La fermeture d'un index attend désormais toutes ses fusions de fond.
+
 - 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
   auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
   distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,

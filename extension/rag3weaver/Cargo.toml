@@ -148,9 +148,12 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # La 4.4.1 (21 novembre 2026, tag v4.4.1, main 31d6b3d) : une fusion finie après un commit étiqueté ne lui
 # efface plus sa génération, close la garde, commit_fast et commit_direct sont refusés sur un index étiqueté. Sur un index étiqueté, `commit()` est refusé ; les
 # commits de rag3weaver qui ne créent pas de version passent par `commit_keeping_generation()`.
-lucivy-core = "4.4.1"
+# La 4.5.0 (22 novembre 2026, tag v4.5.0, main 2eea027) : les budgets d'erreurs des requêtes floues sur plusieurs
+# mots (`contains_split` + `budget`), `contains` sur plusieurs `fields` sous un seul compte de fautes, l'avertissement
+# des booléens de `contains` flous, et `close()` qui attend tous les lots de fusions. Rien ne change par défaut.
+lucivy-core = "4.5.0"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.4.1", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.5.0", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
