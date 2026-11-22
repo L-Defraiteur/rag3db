@@ -3125,17 +3125,21 @@ impl Node for ExactNameNode {
         let sait = ctx
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
             .is_some_and(|d| d.filter_within_edits("n", "p", 1).is_some());
+        // Two swapped letters are one typo (OSA, c7): Levenshtein counts them two, so the base preselects within
+        // twice the distance and `typo_of` decides below, on the names read.
+        let mut par_faute = false;
         if uuids.is_empty() && distance > 0 && !nom.contains(char::is_whitespace) && nom.chars().count() >= crate::search::MIN_TYPO_NAME_CHARS && sait {
+            par_faute = true;
             uuids = admitted(
                 ctx,
                 FilterCondition::Field {
                     key: self.field.clone(),
-                    value: FilterValue::Ops(vec![crate::filter::FilterOp::WithinEdits { value: nom.clone(), max: distance }]),
+                    value: FilterValue::Ops(vec![crate::filter::FilterOp::WithinEdits { value: nom.clone(), max: distance.saturating_mul(2) }]),
                 },
             )?;
         }
         uuids.sort();
-        uuids.truncate(self.limit);
+        uuids.truncate(if par_faute { self.limit.saturating_mul(10) } else { self.limit });
         if uuids.is_empty() {
             return vide(ctx);
         }
@@ -3151,9 +3155,15 @@ impl Node for ExactNameNode {
             None => true,
             Some(plis) => l.data.get(plis).and_then(|v| v.as_str()).is_none_or(|s| s.is_empty() || s == "?"),
         };
+        let champ = self.field.clone();
+        let faute = |l: &crate::search_backend::EntityRow| {
+            !par_faute || l.data.get(&champ).and_then(|v| v.as_str()).is_some_and(|n| crate::search::typo_of(n, &nom))
+        };
         let resultats: Vec<UnifiedResult> = lignes
             .into_iter()
             .filter(feuille)
+            .filter(faute)
+            .take(self.limit)
             .map(|l| {
                 let mut u = UnifiedResult::from(crate::search::SearchResult {
                     uuid: l.uuid,
