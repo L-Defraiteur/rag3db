@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useState } from "react";
+import { AgentsBar } from "@/components/AgentsBar";
 import { createRoot } from "react-dom/client";
 import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -238,6 +239,8 @@ function App() {
           </>
         )}
       </header>
+      <div className={`flex-1 flex ${fullWindow ? "min-h-0" : ""}`}>
+      {fenetre ? null : <AgentsBar />}
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (
           <p className="text-destructive" role="alert">
@@ -251,6 +254,7 @@ function App() {
           </p>
         )}
       </main>
+      </div>
     </div>
   );
 }
