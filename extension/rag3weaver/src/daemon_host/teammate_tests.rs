@@ -94,6 +94,9 @@ mod closing;
 /// The witnesses of reopening a closed agent (`--pop-agent`, 22 November 2026), in a module of their own.
 mod reopen;
 
+/// The witnesses of forking an agent (`--fork-agent`, 22 November 2026), in a module of their own.
+mod fork;
+
 /// The witnesses of the author set by the host (M7, 21 November 2026), in a module of their own.
 mod author;
 
