@@ -50,6 +50,23 @@ struct Options {
     theme: Option<String>,
     /// Le journal de séance (`--journal <fichier>`, lot tty-7).
     journal: Option<String>,
+    /// `--continue` : la dernière conversation du dépôt.
+    continuer: bool,
+}
+
+/// The repository of a folder: its git root, or the folder itself when it has none.
+fn folder_repository(folder: &std::path::Path) -> std::path::PathBuf {
+    folder.to_path_buf()
+}
+
+/// A new conversation's name, from its date (`month0` from 0).
+fn new_conversation_name(_day: u32, _month0: u32, _hour: u32, _minute: u32) -> String {
+    String::new()
+}
+
+/// The last conversation of a repository in the host's list of teammates.
+fn last_conversation(_list: &Value, _parent: &str) -> Option<String> {
+    None
 }
 
 fn options() -> Result<Options, String> {
@@ -58,7 +75,7 @@ fn options() -> Result<Options, String> {
 
 fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
+    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None, continuer: false };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -348,5 +365,46 @@ mod english_options_tests {
         for flag in ["--repo", "--task", "--request", "--log", "--address", "--since"] {
             assert!(parse(&["--repo", "repo", "--task", "sample", flag]).is_err(), "{flag}");
         }
+    }
+}
+
+#[cfg(test)]
+mod launch_from_a_folder_tests {
+    use super::*;
+
+    /// **`rag3weaver-tty` alone starts** (Lucie, 22 November 2026: « je lance une session depuis un répertoire, déjà
+    /// ça devrait commencer comme ça ») : `--repo` and `--task` are options; `--continue` takes the last conversation.
+    #[test]
+    fn no_argument_is_required_and_continue_is_an_option() {
+        let o = parse_options(Vec::<String>::new(), None).expect("no argument is required");
+        assert_eq!((o.depot.as_str(), o.task.as_str(), o.continuer), ("", "", false));
+        let c = parse_options(vec!["--continue".to_string()], None).unwrap();
+        assert!(c.continuer);
+    }
+
+    /// The repository is the folder's git root, or the folder itself when it has none.
+    #[test]
+    fn the_repository_is_the_folders_git_root_or_the_folder() {
+        let d = std::env::temp_dir().join(format!("tty-dossier-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("projet/src")).unwrap();
+        assert_eq!(folder_repository(&d.join("projet/src")), d.join("projet/src"), "no git: the folder itself");
+        assert!(std::process::Command::new("git").args(["init", "-q"]).current_dir(d.join("projet")).status().unwrap().success());
+        let root = folder_repository(&d.join("projet/src"));
+        assert_eq!(root.canonicalize().unwrap(), d.join("projet").canonicalize().unwrap(), "the git root");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A new conversation is named by its date; `--continue` takes the last one of the repository.
+    #[test]
+    fn a_new_conversation_is_named_by_its_date_and_continue_takes_the_last() {
+        assert_eq!(new_conversation_name(22, 10, 22, 41), "22-11-22h41");
+        let list = serde_json::json!({ "teammates": [
+            { "parent": "b1", "task": "ancienne", "state": "ended" },
+            { "parent": "b2", "task": "autre-depot", "state": "ended" },
+            { "parent": "b1", "task": "derniere", "state": "waiting" }
+        ] });
+        assert_eq!(last_conversation(&list, "b1").as_deref(), Some("derniere"));
+        assert_eq!(last_conversation(&list, "b3"), None);
     }
 }
