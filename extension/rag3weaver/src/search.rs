@@ -2086,6 +2086,17 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// 235 caractères.)
 pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 900;
 
+/// **The distance of the whole query** (the pass that puts a copied text first, Lucie, 25 October 2026): 1 up to
+/// [`MAX_FUZZY_WHOLE_QUERY_CHARS`], 0 beyond.
+pub fn whole_query_distance(query: &str) -> u8 {
+    if query.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 }
+}
+
+/// The witnesses of the whole query's distance (22 November 2026), in a file of their own.
+#[cfg(test)]
+#[path = "search_whole_phrase_tests.rs"]
+mod whole_phrase_tests;
+
 /// **La recherche par mots garde au plus tant de termes** (même ticket, même mesure) : le plus
 /// grand palier sous le budget sur la base de code — 343 ms à 64 termes et 650 ms à 128 sur
 /// lucivy 4.3.2 (495 ms et 2,7 s sur 4.3.1).

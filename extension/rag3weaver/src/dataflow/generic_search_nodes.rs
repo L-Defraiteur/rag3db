@@ -1577,8 +1577,8 @@ impl Node for BM25SearchNode {
             // recherche par mots garde au plus `MAX_WORD_TERMS` termes ; les deux coupes se
             // disent dans la méta.
             let longueur = query_str.chars().count();
-            let distance_entiere = if longueur <= crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 };
-            if distance_entiere == 0 {
+            let distance_entiere = crate::search::whole_query_distance(&query_str);
+            if longueur > crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS {
                 node_warnings.push(format!(
                     "requête longue : la requête entière ({longueur} caractères) se cherche sans flou au-delà de {}",
                     crate::search::MAX_FUZZY_WHOLE_QUERY_CHARS
