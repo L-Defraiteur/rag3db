@@ -928,31 +928,9 @@ impl DaemonHost {
                         if let Some(p) = hote.porte_d_ecriture.lock().unwrap_or_else(|e| e.into_inner()).clone() {
                             p.attendre();
                         }
-                        // The worktree's signature before the first writing: a change made during it is written next.
-                        let mut ecrite = worktree_signature(&reel_f);
-                        if let Err(e) = ecrire(&hote) {
-                            // The layer could not be written: said in the state, and the session reads the backend again.
-                            let _ = hote.noter_l_ouverture(&claude_f, &nom_f, &json!({ "name": nom_f, "layer_refused": e }));
-                            if hote.session_default_view(&session_f) == Some(json!({ "layer": couche_f })) {
-                                let _ = hote.set_session_view(&session_f, None);
-                            }
-                            hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
-                            return;
-                        }
-                        hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
-                        #[cfg(test)]
-                        if let Some(p) = hote.porte_du_guet.lock().unwrap_or_else(|e| e.into_inner()).clone() {
-                            p.attendre();
-                        }
-                        // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): the kernel's events on
-                        // the worktree (inotify, not the backend's files bus) wake the thread; it waits 150 ms of quiet, then
-                        // a change of the worktree's signature (its HEAD, its status, the time and size of each changed file)
-                        // rewrites the layer's gap from the fork, deletions included. A slow poll every 30 s stands in when the
-                        // kernel's events are missing. Measured on a rag3db worktree (about 9 500 tracked files): one signature
-                        // costs 16 to 25 ms at luciepc, about 50 ms at the tablet — too much each second for each open view.
-                        // The host is held weakly: a host that goes stops it; close_view stops it before the worktree goes.
-                        let faible = std::sync::Arc::downgrade(&hote);
-                        drop(hote);
+                        // **The kernel's watch first** (c7, 22 November 2026): posed before the first writing, so that a write
+                        // in the worktree the moment the view is said written makes an event; posed after, such a write was
+                        // only caught by the slow poll, 30 s later.
                         let sonnette = arret_f.clone();
                         let reel_m = reel_f.clone();
                         let _observateur = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
@@ -981,6 +959,31 @@ impl DaemonHost {
                         })
                         .map_err(|e| eprintln!("[démon] la vue {couche_f} : pas d'événements du noyau ({e}) ; elle se relit toutes les 30 s"))
                         .ok();
+                        // The worktree's signature before the first writing: a change made during it is written next.
+                        let mut ecrite = worktree_signature(&reel_f);
+                        if let Err(e) = ecrire(&hote) {
+                            // The layer could not be written: said in the state, and the session reads the backend again.
+                            let _ = hote.noter_l_ouverture(&claude_f, &nom_f, &json!({ "name": nom_f, "layer_refused": e }));
+                            if hote.session_default_view(&session_f) == Some(json!({ "layer": couche_f })) {
+                                let _ = hote.set_session_view(&session_f, None);
+                            }
+                            hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
+                            return;
+                        }
+                        hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
+                        #[cfg(test)]
+                        if let Some(p) = hote.porte_du_guet.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                            p.attendre();
+                        }
+                        // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): the kernel's events on
+                        // the worktree (inotify, not the backend's files bus) wake the thread; it waits 150 ms of quiet, then
+                        // a change of the worktree's signature (its HEAD, its status, the time and size of each changed file)
+                        // rewrites the layer's gap from the fork, deletions included. A slow poll every 30 s stands in when the
+                        // kernel's events are missing. Measured on a rag3db worktree (about 9 500 tracked files): one signature
+                        // costs 16 to 25 ms at luciepc, about 50 ms at the tablet — too much each second for each open view.
+                        // The host is held weakly: a host that goes stops it; close_view stops it before the worktree goes.
+                        let faible = std::sync::Arc::downgrade(&hote);
+                        drop(hote);
                         let mut dit: Option<String> = None;
                         loop {
                             // Whether this turn was woken by a kernel event (the bell) or by the slow poll.
