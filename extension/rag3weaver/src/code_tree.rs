@@ -275,8 +275,9 @@ pub fn add_files_with(roots: &Roots, tree: &Path, from: &str, name: Option<&str>
     // l'IDE.
     w.insert("read_only".into(), Value::Bool(false));
     w.insert("task_writes".into(), Value::Bool(true));
-    // Les commandes : la porte du gabarit (`approval` dans le livré : la liste
-    // sûre passe, le reste se demande dans la boîte), et `run_command` gardé.
+    // Les commandes : la porte du gabarit (`auto` dans le livré depuis le 22 novembre
+    // 2026 : tout ce que le bac lance passe ; `approval` seulement si le gabarit ne dit
+    // rien), et `run_command` gardé.
     // Hors d'une tâche le chat ne lance aucune commande ; dans une tâche, elles
     // passent par cette porte, dans le worktree (c7, premier essai réel de
     // l'équipier, 7 novembre 2026 : sans elles, aucune tâche de code réelle).
@@ -602,7 +603,8 @@ mod tests {
         // du gabarit, dans une tâche seulement.
         assert_eq!(m["workspace"]["task_writes"], true);
         assert!(m["tools"].get("edit_file").is_some() && m["tools"].get("run_command").is_some(), "{}", m["tools"]);
-        assert_eq!(m["workspace"]["commands"], "approval");
+        // La posture d'un projet neuf est auto depuis le 22 novembre 2026 (tout ce que le bac lance passe).
+        assert_eq!(m["workspace"]["commands"], "auto");
         // Les déclarations dans un dépôt, à la racine de l'arbre inscrit.
         let racine = roots.config.join(&a.name);
         let log = std::process::Command::new("git").arg("-C").arg(&racine).args(["log", "--format=%s"]).output().unwrap();
