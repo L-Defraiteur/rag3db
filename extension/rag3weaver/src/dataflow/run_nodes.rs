@@ -1575,3 +1575,8 @@ mod tests {
         let _ = std::fs::remove_file(&journal);
     }
 }
+
+/// Witnesses: a task's own tree is never a protected path for its commands (22 Nov 2026).
+#[cfg(test)]
+#[path = "run_nodes_task_root_tests.rs"]
+mod task_root_tests;
