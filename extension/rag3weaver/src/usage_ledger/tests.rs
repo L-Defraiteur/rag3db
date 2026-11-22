@@ -71,7 +71,7 @@ fn a_reply_without_usage_and_an_open_reservation_count_at_their_bound() {
 /// **Two writers at the edge of the cap: only one passes** (the reservation under `flock`). Each thread opens the files
 /// itself, as two processes would: `flock` holds per open file.
 #[test]
-fn two_writers_at_the_edge_of_the_cap_only_one_passes() {
+fn two_writers_at_the_edge_of_the_cap_only_one_goes_through() {
     let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":100,"free_private_hosts":true,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
     for _ in 0..20 {
         std::fs::remove_dir_all(&l.dir).ok();
@@ -174,7 +174,7 @@ fn a_tariff_that_changes_counts_each_call_at_the_tariff_of_its_day() {
 
 /// **Beyond the cap, an agent's call is refused, a human's own passes** and is counted.
 #[test]
-fn beyond_the_cap_an_agent_is_refused_and_a_human_passes() {
+fn beyond_the_cap_an_agent_is_refused_and_a_human_goes_through() {
     let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":1,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
     let usage = Usage { prompt_tokens: 10, completion_tokens: 900_000, ..Default::default() };
     let m = MeteredLlm::new(model(usage), l.clone(), "paid", "vertex", false);
