@@ -98,7 +98,78 @@ then give its link.
 
 ## 7. La maquette de l'écran
 
-*Section de recherche.*
+*Section de recherche.* Un seul écran : le chat au centre, toujours ; la barre des agents à gauche, l'accueil toujours
+en tête. Il n'y a plus de page de formulaires ; la plomberie est derrière « Avancé ».
+
+### L'arrivée, sans rien d'ouvert
+
+```
+┌─────────────────────┬────────────────────────────────────────────────────────────┐
+│ rag3weaver          │  Accueil                                    ◐   ⚙ Avancé   │
+│ ┌─────────────────┐ │────────────────────────────────────────────────────────────│
+│ │ 🔍 un agent…    │ │                                                            │
+│ └─────────────────┘ │  Bonjour. Sur cette machine : aucun dépôt ouvert, aucun    │
+│                     │  agent en cours. Je n'ai pas d'outils de code : je peux    │
+│ ● Accueil           │  ouvrir un dossier, cloner un dépôt, et te préparer un     │
+│                     │  agent de code dessus. Que veux-tu faire ?                 │
+│ (aucun agent)       │                                                            │
+│                     │  [Ouvrir un dossier…]  [Cloner un dépôt…]                  │
+│ + Nouvel agent      │                                                            │
+│                     │ ┌────────────────────────────────────────────────────────┐ │
+│                     │ │ Écris…                                            ➤   │ │
+│                     │ └────────────────────────────────────────────────────────┘ │
+└─────────────────────┴────────────────────────────────────────────────────────────┘
+```
+
+- La saisie a le focus. Le premier message est celui de l'agent d'accueil, tiré de `machine_state` (le nombre de
+  dépôts, d'agents en cours, d'accords qui attendent ; zéro se dit « aucun »).
+- Les deux boutons sous le message sont les mêmes gestes que les phrases : « Ouvrir un dossier… » montre le sélecteur
+  dans le fil (§ 7.3), « Cloner un dépôt… » demande l'adresse puis pose la carte (§ 7.2).
+
+### La barre des agents
+
+- **Accueil**, toujours en tête, avec un point s'il attend une réponse.
+- **Actifs** : un tour en cours (●), un accord qui attend (◐, « attend ton accord »). **Autres** (○), du plus récent au
+  plus ancien, avec « il y a 3 j ». Chaque ligne : le projet et la tâche (`rag3db · lot B`), puis l'état en une ligne.
+- Un clic ouvre le chat de l'agent au centre ; l'adresse suit (`/ide/code/<id>/chat`), le retour en arrière ramène.
+- La recherche filtre par projet ou tâche. « + Nouvel agent » écrit à l'agent d'accueil « prépare-moi un agent ».
+- La liste vient de l'état de l'hôte (`/ide/etat`, les dépôts et leurs tâches) : rien de neuf à calculer côté page.
+
+### 7.2 La carte du clone, dans le chat de l'accueil
+
+```
+   tu : j'aimerais qu'on regarde github.com/x/y
+
+   Je n'ai pas d'outils de code. Je peux le préparer :
+   ┌────────────────────────────────────────────────────────────┐
+   │ Cloner un dépôt                                   attend ton accord │
+   │ https://github.com/x/y                                             │
+   │ → dans ~/git_workspaces/y   (le dossier n'existe pas : il sera créé) │
+   │ puis l'ouvrir, et créer un agent de code dessus                    │
+   │                                       [Refuser]   [Accorder]       │
+   └────────────────────────────────────────────────────────────┘
+   ✓ Cloné dans ~/git_workspaces/y, ouvert.
+   ✓ Ton agent de code sur y est prêt : [Ouvrir son chat]
+```
+
+- C'est la carte d'accord de l'IDE (le même composant que celle d'une commande), de classe `clone` : l'adresse en clair,
+  la destination avec `~`, ce qui se passera ensuite. Une adresse qui porte un jeton est refusée avant la carte.
+- Les deux lignes suivantes sont les résultats de `open_folder` et de `create_code_agent` ; le bouton « Ouvrir son
+  chat » est le lien que rend `create_code_agent`, et l'agent apparaît aussitôt dans la barre, parmi les actifs.
+
+### 7.3 Le sélecteur de dossiers, dans le fil
+
+- Le sélecteur s'ouvre en carte dans le fil : un fil d'Ariane depuis `~`, en tête les dépôts git trouvés sous
+  `~/git_workspaces`, puis les sous-dossiers. Seul ce que l'hôte refuse vraiment est marqué d'avance, avec sa raison.
+- « Ouvrir ce dossier » appelle `open_folder`, puis l'accueil propose « Créer un agent de code dessus ? ».
+- Le même sélecteur est dans « Avancé », avec le champ de chemin (qui comprend `~`).
+
+### Ce qu'il me faut des outils (pour archi)
+
+- `machine_state` rend, par agent : son id d'IDE (pour le lien et la barre), le projet, la tâche, l'état (`running`,
+  `waiting_approval`, `idle`), l'heure du dernier tour, et le nombre d'accords qui attendent en tout.
+- `create_code_agent` rend l'id de l'IDE de l'agent créé et son lien (`/ide/code/<id>/chat`).
+- `clone_repository` rend la destination retenue avant la carte (pour l'y écrire), et après l'accord, le chemin cloné.
 
 ## Les lots, si la page est retenue
 
