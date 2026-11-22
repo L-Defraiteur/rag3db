@@ -57,6 +57,40 @@ impl DaemonFile {
     }
 }
 
+/// **Where the host's data lives, folder by folder** (22 Nov 2026: e2e hosts opened the tasks of the real data
+/// folder, and one wrote five tasks there). One source for every root: a root's own variable, else the data
+/// folder, whose order is `RAG3WEAVER_DATA_DIR`, `RAG3WEAVER_DAEMON_DIR` (the witnesses' host folder), then the
+/// user's (`$XDG_DATA_HOME/rag3weaver`, `~/.local/share/rag3weaver`). In service none is set: nothing moves.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DataRoots {
+    /// The code trees' bases, the register of granted roots, the user's title.
+    pub data: PathBuf,
+    /// The teammates' tasks (`RAG3WEAVER_TACHES_DIR`).
+    pub tasks: PathBuf,
+    /// The chat sessions (`RAG3WEAVER_CHATS_DIR`).
+    pub chats: PathBuf,
+    /// The runs' journal (`RAG3WEAVER_RUNS_DIR`).
+    pub runs: PathBuf,
+}
+
+/// [`DataRoots`] read from `get` (the environment, or a witness's table).
+pub fn data_roots_with(get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> DataRoots {
+    let var = |k: &str| get(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let home = var("HOME").unwrap_or_else(std::env::temp_dir);
+    // The red stub: today's roots, each read on its own.
+    let data = var("RAG3WEAVER_DATA_DIR").unwrap_or_else(|| home.join(".local/share/rag3weaver"));
+    let tasks = var("RAG3WEAVER_TACHES_DIR")
+        .unwrap_or_else(|| var("XDG_DATA_HOME").unwrap_or_else(|| home.join(".local/share")).join("rag3weaver/taches"));
+    let chats = var("RAG3WEAVER_CHATS_DIR").unwrap_or_else(|| tasks.parent().map(|p| p.join("chats")).unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-chats")));
+    let runs = var("RAG3WEAVER_RUNS_DIR").unwrap_or_else(|| home.join(".local/share/rag3weaver/runs"));
+    DataRoots { data, tasks, chats, runs }
+}
+
+/// [`DataRoots`] of this process's environment.
+pub fn data_roots() -> DataRoots {
+    data_roots_with(&|k| std::env::var_os(k))
+}
+
 fn forced_dir() -> Option<PathBuf> {
     std::env::var_os("RAG3WEAVER_DAEMON_DIR").filter(|v| !v.is_empty()).map(PathBuf::from)
 }
