@@ -571,6 +571,9 @@ fn protected_path_in(ligne: &str, racine: &std::path::Path, protected: &[std::pa
     }
     let canon = |r: &std::path::PathBuf| r.canonicalize().unwrap_or_else(|_| r.clone());
     let proteges: Vec<std::path::PathBuf> = protected.iter().map(canon).collect();
+    // The command's own tree is its domain: a task's tree lives under the host's data folder (protected), and is
+    // never a protected path for the task's commands (recherche's audit, 22 Nov 2026). Leaving it stays checked.
+    let domaine = canon(&racine.to_path_buf());
     let maison = std::env::var_os("HOME").map(std::path::PathBuf::from);
     for mot in ligne.split_whitespace() {
         let mot = mot.trim_matches(|c| c == '\'' || c == '"');
@@ -589,6 +592,9 @@ fn protected_path_in(ligne: &str, racine: &std::path::Path, protected: &[std::pa
             racine.join(mot)
         };
         let Some(reel) = resolve_path(&candidat) else { continue };
+        if reel.starts_with(&domaine) {
+            continue;
+        }
         if proteges.iter().any(|p| reel.starts_with(p)) {
             return Some(reel);
         }
