@@ -852,7 +852,7 @@ impl NodeFactory for SearchSourceNodeFactory {
                     default: Some(serde_json::json!([])),
                     description: EXCLUDE_HELP.into(),
                     choices: None,
-                    json_schema: None,
+                    json_schema: Some(serde_json::json!({"type": "array", "items": {"type": "string"}})),
                 },
                 ConfigParam {
                     name: "must".into(),
@@ -861,7 +861,7 @@ impl NodeFactory for SearchSourceNodeFactory {
                     default: Some(serde_json::json!([])),
                     description: MUST_HELP.into(),
                     choices: None,
-                    json_schema: None,
+                    json_schema: Some(serde_json::json!({"type": "array", "items": {"type": "string"}})),
                 },
                 ConfigParam {
                     name: "phrase".into(),
@@ -870,7 +870,7 @@ impl NodeFactory for SearchSourceNodeFactory {
                     default: Some(serde_json::json!([])),
                     description: PHRASE_HELP.into(),
                     choices: None,
-                    json_schema: None,
+                    json_schema: Some(serde_json::json!({"type": "array", "items": {"type": "string"}})),
                 },
                 ConfigParam {
                     name: "exact".into(),
