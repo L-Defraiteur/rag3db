@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
+  auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
+  distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,
+  « lit hors des worktrees ». Sans classe, la carte reste la même.
 - 22 novembre 2026 — **Remplacer des vecteurs coûte dix fois moins.** Une ligne qui porte déjà un vecteur et en
   reçoit un neuf (un contenu changé, un modèle changé) ne passe plus par NULL une ligne à la fois : tout le paquet part
   en une instruction, comme les lignes nées sans vecteur. Le défaut du moteur qui l'imposait depuis le 3 octobre (un
