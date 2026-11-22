@@ -354,7 +354,7 @@ public:
         HNSWInsertState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
-            common::column_id_t columnID, uint64_t degree);
+            common::column_id_t columnID, uint64_t degree, int64_t searchEf);
     };
 
     struct HNSWDeleteState final : DeleteState {
@@ -371,9 +371,9 @@ public:
         HNSWDeleteState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
-            common::column_id_t columnID, uint64_t degree)
+            common::column_id_t columnID, uint64_t degree, int64_t searchEf)
             : insertState{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
-                  nodeTable, columnID, degree} {}
+                  nodeTable, columnID, degree, searchEf} {}
     };
 
     struct HNSWUpdateState final : UpdateState {
@@ -381,9 +381,9 @@ public:
         HNSWUpdateState(main::ClientContext* context, catalog::TableCatalogEntry* nodeTableEntry,
             catalog::TableCatalogEntry* upperRelTableEntry,
             catalog::TableCatalogEntry* lowerRelTableEntry, storage::NodeTable& nodeTable,
-            common::column_id_t columnID, uint64_t degree)
+            common::column_id_t columnID, uint64_t degree, int64_t searchEf)
             : insertState{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry,
-                  nodeTable, columnID, degree} {}
+                  nodeTable, columnID, degree, searchEf} {}
     };
 
     OnDiskHNSWIndex(const main::ClientContext* context, storage::IndexInfo indexInfo,

@@ -617,13 +617,23 @@ HNSWSearchState::HNSWSearchState(main::ClientContext* context,
     upperGraph = std::make_unique<graph::OnDiskGraph>(context, std::move(upperGraphEntry));
 }
 
+// The search of an insertion, and of the repairs after an update or a delete, takes the index's
+// efc, as its CREATE does. It took the default query efs (QueryHNSWConfig{}, 200) whatever the
+// index said: efc only priced the CREATE, and an index created at efc 50 or 4 000 inserted at 200
+// all the same (measured for ED, 22 November 2026 : docs/coeur-cpp-hotfixs-tickets/22-11-2026/).
+static QueryHNSWConfig insertSearchConfig(int64_t searchEf) {
+    QueryHNSWConfig config;
+    config.efs = searchEf;
+    return config;
+}
+
 OnDiskHNSWIndex::HNSWInsertState::HNSWInsertState(main::ClientContext* context,
     catalog::TableCatalogEntry* nodeTableEntry, catalog::TableCatalogEntry* upperRelTableEntry,
     catalog::TableCatalogEntry* lowerRelTableEntry, NodeTable& nodeTable,
-    common::column_id_t columnID, uint64_t degree)
+    common::column_id_t columnID, uint64_t degree, int64_t searchEf)
     : searchState{context, nodeTableEntry, upperRelTableEntry, lowerRelTableEntry, nodeTable,
           columnID, nodeTable.getNumTotalRows(Transaction::Get(*context)), degree,
-          QueryHNSWConfig{}} {
+          insertSearchConfig(searchEf)} {
     std::vector<common::LogicalType> insertTypes;
     insertTypes.push_back(common::LogicalType::INTERNAL_ID());
     insertTypes.push_back(common::LogicalType::INTERNAL_ID());
@@ -840,7 +850,7 @@ std::unique_ptr<Index::InsertState> OnDiskHNSWIndex::initInsertState(main::Clien
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
         getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);
     return std::make_unique<HNSWInsertState>(context, nodeTableEntry, upperRelTableEntry,
-        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml, config.efc);
 }
 
 class CommitInsertEmbeddingScanState final : public GetEmbeddingsScanState {
@@ -942,7 +952,7 @@ void OnDiskHNSWIndex::finalize(main::ClientContext* context) {
     const auto scanState = std::make_unique<OnDiskEmbeddingScanState>(transaction, mm, nodeTable,
         indexInfo.columnIDs[0], embeddingDim);
     const auto insertState = std::make_unique<HNSWInsertState>(context, nodeTableEntry,
-        upperRelTableEntry, lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+        upperRelTableEntry, lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml, config.efc);
     // TODO(Guodong): Perhaps should switch to scan instead of lookup here.
     for (auto offset = hnswStorageInfo.numCheckpointedNodes; offset < numTotalRows; offset++) {
         const auto vector = insertState->searchState.embeddings->getEmbedding(offset, *scanState);
@@ -1078,7 +1088,7 @@ std::unique_ptr<Index::DeleteState> OnDiskHNSWIndex::initDeleteState(
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] = getIndexTableCatalogEntries(
         catalog::Catalog::Get(*context), Transaction::Get(*context), indexInfo);
     return std::make_unique<HNSWDeleteState>(context, nodeTableEntry, upperRelTableEntry,
-        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml, config.efc);
 }
 
 void OnDiskHNSWIndex::delete_(Transaction* transaction, const common::ValueVector& nodeIDVector,
@@ -1367,7 +1377,7 @@ std::unique_ptr<Index::UpdateState> OnDiskHNSWIndex::initUpdateState(main::Clien
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
         getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);
     return std::make_unique<HNSWUpdateState>(context, nodeTableEntry, upperRelTableEntry,
-        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
+        lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml, config.efc);
 }
 
 void OnDiskHNSWIndex::update(Transaction* transaction, const common::ValueVector& nodeIDVector,
