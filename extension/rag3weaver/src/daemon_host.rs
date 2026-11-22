@@ -1339,9 +1339,19 @@ impl DaemonHost {
     /// repository opens as it is (Lucie, 21 November 2026). Refused, saying why: Lucie's tree, sairen, another session's
     /// folder.
     pub fn ouvrir_un_dossier(&self, session: Option<&str>, chemin: &Path) -> Value {
+        // **`~` is the user's home** (Lucie, 22 November 2026: a field made for a human): `~` and `~/…` unfold
+        // towards the parent of the space of the worktrees (`~/git_workspaces`).
+        let maison = self.espace_et_table().0.parent().map(Path::to_path_buf).unwrap_or_default();
+        let deplie = deplier_le_tilde(chemin, &maison);
+        let chemin = deplie.as_path();
         let r = self.check_session(session).and_then(|s| {
             if !chemin.is_absolute() {
-                return Err(format!("ouvrir {} : un chemin absolu est attendu", chemin.display()));
+                return Err(format!(
+                    "ouvrir {} : un chemin absolu ou sous ~ est attendu, par exemple ~/{} ou {}",
+                    chemin.display(),
+                    chemin.display(),
+                    maison.join(chemin).display()
+                ));
             }
             let qui = s.claude_name.clone();
             let (espace, table) = self.espace_et_table();
@@ -4165,6 +4175,15 @@ mod ide_card_root_tests;
 /// L'accueil en arbre des agents (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_agents_tests;
+/// **`~` and `~/…` unfolded towards `maison`** (22 November 2026); any other path as it is (`~user` is not read).
+pub(crate) fn deplier_le_tilde(chemin: &Path, maison: &Path) -> std::path::PathBuf {
+    match chemin.to_str() {
+        Some("~") => maison.to_path_buf(),
+        Some(t) => t.strip_prefix("~/").map(|reste| maison.join(reste)).unwrap_or_else(|| chemin.to_path_buf()),
+        None => chemin.to_path_buf(),
+    }
+}
+
 /// Ouvrir un dossier depuis l'IDE (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_ouvrir_tests;
