@@ -119,3 +119,42 @@ fn the_card_says_its_class_in_plain_words() {
     v.ligne_de_boite(&line(1, "teammate", "approval", json!({ "command": "cargo build" })));
     assert!(v.ligne_d_etat().contains("attend ton accord : cargo build  [ Oui ]"), "without a class, nothing changes: {}", v.ligne_d_etat());
 }
+
+fn root_card(v: &mut Vue, args: Value) {
+    v.ligne_de_boite(&line(1, "teammate", "approval", json!({ "tool": "run_command", "args": args, "command": "ls /home/lucied/projet", "class": "open_root", "scope": "once" })));
+}
+
+/// **A root asked for is said with its mode** (archi's judge-all, 22 November 2026): the card names the root and
+/// whether it is read or written.
+#[test]
+fn an_open_root_card_says_the_root_and_its_mode() {
+    let mut v = Vue::new(220, true);
+    root_card(&mut v, json!({ "command": "ls /home/lucied/projet", "root": "/home/lucied/projet", "mode": "write" }));
+    let s = v.ligne_d_etat();
+    assert!(s.contains("demande la racine /home/lucied/projet en écriture"), "{s}");
+    let mut r = Vue::new(220, true);
+    root_card(&mut r, json!({ "command": "ls /home/lucied/projet", "root": "/home/lucied/projet", "mode": "read" }));
+    assert!(r.ligne_d_etat().contains("en lecture"), "{}", r.ligne_d_etat());
+}
+
+/// **A wide root's warning jumps to the eye** (archi, c7: « un avertissement de racine large doit sauter aux yeux »):
+/// it is on the card, in a segment of its own, in bright red.
+#[test]
+fn a_wide_root_warning_is_said_in_red() {
+    let mut v = Vue::new(260, true);
+    root_card(&mut v, json!({ "command": "ls /home/lucied", "root": "/home/lucied", "mode": "read", "warning": "cette racine contient aussi : .ssh, git_workspaces" }));
+    let line = v.ligne_vivante(260, v.depuis);
+    let warn = line.spans.iter().find(|s| s.content.contains("cette racine contient aussi")).unwrap_or_else(|| panic!("the warning is on the card: {line:?}"));
+    assert_eq!(warn.style.fg, Some(ratatui::style::Color::LightRed), "in bright red, apart: {warn:?}");
+    assert!(warn.content.starts_with("⚠ "), "{warn:?}");
+}
+
+/// **A protected folder is said, with the agent's reason, and opened for this command only.**
+#[test]
+fn a_protected_card_says_it_opens_for_this_command_only_and_why() {
+    let mut v = Vue::new(260, true);
+    v.ligne_de_boite(&line(1, "teammate", "approval", json!({ "tool": "run_command", "args": { "command": "cat ~/.local/share/rag3weaver/daemon.json", "reason": "lire le port de l'hôte" }, "command": "cat ~/.local/share/rag3weaver/daemon.json", "class": "protected", "scope": "once" })));
+    let s = v.ligne_d_etat();
+    assert!(s.contains("ouvre un dossier protégé, pour cette commande seulement"), "{s}");
+    assert!(s.contains("« lire le port de l'hôte »"), "{s}");
+}
