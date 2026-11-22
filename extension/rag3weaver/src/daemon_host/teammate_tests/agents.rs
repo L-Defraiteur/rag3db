@@ -48,7 +48,7 @@ fn the_agents_of_the_machine_are_a_tree_of_roots_and_tasks() {
 
 /// **The tree says each agent's last activity and its closed agents** (c7 for Lucie, 22 November 2026: reopen an agent
 /// already launched, `--pop-agent`): an open task gives its agent key and `last_activity.at` (its last mailbox line, else
-/// its opening); a task closed (rejected here) stays under its root, stopped (`closed_state: "rejected"`), its agent key, its closing
+/// its opening); a task closed (rejected here) stays under its root, stopped (`lifecycle: "rejected"`), its agent key, its closing
 /// time, its archive, the last line of its archived mailbox, and `reopenable: true` while its archive is there.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
@@ -74,7 +74,7 @@ fn the_agents_say_their_last_activity_and_their_closed_agents() {
     assert!(vive["agent_key"].as_str().is_some_and(|k| k.starts_with("agent:")), "the open task says no agent key: {vive}");
     assert_eq!(vive["last_activity"]["at"], ligne["at"], "the open task's last activity is not its last mailbox line: {vive}");
     let finie = taches.iter().find(|t| t["name"] == "archi-finie").unwrap_or_else(|| panic!("the closed task is not under its root: {a:#}"));
-    assert_eq!((&finie["state"], &finie["closed_state"]), (&json!("stopped"), &json!("rejected")), "{finie}");
+    assert_eq!((&finie["state"], &finie["lifecycle"]), (&json!("stopped"), &json!("rejected")), "{finie}");
     assert_eq!(finie["agent_key"], json!(cle_finie), "{finie}");
     assert!(finie["closed_ms"].as_u64().is_some(), "{finie}");
     assert!(finie["archive"].as_str().is_some_and(|p| std::path::Path::new(p).is_dir()), "{finie}");
@@ -132,6 +132,7 @@ fn the_agents_give_the_contract_of_the_left_bar() {
         assert!(t["last_activity"].get("command").is_some(), "{t}");
     }
     assert_eq!(ta["state"], json!("waiting"), "an open task with no step running waits: {ta}");
+    assert_eq!(ta["lifecycle"], json!("open"), "{ta}");
     assert_eq!(ta["last_activity"]["at"], reponse["at"], "{ta}");
     assert_eq!(ta["contacts"], json!([{ "id": "agent:autre-123", "last_message_at": reponse["at"] }]), "{ta}");
     assert_eq!(tb["state"], json!("paused"), "{tb}");

@@ -113,8 +113,8 @@ impl DaemonHost {
             "backend": t.parent,
             "repo": t.depot.file_name().map(|n| n.to_string_lossy().to_string()),
             "name": t.nom,
-            // Open only, until a finished task keeps its folder and its parent (page of the reviewer).
-            "state": "open",
+            // Its lifecycle (open here; rejected, merged or orphan once closed), apart from its `state` of the left bar.
+            "lifecycle": "open",
             "running": self.teammate_running(&t.parent, &t.nom),
             "doing": doing,
             "views": t.vues,
@@ -154,7 +154,7 @@ fn closed_agent_task(t: &Value, machine: &str) -> Value {
         "unread": 0,
         "contacts": contacts(&lignes, &id),
         "pending": 0,
-        "closed_state": state,
+        "lifecycle": state,
         "backend": t["parent"],
         "name": t["nom"],
         "state": "stopped",
@@ -222,6 +222,7 @@ fn fields() -> Value {
         "id": "the agent's identity: its agent key (agent:<key>) for a task, session:<name> for a root",
         "name": "the agent's name: its task's name, or the Claude session's",
         "state": "active (a step runs, or a live root), paused (paused.json, or every agent paused), stopped (closed, or a root no longer live), waiting (open, no step running)",
+        "lifecycle": "a task's lifecycle: open, or once closed rejected, merged or orphan",
         "machine": "the hostname of the host that runs the agent",
         "parent": "the id of the root that launched the task (session:<name>), null for a root or a task without a parent",
         "children": "the ids of the agents it launched",
