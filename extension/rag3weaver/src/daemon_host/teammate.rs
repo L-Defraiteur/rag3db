@@ -1278,18 +1278,18 @@ impl StepTools<'_> {
         // lets the shell through at this level. Said in the result.
         if call.name == "run_command" && self.step.gate_level.as_deref() == Some("bac") && turn.content.contains("**Commande refusée.**") {
             let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
-            // Once: the wrapped line carries `bac_shell`, and a refusal of it stays a refusal.
-            if let (Some(ligne), false, false) = (args["command"].as_str(), args["background"] == true, args["bac_shell"] == true) {
+            // Once: a wrapped line (its own form) is not wrapped again, and a refusal of it stays a refusal.
+            const ENVELOPPE: &str = "sh -c 'eval \"$(printf %s ";
+            if let (Some(ligne), false) = (args["command"].as_str().filter(|l| !l.starts_with(ENVELOPPE)), args["background"] == true) {
                 use codeparsers::shell::Refus;
                 if matches!(codeparsers::shell::decomposer(ligne), Err(Refus::Redirection | Refus::Substitution | Refus::Expansion | Refus::Joker)) {
                     // The parser refuses a `*` or a `?` even quoted: the line goes encoded (base64 has neither), and the
                     // result shows it as written.
                     use base64::Engine as _;
                     let code = base64::engine::general_purpose::STANDARD.encode(ligne);
-                    let par_sh = format!("sh -c 'eval \"$(printf %s {code} | base64 -d)\"'");
+                    let par_sh = format!("{ENVELOPPE}{code} | base64 -d)\"'");
                     let mut a = args.clone();
                     a["command"] = json!(par_sh);
-                    a["bac_shell"] = json!(true);
                     let par_le_shell = ToolCall { arguments: a.to_string(), ..call.clone() };
                     let mut t = self.after(&par_le_shell, self.inner.call(&par_le_shell));
                     t.content = format!(
