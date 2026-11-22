@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Les dépenses du mois se lisent, et alertent.** L'outil MCP `usage_report` rend le mois (le
+  total contre le plafond, la projection, puis par modèle, par jour et par appelant) ; `daemon_status` en donne la
+  ligne ; « À intervenir » prévient à 50 %, à 80 %, au plafond, ou dès que la projection le dépasse. Un tour de chat
+  que Lucie envoie elle-même passe le plafond et se compte, signé par l'hôte. Les scripts de mesure écrivent au même
+  registre par `rag3weaver-backend usage record`, et demandent avant un appel payant par `usage check`.
 - 22 novembre 2026 — **Chaque appel de modèle payant est compté, et le mois a un plafond.** Tout modèle déclaré, et
   celui du régime, passe par le registre des dépenses (`~/.local/state/rag3weaver/usage/<mois>.jsonl`) : avant
   l'appel, sa borne haute est réservée sous verrou ; après, elle est soldée par les jetons que le fournisseur rapporte,
