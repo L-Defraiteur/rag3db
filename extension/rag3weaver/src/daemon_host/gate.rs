@@ -182,8 +182,8 @@ pub fn served_judge(conf: &Value) -> Option<GateJudge> {
 
 /// [`served_judge`] writing to `ledger` (the witnesses' own).
 pub fn served_judge_with(conf: &Value, ledger: Arc<crate::usage_ledger::Ledger>) -> Option<GateJudge> {
-    let _ = &ledger;
     let adresse = conf["address"].as_str()?.to_string();
+    let modele = conf["model"].as_str().unwrap_or("gate-judge").to_string();
     let prompt = std::fs::read_to_string(conf["prompt_file"].as_str()?).ok()?;
     let seuil = conf["threshold"].as_f64().unwrap_or(0.5);
     Some(Arc::new(move |input: &Value| -> Value {
@@ -198,6 +198,16 @@ pub fn served_judge_with(conf: &Value, ledger: Arc<crate::usage_ledger::Ledger>)
             "temperature": 0, "max_tokens": 1, "logprobs": true, "top_logprobs": 20,
             "chat_template_kwargs": { "enable_thinking": false }
         });
+        // **Reserve before, settle after** (ED's ledger): the bound is the prompt's characters and the one token asked;
+        // a refusal is said and is the card, never a call around the ledger.
+        use crate::usage_ledger::{is_private_address, Caller, Tokens};
+        let fournisseur = format!("http://{adresse}");
+        let borne = Tokens { input: (prompt.len() + texte.len()) as u64, output: 1, ..Default::default() };
+        let appelant = Caller { agent: "gate".into(), ..Default::default() };
+        let reservation = match ledger.reserve(&modele, &fournisseur, is_private_address(&fournisseur), borne, &appelant, false) {
+            Ok(r) => r,
+            Err(e) => return json!({ "label": "not_authorized", "why": format!("the spending ledger refused the judge's call: {e}") }),
+        };
         let agent = ureq::Agent::new_with_config(ureq::Agent::config_builder().timeout_global(Some(std::time::Duration::from_secs(20))).build());
         let reponse = agent
             .post(format!("http://{adresse}/v1/chat/completions"))
@@ -206,7 +216,16 @@ pub fn served_judge_with(conf: &Value, ledger: Arc<crate::usage_ledger::Ledger>)
             .ok()
             .and_then(|r| r.into_body().read_to_string().ok())
             .and_then(|t| serde_json::from_str::<Value>(&t).ok());
-        let Some(v) = reponse else { return json!({ "label": "not_authorized", "why": "the judge does not answer" }) };
+        let Some(v) = reponse else {
+            // Nothing billed before an answer: settled at zero.
+            let _ = ledger.settle(&reservation, Some(Tokens::default()));
+            return json!({ "label": "not_authorized", "why": "the judge does not answer" });
+        };
+        let utilise = match (v["usage"]["prompt_tokens"].as_u64(), v["usage"]["completion_tokens"].as_u64()) {
+            (Some(i), Some(o)) => Some(Tokens { input: i, output: o, ..Default::default() }),
+            _ => None,
+        };
+        let _ = ledger.settle(&reservation, utilise);
         let (mut y, mut n) = (0.0f64, 0.0f64);
         for t in v["choices"][0]["logprobs"]["content"][0]["top_logprobs"].as_array().into_iter().flatten() {
             let p = t["logprob"].as_f64().map(f64::exp).unwrap_or(0.0);

@@ -281,10 +281,28 @@ impl LlamaServerDecider {
         // gabarit du modèle, que `/completion` ne lirait pas dans une chaîne.
         let tokens = self.post("/tokenize", serde_json::json!({ "content": prompt, "add_special": false, "parse_special": true }))?;
         let tokens = tokens.get("tokens").cloned().ok_or_else(|| DecideError::Provider("/tokenize : champ `tokens` absent".into()))?;
+        // **Reserve before, settle after** (ED's ledger): free at a private address, refused when nothing frees it
+        // and it has no price.
+        use crate::usage_ledger::{is_private_address, Caller, Tokens};
+        let n = tokens.as_array().map(|t| t.len() as u64).unwrap_or(prompt.len() as u64);
+        let reservation = self
+            .ledger
+            .reserve(&self.model, &self.base, is_private_address(&self.base), Tokens { input: n, output: 1, ..Default::default() }, &Caller { agent: "decider".into(), ..Default::default() }, false)
+            .map_err(|e| DecideError::Provider(format!("the spending ledger refused the call: {e}")))?;
         let reply = self.post(
             "/completion",
             serde_json::json!({ "prompt": tokens, "n_predict": 1, "n_probs": self.n_probs, "temperature": 0, "cache_prompt": false }),
-        )?;
+        );
+        let utilise = match &reply {
+            Ok(r) => match (r["tokens_evaluated"].as_u64(), r["tokens_predicted"].as_u64()) {
+                (Some(i), Some(o)) => Some(Tokens { input: i, output: o, ..Default::default() }),
+                _ => None,
+            },
+            // No answer: nothing billed.
+            Err(_) => Some(Tokens::default()),
+        };
+        let _ = self.ledger.settle(&reservation, utilise);
+        let reply = reply?;
         let top = reply
             .pointer("/completion_probabilities/0/top_logprobs")
             .and_then(|v| v.as_array())
