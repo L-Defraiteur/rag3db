@@ -313,7 +313,9 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
             .with_racine_des_taches(d.path().join("taches"))
             .with_chats_root(d.path().join("chats"))
             .with_runs_root(d.path().join("runs"))
-            .with_chat_model(faux_equipier_qui_demande()),
+            .with_chat_model(faux_equipier_qui_demande())
+            // The terminal's person: her title makes her yes a grant (human-yes-only, 22 Nov 2026).
+            .with_user_token("titre-du-temoin".to_string()),
     );
     let parent = heberger(&host, &manifeste);
     let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -323,7 +325,7 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
         let host = host.clone();
         std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
     }
-    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: Some("titre-du-temoin".into()) };
     let agent = client::agent();
     // La demande, comme le terminal la pose (le superviseur par défaut).
     let r = client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "porte", "kind": "request", "text": "Liste le dépôt, puis dis bonjour par echo." }))
@@ -355,7 +357,8 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
 
     // L'accord, tel que le terminal le construit.
     let corps = boite::reponse(&parent, "porte", &demande, "oui", Some(true));
-    client::poster(&agent, &ep, "/ide/teammate/mailbox", &corps).expect("l'accord est posé");
+    // Her keystroke answers: the terminal sends her title (post_typed), as it does at the keyboard.
+    client::post_typed(&agent, &ep, "/ide/teammate/mailbox", &corps).expect("l'accord est posé");
     let borne = Instant::now() + Duration::from_secs(120);
     let lignes = loop {
         let lignes = relire(&mut vue_boite);
