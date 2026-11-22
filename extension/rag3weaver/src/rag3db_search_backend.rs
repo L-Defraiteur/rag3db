@@ -40,10 +40,101 @@ fn quote(name: &str) -> String {
 }
 
 
+impl Rag3dbSearchBackend {
+    /// The texts, then their admitted chunks (see [`SearchBackend::vector_search_shared_texts`]).
+    #[allow(clippy::too_many_arguments)]
+    fn shared_texts(
+        &self,
+        chunk_table: &str,
+        text_table: &str,
+        rel: &str,
+        index_name: &str,
+        embedding: &[f32],
+        limit: usize,
+        filter_match: Option<&str>,
+        filter_where: Option<&str>,
+        filter_params: &[QueryParam],
+    ) -> Result<Vec<VectorHit>, String> {
+        let embedding_value = CypherValue::List(embedding.iter().map(|&f| CypherValue::Float(f as f64)).collect());
+        let emb = || [QueryParam { name: "embedding".into(), value: embedding_value.clone() }];
+        let (c, t, r) = (quote(chunk_table), quote(text_table), quote(rel));
+        let m = filter_match.map(|m| format!(" {m}")).unwrap_or_default();
+        let read = |rows: &[Vec<CypherValue>]| -> Vec<(String, f64)> {
+            rows.iter()
+                .filter_map(|row| Some((row.first()?.as_str()?.to_string(), 1.0 - row.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0))))
+                .collect()
+        };
+        let texts = if filter_match.is_none() && filter_where.is_none() {
+            let q = format!("CALL QUERY_VECTOR_INDEX('{text_table}', '{index_name}', $embedding, {limit}) RETURN node._text_hash, distance");
+            read(&self.conn.execute_with_params(&q, &emb()).map_err(|e| e.to_string())?.rows)
+        } else {
+            // The projection keeps the texts an admitted chunk points to : the HNSW descends
+            // only among them.
+            let graph_name = format!("_vf_{text_table}");
+            let w = filter_where.map(|w| format!(" WHERE {w}")).unwrap_or_default();
+            let projection = inline_params_borne(&format!("MATCH (t:{t})<-[:{r}]-(n:{c}){m}{w} RETURN t"), filter_params)?;
+            PLUS_LONG_CYPHER_PROJETE.fetch_max(projection.len(), std::sync::atomic::Ordering::Relaxed);
+            PROJECTIONS_POSEES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if std::env::var_os("RAG3W_VEC_TRACE").is_some() {
+                eprintln!("[vec-trace] {projection}");
+            }
+            let escaped = projection.replace('\\', "\\\\").replace('\'', "\\'");
+            let drop = format!("CALL DROP_PROJECTED_GRAPH('{graph_name}', skip_if_not_exists := true)");
+            let _ = self.conn.execute(&drop);
+            self.conn
+                .execute(&format!("CALL PROJECT_GRAPH_CYPHER('{graph_name}', '{escaped}')"))
+                .map_err(|e| format!("PROJECT_GRAPH_CYPHER failed: {e}"))?;
+            let q = format!("CALL QUERY_VECTOR_INDEX('{graph_name}', '{index_name}', $embedding, {limit}) RETURN node._text_hash, distance");
+            let result = self.conn.execute_with_params(&q, &emb());
+            let _ = self.conn.execute(&drop);
+            read(&result.map_err(|e| e.to_string())?.rows)
+        };
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Back to the chunks : those of the texts found, under the same filter.
+        let score: std::collections::HashMap<String, f64> = texts.iter().cloned().collect();
+        let w = filter_where.map(|w| format!(" AND ({w})")).unwrap_or_default();
+        let q = format!("MATCH (t:{t})<-[:{r}]-(n:{c}){m} WHERE t._text_hash IN $_shared_text_hashes{w} RETURN DISTINCT n._uuid, t._text_hash");
+        let mut params = filter_params.to_vec();
+        params.push(QueryParam {
+            name: "_shared_text_hashes".into(),
+            value: CypherValue::List(texts.iter().map(|(h, _)| CypherValue::String(h.clone())).collect()),
+        });
+        let rows = self.conn.execute_with_params(&q, &params).map_err(|e| e.to_string())?.rows;
+        let mut hits: Vec<VectorHit> = rows
+            .iter()
+            .filter_map(|row| {
+                let uuid = row.first()?.as_str()?.to_string();
+                let score = *score.get(row.get(1)?.as_str()?)?;
+                Some(VectorHit { uuid, score, entity: None })
+            })
+            .collect();
+        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.uuid.cmp(&b.uuid)));
+        Ok(hits)
+    }
+}
+
 impl SearchBackend for Rag3dbSearchBackend {
     /// Le filtre devient un **graphe projeté** avant la descente HNSW — c'est
     /// un vrai pré-filtre, pas un tri après coup.
     fn honore_le_filtre(&self) -> bool { true }
+
+    fn vector_search_shared_texts(
+        &self,
+        chunk_table: &str,
+        text_table: &str,
+        rel: &str,
+        index_name: &str,
+        _column: &str,
+        embedding: &[f32],
+        limit: usize,
+        filter_match: Option<&str>,
+        filter_where: Option<&str>,
+        filter_params: &[QueryParam],
+    ) -> Option<Result<Vec<VectorHit>, String>> {
+        Some(self.shared_texts(chunk_table, text_table, rel, index_name, embedding, limit, filter_match, filter_where, filter_params))
+    }
 
     fn vector_search(
         &self,

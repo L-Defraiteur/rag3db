@@ -1139,6 +1139,48 @@ pub(crate) fn inline_params(query: &str, params: &[QueryParam]) -> String {
 }
 
 /// Vector search via SearchBackend (multi-backend).
+/// **The dense search over the shared texts** (lot L3) : [`search_vector_via_backend`]'s
+/// contract (chunk-level results, the same refusals), served by the text index of
+/// `chunk_table`. `None` : the backend does not serve it, the caller searches the chunks.
+#[allow(clippy::too_many_arguments)]
+pub fn search_shared_texts_via_backend(
+    backend: &dyn crate::search_backend::SearchBackend,
+    chunk_table: &str,
+    text_table: &str,
+    rel: &str,
+    index_name: &str,
+    column: &str,
+    embedding: &[f32],
+    limit: usize,
+    extra_where: Option<&str>,
+    extra_params: &[QueryParam],
+    extra_match: Option<&str>,
+) -> Option<Result<Vec<SearchResult>, CatalogError>> {
+    let hits = backend.vector_search_shared_texts(chunk_table, text_table, rel, index_name, column, embedding, limit, extra_match, extra_where, extra_params)?;
+    Some(
+        hits.map_err(|e| {
+            if e.contains(crate::catalog::INDEX_BEHIND_ITS_TABLE) {
+                CatalogError::IndexDetache { table: text_table.to_string(), index: index_name.to_string() }
+            } else {
+                CatalogError::DbError(e)
+            }
+        })
+        .map(|hits| {
+            hits.into_iter()
+                .map(|h| SearchResult {
+                    sans_vecteur: false,
+                    uuid: h.uuid,
+                    score: h.score,
+                    entity: h.entity.or_else(|| Some(chunk_table.to_string())),
+                    data: None,
+                    chunk: None,
+                    chunks: None,
+                })
+                .collect()
+        }),
+    )
+}
+
 pub fn search_vector_via_backend(
     backend: &dyn crate::search_backend::SearchBackend,
     entity: &str,
