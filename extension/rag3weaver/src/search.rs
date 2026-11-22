@@ -1787,6 +1787,10 @@ fn build_contains_clauses(
 
     if fields.len() == 1 {
         make_clause(&fields[0])
+    } else if distance > 0 && !regex && !strict_separators {
+        // lucivy 4.4.2 (22 November 2026): one fuzzy `contains` over several `fields`, one error budget per document
+        // (the errors of the best field, the BM25 of all) — a typo in two fields is not paid twice.
+        serde_json::json!({ "type": "contains", "fields": fields, "value": value, "distance": distance })
     } else {
         let clauses: Vec<serde_json::Value> = fields.iter().map(|f| make_clause(f)).collect();
         serde_json::json!({
