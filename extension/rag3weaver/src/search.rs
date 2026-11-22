@@ -2095,6 +2095,27 @@ pub fn whole_query_distance(query: &str) -> u8 {
     if !several_words && query.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 }
 }
 
+/// **`a` within `max` edits of `b`** (Levenshtein, by characters, case included): the rule of a name typed with a
+/// typo, the same as rag3db's `levenshtein(a, b) <= max`.
+pub fn within_edits(a: &str, b: &str, max: usize) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    if a.len().abs_diff(b.len()) > max {
+        return false;
+    }
+    let mut previous: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut current = vec![i + 1; b.len() + 1];
+        for (j, cb) in b.iter().enumerate() {
+            current[j + 1] = (previous[j] + usize::from(ca != cb)).min(previous[j + 1] + 1).min(current[j] + 1);
+        }
+        if current.iter().min().is_some_and(|m| *m > max) {
+            return false;
+        }
+        previous = current;
+    }
+    previous[b.len()] <= max
+}
+
 /// The witnesses of the whole query's distance (22 November 2026), in a file of their own.
 #[cfg(test)]
 #[path = "search_whole_phrase_tests.rs"]
