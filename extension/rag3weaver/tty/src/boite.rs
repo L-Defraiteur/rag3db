@@ -113,11 +113,12 @@ pub fn mode_word(mode: Option<&str>) -> String {
     }
 }
 
-/// **A root the judge granted** (archi's host line `root_granted`, or a host report carrying `root` and `by: judge`):
-/// « racine accordée par le juge : <root> (<mode>), sur ta phrase « … » ». `None` for any other line.
+/// **A root the judge granted** (archi's host line `root_granted`, written by judge-grant-said: `root`, `mode`,
+/// `by: judge`, `quote`): « racine accordée par le juge : <root> (<mode>), sur ta phrase « … » ». `None` for any other
+/// line.
 pub fn judge_granted_root(l: &Value) -> Option<String> {
     let root = l["root"].as_str()?;
-    if l["from"] != "host" || !(l["kind"] == "root_granted" || (l["kind"] == "report" && l["by"] == "judge")) {
+    if l["from"] != "host" || l["kind"] != "root_granted" {
         return None;
     }
     let quote = l["quote"].as_str().map(|q| format!(", sur ta phrase « {q} »")).unwrap_or_default();

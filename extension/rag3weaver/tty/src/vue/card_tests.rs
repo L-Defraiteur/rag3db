@@ -178,7 +178,8 @@ fn a_granted_root_is_said_lasting_and_a_protected_grant_for_this_command_only() 
     assert!(w[0].ends_with("accordé par toi, pour cette commande seulement : cat secret.env"), "{w:?}");
 }
 
-/// **A root the judge granted is said** (archi's host report `root_granted`): « › racine accordée par le juge : … ».
+/// **A root the judge granted is said** (archi's host line `root_granted`, the one form: judge-grant-said):
+/// « › racine accordée par le juge : … ».
 #[test]
 fn a_root_granted_by_the_judge_is_said() {
     let mut v = Vue::new(260, true);
@@ -186,9 +187,4 @@ fn a_root_granted_by_the_judge_is_said() {
     let w = written(&mut v);
     assert_eq!(w.len(), 1, "{w:?}");
     assert!(w[0].contains("racine accordée par le juge : /home/lucied/projet (lecture), sur ta phrase « regarde mon projet »"), "{w:?}");
-    // The same, as a host report that carries the root and the judge.
-    let mut r = Vue::new(260, true);
-    r.ligne_de_boite(&line(1, "host", "report", json!({ "root": "/home/lucied/projet", "mode": "write", "by": "judge", "quote": "corrige-le", "text": "…" })));
-    let w = written(&mut r);
-    assert!(w.iter().any(|l| l.contains("racine accordée par le juge : /home/lucied/projet (écriture)")), "{w:?}");
 }
