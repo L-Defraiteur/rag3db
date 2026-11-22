@@ -57,6 +57,10 @@ pub struct Tache {
     /// writes for the agent (its identity in `compose_restart`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_key: Option<String>,
+    /// **The agent this task is a copy of** (`--fork-agent`, 22 November 2026): `{agent, task, head}`, the original's
+    /// key, its task and the head the copy started from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forked_from: Option<serde_json::Value>,
     /// **La persona de l'agent de la tâche**, à la place de `agent.persona` du manifeste.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persona_de_l_agent: Option<String>,
@@ -811,6 +815,7 @@ impl DaemonHost {
             nom_de_l_agent,
             persona_de_l_agent,
             agent_key: Some(cle.unwrap_or_else(|| agent_key_for(&manifest, nom))),
+            forked_from: None,
             parent_session: None,
             vues: None,
             vue_active: None,
@@ -1166,6 +1171,12 @@ impl DaemonHost {
         }
         self.backends.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, autre| autre.id != h.id);
         Ok(json!({ "removed": h.id, "manifest": h.manifest, "closed_tasks": fermees }))
+    }
+
+    /// **Fork an agent** (`--fork-agent`, 22 November 2026): RED STUB.
+    #[allow(unused_variables)]
+    pub fn fork_agent(&self, parent: &str, task: &str, name: Option<&str>) -> Result<Tache, String> {
+        Err("dupliquer un agent : pas encore".into()) // RED STUB.
     }
 
     /// **Reopen a closed agent** (`--pop-agent`, c7 for Lucie, 22 November 2026): the latest closed task of `parent`
