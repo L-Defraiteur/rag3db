@@ -1326,6 +1326,9 @@ fn le_code_du_chat_se_lit_comme_du_code() {
         return;
     };
     let (d, host, manifeste, id) = banc(qui_montre_du_code());
+    // The chat links only a path that exists (Lucie, 22 November 2026): the cited file is in the tree.
+    std::fs::create_dir_all(d.path().join("code/src/lib.rs").parent().unwrap()).unwrap();
+    std::fs::write(d.path().join("code/src/lib.rs"), "pub fn un() {}\npub fn deux() {}\n").unwrap();
     drop(host);
     let (chats, taches) = (d.path().join("chats"), d.path().join("taches"));
     let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
@@ -1784,7 +1787,7 @@ fn deux_fenetres_du_chat_suivent_le_meme_tour() {
 /// **The chat guides a detached window of the repository** (the IDE in several windows, slice 2; Lucie, 13 Nov.
 /// 2026: the chat on one screen, the repository on the other). A window opened on the repository with
 /// `?fenetre=depot` declares itself to the shared worker; a file cited in the chat (`src/main.rs:1`), clicked, opens in
-/// that window, and the chat stays on its conversation (the link only: the file need not exist). Nothing is asked of the host for it.
+/// that window, and the chat stays on its conversation (the file exists: the chat links only a path it resolved, 22 November 2026). Nothing is asked of the host for it.
 #[test]
 #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 fn le_chat_guide_une_fenetre_du_depot_detachee() {
@@ -1797,6 +1800,9 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("Le point d'entrée est `src/main.rs:1` ; voir aussi `src/long.rs:5` et `src/long.rs:40`.").generate(turns, opts, sink))))
     });
     let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
+    // The chat links only a path that exists (Lucie, 22 November 2026): the cited file is in the tree.
+    std::fs::create_dir_all(d.path().join("code/src/main.rs").parent().unwrap()).unwrap();
+    std::fs::write(d.path().join("code/src/main.rs"), "fn main() {}\n").unwrap();
     // A file of sixty lines in the workspace, cited at two of its lines (ED's review of slice 3).
     std::fs::create_dir_all(d.path().join("code/src")).unwrap();
     std::fs::write(d.path().join("code/src/long.rs"), (1..=60).map(|n| format!("// ligne {n}\n")).collect::<String>()).unwrap();
@@ -3176,3 +3182,6 @@ fn the_pages_of_a_repository_speak_git() {
 
 /// The witness of the lot `billing-views`, in a file of its own.
 mod human_turn_past_the_cap;
+
+/// The chat links only a path it resolved (22 November 2026), in a file of its own.
+mod resolved_links;
