@@ -265,8 +265,24 @@ fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage:
     }
     let repris = items.len();
     let (conn, dialect) = catalog.connexion_et_dialecte();
+    // **The shared texts** (lot L2b) : a chunk whose texts are shared gets its text, and the
+    // vector goes to the text too, where the text has none.
+    let for_texts = catalog.shared_text_tables().contains("ScopeContent_Chunk").then(|| items.clone());
     crate::dataflow::record_nodes::write_vectors(conn.as_ref(), dialect.as_ref(), "ScopeContent_Chunk", &neuf.column, &neuf.marker, items)
         .map_err(|e| format!("l'écriture des vecteurs de « {} » : {e}", modele.slug()))?;
+    if let Some(items) = for_texts {
+        let pairs: Vec<(String, String)> = items
+            .iter()
+            .filter_map(|i| match i {
+                CypherValue::Map(m) => Some((m.get("uuid")?.as_str()?.to_string(), m.get("hash")?.as_str()?.to_string())),
+                _ => None,
+            })
+            .collect();
+        let refus = |e: String| format!("les textes partagés de « {} » : {e}", modele.slug());
+        crate::shared_text::attach_chunks_to_texts(conn.as_ref(), dialect.as_ref(), "ScopeContent_Chunk", &pairs).map_err(refus)?;
+        crate::shared_text::set_text_vectors(conn.as_ref(), dialect.as_ref(), "ScopeContent_Chunk", &crate::shared_text::text_storage("ScopeContent_Chunk", modele).column, items)
+            .map_err(refus)?;
+    }
     Ok((repris, lignes))
 }
 

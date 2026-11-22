@@ -1213,6 +1213,8 @@ pub trait SchemaDialect: Send + Sync {
     fn set_text_vectors(&self, text_table: &str, column: &str) -> String;
     /// The distinct `_text_hash` of the chunks whose `_parent_uuid` is in `$uuids`.
     fn hashes_of_chunks_by_parent(&self, chunk_table: &str) -> String;
+    /// The distinct `_text_hash` of the chunks whose `_uuid` is in `$uuids`.
+    fn hashes_of_chunks_by_uuid(&self, chunk_table: &str) -> String;
     /// **The texts among `$hashes` that no chunk points to any more, removed** : one
     /// statement.
     fn delete_orphan_texts(&self, chunk_table: &str, text_table: &str, rel: &str) -> String;
@@ -2825,6 +2827,10 @@ impl SchemaDialect for Rag3dbDialect {
         format!("MATCH (c:{}) WHERE c._parent_uuid IN $uuids RETURN DISTINCT c._text_hash", self.quote(chunk_table))
     }
 
+    fn hashes_of_chunks_by_uuid(&self, chunk_table: &str) -> String {
+        format!("MATCH (c:{}) WHERE c._uuid IN $uuids RETURN DISTINCT c._text_hash", self.quote(chunk_table))
+    }
+
     fn delete_orphan_texts(&self, _chunk_table: &str, text_table: &str, rel: &str) -> String {
         format!(
             "MATCH (t:{}) WHERE t._text_hash IN $hashes AND NOT EXISTS {{ MATCH (t)<-[:{}]-() }} DELETE t",
@@ -4400,6 +4406,10 @@ impl SchemaDialect for PostgresDialect {
 
     fn hashes_of_chunks_by_parent(&self, chunk_table: &str) -> String {
         format!("SELECT DISTINCT _text_hash FROM {} WHERE _parent_uuid = ANY($uuids)", self.quote(chunk_table))
+    }
+
+    fn hashes_of_chunks_by_uuid(&self, chunk_table: &str) -> String {
+        format!("SELECT DISTINCT _text_hash FROM {} WHERE _uuid = ANY($uuids)", self.quote(chunk_table))
     }
 
     fn delete_orphan_texts(&self, chunk_table: &str, text_table: &str, _rel: &str) -> String {
