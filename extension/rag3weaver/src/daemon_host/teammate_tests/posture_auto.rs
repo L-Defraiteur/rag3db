@@ -3,7 +3,7 @@
 //! added from the shipped code template, without any setting touched: the teammate writes a file, runs it, commits it,
 //! and no card opens. A module of its own.
 
-use super::chat_qui_code::{depot_inscrit, hote};
+use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
 use super::mode_auto_v1::{ended, teammate};
 use super::*;
 use std::time::{Duration, Instant};

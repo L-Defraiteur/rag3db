@@ -4,7 +4,7 @@
 //! and a host line `merged` says how many. Otherwise nothing is touched, and a line `merge_held` says why and the
 //! command that takes the branch. Never a non-fast-forward merge, never a forced checkout. A module of its own.
 
-use super::chat_qui_code::{depot_inscrit, hote};
+use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
 use super::mode_auto_v1::{ended, teammate};
 use super::*;
 use std::time::{Duration, Instant};
