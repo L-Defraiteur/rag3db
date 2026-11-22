@@ -62,7 +62,7 @@ et ouvert par l'hôte sans manifeste de dépôt :
 | `machine_state` | lit l'état de la machine : les dépôts attachés (nom, chemin, fraîcheur de l'index), les agents et leurs tâches (état, dernière ligne de boîte), les dépenses du mois (le registre d'ED : total, plafond), les hôtes déclarés | lecture seule, sans carte |
 | `open_folder(path)` | attache un dossier, comme `rag3weaver-backend ouvrir` (`code_tree::open_folder`), **sans index** : l'index reste une proposition (page 02 du 21) | un chemin hors de la racine de création passe par la carte `open_root` de `judge_all` |
 | `clone_repository(url, into?)` | clone dans `~/git_workspaces/<nom du dépôt>` (la convention de Lucie), puis l'attache comme `open_folder`. **Un dossier qui existe déjà est refusé**, avec la proposition de l'ouvrir | **toujours une carte** : réseau et écriture, classe `outbound`. La carte montre l'URL et le dossier. Une URL qui porte un jeton est refusée net |
-| `create_code_agent(repository, request?)` | ouvre un agent de code (une tâche de l'équipier) sur un dépôt attaché et rend son lien dans l'IDE. Il n'écrit la première demande que si l'utilisatrice l'a dictée | sans carte : rien ne sort, l'agent créé a ses propres portes |
+| `create_code_agent(folder, brief)` | fait naître un agent de code dont le répertoire de travail est `folder`, le brief posé comme première demande (section 9 bis), et rend le lien de son chat | une `action_card` montre le brief et le dossier avant de lancer ; rien ne sort, l'agent créé a ses propres portes |
 
 **Ce qu'il n'a pas, exprès** : pas de shell, pas de lecture de fichiers, pas de mémoire longue en écriture (il la **lit**,
 pour dire ce qui a été fait et décidé : `recall_fiches`, `get_fiche`), pas de push, pas de création de dépôt distant. Ces gestes appartiennent aux agents de
@@ -128,9 +128,22 @@ sa version, son schéma JSON, sa description pour le modèle). Le rendu est à r
 | `machine_state` | l'état de la machine | ce que rend l'outil `machine_state` (dépôts, agents, tâches, accords en attente, index) |
 | `spending` | les dépenses | `items: [{label, value, unit?, hint?}]`, le plafond |
 | `memory_cards` | des fiches de la mémoire | `items: [{title, summary, link}]` |
+| `briefing` | ce qui a bougé depuis la dernière visite (idée 1 de c7) | `since`, `items: [{text, link?, status?}]`, `actions` |
+| `activity` | le travail d'un pas, raconté (idée 3) | `items: [{text, detail_link?}]`, lu au journal des runs, pas dans la boîte |
+| `plan` | le plan d'un agent, en liste cochée (idée 5) | `items: [{text, status}]`, `current?` |
+| `impact` | le rayon d'impact d'une carte (idée 8) | `symbols`, `callers`, `files`, `untested?`, `link?` |
+| `grants` | ce que l'utilisatrice a autorisé, ses phrases citées (idée 11) | `items: [{quote, at, opened, agent, by, link?}]` |
+| `recap` | le retour d'absence (idée 22) | `where_we_were`, `while_you_were_away` |
 
 Les états d'un `status` sont `running`, `waiting` (« attend ton accord »), `done`, `failed` et `idle` (un agent arrêté
 sans erreur). Un `hint` est une phrase courte sous un chiffre.
+
+**Un composant vivant, et l'épingle** (idée 2 de c7) : un composant peut porter **sa source** (`source: {tool, args}`)
+et un intervalle (`every_s`). L'hôte refait alors l'appel et remplit de nouveau le composant. **Seul un outil en lecture
+peut être une source** (`machine_state`, la mémoire, l'état d'une tâche, le registre) ; un outil qui écrit, lance ou
+envoie est refusé comme source. L'outil `pin(component_id)` passe un composant du fil dans le bord droit, propre à
+l'utilisatrice ; il y reste vivant par sa source, et se retire d'un geste. Le gabarit ne porte pas de champ `refresh` :
+c'est l'instance qui dit d'où elle vient.
 
 **Les règles** :
 - **rien d'inventé** : `data` ne porte que ce qu'un outil vient de rendre dans le même tour. Un `link` est une route de
@@ -164,6 +177,54 @@ Le novice ne connaît ni chemin ni réglage. L'agent d'accueil s'en charge :
   « c'est celui-ci ? » avec sa carte, au lieu d'un chemin ;
 - **jamais un réglage à faire à la main** : le modèle, le mode auto, l'index sont des défauts ; l'agent les dit s'ils
   comptent pour la demande (« je n'ai pas encore indexé ce projet ; je le fais ? »).
+
+## 9 bis. Il prépare, il ne code pas (Lucie, 23 h)
+
+« L'agent d'accueil doit bien comprendre que lui ne fait pas de code : il va préparer un agent avec un explicatif de la
+demande de l'utilisateur, et un dossier où le faire surgir selon les instructions (simplement, le cd de l'agent se trouve
+là-bas). »
+
+- **Il ne code jamais**, et ne s'en approche pas : ni `propose`, ni outil d'édition, ni commande.
+- **Il rédige le brief** : les mots de l'utilisatrice, cités, puis ce qu'il en a compris. Il le montre sur une
+  `action_card` avant de lancer (« Je prépare un agent de code avec ce brief, dans ce dossier. Je le fais ? »).
+- **Il choisit ou crée le dossier** selon ce qu'elle a dit : un projet existant, un clone, un projet neuf sous
+  `~/git_workspaces/<nom>`. L'agent de code naît avec ce dossier pour répertoire de travail ; c'est tout ce qui les relie.
+- **`create_code_agent(folder, brief)`** rend le lien du chat de cet agent, où la conversation continue, le brief déjà posé
+  comme première demande. C'est la même forme que `open_code_task` dans le chat d'un projet.
+- **Le témoin** : « regarde ce dépôt et corrige X » → l'accueil n'appelle aucun outil de code, et l'agent créé a le bon
+  dossier et le brief.
+
+## 9 ter. Ce qu'il voit, et ce qu'il dit de lui-même (Lucie, 23 h 1x)
+
+« Bien sûr il liste les agents actifs, etc., nous montre des tableaux des tickets ouverts / fermés, des PR mergées, reçoit
+des notifs quand quelque chose arrive et en parle à l'utilisateur, explique comment fonctionne l'IDE » ; et « nous ouvre
+un lien vers tel autre agent… leur parle si nécessaire ».
+
+| Ce qu'il fait | Comment | Bornes |
+|---|---|---|
+| **les agents** : actifs ou non, ce que fait chacun, leur lien | `machine_state`, en `action_card` ou `table` | lecture |
+| **les tickets** ouverts et fermés du projet | les `docs/**/tickets/` du dépôt (un fournisseur plus tard), en `table` | lecture |
+| **les PR** ouvertes et fusionnées | git et le fournisseur du dépôt, en `table` | lecture |
+| **les événements**, dont il parle de lui-même | voir plus bas | il parle, il n'agit pas |
+| **le mode d'emploi** de l'IDE (une carte, une branche de travail, la mémoire, le cadran) | une doc courte livrée avec le produit, qu'il cite | lecture |
+| **ouvrir un autre agent** | un `links` dont le clic ouvre le chat visé au centre (la barre gauche suit) ; il peut le proposer (« l'agent de `essai` t'attend → ouvrir ») | aucun clic n'agit ailleurs qu'à l'écran |
+| **parler à un autre agent** | `message_agent {agent, text}` : un message dans la boîte de l'agent visé, **signé de l'accueil** (`by.kind = agent`), visible des deux côtés (« l'accueil a demandé à l'agent de X : … ») | il transmet et demande ; il n'accorde rien et ne décide pas à sa place. Un message signé agent n'accorde aucune carte (`human-yes-only`), et le juge ne le lit pas, puisqu'il ne lit que les tours humains |
+
+**Un accueil qui vit comme un équipier.** Un chat ne fait un tour que sur un message de l'utilisatrice. L'équipier, lui, se
+réveille par sa boîte. L'accueil a donc une boîte : les messages de l'utilisatrice y sont des `request` signées humaines,
+ses répliques des `report`, et l'hôte y pose les événements.
+
+**Les événements** (forme validée par c7) :
+- un abonné de l'hôte traduit le flux en lignes `{kind: "event", from: "host", subject, link}` : une tâche finie, une carte
+  qui attend, un rouge (une vérification de tâche ou une commande de fond finie en échec), un plafond approché, un index
+  fini ;
+- ils sont **regroupés** sur une fenêtre, sous une **borne de réveils par heure**, avec une option « calme » ; la dépense
+  de ces réveils va au registre sous l'appelant « accueil » ;
+- **la règle de sûreté, en code** : un pas réveillé par un événement, sans tour humain, n'a que les outils de lecture et
+  `show`. Aucune carte, aucun outil qui agit (`open_folder`, `clone_repository`, `create_code_agent`, `message_agent`
+  compris). Il parle en une ligne calme, avec son lien ; il n'agit jamais à la place de l'utilisatrice. Un témoin le
+  prouve ;
+- l'IDE montre ces lignes comme une réplique de l'agent, marquée « de lui-même ».
 
 ## 10. La maquette de l'écran
 
