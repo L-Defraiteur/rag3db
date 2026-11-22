@@ -579,6 +579,14 @@ impl Vue {
             self.valider_avec_tete(Genre::Boite, "› ", &t);
             return;
         }
+        // **The work landing in the user's folder** (archi's land-each-turn): said, whatever the steps shown.
+        if l["from"] == "host" && matches!(l["kind"].as_str(), Some("merged" | "merge_held")) {
+            if let Some(t) = l["text"].as_str().filter(|t| !t.trim().is_empty()) {
+                self.clore();
+                self.valider_avec_tete(Genre::Boite, "› ", t);
+            }
+            return;
+        }
         // **A closing that came too late** (archi, 21 November 2026): the host keeps it without effect and says who had
         // closed the card; the terminal says it, whatever the steps shown.
         if l["from"] == "host" && l["kind"] == "report" && l.get("late_from").is_some() {
