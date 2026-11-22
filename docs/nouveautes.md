@@ -9,6 +9,8 @@
 - 22 novembre 2026 — **Une demande de code partie de l'IDE demande le bac.** L'agent avance, les règles de la porte
   vérifient ; « Avancé » choisit, par projet, le juge ou une carte par commande. La page d'une tâche dit la porte en une
   ligne en tête de la boîte.
+- 22 novembre 2026 — **L'IDE dit quand il n'est pas ouvert en ton nom.** Une page entrée avec le seul jeton de l'hôte
+  (ce qu'un agent peut tenir) l'annonce en tête : ses « oui » ne compteront pas, et comment l'ouvrir depuis ton lanceur.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
