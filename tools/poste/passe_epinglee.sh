@@ -52,7 +52,10 @@ export RAG3WEAVER_TARGET_REPRENDRE=1
 # 22 novembre 2026, 00 h 2x (G) : lib 2c4bddcd3c, bâtie à 05301576ba avec fsm-finalize-lock de hotfixs (la course de
 # l'allocateur de pages), symboles identiques à 424ce93e56, posée aux deux postes ; verdict e2e_code et e2e_lectures
 # VERTS, e2e_demon_hote rouge à l'identique sous 424ce93e56 (lucivy 4.4, commit_tagged), donc hors de la lib.
-export RAG3DB_LIB=rag3db-build-2c4bddcd3c78d5fc054f3f123c013a832047533b-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+# 22 novembre 2026, 17 h 3x (G) : lib 6929acb98d, bâtie à 10b5dc12ac avec copy-first-line-wins de hotfixs (un COPY
+# multi-fils gardait une ligne tardive au conflit de clé), posée aux deux magasins ; verdict e2e_code 36/36,
+# e2e_lectures 28/28, e2e_demon_hote 27/27, VERT.
+export RAG3DB_LIB=rag3db-build-6929acb98dcd70899e8315072fad9a3656630b09-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 # Depuis le 20 novembre 2026 (fenêtre de G, train C++ train-20-11 : la quarantaine du dernier lecteur au point de
 # reprise de hotfixs et la course des groupes du cœur) : lib 4ad394f4d2 (le commit moteur de master du train, mêmes sources que 501d7ccc90, BUILD_ID seul différent) posée aux deux postes, hôtes source baccb2ea6e
 # (l'hôte répété de la bascule vers les versions) ; les passes de cette source ne demandent plus MOTEUR_ANCIEN.
