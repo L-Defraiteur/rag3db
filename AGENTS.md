@@ -2,6 +2,21 @@
 
 Instructions for any coding agent working in this repository (Claude Code, Codex, others).
 
+## Leitmotiv
+
+What we are building, in Lucie's words (22 November 2026):
+
+> **Lâchez une équipe d'agents sur vos projets. Vous garderez le fil.**
+
+- « Ils travaillent seuls. Vous savez toujours où ils en sont. »
+- « Une horde d'agents au travail, et vous comprenez tout. »
+- « Vos agents travaillent toute la nuit. Le matin, vous savez tout. »
+- « L'équipe d'agents qui se souvient. »
+
+Ultra-autonomous agents that spawn other sessions and talk to each other; safety checks exist to validate what
+runs without a human, not to keep one at the keyboard. An interface is simple to use, offers advanced things, and
+a newcomer talks to an agent and work starts. Judge every change against this.
+
 ## Read first
 
 1. [`docs/README.md`](docs/README.md): how the docs are organised (one folder per working
