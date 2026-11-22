@@ -69,3 +69,32 @@ en passe).
    « Avancé ». Témoin navigateur.
 5. **Les cartes de l'agent d'accueil** dans le fil : un lien vers un chat d'agent, la carte d'accord « cloner et
    préparer », la carte « prêt → ouvrir le chat ». Rendu seulement : les outils et la déclaration sont à archi.
+
+## Des agents autonomes, qui se font surgir et se parlent (Lucie, 23 h 15)
+
+« Des agents ultra autonomes, qui savent faire pop d'autres sessions, qui communiquent entre elles ; arrêtons de trop
+mettre de sécu : elle sert de points de validation au mode auto, pas à exiger l'utilisateur H24. »
+
+```
+│ ACTIFS                    │
+│ ● rag3db · lot B      ⋯   │   ⋯ = Reprendre · Dupliquer
+│   └ ● cartographe         │   un agent surgi est sous son parent
+│   └ ○ relecteur  fini     │
+│ ◐ essai-auto              │
+```
+
+- **Sur chaque agent de la barre, un menu « ⋯ »** : **Reprendre** ouvre sa session dans le chat central, même si elle
+  est déjà ouverte ailleurs (le pendant de `--pop-agent` au terminal), et **Dupliquer** crée une copie indépendante,
+  avec son propre chat (le pendant de `--fork-agent`). La copie apparaît aussitôt dans la barre, « copie de … ».
+- **Un agent qui en fait surgir un autre** : le nouveau apparaît sous son parent, relié par un trait, avec son état. Un
+  clic ouvre son chat.
+- **Les messages entre agents se lisent dans les deux fils** : dans le fil de l'émetteur, une ligne « → au cartographe :
+  … » ; dans celui du destinataire, « ← de rag3db · lot B : … ». Chaque ligne mène à l'autre fil.
+- **Les cartes deviennent rares** : ce que le juge accorde, ou ce que le survivant tranche, se dit en **ligne calme**
+  dans le fil (« ✓ accordé par le juge : `git push origin lot` — d'après « pousse quand c'est vert » »), avec la phrase
+  citée et un lien pour révoquer. Une carte ne s'ouvre que lorsqu'aucune règle ne tranche, et elle n'interrompt pas les
+  autres agents.
+
+**Lots, après l'accueil-chat** : le menu « Reprendre / Dupliquer » (sur les routes d'archi, les pendants des options de
+tty) ; la barre en arbre parent → enfants ; les lignes entre agents dans les deux fils ; les accords tranchés en lignes
+calmes, la carte en dernier recours.
