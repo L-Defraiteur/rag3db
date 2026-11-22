@@ -26,7 +26,8 @@
     },
     "section": {
       "type": "string",
-      "description": "Le titre de la section du source d'où vient l'apport (l'ancre de la Ref doc:) ; vide pour le source entier."
+      "minLength": 1,
+      "description": "The section of the source the apport comes from (the anchor of the doc: Ref), never empty: it is part of the apport's identity (fiche, source, section); for the whole source, name it (example: « whole »)."
     },
     "texte": {
       "type": "string",

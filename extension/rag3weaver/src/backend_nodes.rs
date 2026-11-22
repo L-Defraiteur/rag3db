@@ -407,9 +407,11 @@ impl Node for EntityRecordNode {
         // entité qui déclare `files` a son fichier écrit avant que la ligne ne
         // soit ingérée ; une ingestion qui échoue laisse le fichier en avance
         // sur l'index (rattrapable), jamais une ligne sans son fichier.
-        let fichier = match ctx
+        let miroir_de_l_entite = ctx
             .service::<HashMap<String, Arc<crate::fichiers_entite::Miroir>>>(crate::fichiers_entite::SERVICE)
             .and_then(|m| m.get(entity))
+            .cloned();
+        let fichier = match miroir_de_l_entite.as_ref()
         {
             // Un fichier composé est une vue de la base : la réaction de miroir
             // le réécrit après l'ingestion (lot M2c), pas le put.
@@ -440,6 +442,14 @@ impl Node for EntityRecordNode {
                 report.warnings
             ));
         }
+        // **A composed mirror, written now** (22 November 2026, a miss of the MCP: `put_fiche` answered `file: null`
+        // while its file was written behind): composed from the row just ingested, its path is the answer's `file`,
+        // and the file exists when the call returns. The mirror reaction composing it again is harmless.
+        let fichier = match (fichier, miroir_de_l_entite.as_ref()) {
+            (Some(f), _) => Some(f),
+            (None, Some(m)) if m.est_compose() => m.regenerer(&cat, &uuid)?.map(|(chemin, _)| chemin),
+            _ => None,
+        };
         // `atomic: false`, dit : la ligne, ses morceaux, son plein texte et ses
         // vecteurs partent en plusieurs instructions, sans transaction autour
         // (la forme B de la page de l'enveloppe les envelopperait).
