@@ -21,6 +21,9 @@
   disque, et l'ancienne analyse restait. L'hôte relance maintenant l'index en fond de lui-même, en disant pourquoi.
   **Pendant cette repasse**, l'état de l'index (`analysis_repass`) et chaque réponse des outils de recherche disent
   « repasse de l'analyse en cours : n/N fichiers — la réponse porte sur l'analyse d'avant ».
+- 22 novembre 2026 — **Un texte copié se retrouve tel quel.** La passe de la requête entière cherche une phrase de
+  plusieurs mots à distance 0 : un `contains` flou ignorait les séparateurs et cherchait la phrase collée en un seul
+  mot, à une faute près. Un jeton seul garde sa distance 1 ; une faute dans une phrase revient à la recherche par mots.
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
