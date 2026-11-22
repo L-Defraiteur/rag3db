@@ -891,4 +891,37 @@ for i in 1 2 3 4 5 6; do ( P enqueue dup-1 dup-1 "$h" docs - - - - author-a > /d
 n=$(grep -v '^#' "$D/pusher/queue.tsv" | awk -F'\t' '$1 == "dup-1"' | wc -l)
 [ "$n" = 1 ] && ok "six dépôts simultanés du même id : une seule ligne en file" || ko "six dépôts simultanés du même id : $n lignes en file"
 P dequeue dup-1 > /dev/null 2>&1
+# 50. Two slots and trains of two (22 Nov., c7: the queue waits 30 min in median with trains of one; every two-slot
+# case above runs with PUSHER_TRAIN_MAX=1). (a) Four Rust lots, all green: A (two lots) and B (the next two, reposed
+# on A in the second worktree) replay at the same time, and all four land in one step.
+for x in ta tb tc td; do eval "h_$x=\$(lot t2$x extension/rag3weaver/src/t2$x.rs 'fn t2$x() {}')"; done
+for x in ta tb tc td; do eval "P enqueue t2$x t2$x \"\$h_$x\" rust some_witness e2e_code - - author-c > /dev/null"; done
+echo VERT > "$D/outcomes.d/t2ta"; echo VERT > "$D/outcomes.d/t2tc"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+wb=$(awk '$2 ~ /-t2tc\+1$/ && $3 == "start" {print $1}' "$D/pass_times")
+on_master t2ta && on_master t2tb && on_master t2tc && on_master t2td && [ "$wb" = wt2 ] \
+  && ok "deux créneaux, trains de deux : A et B rejoués ensemble, les quatre lots poussés en un pas" \
+  || ko "deux créneaux, trains de deux : $(for x in ta tb tc td; do on_master t2$x && printf 'poussé ' || printf 'PAS-poussé '; done) B dans « $wb »"
+# (b) The second lot of A red: A bisected, its green prefix (the first lot) pushed, the second left at the head of the
+# queue for the next step (the bisection's rule); B, speculative on the whole of A, thrown away and never returned.
+# Next step: the second lot replayed alone and returned red; then B replayed and pushed.
+for x in ua ub uc ud; do eval "h_$x=\$(lot t2$x extension/rag3weaver/src/t2$x.rs 'fn t2$x() {}')"; done
+for x in ua ub uc ud; do eval "P enqueue t2$x t2$x \"\$h_$x\" rust some_witness e2e_code - - author-c > /dev/null"; done
+# The train's own pass reads outcomes.d/t2ua; the bisection's pass (t2ua alone) reads the queue.
+echo "ROUGE e2e_code" > "$D/outcomes.d/t2ua"; echo VERT > "$D/outcomes.d/t2uc"; printf 'VERT\n' > "$D/outcomes"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+tete=$(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1)
+on_master t2ua && ! on_master t2ub && ! on_master t2uc && [ "$tete" = t2ub ] && grep -q "^t2uc	" "$D/pusher/queue.tsv" \
+  && ! grep -q "^rouge	t2u[a-d]	" "$D/pusher/inbox/author-c.txt" \
+  && ok "train de deux rouge : bissecté, le premier poussé, le second en tête de file, B jeté sans être rendu" \
+  || ko "train de deux rouge : $(for x in ua ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); tête $tete ; rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" 2>/dev/null | cut -f2 | paste -sd,)"
+echo "ROUGE e2e_code" > "$D/outcomes.d/t2ub"; echo VERT > "$D/outcomes.d/t2uc"; : > "$D/outcomes"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+for i in 1 2 3; do echo VERT >> "$D/outcomes"; done
+on_master t2uc || PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+grep -q "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" && ! on_master t2ub && on_master t2uc && on_master t2ud \
+  && ! grep -q "^rouge	t2u[cd]	" "$D/pusher/inbox/author-c.txt" \
+  && ok "train de deux rouge : le second rendu seul au pas suivant, B rejoué et poussé, jamais rendu" \
+  || ko "train de deux rouge, suite : $(for x in ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" 2>/dev/null | cut -f2 | paste -sd,)"
+: > "$D/outcomes"; rm -f "$D"/outcomes.d/t2u*
 exit $red
