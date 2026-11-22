@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une faute sur plusieurs champs ne se paie qu'une fois.** La recherche floue d'une requête
+  sur plusieurs champs (le nom et le corps d'un scope) part en un seul `contains` à `fields` de lucivy 4.5.0 : la faute du
+  meilleur champ compte, le BM25 de tous s'ajoute, et lucivy n'avertit plus d'un booléen de `contains` flous.
 - 22 novembre 2026 — **Un nom tapé à une faute près donne sa déclaration d'abord.** « FuseResultNode » rend
   `FuseResultsNode` en tête, comme le nom tapé juste, au lieu de ses usages trouvés par sous-chaîne : sans nom exact,
   une requête d'un seul jeton cherche les noms à une faute près (distance d'édition, sur rag3db).
