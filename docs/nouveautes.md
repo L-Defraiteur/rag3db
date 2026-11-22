@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Chaque appel de modèle payant est compté, et le mois a un plafond.** Tout modèle déclaré, et
+  celui du régime, passe par le registre des dépenses (`~/.local/state/rag3weaver/usage/<mois>.jsonl`) : avant
+  l'appel, sa borne haute est réservée sous verrou ; après, elle est soldée par les jetons que le fournisseur rapporte,
+  le cache écrit et lu à part. Au-delà de 200 USD dans le mois, un appel d'agent est refusé en le disant, celui d'un
+  humain passe et se compte. Les prix vivent dans `~/.config/rag3weaver/prices.json`, écrit au premier appel depuis
+  les pages officielles des fournisseurs (relevé du 21 novembre, la hausse d'Argon au 1er décembre comprise) ; un
+  modèle sans prix est refusé, jamais compté à zéro. C'est la condition d'entrée de tout fournisseur payant neuf.
 - 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
   d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
   rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
