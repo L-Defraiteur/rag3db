@@ -121,6 +121,7 @@ impl DaemonHost {
             "active_view": t.vue_active,
             "last_line": last_line,
             "agent_key": t.agent_key,
+            "forked_from": t.forked_from,
         })
     }
 }

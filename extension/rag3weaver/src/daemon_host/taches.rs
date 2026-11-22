@@ -1173,10 +1173,47 @@ impl DaemonHost {
         Ok(json!({ "removed": h.id, "manifest": h.manifest, "closed_tasks": fermees }))
     }
 
-    /// **Fork an agent** (`--fork-agent`, 22 November 2026): RED STUB.
-    #[allow(unused_variables)]
+    /// **Fork an agent** (`--fork-agent`, c7 for Lucie, 22 November 2026): the open task `task` of `parent` is copied
+    /// into a new task `name` (default `<task>-copie`, then `-copie-2`…): its branch starts at the head of the
+    /// original's branch, it takes the original's agent name, persona, root and views, a copy of its mailbox, its plans
+    /// and its conversation so far, and a new agent key (agreed with archi and mémoire), the copy saying whose copy it
+    /// is (`forked_from: {agent, task, head}`). It inherits the original's durable roots, granted again to its key
+    /// with the original proof « hérité de <key> au fork » and the same `granted_by`; a grant for one command is not
+    /// inherited. Then the two agents are independent.
     pub fn fork_agent(&self, parent: &str, task: &str, name: Option<&str>) -> Result<Tache, String> {
-        Err("dupliquer un agent : pas encore".into()) // RED STUB.
+        let orig = self.tache(parent, task).ok_or_else(|| format!("dupliquer « {task} » : aucune tâche ouverte de ce nom sur {parent}"))?;
+        let nom = match name {
+            Some(n) => n.to_string(),
+            None => (1..)
+                .map(|i| if i == 1 { format!("{task}-copie") } else { format!("{task}-copie-{i}") })
+                .find(|n| self.tache(parent, n).is_none() && !orig.arbre.parent().and_then(Path::parent).is_some_and(|r| r.join(n).exists()))
+                .unwrap_or_default(),
+        };
+        let tete = if orig.sans_depot {
+            None
+        } else {
+            Some(git(&orig.depot, &["rev-parse", &orig.branche]).map(|o| o.trim().to_string()).map_err(|e| format!("dupliquer « {task} » : la tête de {} : {e}", orig.branche))?)
+        };
+        let n = self.ouvrir_une_tache_depuis(parent, &nom, orig.nom_de_l_agent.as_deref(), orig.persona_de_l_agent.as_deref(), tete.as_deref(), None)?;
+        let source = orig.arbre.parent().map(Path::to_path_buf).ok_or("la tâche n'a pas de dossier")?;
+        self.reprendre_le_travail(parent, &n, &source, task)?;
+        if let Some(session) = orig.parent_session.as_deref().filter(|s| !s.is_empty()) {
+            self.donner_les_vues(parent, &nom, session, orig.vues.clone().unwrap_or_default(), orig.vue_active.clone())?;
+        }
+        let lien = json!({ "agent": orig.agent_key, "task": task, "head": tete });
+        if let Some(gardee) = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&n.manifest) {
+            gardee.forked_from = Some(lien);
+        }
+        self.ecrire_le_registre()?;
+        // The durable roots of the original, inherited (agreed with archi, 22 November 2026): the same work, on the
+        // words of the same user. A grant for one command lives in memory and is not inherited.
+        if let (Some(cle), Some(neuve)) = (&orig.agent_key, &n.agent_key) {
+            for g in self.root_grants(Some(cle)).into_iter().filter(|g| &g.agent == cle) {
+                let preuve = crate::daemon_host::root_grants::Proof { quote: format!("{} — hérité de {cle} au fork", g.quote), at: Some(g.at), turn: g.turn.clone() };
+                self.grant_root(neuve, &g.root, preuve, &g.granted_by, &g.mode)?;
+            }
+        }
+        self.tache(parent, &nom).ok_or_else(|| format!("dupliquer « {task} » : la copie {nom} n'est plus ouverte"))
     }
 
     /// **Reopen a closed agent** (`--pop-agent`, c7 for Lucie, 22 November 2026): the latest closed task of `parent`
