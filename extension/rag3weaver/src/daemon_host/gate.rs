@@ -25,12 +25,26 @@ pub enum GateOutcome {
 /// The gate of a teammate's step: given the command the guard held, its outcome.
 pub type StepGate = Arc<dyn Fn(&str) -> GateOutcome + Send + Sync>;
 
+/// What the gate decides for a path outside the sandbox's roots (`judge_all`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpenRootOutcome {
+    /// The root is granted to the task's agent (the judge's yes): the command is replayed.
+    Granted,
+    /// The card, with what it shows (`command`, `root`, `mode`, and a `warning` for a broad root).
+    Card { class: String, args: Value },
+}
+
+/// The `judge_all` gate of a teammate's step: given the sandbox's `open_root` request, its outcome.
+pub type StepOpenRoot = Arc<dyn Fn(&Value) -> OpenRootOutcome + Send + Sync>;
+
 /// The rules of the gate (`rules.json` in the gate's folder): the classes judged, the judge.
 #[derive(Debug, Clone, Default)]
 pub struct GateRules {
     pub judged: Vec<String>,
     /// `{address, prompt_file, threshold}` of the served judge (banc's Qwen), if any.
     pub judge: Option<Value>,
+    /// The survivor's option (Lucie, 21 Nov 20 h 35): it would judge a broad root. Not in v1: the card decides, and says so.
+    pub dangerous_standalone_survivor: bool,
 }
 
 impl GateRules {
@@ -45,7 +59,11 @@ impl GateRules {
             .as_array()
             .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
             .unwrap_or_else(|| JUDGED_CLASSES.iter().map(|c| c.to_string()).collect());
-        GateRules { judged, judge: v.get("judge").filter(|j| j.is_object()).cloned() }
+        GateRules {
+            judged,
+            judge: v.get("judge").filter(|j| j.is_object()).cloned(),
+            dangerous_standalone_survivor: v["dangerous_standalone_survivor"].as_bool().unwrap_or(false),
+        }
     }
 }
 
@@ -130,6 +148,48 @@ fn deletable_without_asking(racine: &Path, fichier: &str) -> bool {
     let propre = git(&["diff", "--quiet", "HEAD", "--", fichier]).is_some_and(|o| o.status.success());
     let distant = git(&["branch", "-r", "--contains", "HEAD"]).is_some_and(|o| o.status.success() && !o.stdout.is_empty());
     propre && distant
+}
+
+/// **A root broader than a project** (Lucie, 21 Nov 20 h 35): the home folder or one of its parents, or a folder that
+/// holds two repositories or more (one or two levels down). Its warning says what it holds; it goes to the card, never
+/// to the judge alone.
+pub fn broad_root(root: &Path) -> Option<String> {
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from).and_then(|h| h.canonicalize().ok()) {
+        if root == home || home.starts_with(root) {
+            return Some(format!("cette racine contient tout ton dossier personnel ({})", home.display()));
+        }
+    }
+    let mut depots = Vec::new();
+    for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        let p = e.path();
+        if !p.is_dir() || p.file_name().is_some_and(|n| n == ".git") {
+            continue;
+        }
+        if p.join(".git").exists() {
+            depots.push(p.strip_prefix(root).unwrap_or(&p).display().to_string());
+            continue;
+        }
+        for e2 in std::fs::read_dir(&p).into_iter().flatten().flatten() {
+            if e2.path().is_dir() && e2.path().join(".git").exists() {
+                depots.push(e2.path().strip_prefix(root).unwrap_or(&e2.path()).display().to_string());
+            }
+        }
+    }
+    depots.sort();
+    (depots.len() >= 2).then(|| {
+        let plus = if depots.len() > 8 { format!(" et {} autres", depots.len() - 8) } else { String::new() };
+        format!("cette racine contient aussi : {}{plus}", depots.iter().take(8).cloned().collect::<Vec<_>>().join(", "))
+    })
+}
+
+/// The last turn of the human (its text, its time, its line), for a grant's proof.
+fn last_human_turn(files: &TeammateFiles) -> Option<Value> {
+    files.mailbox().into_iter().rev().find(|l| l["by"]["kind"] == "human" && l["kind"] != "answer")
+}
+
+/// The last turn of the agent: the reason it gave, shown on a protected folder's card.
+fn last_agent_turn(files: &TeammateFiles) -> String {
+    files.mailbox().into_iter().rev().find(|l| l["from"] == "teammate").and_then(|l| l["text"].as_str().map(str::to_string)).unwrap_or_default()
 }
 
 /// A package manager's install (banc's `INSTALL_CMD`, word for word).
@@ -264,6 +324,60 @@ impl DaemonHost {
             let Some(juge) = &juge else { return GateOutcome::Card { class } };
             let verdict = juge(&entree);
             if matches!(verdict["label"].as_str(), Some("explicit" | "covered")) { accorder("judge") } else { GateOutcome::Card { class } }
+        }))
+    }
+
+    /// **The `judge_all` gate of a teammate's step** (Lucie, 21 Nov 2026, 20 h): the sandbox stopped a path outside its
+    /// roots. A protected folder is its own card, never judged (a human yes opens it for this command only). A root
+    /// broader than a project is a card with its warning. Otherwise, in the auto mode, the judge: its yes grants the root
+    /// (the project's, as `proposed_root` suggests) to the task's agent, and the command is replayed; anything else is
+    /// the card, whose yes grants it.
+    pub(crate) fn step_open_root(&self, backend_id: &str, files: &TeammateFiles) -> Option<StepOpenRoot> {
+        let hote = self.soi.get().cloned()?;
+        let rules = GateRules::read(self.gate_dir.as_deref().or(Some(default_gate_dir().as_path())));
+        let juge = self.gate_judge.clone().or_else(|| rules.judge.as_ref().and_then(served_judge));
+        let backend_id = backend_id.to_string();
+        let files = files.clone();
+        Some(Arc::new(move |m: &Value| -> OpenRootOutcome {
+            let replay = m["replay"].as_str().unwrap_or_default().to_string();
+            let mode = m["mode"].as_str().filter(|x| matches!(*x, "read" | "write")).unwrap_or("read").to_string();
+            let refused = PathBuf::from(m["refused"].as_str().unwrap_or_default());
+            if m["protected"] == true {
+                let args = json!({ "command": replay, "root": refused, "mode": "read", "reason": last_agent_turn(&files) });
+                return OpenRootOutcome::Card { class: "protected".into(), args };
+            }
+            let Some(h) = hote.upgrade() else {
+                return OpenRootOutcome::Card { class: "open_root".into(), args: json!({ "command": replay, "root": refused, "mode": mode }) };
+            };
+            let dossier = if refused.is_dir() { refused.clone() } else { refused.parent().map(Path::to_path_buf).unwrap_or_else(|| refused.clone()) };
+            let root = h.proposed_root(&refused).unwrap_or(dossier);
+            let mut args = json!({ "command": replay, "root": root, "mode": mode });
+            if let Some(w) = broad_root(&root) {
+                args["warning"] = json!(w);
+                if rules.dangerous_standalone_survivor {
+                    args["note"] = json!("dangerous_standalone_survivor : pas encore en v1, la carte décide");
+                }
+                return OpenRootOutcome::Card { class: "open_root".into(), args };
+            }
+            let carte = |args: Value| OpenRootOutcome::Card { class: "open_root".into(), args };
+            let auto = h.with_backend_id(&backend_id, |b| b.garde().map(|g| g.mode())).ok().flatten() == Some(crate::commande::Mode::Auto);
+            let (Some(agent), Some(juge), true) = (h.agent_key_of_backend(&backend_id), &juge, auto) else { return carte(args) };
+            let mut entree = judge_input(&files, &replay, "open_root");
+            entree["action"]["open_root"] = json!({ "path": root, "mode": mode });
+            let verdict = juge(&entree);
+            if !matches!(verdict["label"].as_str(), Some("explicit" | "covered")) {
+                return carte(args);
+            }
+            let tour = last_human_turn(&files).unwrap_or(Value::Null);
+            let preuve = super::root_grants::Proof {
+                quote: verdict["quote"].as_str().or(tour["text"].as_str()).unwrap_or_default().to_string(),
+                at: tour["at"].as_u64(),
+                turn: tour["id"].as_str().map(str::to_string),
+            };
+            match h.grant_root(&agent, &root, preuve, "judge", &mode) {
+                Ok(_) => OpenRootOutcome::Granted,
+                Err(_) => carte(args),
+            }
         }))
     }
 

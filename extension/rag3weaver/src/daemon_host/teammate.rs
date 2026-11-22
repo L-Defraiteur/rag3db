@@ -524,6 +524,9 @@ pub struct Step {
     /// The gate of the auto mode, when the task's backend is in it (page 07 of rag3weaver-archi).
     #[cfg(feature = "code")]
     pub gate: Option<super::gate::StepGate>,
+    /// The `judge_all` gate: a path outside the sandbox's roots (page 07 of rag3weaver-archi, « suite »).
+    #[cfg(feature = "code")]
+    pub open_root: Option<super::gate::StepOpenRoot>,
     /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
@@ -697,6 +700,8 @@ impl Step {
             browser: None,
             #[cfg(feature = "code")]
             gate: None,
+            #[cfg(feature = "code")]
+            open_root: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
@@ -1237,6 +1242,30 @@ impl StepTools<'_> {
 
     #[cfg(feature = "code")]
     fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+        // **judge_all** (page 07, « suite »): the sandbox stopped a path outside its roots; the judge's yes grants the
+        // root and the command is replayed now, anything else is a card whose yes grants it.
+        let marque = crate::dataflow::run_nodes::OPEN_ROOT_MARKER;
+        if let (Some(i), Some(gate)) = (turn.content.find(marque), &self.step.open_root) {
+            let demande = serde_json::Deserializer::from_str(&turn.content[i + marque.len()..]).into_iter::<Value>().next().and_then(Result::ok);
+            if let Some(m) = demande {
+                match gate(&m) {
+                    super::gate::OpenRootOutcome::Granted => return self.inner.call(call),
+                    super::gate::OpenRootOutcome::Card { class, args } => {
+                        let ouverte = super::card::open_card(&self.step.files, "run_command", &args, &class, "once")
+                            .and_then(|id| self.step.files.mailbox().into_iter().find(|l| l["id"] == id.as_str()).ok_or_else(|| "the card's line".to_string()));
+                        if let Ok(line) = ouverte {
+                            publish(self.step.bus.as_ref(), &self.step.task, &line);
+                            turn.content.push_str(&format!(
+                                "\n\n_La demande d'accès à {} est dans la boîte du superviseur (ligne {}) : continue sans elle ; si elle est accordée, relance ta commande mot pour mot._",
+                                args["root"].as_str().unwrap_or_default(),
+                                line["id"].as_str().unwrap_or_default()
+                            ));
+                        }
+                        return turn;
+                    }
+                }
+            }
+        }
         if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
             let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
             if let Some(ligne) = args["command"].as_str() {
@@ -1677,15 +1706,38 @@ impl DaemonHost {
         if kind == "answer" && extra["approved"] == true {
             let visee = extra["reply_to"].as_str().and_then(|r| files.mailbox().into_iter().find(|l| l["id"] == r));
             if let Some(ligne) = visee.as_ref().filter(|l| l["kind"] == "approval").and_then(|l| l["command"].as_str().map(str::to_string)) {
-                let domaine = t.workspace.as_ref().map(|w| w.racine.clone());
-                let accorde = self.with_backend_id(&t.id, |b| match b.garde() {
-                    Some(g) => g.accorder_ligne(&ligne, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
-                    None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
-                });
-                let note = match accorde {
-                    // The line word for word: the grant is keyed by it, and the agent replays what it reads.
-                    Ok(Ok(_)) => format!("commande accordée pour la tâche : {ligne} — relance-la mot pour mot"),
-                    Ok(Err(e)) | Err(e) => format!("l'accord n'a pas pu se poser : {e}"),
+                let carte = visee.clone().unwrap_or(Value::Null);
+                let classe = carte["class"].as_str().unwrap_or_default().to_string();
+                let note = if classe == "open_root" || classe == "protected" {
+                    // **A yes on a root's card** (judge_all): the root is granted to the task's agent, durably for
+                    // open_root, for this command only for a protected folder; never a line's grant.
+                    let racine = std::path::PathBuf::from(carte["args"]["root"].as_str().unwrap_or_default());
+                    let mode = carte["args"]["mode"].as_str().unwrap_or("read").to_string();
+                    let preuve = super::root_grants::Proof {
+                        quote: text.to_string(),
+                        at: None,
+                        turn: extra["reply_to"].as_str().map(str::to_string),
+                    };
+                    let accorde = match self.agent_key_of_backend(&t.id) {
+                        None => Err("la tâche n'a pas de clé d'agent : la racine ne peut pas lui être accordée".to_string()),
+                        Some(agent) if classe == "protected" => self.grant_once(&agent, &racine, preuve, "user", "read"),
+                        Some(agent) => self.grant_root(&agent, &racine, preuve, "user", &mode).map(|_| ()),
+                    };
+                    match accorde {
+                        Ok(()) => format!("racine accordée : {} ({mode}) — relance ta commande mot pour mot : {ligne}", racine.display()),
+                        Err(e) => format!("l'accord de la racine n'a pas pu se poser : {e}"),
+                    }
+                } else {
+                    let domaine = t.workspace.as_ref().map(|w| w.racine.clone());
+                    let accorde = self.with_backend_id(&t.id, |b| match b.garde() {
+                        Some(g) => g.accorder_ligne(&ligne, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
+                        None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
+                    });
+                    match accorde {
+                        // The line word for word: the grant is keyed by it, and the agent replays what it reads.
+                        Ok(Ok(_)) => format!("commande accordée pour la tâche : {ligne} — relance-la mot pour mot"),
+                        Ok(Err(e)) | Err(e) => format!("l'accord n'a pas pu se poser : {e}"),
+                    }
                 };
                 if let Some(o) = extra.as_object_mut() {
                     o.insert("granted".into(), Value::String(note.clone()));
@@ -2105,6 +2157,7 @@ impl DaemonHost {
                 if let Some(t) = self.tache(parent, task) {
                     let racine = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
                     step.gate = self.step_gate(&t.id, &files, racine);
+                    step.open_root = self.step_open_root(&t.id, &files);
                 }
             }
             step.woke_by = woke_by.take();
