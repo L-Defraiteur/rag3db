@@ -22,7 +22,6 @@ fn the_cost_of_a_full_index_of_a_frozen_tree() {
     let manifeste = PathBuf::from(crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap());
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(arbre);
-    m["workspace"]["commands"] = json!("off");
     // No embedding service: the full text and the graph only; the vectors stay due on both sides.
     m["embeddings"]["address"] = json!("127.0.0.1:1");
     m["embeddings"]["catch_up_on_open"] = json!(false);
@@ -47,6 +46,30 @@ fn the_cost_of_a_full_index_of_a_frozen_tree() {
         let existe = host.with_backend(&h, |b| b.catalog.lock().unwrap().get_relation_def(rel).is_some()).unwrap();
         let n = if existe { compte(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)")) } else { 0 };
         lignes.push(format!("[mesure] {rel} {n}"));
+    }
+    // The edges themselves, sorted, to compare two passes (`RAG3WEAVER_MESURE_DUMP=<prefix>`): the key of each end.
+    if let Ok(prefixe) = std::env::var("RAG3WEAVER_MESURE_DUMP") {
+        let lignes_de = |q: &str| -> Vec<String> {
+            host.with_backend(&h, |b| {
+                let cat = b.catalog.lock().unwrap();
+                let mut v: Vec<String> = cat
+                    .execute_raw(q)
+                    .map(|r| r.rows.iter().map(|l| l.iter().map(|x| x.as_str().map(str::to_string).unwrap_or_else(|| format!("{x:?}"))).collect::<Vec<_>>().join("\t")).collect())
+                    .unwrap_or_default();
+                v.sort();
+                v
+            })
+            .unwrap()
+        };
+        for (rel, q) in [
+            ("MENTIONS", "MATCH (a:Scope)-[r:MENTIONS]->(b:Symbol) RETURN a.key, b.name, r.kind"),
+            ("CONSUMES", "MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.key, b.key, r.usage"),
+            ("DEFINES", "MATCH (a:Scope)-[r:DEFINES]->(b:Symbol) RETURN a.key, b.name"),
+            ("Symbol", "MATCH (s:Symbol) RETURN s.name"),
+        ] {
+            std::fs::write(format!("{prefixe}.{rel}.tsv"), lignes_de(q).join("\n") + "\n").unwrap();
+        }
+        lignes.push(format!("[mesure] dump {prefixe}.*.tsv"));
     }
     let s = host.open_session("the measure", None, Vec::new(), None);
     let _ = host.close(Some(&s), &manifeste);
