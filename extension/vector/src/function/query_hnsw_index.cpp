@@ -1,4 +1,5 @@
 #include <cstdio>
+#include "common/string_utils.h"
 #include <cstdlib>
 
 #include "binder/binder.h"
@@ -135,8 +136,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
                     tableOrGraphName));
             }
             auto nodeInfo = nativeEntry.nodeInfos[0];
-            cypherQuery = stringFormat("MATCH (n:`{}`) WHERE {} RETURN n", nodeInfo.tableName,
-                nodeInfo.predicate);
+            cypherQuery = stringFormat("MATCH (n:{}) WHERE {} RETURN n",
+                common::StringUtils::quoteIdentifier(nodeInfo.tableName), nodeInfo.predicate);
         } else {
             KU_ASSERT(graphEntry->type == graph::GraphEntryType::CYPHER);
             cypherQuery = graphEntry->cast<graph::ParsedCypherGraphEntry>().cypherQuery;

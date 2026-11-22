@@ -2,6 +2,7 @@
 
 #include <regex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "common/api.h"
@@ -13,6 +14,22 @@ namespace common {
 
 class RAG3DB_API StringUtils {
 public:
+    // A name between backticks for generated Cypher, its own backticks doubled: `a``b` names a`b
+    // (ticket docs/tickets/2026-10-04-accent-grave-double-dans-un-nom.md).
+    static std::string quoteIdentifier(std::string_view name) {
+        std::string quoted;
+        quoted.reserve(name.size() + 2);
+        quoted += '`';
+        for (const auto c : name) {
+            quoted += c;
+            if (c == '`') {
+                quoted += '`';
+            }
+        }
+        quoted += '`';
+        return quoted;
+    }
+
     static std::vector<std::string> splitComma(const std::string& input);
 
     // Does not split within [], {}, or ().

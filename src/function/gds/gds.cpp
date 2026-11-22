@@ -1,4 +1,5 @@
 #include "function/gds/gds.h"
+#include "common/string_utils.h"
 
 #include "binder/binder.h"
 #include "binder/expression/rel_expression.h"
@@ -82,12 +83,13 @@ static NativeGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std
         throw BinderException(stringFormat("{} is not a NODE table.", tableName));
     }
     if (!predicate.empty()) {
-        auto cypher = stringFormat("MATCH (n:`{}`) RETURN n, {}", nodeEntry->getName(), predicate);
+        auto cypher =
+            stringFormat("MATCH (n:{}) RETURN n, {}", common::StringUtils::quoteIdentifier(nodeEntry->getName()), predicate);
         auto columns = getResultColumns(cypher, &context);
         KU_ASSERT(columns.size() == 2);
         return {nodeEntry, columns[0], columns[1]};
     } else {
-        auto cypher = stringFormat("MATCH (n:`{}`) RETURN n", nodeEntry->getName());
+        auto cypher = stringFormat("MATCH (n:{}) RETURN n", common::StringUtils::quoteIdentifier(nodeEntry->getName()));
         auto columns = getResultColumns(cypher, &context);
         KU_ASSERT(columns.size() == 1);
         return {nodeEntry, columns[0], nullptr /* empty predicate */};
@@ -105,12 +107,12 @@ static NativeGraphEntryTableInfo bindRelEntry(ClientContext& context, const std:
     }
     if (!predicate.empty()) {
         auto cypher =
-            stringFormat("MATCH ()-[r:`{}`]->() RETURN r, {}", relEntry->getName(), predicate);
+            stringFormat("MATCH ()-[r:{}]->() RETURN r, {}", common::StringUtils::quoteIdentifier(relEntry->getName()), predicate);
         auto columns = getResultColumns(cypher, &context);
         KU_ASSERT(columns.size() == 2);
         return {relEntry, columns[0], columns[1]};
     } else {
-        auto cypher = stringFormat("MATCH ()-[r:`{}`]->() RETURN r", relEntry->getName());
+        auto cypher = stringFormat("MATCH ()-[r:{}]->() RETURN r", common::StringUtils::quoteIdentifier(relEntry->getName()));
         auto columns = getResultColumns(cypher, &context);
         KU_ASSERT(columns.size() == 1);
         return {relEntry, columns[0], nullptr /* empty predicate */};

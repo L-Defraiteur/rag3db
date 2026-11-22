@@ -1,4 +1,5 @@
 #include "binder/binder.h"
+#include "common/string_utils.h"
 #include "binder/bound_import_database.h"
 #include "common/copier_config/csv_reader_config.h"
 #include "common/exception/binder.h"
@@ -42,7 +43,7 @@ static std::string getColumnNamesToCopy(const CopyFrom& copyFrom) {
     std::string delimiter = "";
     for (auto& column : copyFrom.getCopyColumnInfo().columnNames) {
         columns += delimiter;
-        columns += "`" + column + "`";
+        columns += common::StringUtils::quoteIdentifier(column);
         if (delimiter == "") {
             delimiter = ",";
         }
@@ -125,13 +126,13 @@ std::unique_ptr<BoundStatement> Binder::bindImportDatabaseClause(const Statement
                 if (!copyFromOptions.empty()) {
                     optionsMap.insert(copyFromOptions.begin(), copyFromOptions.end());
                 }
-                query =
-                    stringFormat("COPY `{}` {} FROM \"{}\" {};", copyFromStatement.getTableName(),
-                        columnNames, copyFilePath, CSVOption::toCypher(optionsMap));
+                query = stringFormat("COPY {} {} FROM \"{}\" {};",
+                    common::StringUtils::quoteIdentifier(copyFromStatement.getTableName()), columnNames, copyFilePath,
+                    CSVOption::toCypher(optionsMap));
             } else {
-                query =
-                    stringFormat("COPY `{}` {} FROM \"{}\" {};", copyFromStatement.getTableName(),
-                        columnNames, copyFilePath, CSVOption::toCypher(copyFromOptions));
+                query = stringFormat("COPY {} {} FROM \"{}\" {};",
+                    common::StringUtils::quoteIdentifier(copyFromStatement.getTableName()), columnNames, copyFilePath,
+                    CSVOption::toCypher(copyFromOptions));
             }
             finalQueryStatements += query;
         }

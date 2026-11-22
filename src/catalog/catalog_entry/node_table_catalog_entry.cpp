@@ -35,8 +35,8 @@ std::unique_ptr<NodeTableCatalogEntry> NodeTableCatalogEntry::deserialize(
 }
 
 std::string NodeTableCatalogEntry::toCypher(const ToCypherInfo& /*info*/) const {
-    return common::stringFormat("CREATE NODE TABLE `{}` ({} PRIMARY KEY(`{}`));", getName(),
-        propertyCollection.toCypher(), primaryKeyName);
+    return common::stringFormat("CREATE NODE TABLE {} ({} PRIMARY KEY({}));",
+        common::StringUtils::quoteIdentifier(getName()), propertyCollection.toCypher(), common::StringUtils::quoteIdentifier(primaryKeyName));
 }
 
 std::unique_ptr<TableCatalogEntry> NodeTableCatalogEntry::copy() const {
