@@ -169,6 +169,38 @@ pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode:
     format!("{agent} {modifier}\n\n{declare}")
 }
 
+/// The chat's tool that opens a code task (a repository's chat, outside a task).
+pub const OPEN_CODE_TASK: &str = "open_code_task";
+
+impl DaemonHost {
+    /// **Open the code task from a repository's chat** (the dry run of 22 Nov 2026): the task (its branch, its tree),
+    /// the user's own message as its request (by human: she wrote it), its agent started. Returns `moved_to_task` with
+    /// the task, its backend, its branch, the IDE's link and the request.
+    #[cfg(feature = "code")]
+    pub(crate) fn open_code_task_from_chat(&self, backend_id: &str, message: &str, nom: Option<&str>) -> Result<Value, String> {
+        let hote = self.soi.get().and_then(std::sync::Weak::upgrade).ok_or("l'hôte ne se connaît pas : il ne peut pas ouvrir de tâche depuis le chat")?;
+        let base = super::taches::slug(nom.unwrap_or_else(|| message)).chars().take(40).collect::<String>().trim_matches('-').to_string();
+        let base = if base.is_empty() { "tache".to_string() } else { base };
+        let mut tache = base.clone();
+        let mut n = 2;
+        while self.tache(backend_id, &tache).is_some() {
+            tache = format!("{base}-{n}");
+            n += 1;
+        }
+        hote.post_to_teammate(backend_id, &tache, "user", "request", None, message, &json!({ "by": { "kind": "human", "client": "ide" }, "expects": "report" }))?;
+        let t = self.tache(backend_id, &tache).ok_or_else(|| format!("la tâche {tache} ne s'est pas ouverte"))?;
+        let encode: String = tache.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+        Ok(json!({
+            "kind": "moved_to_task",
+            "task": tache,
+            "backend": t.id,
+            "branch": t.branche,
+            "link": format!("/ide/code/{backend_id}/taches/{encode}"),
+            "request": message,
+        }))
+    }
+}
+
 pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
     let changer = match mode {
         ModeDeclarations::Approbation => {
@@ -189,8 +221,9 @@ pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
          outline, grep and search, read before you change, then edit with edit_file (the content_hash that \
          read gives keeps you from overwriting a change). The person reviews the branch, then merges it."
     } else {
-        "The code of this backend's tree can be read here, not written: if the person wants a change, tell \
-         them to open a task in the IDE (its own branch, reviewed then merged) and to ask you there."
+        "The code of this backend's tree can be read here, not written: when the person asks for a change, call \
+         open_code_task to open a task (its own branch, reviewed then merged) with their request; the conversation \
+         goes on there. Never ask them to open it themselves."
     };
     format!(
         "You work on a declared backend: its manifest, tool graphs (mermaid), JSON schemas, scripted nodes, \
@@ -874,9 +907,11 @@ impl DaemonHost {
                     } else {
                         let (backend, domaine) = (hosted.id.clone(), b.prepared().workspace_root());
                         let du_chat = hosted.id.clone();
+                        let (du_depot, demande) = (hosted.id.clone(), message.to_string());
                         outils
                             .avec_les_commandes_en_attente(move |ligne| self.atelier_demander_commande(&backend, ligne, domaine.as_deref()))
                             .avec_les_cartes_rattachees(move |id| self.rattacher_accord(id, &du_chat))
+                            .avec_l_ouverture_de_tache(move |nom| self.open_code_task_from_chat(&du_depot, &demande, nom))
                     };
                     // **A slow tool says it waits** (ticket of 19 Nov., relevé par archi): the teammate's notice.
                     let attente = DitSonAttente {
@@ -1227,6 +1262,8 @@ pub(crate) struct OutilsDuChat<'a> {
     /// **Une carte d'accord passée sous un appel** : son id, rattaché à la conversation pour
     /// que la décision y relance le tour (la carte d'un chemin ; c7, 9 novembre 2026).
     rattacher: Option<Box<dyn Fn(&str) + Send + Sync + 'a>>,
+    /// Opens the code task from a repository's chat (`open_code_task`), with the task's name if the agent gives one.
+    ouvrir_la_tache: Option<Box<dyn Fn(Option<&str>) -> Result<Value, String> + Send + Sync + 'a>>,
     /// **An answer whose index is not ready** (its `index`, carried by the turn's `metadata`, and the call's `view`):
     /// the host watches it.
     pas_pret: Option<Box<dyn Fn(&Value, Option<Value>) + Send + Sync + 'a>>,
@@ -1258,15 +1295,16 @@ impl<'a> OutilsDuChat<'a> {
                     retires.insert(
                         nom.clone(),
                         format!(
-                            "« {nom} » écrit les fichiers, et le chat n'écrit jamais hors d'une tâche : demandez à la personne \
-                             d'ouvrir une tâche dans l'IDE (sa branche, relue puis fusionnée), et éditez-y"
+                            "« {nom} » écrit les fichiers, et le chat n'écrit jamais hors d'une tâche : appelez open_code_task \
+                             pour ouvrir une tâche (sa branche, relue puis fusionnée) avec la demande de la personne ; la \
+                             conversation continue dans la tâche"
                         ),
                     );
                 }
             }
         }
         Self {
-            inner, ecrivent, retires, empreinte: None, rattacher: None, pas_pret: None, vues: None,
+            inner, ecrivent, retires, empreinte: None, rattacher: None, pas_pret: None, vues: None, ouvrir_la_tache: None,
             #[cfg(feature = "code")]
             en_attente: None,
         }
@@ -1384,6 +1422,24 @@ impl<'a> OutilsDuChat<'a> {
 
     /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
     #[cfg(feature = "code")]
+    /// **A request for code opens the task** (the dry run of 22 Nov 2026): `open_code_task` is offered, and `ouvrir`
+    /// opens it.
+    pub(crate) fn avec_l_ouverture_de_tache(mut self, ouvrir: impl Fn(Option<&str>) -> Result<Value, String> + Send + Sync + 'a) -> Self {
+        self.ouvrir_la_tache = Some(Box::new(ouvrir));
+        self
+    }
+
+    /// `open_code_task`, when this chat opens tasks: its answer, never the inner toolbox's.
+    fn ouvrir_une_tache(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
+        let ouvrir = self.ouvrir_la_tache.as_ref().filter(|_| call.name == OPEN_CODE_TASK)?;
+        let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+        let rendu = match ouvrir(args["name"].as_str().filter(|n| !n.trim().is_empty())) {
+            Ok(v) => v,
+            Err(e) => json!({ "ok": false, "error": e }),
+        };
+        Some(crate::llm::Turn::tool_result(&call.id, &call.name, rendu.to_string()))
+    }
+
     pub(crate) fn avec_les_cartes_rattachees(mut self, rattacher: impl Fn(&str) + Send + Sync + 'a) -> Self {
         self.rattacher = Some(Box::new(rattacher));
         self
@@ -1466,25 +1522,46 @@ impl OutilsDuChat<'_> {
 
 impl crate::agent::ToolBox for OutilsDuChat<'_> {
     fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
+        if let Some(t) = self.ouvrir_une_tache(call) {
+            return t;
+        }
         match self.avec_la_vue(call) {
             Err(t) => t,
             Ok(c) => self.appeler(&c, || self.inner.call(&c)),
         }
     }
     fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
+        if let Some(t) = self.ouvrir_une_tache(call) {
+            return t;
+        }
         match self.avec_la_vue(call) {
             Err(t) => t,
             Ok(c) => self.appeler(&c, || self.inner.call_in(&c, run)),
         }
     }
     fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
+        if let Some(t) = self.ouvrir_une_tache(call) {
+            return t;
+        }
         match self.avec_la_vue(call) {
             Err(t) => t,
             Ok(c) => self.appeler(&c, || self.inner.call_with(&c, run, inv)),
         }
     }
     fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
-        self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect()
+        let mut defs: Vec<crate::tools::ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect();
+        if self.ouvrir_la_tache.is_some() {
+            defs.push(crate::tools::ToolDef {
+                name: OPEN_CODE_TASK.into(),
+                description: "Opens a code task on this repository (its own branch and tree, with edit and command tools) \
+                              with the person's last message as its request, starts the agent there, and returns where the \
+                              conversation goes on (moved_to_task, its link). Call it when the person asks for a change to the \
+                              code. `name`: a short task name, optional."
+                    .into(),
+                parameters: json!({ "type": "object", "properties": { "name": { "type": "string" } }, "additionalProperties": false }),
+            });
+        }
+        defs
     }
     fn is_async(&self, tool: &str) -> bool {
         self.inner.is_async(tool)
