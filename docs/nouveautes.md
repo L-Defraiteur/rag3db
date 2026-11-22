@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une faute sur plusieurs champs ne se paie qu'une fois.** La recherche floue d'une requête
+  sur plusieurs champs (le nom et le corps d'un scope) part en un seul `contains` à `fields` de lucivy 4.5.0 : la faute du
+  meilleur champ compte, le BM25 de tous s'ajoute, et lucivy n'avertit plus d'un booléen de `contains` flous.
 - 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
   auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
   distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,
