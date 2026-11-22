@@ -201,6 +201,63 @@ impl SearchBackend for PostgresSearchBackend {
             .collect()))
     }
 
+    fn vector_search_shared_texts(
+        &self,
+        chunk_table: &str,
+        text_table: &str,
+        _rel: &str,
+        _index_name: &str,
+        column: &str,
+        embedding: &[f32],
+        limit: usize,
+        filter_match: Option<&str>,
+        filter_where: Option<&str>,
+        filter_params: &[QueryParam],
+    ) -> Option<Result<Vec<VectorHit>, String>> {
+        // The texts an admitted chunk points to (a join on `_text_hash`, no rel), then their
+        // admitted chunks with the text's score.
+        let embedding_str = embedding.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",");
+        let (c, t, col) = (quote(chunk_table), quote(text_table), quote(column));
+        let join = filter_match.map(|j| format!(" {j}")).unwrap_or_default();
+        let w = filter_where.map(|w| format!(" AND {w}")).unwrap_or_default();
+        let run = |sql: &str, params: &[QueryParam]| {
+            if params.is_empty() { self.conn.execute(sql) } else { self.conn.execute_with_params(sql, params) }.map_err(|e| e.to_string())
+        };
+        Some((|| {
+            let texts_sql = format!(
+                "SELECT t._text_hash, (t.{col} <=> '[{embedding_str}]'::vector) AS distance FROM {t} AS t \
+                 WHERE t.{col} IS NOT NULL AND EXISTS (SELECT 1 FROM {c} AS n{join} WHERE n._text_hash = t._text_hash{w}) \
+                 ORDER BY distance LIMIT {limit}"
+            );
+            let texts: Vec<(String, f64)> = run(&texts_sql, filter_params)?
+                .rows
+                .iter()
+                .filter_map(|row| Some((row.first()?.as_str()?.to_string(), 1.0 - row.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0))))
+                .collect();
+            if texts.is_empty() {
+                return Ok(Vec::new());
+            }
+            let score: std::collections::HashMap<String, f64> = texts.iter().cloned().collect();
+            let mut params = filter_params.to_vec();
+            params.push(QueryParam {
+                name: "_shared_text_hashes".into(),
+                value: crate::connection::CypherValue::List(texts.iter().map(|(h, _)| crate::connection::CypherValue::String(h.clone())).collect()),
+            });
+            let chunks_sql = format!("SELECT DISTINCT n._uuid, n._text_hash FROM {c} AS n{join} WHERE n._text_hash = ANY($_shared_text_hashes){w}");
+            let mut hits: Vec<VectorHit> = run(&chunks_sql, &params)?
+                .rows
+                .iter()
+                .filter_map(|row| {
+                    let uuid = row.first()?.as_str()?.to_string();
+                    let score = *score.get(row.get(1)?.as_str()?)?;
+                    Some(VectorHit { uuid, score, entity: None })
+                })
+                .collect();
+            hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.uuid.cmp(&b.uuid)));
+            Ok(hits)
+        })())
+    }
+
     fn vector_search(
         &self,
         table: &str,

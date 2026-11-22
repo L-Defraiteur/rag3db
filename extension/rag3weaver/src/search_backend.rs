@@ -133,6 +133,29 @@ pub trait SearchBackend: Send + Sync {
     /// troisième.
     fn honore_le_filtre(&self) -> bool { false }
 
+    /// **The dense search over the shared texts** (lot L3, `crate::shared_text`) : the top
+    /// `limit` texts of `text_table`'s vector index among those an admitted chunk points to,
+    /// then every admitted chunk of those texts, with its text's score. The filter is the
+    /// chunks' (alias `n`, as for [`Self::vector_search_filtered`]) : a text is shared across
+    /// cells, layers and parents, so admission is always judged on the chunk. `None` : this
+    /// backend does not serve it, the caller searches the chunks.
+    #[allow(clippy::too_many_arguments)]
+    fn vector_search_shared_texts(
+        &self,
+        _chunk_table: &str,
+        _text_table: &str,
+        _rel: &str,
+        _index_name: &str,
+        _column: &str,
+        _embedding: &[f32],
+        _limit: usize,
+        _filter_match: Option<&str>,
+        _filter_where: Option<&str>,
+        _filter_params: &[crate::connection::QueryParam],
+    ) -> Option<Result<Vec<VectorHit>, String>> {
+        None
+    }
+
     /// Recherche plein texte servie par le backend lui-même.
     ///
     /// `None` = ce backend n'en sert pas, l'appelant reste sur lucivy. C'est
