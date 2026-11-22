@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une base analysée sous d'autres règles se repasse à son ouverture.** Chaque fichier
+  indexé garde la version de l'analyse qui l'a fait (le commit de codeparsers, les règles, le gabarit). Seul un
+  `index` entier la comparait : un hôte mis à jour rouvrait la base, ne reprenait que les fichiers changés sur le
+  disque, et l'ancienne analyse restait. L'hôte relance maintenant l'index en fond de lui-même, en disant pourquoi.
+  **Pendant cette repasse**, l'état de l'index (`analysis_repass`) et chaque réponse des outils de recherche disent
+  « repasse de l'analyse en cours : n/N fichiers — la réponse porte sur l'analyse d'avant ».
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
