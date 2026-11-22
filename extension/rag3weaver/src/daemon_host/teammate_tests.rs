@@ -15,6 +15,7 @@ mod background;
 mod card;
 mod mode_auto_v1;
 mod human_yes_only;
+mod posture_auto;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
