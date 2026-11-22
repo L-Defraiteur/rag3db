@@ -30,6 +30,9 @@ pub enum FilterOp {
     NotIn(Vec<Value>),
     StartsWith(String),
     Contains(String),
+    /// The whole value within `max` edits of `value` (Levenshtein; 22 November 2026, a name typed with one typo). A
+    /// dialect that cannot say it admits nothing: the filter never opens.
+    WithinEdits { value: String, max: u8 },
     ValuesCount {
         min: Option<usize>,
         max: Option<usize>,

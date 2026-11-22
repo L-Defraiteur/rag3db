@@ -1410,6 +1410,11 @@ pub trait SchemaDialect: Send + Sync {
     /// contains filter expression.
     fn filter_contains(&self, prop: &str, param: &str) -> String;
 
+    /// The whole value within `max` edits of the parameter (Levenshtein), when the dialect has an edit distance.
+    fn filter_within_edits(&self, _prop: &str, _param: &str, _max: u8) -> Option<String> {
+        None
+    }
+
     /// Scalar membership in the parameter array, whose type must match the field.
     fn filter_in(&self, prop: &str, param: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("filter_in"); }
@@ -2993,6 +2998,10 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn filter_contains(&self, prop: &str, param: &str) -> String {
         format!("contains({prop}, ${param})")
+    }
+
+    fn filter_within_edits(&self, prop: &str, param: &str, max: u8) -> Option<String> {
+        Some(format!("levenshtein({prop}, ${param}) <= {max}"))
     }
 
     fn filter_list_scalar_contains(&self, prop: &str, param: &str) -> Option<String> {

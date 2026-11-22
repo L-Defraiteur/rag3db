@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un nom tapé à une faute près donne sa déclaration d'abord.** « FuseResultNode » rend
+  `FuseResultsNode` en tête, comme le nom tapé juste, au lieu de ses usages trouvés par sous-chaîne : sans nom exact,
+  une requête d'un seul jeton cherche les noms à une faute près (distance d'édition, sur rag3db).
 - 22 novembre 2026 — **Un texte copié se retrouve tel quel.** La passe de la requête entière cherche une phrase de
   plusieurs mots à distance 0 : un `contains` flou ignorait les séparateurs et cherchait la phrase collée en un seul
   mot, à une faute près. Un jeton seul garde sa distance 1 ; une faute dans une phrase revient à la recherche par mots.
