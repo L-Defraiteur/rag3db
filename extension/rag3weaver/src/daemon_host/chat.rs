@@ -440,6 +440,19 @@ impl DaemonHost {
                 .and_then(|o| serde_json::from_slice(&o).map_err(|e| e.to_string()));
             match lu {
                 Err(e) => lignes.push(format!("session de chat {} illisible, laissée : {e}", chemin.display())),
+                // A task's chat whose task is closed (its tree removed): put away, with its companions, not an orphan.
+                Ok(f) if !f.manifest.is_file() && f.manifest.starts_with(&self.racine_des_taches) => {
+                    let rangement = self.chats_root.join("closed");
+                    let range = std::fs::create_dir_all(&rangement).and_then(|_| std::fs::rename(&chemin, rangement.join(chemin.file_name().unwrap_or_default())));
+                    let compagnon = chemin.with_extension("rangement.json");
+                    if compagnon.is_file() {
+                        let _ = std::fs::rename(&compagnon, rangement.join(compagnon.file_name().unwrap_or_default()));
+                    }
+                    lignes.push(match range {
+                        Ok(()) => format!("session de chat de {id} rangée dans {} : sa tâche est fermée ou effacée", rangement.display()),
+                        Err(e) => format!("session de chat de {id}, d'une tâche fermée, non rangée : {e}"),
+                    });
+                }
                 Ok(f) if !f.manifest.is_file() => {
                     let pourquoi = format!("le manifeste {} a disparu", f.manifest.display());
                     lignes.push(format!("session de chat de {id} orpheline : {pourquoi}"));
