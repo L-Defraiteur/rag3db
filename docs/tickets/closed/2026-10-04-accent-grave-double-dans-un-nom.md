@@ -1,6 +1,14 @@
 # Un accent grave doublé dans un nom n'est pas réduit
 
-- **État** : ouvert — **confort** (orchestration, 5 octobre 2026), hors de la condition 1 de la stèle : ni perte ni corruption du stockage, et non atteignable depuis rag3weaver (aucun de ses noms n'a d'accent grave, par lecture). À faire quand la file est vide ; Lucie peut renverser ce classement.
+- **État** : fermé (22 novembre 2026, hotfixs), corrigé sur la branche `escaped-backtick-in-names`. L'analyseur
+  (`transformSymbolicName`) réduit l'accent grave doublé, et le Cypher que le moteur génère le double, par
+  `StringUtils::quoteIdentifier`, à 22 endroits : le `toCypher` des tables, des relations, des séquences, des
+  propriétés et des macros ; l'EXPORT et l'IMPORT, clés primaires comprises, qui étaient écrites sans accents graves ;
+  les fonctions de graphe ; `QUERY_VECTOR_INDEX`. La preuve : `UpstreamFixes.EscapedBacktickInAName` (sorti de
+  known_red) et `BacktickNameRoundTripTest.NamesWithABacktickSurviveExportAndImport` (table, clé, propriétés et
+  relation à accent grave, EXPORT, DROP, IMPORT), **rouges sur master 10b5dc12ac**, **verts avec le correctif**. Ce qui
+  reste hors du lot est au ticket
+  `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-22-des-noms-ecrits-dans-du-cypher-genere-sans-echappement.md`.
 - **Gravité** : réponse fausse
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non, par lecture : ses noms de tables et de colonnes (Scope_Chunk, embedding__<modèle>, _embed_hash__…) n'ont jamais d'accent grave

@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un nom qui contient un accent grave est lu et exporté juste.** Entre accents graves, deux accents graves de suite valent un accent grave dans le nom (`` `a``b` `` nomme a`b), comme dans le Cypher standard ; le nom stocké gardait les deux. L'EXPORT et l'IMPORT d'une base, et les instructions que le moteur écrit lui-même, doublent désormais l'accent grave d'un nom.
 - 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
   auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
   distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,
