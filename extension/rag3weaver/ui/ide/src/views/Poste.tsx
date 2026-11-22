@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { projectGate } from "@/views/TaskReview";
 import { Bot, Eye, FolderTree, GitBranch, ListChecks, Server } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,34 @@ import { fetchPoste, type Poste as PosteState } from "@/lib/host";
 // `/ide/poste/etat`), every few seconds. An agent is a live session of the host (by its Claude name when its client
 // gave it), or a session named in the table of the folders without a live session: inactive. Markers of the witness:
 // `#agents`, `#dossiers-du-poste`, `#vues-ouvertes`, `#depots-du-poste`, `#disponibles-du-poste`, `#taches-du-poste`.
+/** **The gate of a project's requests** (c7, 22 November 2026): what a request written in the IDE asks for — the bac
+ * (the default: the agent goes on, the gate's rules check), the judge, or a card for each command. */
+function GateChoice({ backend }: { backend: string }) {
+  const [gate, setGate] = useState(projectGate(backend));
+  return (
+    <label className="ml-2 text-xs text-muted-foreground">
+      porte{" "}
+      <select
+        className="gate-choice rounded border bg-background px-1"
+        value={gate}
+        onChange={(e) => {
+          const v = e.target.value as "bac" | "judge" | "cards";
+          setGate(v);
+          try {
+            localStorage.setItem(`rag3weaver.gate.${backend}`, v);
+          } catch {
+            /* the choice lives for this page only */
+          }
+        }}
+      >
+        <option value="bac">bac (l'agent avance, les règles vérifient)</option>
+        <option value="judge">juge</option>
+        <option value="cards">une carte par commande</option>
+      </select>
+    </label>
+  );
+}
+
 export function Poste() {
   const [poste, setPoste] = useState<PosteState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +135,7 @@ export function Poste() {
               <li key={r.id}>
                 <a href={`/ide/code/${r.id}/arbre/`} className="font-medium hover:underline">{r.repo ?? r.name ?? r.id}</a>
                 {r.root ? <span className="text-muted-foreground font-mono text-xs"> · {r.root}</span> : null}
+                <GateChoice backend={r.id} />
               </li>
             ))}
             {!poste.repositories.length ? <li className="text-muted-foreground">aucun dépôt attaché</li> : null}
