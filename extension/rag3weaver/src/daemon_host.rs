@@ -4186,6 +4186,10 @@ mod chat_open_code_task;
 /// Witnesses: a code backend's chat starts from the person's project (22 Nov 2026).
 #[cfg(test)]
 mod chat_project_first;
+
+/// The page follows a request for code to its task (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod chat_moves_to_task_tests;
 /// Le relais contextuel : cible effective, clic et reprise dans le navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_contextuel;
