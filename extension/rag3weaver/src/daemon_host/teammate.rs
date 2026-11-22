@@ -1736,8 +1736,21 @@ impl DaemonHost {
         }
         #[allow(unused_mut)]
         let mut accord: Option<String> = None;
+        // **Only a human's yes grants** (c7, 22 Nov 2026: the answer's branch never read `by`): a yes signed by an agent,
+        // or by no one, is kept in the mailbox, grants nothing, and says why.
         #[cfg(feature = "code")]
-        if kind == "answer" && extra["approved"] == true {
+        if kind == "answer" && extra["approved"] == true && extra["by"]["kind"] != "human" {
+            if let Some(o) = extra.as_object_mut() {
+                o.insert(
+                    "granted".into(),
+                    Value::String(
+                        "pas accordé : seule une réponse humaine, depuis ta session (l'IDE ouvert par ton lanceur, ou le terminal), accorde une carte".into(),
+                    ),
+                );
+            }
+        }
+        #[cfg(feature = "code")]
+        if kind == "answer" && extra["approved"] == true && extra["by"]["kind"] == "human" {
             let visee = extra["reply_to"].as_str().and_then(|r| files.mailbox().into_iter().find(|l| l["id"] == r));
             if let Some(ligne) = visee.as_ref().filter(|l| l["kind"] == "approval").and_then(|l| l["command"].as_str().map(str::to_string)) {
                 let carte = visee.clone().unwrap_or(Value::Null);
