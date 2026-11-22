@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// What the memory's tools answer is what they did (two MCP misses, 22 Nov. 2026): the witnesses, in a file of their own.
+#[path = "e2e_archiviste/tool_answers.rs"]
+mod tool_answers;
+
 /// The author is set by the host (writes.author, M7) : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
 #[path = "e2e_archiviste/author.rs"]
 mod author;
