@@ -24,7 +24,7 @@ La tension à dire : beaucoup d'agents qui travaillent seuls, partout, et pourta
 « Plusieurs machines, plusieurs équipes, plusieurs projets » va dans la ligne du dessous, comme preuve, pas dans la
 promesse.
 
-### Le leitmotiv : la ruche (Lucie, 22 nov., 22 h 50)
+### Le leitmotiv : la ruche (Lucie, 22 nov., 22 h 46)
 
 > **Become the hive mind. Control entire swarms of agents.**
 
