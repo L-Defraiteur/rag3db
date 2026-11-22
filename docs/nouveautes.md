@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une barre des agents à gauche.** Sur chaque page de l'IDE, la liste des agents (le chat d'un
+  dépôt, les tâches, les sessions du terminal) : son état, ses non-lus, depuis quand et ce qu'il a fait (son étape s'il a
+  un plan). Ceux qui t'attendent d'abord. Un clic l'ouvre ; dedans, « ← Retour », ses agents et ceux avec qui il a parlé.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
