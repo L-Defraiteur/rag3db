@@ -45,6 +45,8 @@ pub struct GateRules {
     pub judge: Option<Value>,
     /// The survivor's option (Lucie, 21 Nov 20 h 35): it would judge a broad root. Not in v1: the card decides, and says so.
     pub dangerous_standalone_survivor: bool,
+    /// The effects that go to the judge, and the words that recognize them (`effects` of `rules.json`).
+    pub effects: Vec<Value>,
 }
 
 impl GateRules {
@@ -63,6 +65,7 @@ impl GateRules {
             judged,
             judge: v.get("judge").filter(|j| j.is_object()).cloned(),
             dangerous_standalone_survivor: v["dangerous_standalone_survivor"].as_bool().unwrap_or(false),
+            effects: Vec::new(),
         }
     }
 }
@@ -71,6 +74,12 @@ impl GateRules {
 /// parts. `read` and `write_local` pass; `destroy_local` only for what is neither on a remote nor made
 /// by the agent in the task (an untracked file of the task's tree is the agent's); `outbound`,
 /// `database`, `system` by their families.
+/// [`rule_class`] under the effects of a `rules.json`.
+pub fn rule_class_with(ligne: &str, racine: &Path, effects: &[Value]) -> String {
+    let _ = effects;
+    rule_class(ligne, racine)
+}
+
 pub fn rule_class(ligne: &str, racine: &Path) -> String {
     let rang = |c: &str| match c {
         "read" => 0,
@@ -427,3 +436,8 @@ pub fn default_gate_dir() -> PathBuf {
 #[cfg(test)]
 #[path = "gate_ledger_tests.rs"]
 mod ledger_tests;
+
+/// Witnesses: a command's class comes from its effect, the words in rules.json (22 Nov 2026).
+#[cfg(test)]
+#[path = "gate_effect_tests.rs"]
+mod effect_tests;
