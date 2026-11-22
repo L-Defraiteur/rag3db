@@ -64,7 +64,7 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
         // The gate asks for the command: the supervisor grants it.
         for l in files.mailbox() {
             if l["kind"] == "approval" && answered.insert(l["id"].as_str().unwrap_or_default().to_string()) {
-                host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true })).expect("le oui");
+                host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("le oui");
             }
         }
         assert!(Instant::now() < end, "in 90 s, no step was told the end of the background command (launched: {}); tool results: {:#?}\nmailbox: {:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), results.lock().unwrap(), files.mailbox());
@@ -143,7 +143,7 @@ fn background_commands_are_bounded_in_number_and_time() {
     while told.lock().unwrap().is_none() {
         for l in files.mailbox() {
             if l["kind"] == "approval" && answered.insert(l["id"].as_str().unwrap_or_default().to_string()) {
-                host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true })).expect("le oui");
+                host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("le oui");
             }
         }
         assert!(Instant::now() < end, "in 90 s, no step was told the stop at the time (launched: {}); tool results: {:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), results.lock().unwrap());

@@ -4573,7 +4573,9 @@ mod tests {
     /// [`hote_garde`], l'hôte réglé par `regler` (la racine des tâches d'un
     /// témoin, dans son dossier).
     pub(super) fn hote_garde_avec(jeton: &str, regler: impl FnOnce(DaemonHost) -> DaemonHost) -> (String, std::thread::JoinHandle<()>) {
-        let hote = regler(hote_isole());
+        // The witnesses' person enters with the host's token, which is also her title here: the routes that grant
+        // answer her (human-yes-only, 22 Nov 2026). A witness of a non-human caller gives its host another title.
+        let hote = regler(hote_isole().with_user_token(jeton.to_string()));
         let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let adresse = ecoute.local_addr().unwrap().to_string();
         let server = tiny_http::Server::from_listener(ecoute, None).unwrap();

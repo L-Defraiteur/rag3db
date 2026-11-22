@@ -411,6 +411,7 @@ fn une_proposition_se_voit_se_joue_puis_s_applique_dans_l_ide() {
         let mut r = crate::daemon::agent_de_temoin()
             .post(format!("{racine}/ide/propositions{route}"))
             .header("Cookie", "rag3weaver_ide=j")
+            .header("X-Rag3weaver-User", "j")
             .header("content-type", "application/json")
             .send(corps.to_string())
             .unwrap();
