@@ -1374,11 +1374,17 @@ impl DaemonHost {
                     Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
                 }
             };
-            // A new folder, or an empty one, is created and gets git init (never a remote, never a push).
+            // A new folder, or an empty one, is created and gets git init (never a remote, never a push), and a first
+            // empty commit by rag3weaver's identity (archi for tty's path B, 22 November 2026): a task starts from a
+            // commit, and was refused in a repository without one. Never the machine's git config.
+            let premier_commit = |dans: &Path| -> Result<String, String> {
+                git(dans, &["-c", "user.name=rag3weaver", "-c", "user.email=rag3weaver@localhost", "commit", "-q", "--allow-empty", "-m", "premier commit par rag3weaver (dossier neuf)"])
+            };
             let mut cree = false;
             if !lettre.exists() {
                 std::fs::create_dir_all(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?;
                 git(&lettre, &["init", "-q"])?;
+                premier_commit(&lettre)?;
                 cree = true;
             } else if git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_err() {
                 // **A folder with files that is not a git repository opens as it is** (Lucie, 21 November 2026,
@@ -1387,6 +1393,7 @@ impl DaemonHost {
                 let vide = std::fs::read_dir(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?.next().is_none();
                 if vide {
                     git(&lettre, &["init", "-q"])?;
+                    premier_commit(&lettre)?;
                     cree = true;
                 }
             }
