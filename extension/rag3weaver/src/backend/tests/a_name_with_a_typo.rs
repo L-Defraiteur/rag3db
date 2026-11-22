@@ -53,3 +53,15 @@ fn only_a_dialect_with_an_edit_distance_says_it() {
     assert_eq!(crate::dialect::Rag3dbDialect.filter_within_edits("n.name", "p0", 1).as_deref(), Some("levenshtein(n.name, $p0) <= 1"));
     assert!(crate::dialect::PostgresDialect.filter_within_edits("m.name", "p0", 1).is_none());
 }
+
+/// The rule in memory is rag3db's `levenshtein(a, b) <= max`.
+#[test]
+fn within_edits_counts_insertions_deletions_and_substitutions() {
+    use crate::search::within_edits;
+    assert!(within_edits("FuseResultsNode", "FuseResultNode", 1), "one deletion");
+    assert!(within_edits("BM25SearchNode", "BM25SerchNode", 1));
+    assert!(within_edits("sync_source", "sync_sorce", 1));
+    assert!(within_edits("reingest_file", "reingest_fiel", 2) && !within_edits("reingest_file", "reingest_fiel", 1), "a swap is two edits");
+    assert!(!within_edits("FuseResultsNode", "fuseresultsnode", 1), "the case counts");
+    assert!(within_edits("abc", "abc", 0) && !within_edits("abc", "abd", 0));
+}
