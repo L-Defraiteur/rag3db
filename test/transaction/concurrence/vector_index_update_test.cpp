@@ -3725,13 +3725,13 @@ TEST_F(VectorIndexBridgeMeasure, InsertionCostByBatchAndEfc) {
 // docs/coeur-cpp-hotfixs-tickets/22-11-2026/01-le-cout-d-un-set-de-vecteur-sous-hnsw.md). Un nœud inséré
 // garde pour arêtes sortantes les ml premiers résultats de sa recherche (createRels, sans élagage tant
 // qu'il reste sous le seuil). Avec un efc plus grand que la table, cette recherche couvre tout le graphe :
-// ses ml voisins sont alors les ml plus proches exacts. Le témoin : 2 000 points gaussiens de dimension
-// 32, un index à efc 4 000, puis dix lignes créées une à une ; les arêtes de chacune doivent contenir
+// ses ml voisins sont alors les ml plus proches exacts. Le témoin : 20 000 points gaussiens de dimension
+// 64, un index à efc 30 000, puis dix lignes créées une à une ; les arêtes de chacune doivent contenir
 // ses 60 plus proches parmi les lignes déjà là. Avec l'efs de requête par défaut (200), l'insertion en
-// manque.
+// manque. (À 2 000 points de dimension 32, un ef de 200 les trouvait déjà tous : vert sans correctif.)
 TEST_F(VectorIndexUpdate, AnInsertionSearchesWithTheIndexEfc) {
-    constexpr int DIMENSION = 32;
-    constexpr int64_t ROWS = 2000;
+    constexpr int DIMENSION = 64;
+    constexpr int64_t ROWS = 20000;
     constexpr int64_t NEW_ROWS = 10;
     constexpr size_t ML = 60;
     table = "Efc";
@@ -3763,7 +3763,7 @@ TEST_F(VectorIndexUpdate, AnInsertionSearchesWithTheIndexEfc) {
     }
     mustRun(stringFormat("COPY Efc FROM '{}' (header=false);", csv));
     std::filesystem::remove(csv);
-    mustRun("CALL CREATE_VECTOR_INDEX('Efc', 'doc_index', 'vec', metric := 'l2', efc := 4000);");
+    mustRun("CALL CREATE_VECTOR_INDEX('Efc', 'doc_index', 'vec', metric := 'l2', efc := 30000);");
     for (int64_t id = ROWS; id < ROWS + NEW_ROWS; ++id) {
         mustRun(stringFormat("CREATE (:Efc {id: {}, vec: {}});", id, literals[id]));
     }
