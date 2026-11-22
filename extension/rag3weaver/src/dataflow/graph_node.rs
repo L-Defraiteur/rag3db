@@ -16,11 +16,6 @@ use super::port::PortDef;
 
 // ─── GraphNode ──────────────────────────────────────────────────────────────
 
-/// A node that contains and executes a sub-graph.
-///
-/// Free input ports (inputs without incoming edges) become the GraphNode's inputs.
-/// Free output ports (outputs without outgoing edges) become the GraphNode's outputs.
-/// Port names follow the convention `inner_node.port_name`.
 impl std::fmt::Debug for GraphNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GraphNode")
@@ -31,6 +26,11 @@ impl std::fmt::Debug for GraphNode {
     }
 }
 
+/// A node that contains and executes a sub-graph.
+///
+/// Free input ports (inputs without incoming edges) become the GraphNode's inputs.
+/// Free output ports (outputs without outgoing edges) become the GraphNode's outputs.
+/// Port names follow the convention `inner_node.port_name`.
 pub struct GraphNode {
     name: String,
     /// `GraphNode` pour un sous-graphe monté à la main ; le type déclaré

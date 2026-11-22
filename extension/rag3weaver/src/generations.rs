@@ -30,7 +30,6 @@ pub const DEPUIS: &str = "_depuis";
 /// La colonne du rang qui l'a retirée (vide : vivante).
 pub const JUSQU_A: &str = "_jusqu_a";
 
-/// **Ce qu'une lecture voit** : les tables à générations, la couche lue, le rang lu.
 /// **Les ensembles posés une fois par (couche, rang)** (2a′-2, page
 /// `docs/everything-declarative/14-11-2026/05-la-vue-publiee-par-couche-et-rang.md`) : ce qu'une
 /// recherche admet, calculé à la publication d'une génération et non à chaque requête. Partagés par
@@ -58,6 +57,7 @@ impl std::fmt::Debug for EnsemblesPoses {
     }
 }
 
+/// **Ce qu'une lecture voit** : les tables à générations, la couche lue, le rang lu.
 #[derive(Debug, Clone)]
 pub struct Visibilite {
     pub tables: BTreeSet<String>,

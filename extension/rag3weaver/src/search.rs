@@ -375,7 +375,6 @@ impl Default for BM25Mode {
 
 // ─── SearchOptions ───────────────────────────────────────────────────────────
 
-/// Options for search queries.
 /// Options de reranking.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -410,6 +409,7 @@ impl SearchOptions {
     }
 }
 
+/// Options for search queries.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SearchOptions {
@@ -900,7 +900,6 @@ impl SearchTarget {
 
 // ─── SearchMeta ───────────────────────────────────────────────────────────────
 
-/// Metadata about a search operation.
 /// **Le préfixe de la ligne d'état de l'index.** La source de recherche la
 /// pose dans les avertissements avec ce préfixe ; le rendu la reconnaît et
 /// la met EN TÊTE de fiche (les deux passes d'agent ont montré qu'un ⚠ en
@@ -908,6 +907,7 @@ impl SearchTarget {
 /// lecteurs : pas de dérive.
 pub const INDEX_STATUS_PREFIX: &str = "index : ";
 
+/// Metadata about a search operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMeta {

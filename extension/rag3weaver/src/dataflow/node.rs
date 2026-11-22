@@ -128,16 +128,6 @@ pub trait Node: Send {
 
 // ─── NodeContext ────────────────────────────────────────────────────────────
 
-/// Execution context: typed input/output access + services + metrics + logs.
-///
-/// Public API mirrors `luciole::NodeContext` exactly:
-/// - `input(port) -> Option<&PortValue>`
-/// - `take_input(port) -> Option<PortValue>`
-/// - `set_output(port, PortValue)`
-/// - `trigger(port)`
-/// - `metric(key, f64)`
-/// - `info/warn/error/debug(&str)`
-/// - `service::<T>(key) -> Option<&T>`
 /// Pourquoi un run à flux s'arrête avant sa fin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CancelCause {
@@ -187,6 +177,16 @@ impl From<Stopped> for String {
     }
 }
 
+/// Execution context: typed input/output access + services + metrics + logs.
+///
+/// Public API mirrors `luciole::NodeContext` exactly:
+/// - `input(port) -> Option<&PortValue>`
+/// - `take_input(port) -> Option<PortValue>`
+/// - `set_output(port, PortValue)`
+/// - `trigger(port)`
+/// - `metric(key, f64)`
+/// - `info/warn/error/debug(&str)`
+/// - `service::<T>(key) -> Option<&T>`
 pub struct NodeContext {
     inputs: HashMap<String, PortValue>,
     outputs: HashMap<String, PortValue>,
