@@ -188,3 +188,22 @@ fn a_root_granted_by_the_judge_is_said() {
     assert_eq!(w.len(), 1, "{w:?}");
     assert!(w[0].contains("racine accordée par le juge : /home/lucied/projet (lecture), sur ta phrase « regarde mon projet »"), "{w:?}");
 }
+
+/// **The work landing in the user's folder is said** (archi's land-each-turn, 22 November 2026): a host line `merged`
+/// (« k fichier(s) dans ton dossier … ») and a host line `merge_held` (why, and the command to take it) are written,
+/// whatever the steps shown; any other host report stays quiet.
+#[test]
+fn the_work_landing_in_the_folder_is_said() {
+    let mut v = Vue::new(240, true);
+    v.ligne_de_boite(&line(1, "host", "merged", json!({ "into": "/home/lucied/essai", "branch": "agent/fizz", "commits": 1, "files": 2, "text": "2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)" })));
+    let w = written(&mut v);
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].ends_with("2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)"), "{w:?}");
+    let mut h = Vue::new(240, true);
+    h.ligne_de_boite(&line(1, "host", "merge_held", json!({ "why": "ton arbre a des modifications", "branch": "agent/fizz", "command": "git -C /home/lucied/essai merge --ff-only agent/fizz", "text": "gardé sur la branche agent/fizz : ton arbre a des modifications ; pour la prendre : git -C /home/lucied/essai merge --ff-only agent/fizz" })));
+    let w = written(&mut h);
+    assert!(w.iter().any(|l| l.contains("gardé sur la branche agent/fizz") && l.contains("merge --ff-only")), "{w:?}");
+    let mut q = Vue::new(240, true);
+    q.ligne_de_boite(&line(1, "host", "report", json!({ "text": "tâche ouverte : branche agent/fizz" })));
+    assert!(written(&mut q).is_empty(), "a host report stays quiet");
+}
