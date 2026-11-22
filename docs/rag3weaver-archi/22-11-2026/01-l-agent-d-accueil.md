@@ -16,6 +16,15 @@ n'est ouvert. Son exemple :
 L'agent d'accueil n'est donc pas un agent de code. Il sait où en est la machine, il prépare le terrain (un dossier, un
 clone, un agent de code), et il passe la main.
 
+**Le cadre, posé par Lucie le 22 novembre vers 22 h 15.** On travaille désormais l'UX de l'IDE, jugée dans son Chrome,
+avec deux règles :
+1. simple à utiliser mais très avancé, et qui met le produit en valeur ;
+2. un novice arrive, parle à un agent, et ça commence pour lui, sans adresse de dossier tapée ni réglage.
+
+L'utilisateur passe son temps à parler à un agent. Les détails (fiches mémoire, tâches, chats d'agents) sont des liens
+que l'agent lui donne, et l'agent d'accueil **génère à la volée des affichages** dans le fil : tableaux, cartes, liens
+(section 6 bis).
+
 ## 1. Ce qu'il est
 
 - **Toujours là.** L'hôte l'ouvre à son démarrage, sans dossier, sans dépôt. Il est la première entrée de la barre des
@@ -52,11 +61,11 @@ et ouvert par l'hôte sans manifeste de dépôt :
 |---|---|---|
 | `machine_state` | lit l'état de la machine : les dépôts attachés (nom, chemin, fraîcheur de l'index), les agents et leurs tâches (état, dernière ligne de boîte), les dépenses du mois (le registre d'ED : total, plafond), les hôtes déclarés | lecture seule, sans carte |
 | `open_folder(path)` | attache un dossier, comme `rag3weaver-backend ouvrir` (`code_tree::open_folder`), **sans index** : l'index reste une proposition (page 02 du 21) | un chemin hors de la racine de création passe par la carte `open_root` de `judge_all` |
-| `clone_repository(url, into?)` | clone dans la racine de création (`~/git_workspaces/projets/<nom>` par défaut), puis l'attache comme `open_folder` | **toujours une carte** : réseau et écriture, classe `outbound`. La carte montre l'URL et le dossier. Une URL qui porte un jeton est refusée net |
+| `clone_repository(url, into?)` | clone dans `~/git_workspaces/<nom du dépôt>` (la convention de Lucie), puis l'attache comme `open_folder`. **Un dossier qui existe déjà est refusé**, avec la proposition de l'ouvrir | **toujours une carte** : réseau et écriture, classe `outbound`. La carte montre l'URL et le dossier. Une URL qui porte un jeton est refusée net |
 | `create_code_agent(repository, request?)` | ouvre un agent de code (une tâche de l'équipier) sur un dépôt attaché et rend son lien dans l'IDE. Il n'écrit la première demande que si l'utilisatrice l'a dictée | sans carte : rien ne sort, l'agent créé a ses propres portes |
 
-**Ce qu'il n'a pas, exprès** : pas de shell, pas de lecture de fichiers, pas de mémoire longue en écriture (il peut la
-lire : à trancher, voir plus bas), pas de push, pas de création de dépôt distant. Ces gestes appartiennent aux agents de
+**Ce qu'il n'a pas, exprès** : pas de shell, pas de lecture de fichiers, pas de mémoire longue en écriture (il la **lit**,
+pour dire ce qui a été fait et décidé : `recall_fiches`, `get_fiche`), pas de push, pas de création de dépôt distant. Ces gestes appartiennent aux agents de
 code et passent par leurs cartes.
 
 ## 4. Ses limites, dites honnêtement
@@ -95,6 +104,39 @@ then give its link.
 4. `clone_repository` → **la carte** (classe `outbound`, l'URL et le dossier). Lucie dit oui → le clone, puis l'attache.
 5. `create_code_agent` → « Ton agent de code sur `<nom>` est prêt : [ouvrir] ». Il apparaît dans la barre, sous l'accueil.
 6. Lucie passe à lui, et c'est lui qui « regarde le repo », avec ses outils et ses propres cartes.
+
+## 6 bis. Les affichages générés
+
+L'agent d'accueil ne répond pas qu'en texte : il montre. Un outil `show(blocks)` rend des blocs que le fil de l'IDE
+affiche tels quels, sous sa réponse.
+
+| Bloc | Champs | Exemple |
+|---|---|---|
+| `table` | `columns`, `rows` (chaque cellule : un texte ou `{text, link}`) | les dépôts de la machine, avec la fraîcheur de leur index et leur dernier agent |
+| `cards` | `items: [{title, subtitle?, status?, link?, actions?}]` | les agents au travail, chacun avec son état (`running`, `waiting`, `done`) et son lien |
+| `links` | `items: [{text, link}]` | « ta fiche mémoire sur la porte », « la tâche essai-auto » |
+| `stat` | `items: [{label, value, unit?}]` | les dépenses du mois et le plafond |
+
+**Les règles du contrat** :
+- **rien d'inventé** : un bloc ne montre que ce qu'un outil vient de rendre dans le même tour (`machine_state`, la
+  mémoire, `create_code_agent`). L'hôte vérifie que chaque `link` est une route de l'IDE (`/ide/…`) ou une fiche de la
+  mémoire, et retire le reste en le disant ;
+- **une action n'agit jamais d'elle-même** : un bouton de carte (`actions: [{label, says}]`) envoie à l'agent la phrase
+  `says` comme si l'utilisatrice l'avait écrite, par elle et signée humain ; aucun bouton n'appelle un outil en direct ;
+- **le rendu est à la page** (recherche) : la forme visuelle des blocs, leurs couleurs d'état, le lien qui ouvre la bonne
+  vue. Les blocs sont du JSON ; l'agent ne produit jamais de HTML.
+
+## 6 ter. Un novice, sans dossier tapé
+
+Le novice ne connaît ni chemin ni réglage. L'agent d'accueil s'en charge :
+- **à l'arrivée**, un premier message court, puis un `cards` : « Tes projets récents » (ce que `machine_state` trouve sous
+  `~/git_workspaces`, par date), « Commencer un projet neuf », « Cloner un dépôt » ;
+- **un projet neuf** : il propose un nom, crée le dossier sous `~/git_workspaces/<nom>` (`open_folder`, la racine de
+  création ne demande pas de carte), puis un agent de code dessus ;
+- **un projet existant** : il le reconnaît à son nom (« mon jeu », « le site ») parmi les dépôts de la machine, et demande
+  « c'est celui-ci ? » avec sa carte, au lieu d'un chemin ;
+- **jamais un réglage à faire à la main** : le modèle, le mode auto, l'index sont des défauts ; l'agent les dit s'ils
+  comptent pour la demande (« je n'ai pas encore indexé ce projet ; je le fais ? »).
 
 ## 7. La maquette de l'écran
 
@@ -173,14 +215,17 @@ en tête. Il n'y a plus de page de formulaires ; la plomberie est derrière « A
 
 ## Les lots, si la page est retenue
 
-1. La déclaration, l'ouverture par l'hôte au démarrage, `machine_state` en lecture seule, et son témoin : l'agent répond
-   « pas d'outils de code » à une demande de code, sur un faux modèle.
+1. La déclaration, l'ouverture par l'hôte au démarrage, `machine_state` en lecture seule, la mémoire en lecture, et son
+   témoin : l'agent répond « pas d'outils de code » à une demande de code, sur un faux modèle.
+1 bis. `show` et ses quatre blocs, avec le contrôle des liens (un lien hors de l'IDE retiré en le disant) et ses témoins ;
+   le rendu dans le fil (recherche).
 2. `open_folder` et `create_code_agent` (rend le lien), avec leurs témoins.
 3. `clone_repository`, toujours sous une carte, avec un témoin qui refuse une URL à jeton.
 4. L'IDE : l'accueil en tête de la barre, l'écran d'arrivée (recherche) ; le terminal (tty).
 
-## À trancher par Lucie
+## Tranché par c7, par défaut (22 novembre, Lucie en essai ; elle corrige ensuite)
 
-- **Son nom à l'écran** : « Accueil » ? un autre ?
-- **La mémoire longue** : lecture seule (il se souvient des dépôts et des préférences), ou rien du tout ?
-- **La destination d'un clone** : la racine de création (`~/git_workspaces/projets`) par défaut, ou demander à chaque fois ?
+- **Son nom à l'écran** : « Accueil ».
+- **La mémoire longue** : en lecture seule. Il doit pouvoir dire ce qui a été fait et décidé.
+- **La destination d'un clone** : `~/git_workspaces/<nom du dépôt>`, refusé s'il existe déjà, avec la proposition de
+  l'ouvrir.
