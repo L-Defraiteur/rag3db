@@ -1764,6 +1764,9 @@ pub struct Fin {
     /// Les dernières lignes de chaque flux, telles que l'aperçu les a gardées.
     pub fin_stdout: String,
     pub fin_stderr: String,
+    /// Stopped by the time it was given (`delai`), not by its caller (Lucie, 22 November 2026: « arrêtée après N min
+    /// (délai atteint) »).
+    pub delai_atteint: bool,
 }
 
 /// **Une commande en fond** : lancée, rendue tout de suite ; un surveillant
@@ -1812,6 +1815,7 @@ pub fn lancer_en_fond(
                 (*perdus, *entete) = plafonner(p, plafond, *perdus, *entete);
             }
         };
+        let mut atteint = false;
         let statut = loop {
             match enfant.try_wait() {
                 Ok(Some(s)) => break Some(s),
@@ -1821,6 +1825,7 @@ pub fn lancer_en_fond(
             tenir(&j_out, &mut perdus_out, &mut entete_out);
             tenir(&j_err, &mut perdus_err, &mut entete_err);
             if delai.is_some_and(|d| debut.elapsed() >= d) {
+                atteint = true;
                 tuee_s.store(true, std::sync::atomic::Ordering::SeqCst);
                 signaler_le_groupe(pid, "KILL");
                 let _ = enfant.kill();
@@ -1852,6 +1857,7 @@ pub fn lancer_en_fond(
             signal,
             duree: debut.elapsed(),
             tuee: tuee_s.load(std::sync::atomic::Ordering::SeqCst),
+            delai_atteint: atteint,
             octets_stdout: n_out,
             octets_stderr: n_err,
             fin_stdout: queue(&j_out),
