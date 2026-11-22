@@ -793,11 +793,16 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("POST", "/ide/chat") => {
             // Un tour : il publie sur le bus du backend (`agent`, `tokens`) et
             // rend à sa fin le texte, le run et ce qu'il a consommé. Un refus
-            // (éteint, un tour déjà en cours) est une réponse.
+            // (éteint, un tour déjà en cours) est une réponse. Qui l'envoie, l'hôte le dit
+            // (`by_of`, le cookie ou l'en-tête de l'utilisateur) : le tour d'un humain passe
+            // le plafond des dépenses et se compte.
+            let utilisateur = entete(&request, "X-Rag3weaver-User").map(str::to_string);
+            let client = if utilisateur.is_some() { "tty" } else { "ide" };
+            let by = host.by_of(cookie(&request, COOKIE_USER).as_deref(), utilisateur.as_deref(), client);
             let mut corps = Vec::new();
             let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
-                Ok(c) => match host.chat_turn(c["backend"].as_str().unwrap_or_default(), c["message"].as_str().unwrap_or_default()) {
+                Ok(c) => match host.chat_turn_by(c["backend"].as_str().unwrap_or_default(), c["message"].as_str().unwrap_or_default(), &by) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
                 },
