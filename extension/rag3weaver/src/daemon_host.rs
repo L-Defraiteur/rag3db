@@ -461,6 +461,10 @@ pub mod web_search;
 mod agents;
 /// The title of a human: the user token, the IDE's entry codes, `by` (21 Nov 2026).
 pub mod user_title;
+
+/// The page says when it is not entered as the user (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_not_human_tests;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;
