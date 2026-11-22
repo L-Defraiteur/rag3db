@@ -27,10 +27,11 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
     }
     let told = Arc::new(Mutex::new(None::<String>));
     let launched = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let results = Arc::new(Mutex::new(Vec::<String>::new()));
     let model: ChatModel = {
-        let (told, launched) = (told.clone(), launched.clone());
+        let (told, launched, results) = (told.clone(), launched.clone(), results.clone());
         Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-            let (told, launched) = (told.clone(), launched.clone());
+            let (told, launched, results) = (told.clone(), launched.clone(), results.clone());
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
                 let user = boundary(turns);
                 if user.contains("fini-de-fond") {
@@ -38,6 +39,7 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
                     return super::answer(turns, opts, sink, "", super::calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fin lue", "remaining": "" }))]));
                 }
                 // The command is asked for until it has run once (the gate may ask the supervisor first).
+                results.lock().unwrap().extend(super::tool_results(turns));
                 let ran = super::tool_results(turns).iter().any(|r| r.contains("fond.sh") && !r.contains(crate::dataflow::run_nodes::EN_ATTENTE));
                 if ran {
                     launched.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -65,7 +67,7 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
                 host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true })).expect("le oui");
             }
         }
-        assert!(Instant::now() < end, "in 90 s, no step was told the end of the background command (launched: {}):\n{:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), files.mailbox());
+        assert!(Instant::now() < end, "in 90 s, no step was told the end of the background command (launched: {}); tool results: {:#?}\nmailbox: {:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), results.lock().unwrap(), files.mailbox());
         std::thread::sleep(Duration::from_millis(100));
     }
     assert!(launched.load(std::sync::atomic::Ordering::SeqCst), "the command ran");
