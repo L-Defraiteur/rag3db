@@ -97,6 +97,9 @@ mod reopen;
 /// The witnesses of forking an agent (`--fork-agent`, 22 November 2026), in a module of their own.
 mod fork;
 
+/// The witness of the event of a message between agents (22 November 2026), in a module of its own.
+mod agent_message;
+
 /// The witnesses of the author set by the host (M7, 21 November 2026), in a module of their own.
 mod author;
 
