@@ -4199,6 +4199,10 @@ mod chat_contextuel;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_card_tests;
 
+/// A request from the IDE asks for the bac (22 November 2026), its witness in its file.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_gate_bac_tests;
+
 /// The card of a root in the IDE (22 November 2026), its witness in its file.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_card_root_tests;
