@@ -3141,15 +3141,33 @@ impl Node for ExactNameNode {
         };
         public.filter_indirection = None;
         public.occurrence_projection = None;
-        let mut opts = options.clone();
-        let par_le_nom = FilterCondition::Field { key: self.field.clone(), value: FilterValue::Direct(crate::connection::CypherValue::String(nom)) };
-        opts.filter_condition = Some(match options.filter_condition {
-            Some(f) => FilterCondition::Must(vec![f, par_le_nom]),
-            None => par_le_nom,
-        });
         // The filter of the query, the cell, and the visible generation, as every signal reads them.
-        let admis = admitted_parent_uuids_for(ctx, &public, &opts, &conn)?.unwrap_or_default();
-        let mut uuids: Vec<String> = admis.into_iter().collect();
+        let admitted = |ctx: &mut NodeContext, par_le_nom: FilterCondition| -> Result<Vec<String>, String> {
+            let mut opts = options.clone();
+            opts.filter_condition = Some(match options.filter_condition.clone() {
+                Some(f) => FilterCondition::Must(vec![f, par_le_nom]),
+                None => par_le_nom,
+            });
+            Ok(admitted_parent_uuids_for(ctx, &public, &opts, &conn)?.unwrap_or_default().into_iter().collect())
+        };
+        let mut uuids = admitted(ctx, FilterCondition::Field { key: self.field.clone(), value: FilterValue::Direct(crate::connection::CypherValue::String(nom.clone())) })?;
+        // **A name typed with one typo** (c7, 22 November 2026, the bench's q42 to q45): no name is the query, the
+        // query is one token, and the whole query searches it within a typo — then the names within that many edits,
+        // so « FuseResultNode » gives `FuseResultsNode`'s declaration as « FuseResultsNode » does. Only where the
+        // dialect has an edit distance.
+        let distance = crate::search::whole_query_distance(&nom);
+        let sait = ctx
+            .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
+            .is_some_and(|d| d.filter_within_edits("n", "p", 1).is_some());
+        if uuids.is_empty() && distance > 0 && !nom.contains(char::is_whitespace) && sait {
+            uuids = admitted(
+                ctx,
+                FilterCondition::Field {
+                    key: self.field.clone(),
+                    value: FilterValue::Ops(vec![crate::filter::FilterOp::WithinEdits { value: nom.clone(), max: distance }]),
+                },
+            )?;
+        }
         uuids.sort();
         uuids.truncate(self.limit);
         if uuids.is_empty() {

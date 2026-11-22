@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Un nom tapé à une faute près donne sa déclaration d'abord.** « FuseResultNode » rend
+  `FuseResultsNode` en tête, comme le nom tapé juste, au lieu de ses usages trouvés par sous-chaîne : sans nom exact,
+  une requête d'un seul jeton cherche les noms à une faute près (distance d'édition, sur rag3db).
 - 22 novembre 2026 — **La carte d'accord du terminal dit pourquoi elle s'ouvre.** Une commande que la porte du mode
   auto ne laisse pas passer seule porte sa classe en clair sur la carte : « supprime un fichier qui n'est sur aucun
   distant », « envoie hors de la machine ou installe des paquets », « touche une base », « touche le système »,
