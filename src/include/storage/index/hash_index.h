@@ -122,6 +122,12 @@ public:
     void deleteInternal(Key key) const { localStorage->deleteKey(key); }
     // Discards from local storage, but will not insert a deletion (used for rollbacks)
     bool discardLocal(Key key) const { return localStorage->discard(key); }
+    // Under the lock of this index the caller already holds (adoptLock), as appendNoLock.
+    bool lookupLocalNoLock(Key key, common::offset_t& result, visible_func isVisible) const {
+        return localStorage->lookupNoLock(key, result, isVisible) ==
+               HashIndexLocalLookupState::KEY_FOUND;
+    }
+    bool discardLocalNoLock(Key key) const { return localStorage->discardNoLock(key); }
     void discardLocalRange(common::offset_t first, common::offset_t count) override {
         localStorage->discardRange(first, count);
     }
@@ -459,6 +465,19 @@ public:
         }));
         return getTypedHashIndexByPos<HashIndexType<T>>(indexPos)->appendNoLock(transaction, buffer,
             bufferOffset, isVisible);
+    }
+
+    // Under the lock of the index at indexPos, held by the caller (as appendWithIndexPosNoLock):
+    // the offset that key has in this transaction's insertions, and its removal from them.
+    template<common::IndexHashable T>
+    bool lookupLocalWithIndexPosNoLock(const T& key, uint64_t indexPos, common::offset_t& result,
+        visible_func isVisible) {
+        return getTypedHashIndexByPos<HashIndexType<T>>(indexPos)->lookupLocalNoLock(key, result,
+            isVisible);
+    }
+    template<common::IndexHashable T>
+    bool discardLocalWithIndexPosNoLock(const T& key, uint64_t indexPos) {
+        return getTypedHashIndexByPos<HashIndexType<T>>(indexPos)->discardLocalNoLock(key);
     }
 
     void bulkReserve(uint64_t numValuesToAppend) {

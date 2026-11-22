@@ -31,6 +31,12 @@ public:
     HashIndexLocalLookupState lookup(KeyType key, common::offset_t& result,
         visible_func isVisible) {
         std::shared_lock sLock{mtx};
+        return lookupNoLock(key, result, isVisible);
+    }
+
+    // Under the lock the caller already holds (adoptLock): the mutex is not recursive.
+    HashIndexLocalLookupState lookupNoLock(KeyType key, common::offset_t& result,
+        visible_func isVisible) {
         if (localDeletions.contains(key)) {
             return HashIndexLocalLookupState::KEY_DELETED;
         }
@@ -49,8 +55,11 @@ public:
 
     bool discard(KeyType key) {
         std::unique_lock xLock{mtx};
-        return localInsertions.deleteKey(key);
+        return discardNoLock(key);
     }
+
+    // Under the lock the caller already holds (adoptLock).
+    bool discardNoLock(KeyType key) { return localInsertions.deleteKey(key); }
 
     void discardRange(common::offset_t first, common::offset_t count) {
         std::unique_lock xLock{mtx};

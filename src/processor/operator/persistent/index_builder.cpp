@@ -1,6 +1,7 @@
 #include "processor/operator/persistent/index_builder.h"
 
 #include <thread>
+#include <tuple>
 
 #include "common/assert.h"
 #include "common/cast.h"
@@ -53,6 +54,23 @@ void IndexBuilderGlobalQueues::consume(NodeBatchInsertErrorHandler& errorHandler
     }
 }
 
+// The position of a line in the files of a COPY: the file, the block, the line in the block (the
+// order CopyFromFileError sorts by). fileIdx exists for a CSV only; it is the column after the
+// shared ones.
+static uint64_t warningValue(const WarningSourceData& data, size_t idx) {
+    return std::visit([](auto value) { return static_cast<uint64_t>(value); }, data.values[idx]);
+}
+
+static bool comesFirstInTheFiles(const WarningSourceData& a, const WarningSourceData& b) {
+    const auto fileOf = [](const WarningSourceData& data) {
+        return data.numValues > CopyConstants::SHARED_WARNING_DATA_NUM_COLUMNS ?
+                   warningValue(data, CopyConstants::SHARED_WARNING_DATA_NUM_COLUMNS) :
+                   0;
+    };
+    return std::make_tuple(fileOf(a), a.getBlockIdx(), a.getOffsetInBlock()) <
+           std::make_tuple(fileOf(b), b.getBlockIdx(), b.getOffsetInBlock());
+}
+
 void IndexBuilderGlobalQueues::maybeConsumeIndex(size_t index,
     NodeBatchInsertErrorHandler& errorHandler) {
     auto& pkIndex = nodeTable->getPKIndex()->cast<PrimaryKeyIndex>();
@@ -64,6 +82,19 @@ void IndexBuilderGlobalQueues::maybeConsumeIndex(size_t index,
         [&](auto&& queues) {
             using T = std::decay_t<decltype(queues.type)>;
             auto lck = pkIndex.adoptLockOfTypedIndex(index);
+            auto& positions = filePositions[index];
+            const auto isVisible = [&](offset_t offset) {
+                return nodeTable->isVisible(transaction, offset);
+            };
+            const auto reject = [&](const auto& key, offset_t offset,
+                                    const OptionalWarningSourceData& warningData) {
+                errorHandler.handleError(
+                    IndexBuilderError<T>{.message = ExceptionMessage::duplicatePKException(
+                                             TypeUtils::toString(key)),
+                        .key = key,
+                        .nodeID = nodeID_t{offset, nodeTable->getTableID()},
+                        .warningData = warningData});
+            };
             IndexBufferWithWarningData<T> bufferWithWarningData;
             while (queues.array[index].pop(bufferWithWarningData)) {
                 auto& buffer = bufferWithWarningData.indexBuffer;
@@ -71,28 +102,44 @@ void IndexBuilderGlobalQueues::maybeConsumeIndex(size_t index,
                 uint64_t insertBufferOffset = 0;
                 while (insertBufferOffset < buffer.size()) {
                     auto numValuesInserted = pkIndex.appendWithIndexPosNoLock(transaction, buffer,
-                        insertBufferOffset, index,
-                        [&](offset_t offset) { return nodeTable->isVisible(transaction, offset); });
-                    if (numValuesInserted < buffer.size() - insertBufferOffset) {
-                        const auto& erroneousEntry = buffer[insertBufferOffset + numValuesInserted];
-                        OptionalWarningSourceData erroneousEntryWarningData;
-                        if (warningDataBuffer != nullptr) {
-                            erroneousEntryWarningData =
-                                (*warningDataBuffer)[insertBufferOffset + numValuesInserted];
+                        insertBufferOffset, index, isVisible);
+                    if (warningDataBuffer != nullptr) {
+                        for (auto i = 0u; i < numValuesInserted; i++) {
+                            positions[buffer[insertBufferOffset + i].second] =
+                                (*warningDataBuffer)[insertBufferOffset + i];
                         }
-                        errorHandler.handleError(
-                            IndexBuilderError<T>{.message = ExceptionMessage::duplicatePKException(
-                                                     TypeUtils::toString(erroneousEntry.first)),
-                                .key = erroneousEntry.first,
-                                .nodeID =
-                                    nodeID_t{
-                                        erroneousEntry.second,
-                                        nodeTable->getTableID(),
-                                    },
-                                .warningData = erroneousEntryWarningData});
-                        insertBufferOffset += 1; // skip the erroneous index then continue
                     }
                     insertBufferOffset += numValuesInserted;
+                    if (insertBufferOffset >= buffer.size()) {
+                        break;
+                    }
+                    const auto& erroneousEntry = buffer[insertBufferOffset];
+                    OptionalWarningSourceData erroneousEntryWarningData;
+                    if (warningDataBuffer != nullptr) {
+                        erroneousEntryWarningData = (*warningDataBuffer)[insertBufferOffset];
+                    }
+                    // Between two lines of this COPY with the same key, the first of the files
+                    // wins, whatever thread reached the index first (ticket 2026-10-10-copy-garde-
+                    // un-doublon-selon-les-fils). A key held by a row from before the COPY, or
+                    // from another statement, keeps its row as before.
+                    offset_t holder = INVALID_OFFSET;
+                    if (erroneousEntryWarningData.has_value() &&
+                        pkIndex.lookupLocalWithIndexPosNoLock(erroneousEntry.first, index, holder,
+                            isVisible)) {
+                        const auto held = positions.find(holder);
+                        if (held != positions.end() &&
+                            comesFirstInTheFiles(*erroneousEntryWarningData, held->second)) {
+                            // The holder is the later line: it loses (its row is deleted and its
+                            // own line reported), and the entry is tried again at the same place.
+                            const OptionalWarningSourceData holderWarningData = held->second;
+                            positions.erase(held);
+                            pkIndex.discardLocalWithIndexPosNoLock(erroneousEntry.first, index);
+                            reject(erroneousEntry.first, holder, holderWarningData);
+                            continue;
+                        }
+                    }
+                    reject(erroneousEntry.first, erroneousEntry.second, erroneousEntryWarningData);
+                    insertBufferOffset += 1; // skip the erroneous index then continue
                 }
             }
             return;

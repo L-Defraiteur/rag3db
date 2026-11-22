@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <unordered_map>
 #include <variant>
 
 #include "common/copy_constructors.h"
@@ -73,6 +74,12 @@ private:
         // Type information to help std::visit. Value is not used
         T type;
     };
+
+    // Under IGNORE_ERRORS, the file position of each row this COPY indexed, per partition, read
+    // and written under that partition's lock (two equal keys always fall in the same partition):
+    // between two lines of the COPY with the same key, the first line of the file wins.
+    std::array<std::unordered_map<common::offset_t, WarningSourceData>, storage::NUM_HASH_INDEXES>
+        filePositions;
 
     // Queues for distributing primary keys.
     std::variant<Queue<std::string>, Queue<int64_t>, Queue<int32_t>, Queue<int16_t>, Queue<int8_t>,
