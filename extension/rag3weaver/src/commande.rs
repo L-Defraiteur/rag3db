@@ -361,8 +361,16 @@ fn refus_d_identite_git(c: &Commande) -> Option<Verdict> {
 /// `id_ed25519*`, `id_ecdsa*`), anything under `.vault/`. The read tools refuse to show it (22 Nov 2026: the dry run
 /// showed a `.env` through `read_file`, the command guard only saw `cat`).
 pub fn secret_file(path: &str) -> bool {
-    let _ = path;
-    false
+    let p = std::path::Path::new(path);
+    let nom = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    nom == ".env"
+        || (nom.starts_with(".env.") && !nom.ends_with(".example") && !nom.ends_with(".sample") && !nom.ends_with(".template"))
+        || nom.ends_with(".pem")
+        || nom.ends_with(".key")
+        || nom.starts_with("id_rsa")
+        || nom.starts_with("id_ed25519")
+        || nom.starts_with("id_ecdsa")
+        || p.components().any(|c| c.as_os_str() == ".vault")
 }
 
 /// What a refusal to show a secret says, and how to use it without showing it.
@@ -380,14 +388,7 @@ pub fn refus_d_afficher_un_secret(c: &Commande) -> Option<Verdict> {
         let n = n.to_ascii_uppercase();
         ["_KEY", "_TOKEN", "_SECRET"].iter().any(|s| n.ends_with(s)) || n.contains("PASSWORD") || n.contains("API_KEY")
     };
-    let fichier_secret = |a: &str| {
-        let p = std::path::Path::new(a);
-        let nom = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        nom == ".env" || (nom.starts_with(".env.") && !nom.ends_with(".example") && !nom.ends_with(".sample"))
-            || nom.ends_with(".pem") || nom.ends_with(".key")
-            || nom.starts_with("id_rsa") || nom.starts_with("id_ed25519") || nom.starts_with("id_ecdsa")
-            || p.components().any(|c| c.as_os_str() == ".vault")
-    };
+    let fichier_secret = secret_file;
     let montre = matches!(programme.as_str(), "cat" | "less" | "more" | "head" | "tail" | "bat" | "strings" | "xxd" | "od" | "hexdump" | "base64" | "nl" | "tac" | "grep" | "rg" | "awk" | "sed" | "cut" | "sort" | "uniq" | "diff" | "cmp");
     let fautif = if montre {
         c.args.iter().find(|a| !a.starts_with('-') && fichier_secret(a)).cloned()
@@ -405,11 +406,7 @@ pub fn refus_d_afficher_un_secret(c: &Commande) -> Option<Verdict> {
         portee: Portee::CetteFois,
         fondement: Fondement::Configuration,
         faits: observer(c),
-        motif: format!(
-            "`{fautif}` : showing a secret is refused, whatever the grant. Use it without printing it: \
-             pass its file to the program (`--env-file .env`, `set -a; . ./.env; set +a` in a script that prints nothing), \
-             or keep it in the vault with secret_store and point at its path."
-        ),
+        motif: secret_refusal(&fautif),
     })
 }
 
