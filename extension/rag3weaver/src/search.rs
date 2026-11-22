@@ -1814,6 +1814,11 @@ fn words_query(query: &str, fields: &[String]) -> serde_json::Value {
 #[path = "search_words_tests.rs"]
 mod words_tests;
 
+/// The witnesses of one `contains` over several fields (22 November 2026), in a file of their own.
+#[cfg(test)]
+#[path = "search_fields_tests.rs"]
+mod fields_tests;
+
 /// Build contains clause(s) for one value across fields.
 /// Single field → single contains object. Multiple fields → boolean should.
 fn build_contains_clauses(
