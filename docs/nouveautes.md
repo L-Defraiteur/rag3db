@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Remplacer des vecteurs coûte dix fois moins.** Une ligne qui porte déjà un vecteur et en
+  reçoit un neuf (un contenu changé, un modèle changé) ne passe plus par NULL une ligne à la fois : tout le paquet part
+  en une instruction, comme les lignes nées sans vecteur. Le défaut du moteur qui l'imposait depuis le 3 octobre (un
+  remplacement perdait des lignes du HNSW) ne tient plus, rejoué vert par la session du cœur. Deux instructions de 70 à
+  80 ms par vecteur deviennent un lot à 7 à 10 ms par vecteur.
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
