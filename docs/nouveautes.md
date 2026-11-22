@@ -64,6 +64,9 @@
 - 22 novembre 2026 — **Une demande de code dans le chat d'un dépôt mène à sa tâche.** Quand l'agent du dépôt ouvre la
   tâche de code (`open_code_task`), le fil dit « → Ta demande continue dans la tâche … (branche …) » avec son lien, et
   la page y va d'elle-même.
+- 22 novembre 2026 — **« Ouvrir un dossier » comprend `~`.** `~/essai-auto` s'ouvre dans le dossier personnel, dans
+  l'IDE comme par `rag3weaver-backend open` ; un chemin relatif est refusé avec les deux formes attendues
+  (`~/essai-auto` ou le chemin entier).
 - 22 novembre 2026 — **La carte du terminal dit la racine demandée et le dossier protégé.** Quand l'agent veut un
   dossier hors de ses racines, la carte nomme la racine et son mode (« demande la racine … en écriture ») ; une racine
   large porte son avertissement en rouge vif (« ⚠ cette racine contient aussi : … »). Un oui s'inscrit « racine
