@@ -34,7 +34,7 @@ impl Roots {
     pub fn of_user() -> Result<Self, String> {
         let home = std::env::var_os("HOME").map(PathBuf::from).ok_or("HOME n'est pas posé")?;
         let config = std::env::var_os("RAG3WEAVER_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".config/rag3weaver"));
-        let data = crate::daemon_lifecycle::data_roots().data;
+        let data = data_roots().data;
         Ok(Self { config, data })
     }
 
