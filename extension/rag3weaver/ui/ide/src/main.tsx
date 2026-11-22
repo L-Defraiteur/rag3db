@@ -238,6 +238,12 @@ function App() {
           </>
         )}
       </header>
+      {state && state.human === false ? (
+        <p id="not-human" role="alert" className="border-b border-amber-500/60 bg-amber-500/10 px-4 py-2 text-sm">
+          Cette page n'est pas ouverte en ton nom : tes « oui » n'y compteront pas. Ouvre l'IDE depuis ton lanceur
+          (<code className="font-mono">rag3weaver-backend ide --open</code>), ou réponds dans le terminal.
+        </p>
+      ) : null}
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (
           <p className="text-destructive" role="alert">
