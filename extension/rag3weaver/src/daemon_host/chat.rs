@@ -422,6 +422,20 @@ impl DaemonHost {
         std::fs::rename(&neuf, &chemin).map_err(|e| format!("{} : {e}", chemin.display()))
     }
 
+    /// **Take back a conversation** (an agent reopened or forked, 22 November 2026): the session kept under
+    /// `ancien_id` becomes the session of the backend `neuf_id`, whose manifest is `manifeste`, and is written under its
+    /// id. `false` when there is none to take back.
+    pub(super) fn reprendre_la_conversation(&self, ancien_id: &str, neuf_id: &str, manifeste: &std::path::Path) -> Result<bool, String> {
+        let Ok(octets) = std::fs::read(self.chat_path(ancien_id)) else { return Ok(false) };
+        let f: ChatFile = serde_json::from_slice(&octets).map_err(|e| format!("la conversation de {ancien_id} : {e}"))?;
+        self.chats.lock().unwrap_or_else(|p| p.into_inner()).insert(
+            neuf_id.to_string(),
+            ChatEntry { manifest: manifeste.to_path_buf(), session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default() },
+        );
+        self.write_chat(neuf_id)?;
+        Ok(true)
+    }
+
     /// **Relit les sessions** au démarrage : une session dont le manifeste est
     /// là est reprise (son backend inscrit, ouvert au premier appel) ; une autre
     /// est orpheline, dite, et son fichier reste où il est. Rend une ligne par
