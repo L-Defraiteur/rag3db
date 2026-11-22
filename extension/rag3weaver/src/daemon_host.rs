@@ -2989,6 +2989,8 @@ impl DaemonHost {
             "sessions": sessions,
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
             "background": self.background_state(),
+            // The spending of the month (22 November 2026): its alert, for « À intervenir », and its line.
+            "spending": { "alert": crate::usage_ledger::user_ledger().alert(), "line": crate::usage_ledger::user_ledger().summary_line() },
         })
     }
 

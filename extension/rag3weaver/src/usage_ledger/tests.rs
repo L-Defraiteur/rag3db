@@ -1,6 +1,7 @@
 //! The witnesses of the lot `billing-ledger` (21 November 2026): the spending ledger and the monthly cap.
 use super::*;
 use crate::llm::{CallbackLlm, StringSink};
+use serde_json::json;
 
 /// A ledger of its own, with `prices` as its `prices.json` (`None`: no file).
 fn ledger(prices: Option<&str>) -> (tempfile::TempDir, Arc<Ledger>) {
@@ -265,4 +266,52 @@ fn the_gates_local_judge_goes_through_the_ledger_at_price_zero() {
         let (lines, _) = l.lines(&month());
         assert!(!lines.is_empty() && lines.iter().all(|x| x.free && x.slug == "qwen3.5-9b"), "{address}: {lines:?}");
     }
+}
+
+/// **The month's report** (`usage_report`, and its line in `daemon_status`): the total against the cap, the projection
+/// on the days elapsed, and the calls by slug, by day and by caller.
+#[test]
+fn the_months_report_says_the_total_the_projection_and_who_spent() {
+    let (_d, l) = ledger(Some(
+        r#"{"currency":"USD","monthly_cap":200,"free_private_hosts":true,"prices":{"paid":[{"from":"2026-01-01","input":1,"output":2}]}}"#,
+    ));
+    let call = |day: &str, slug: &str, provider: &str, private: bool, k: Tokens, caller: Caller| {
+        let r = l.reserve_on(day.into(), slug, provider, private, k, &caller, false).unwrap();
+        l.settle(&r, Some(k)).unwrap();
+    };
+    let agent = Caller { agent: "agent:teammate".into(), ..Default::default() };
+    call("2026-11-02", "paid", "vertex", false, Tokens { input: 1_000_000, output: 1_000_000, ..Default::default() }, agent.clone());
+    call("2026-11-05", "paid", "vertex", false, Tokens { output: 5_000_000, ..Default::default() }, Caller { human: true, ..Default::default() });
+    call("2026-11-05", "qwen", "http://127.0.0.1:8096/v1", true, Tokens { input: 500, output: 3, ..Default::default() }, agent);
+    let r = l.report("2026-11", "2026-11-10");
+    assert_eq!(r["spent"], json!(13.0), "{r:#}");
+    assert_eq!(r["projection"], json!(39.0), "13 in 10 days of 30: {r:#}");
+    assert_eq!((r["by_slug"]["paid"]["calls"].clone(), r["by_slug"]["paid"]["output"].clone()), (json!(2), json!(6_000_000)));
+    assert_eq!((r["by_slug"]["qwen"]["cost"].clone(), r["by_slug"]["qwen"]["free"].clone()), (json!(0.0), json!(true)));
+    assert_eq!((r["by_day"]["2026-11-02"].clone(), r["by_day"]["2026-11-05"].clone()), (json!(3.0), json!(10.0)));
+    assert_eq!((r["by_caller"]["agent:teammate"].clone(), r["by_caller"]["human"].clone()), (json!(3.0), json!(10.0)));
+    assert_eq!(r["percent"], json!(6.5));
+    assert_eq!(l.report("2026-11", "2026-12-01")["projection"], json!(13.0), "a month over is its total");
+}
+
+/// **A script's call** (`usage check`, `usage record`): `check` says, without writing, whether a call of that bound
+/// passes the cap; `record` writes a call already made, never refused (the money is spent), and a slug without a price
+/// is written and said, then listed as unpriced.
+#[test]
+fn a_scripts_call_is_checked_without_writing_and_recorded_without_refusal() {
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":1,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
+    let script = Caller { agent: "bench".into(), ..Default::default() };
+    let k = Tokens { output: 600_000, ..Default::default() };
+    assert_eq!(l.check("paid", false, k, &script, false), Ok(false), "0.60 under a cap of 1");
+    assert!(l.lines(&month()).0.is_empty(), "check writes nothing");
+    assert_eq!(l.record("paid", "vertex", false, k, &script, false), Ok(None));
+    let e = l.check("paid", false, k, &script, false).unwrap_err();
+    assert!(e.contains("spending cap reached"), "0.60 + 0.60 over 1: {e}");
+    assert_eq!(l.record("paid", "vertex", false, k, &script, false), Ok(None), "a call made is written, over the cap too");
+    let w = l.record("gemini-unknown", "vertex", false, k, &script, false).unwrap().expect("said");
+    assert!(w.contains("no price for `gemini-unknown`"), "{w}");
+    let prices = Prices::load(&l.prices_path).unwrap();
+    let spent = l.spent(&prices, &month());
+    assert!((spent.total - 1.2).abs() < 1e-9 && spent.open == 0, "{spent:?}");
+    assert_eq!(spent.unpriced, vec!["gemini-unknown".to_string()]);
 }

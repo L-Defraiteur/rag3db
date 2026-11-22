@@ -243,6 +243,37 @@ pub struct Spent {
     pub unreadable: Vec<usize>,
 }
 
+/// One call of the ledger, read back.
+#[derive(Debug, Clone)]
+pub struct Call {
+    pub line: Line,
+    pub tokens: Option<Tokens>,
+    /// `None`: no price for its slug on its day.
+    pub cost: Option<f64>,
+    pub open: bool,
+}
+
+/// The days of a month (`YYYY-MM`).
+fn days_in_month(month: &str) -> u32 {
+    let y: i64 = month[..4].parse().unwrap_or(1970);
+    let m: u32 = month[5..7].parse().unwrap_or(1);
+    match m {
+        2 if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+/// **The month's projection**: linear on the days elapsed, today included. A month already over is its total.
+pub fn projection(spent: f64, month: &str, today: &str) -> f64 {
+    if &today[..7] != month {
+        return spent;
+    }
+    let day: u32 = today[8..10].parse().unwrap_or(1).max(1);
+    spent / day as f64 * days_in_month(month) as f64
+}
+
 /// A reservation made, to settle.
 #[derive(Debug, Clone)]
 pub struct Reservation {
@@ -341,37 +372,161 @@ impl Ledger {
         (lines, bad)
     }
 
-    /// What a month has spent, under `prices`: each call at its settle, or at its reservation's bound.
-    pub fn spent(&self, prices: &Prices, month: &str) -> Spent {
+    /// Every call of a month, under `prices`: its head line (the settle, or the reservation), its tokens (the settle's,
+    /// or the reservation's bound), its cost (`None`: no price), and whether it is still open.
+    pub fn calls(&self, prices: &Prices, month: &str) -> (Vec<Call>, Vec<usize>) {
         let (lines, unreadable) = self.lines(month);
-        let mut calls: BTreeMap<&str, (Option<&Line>, Option<&Line>)> = BTreeMap::new();
-        for l in &lines {
-            let e = calls.entry(l.id.as_str()).or_default();
+        let mut by_id: BTreeMap<String, (Option<Line>, Option<Line>)> = BTreeMap::new();
+        for l in lines {
+            let e = by_id.entry(l.id.clone()).or_default();
             if l.kind == "settle" {
                 e.1 = Some(l);
             } else {
                 e.0 = Some(l);
             }
         }
+        let calls = by_id
+            .into_values()
+            .filter_map(|(reserve, settle)| {
+                let open = settle.is_none();
+                let tokens = settle.as_ref().and_then(|l| l.tokens).or_else(|| reserve.as_ref().and_then(|l| l.tokens));
+                let line = settle.or(reserve)?;
+                let cost = if line.free {
+                    Some(0.0)
+                } else {
+                    prices.tariff(&line.slug, &line.day).map(|t| tokens.map(|k| k.cost(t, line.batch)).unwrap_or(0.0))
+                };
+                Some(Call { line, tokens, cost, open })
+            })
+            .collect();
+        (calls, unreadable)
+    }
+
+    /// What a month has spent, under `prices`: each call at its settle, or at its reservation's bound.
+    pub fn spent(&self, prices: &Prices, month: &str) -> Spent {
+        let (calls, unreadable) = self.calls(prices, month);
         let mut s = Spent { unreadable, ..Default::default() };
-        for (reserve, settle) in calls.values() {
-            let Some(head) = settle.or(*reserve) else { continue };
-            if head.free {
-                continue;
-            }
-            if settle.is_none() {
+        for c in calls.iter().filter(|c| !c.line.free) {
+            if c.open {
                 s.open += 1;
             }
-            let tokens = settle.and_then(|l| l.tokens).or_else(|| reserve.and_then(|l| l.tokens));
-            match (prices.tariff(&head.slug, &head.day), tokens) {
-                (Some(t), Some(k)) => s.total += k.cost(t, head.batch),
-                (None, _) => {
-                    if !s.unpriced.contains(&head.slug) {
-                        s.unpriced.push(head.slug.clone());
+            match c.cost {
+                Some(x) => s.total += x,
+                None => {
+                    if !s.unpriced.contains(&c.line.slug) {
+                        s.unpriced.push(c.line.slug.clone());
                     }
                 }
-                (Some(_), None) => {}
             }
+        }
+        s
+    }
+
+    /// **The month's report** (`usage_report`): the total against the cap, the projection, and the calls by slug, by
+    /// day and by caller. `today` is the UTC day the projection counts to.
+    pub fn report(&self, month: &str, today: &str) -> serde_json::Value {
+        use serde_json::json;
+        let prices = match Prices::load(&self.prices_path) {
+            Ok(p) => p,
+            Err(e) => return json!({ "month": month, "error": e }),
+        };
+        let (calls, unreadable) = self.calls(&prices, month);
+        let spent = self.spent(&prices, month);
+        let mut by_slug: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+        let mut by_day: BTreeMap<String, f64> = BTreeMap::new();
+        let mut by_caller: BTreeMap<String, f64> = BTreeMap::new();
+        for c in &calls {
+            let cost = c.cost.unwrap_or(0.0);
+            let k = c.tokens.unwrap_or_default();
+            let e = by_slug.entry(c.line.slug.clone()).or_insert_with(|| {
+                json!({ "provider": c.line.provider, "calls": 0, "input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost": 0.0, "priced": c.cost.is_some(), "free": c.line.free })
+            });
+            for (key, n) in [("calls", 1), ("input", k.input), ("cache_write", k.cache_write), ("cache_read", k.cache_read), ("output", k.output)] {
+                e[key] = json!(e[key].as_u64().unwrap_or(0) + n);
+            }
+            e["cost"] = json!(e["cost"].as_f64().unwrap_or(0.0) + cost);
+            *by_day.entry(c.line.day.clone()).or_default() += cost;
+            let who = if c.line.caller.human {
+                "human".to_string()
+            } else if c.line.caller.agent.is_empty() {
+                "unattributed".to_string()
+            } else {
+                c.line.caller.agent.clone()
+            };
+            *by_caller.entry(who).or_default() += cost;
+        }
+        let projection = projection(spent.total, month, today);
+        json!({
+            "month": month,
+            "currency": prices.currency,
+            "cap": prices.monthly_cap,
+            "spent": spent.total,
+            "percent": if prices.monthly_cap > 0.0 { spent.total / prices.monthly_cap * 100.0 } else { 0.0 },
+            "projection": projection,
+            "open_reservations": spent.open,
+            "unpriced": spent.unpriced,
+            "unreadable_lines": unreadable,
+            "by_slug": by_slug,
+            "by_day": by_day,
+            "by_caller": by_caller,
+            "prices": self.prices_path,
+            "ledger": self.month_path(month),
+        })
+    }
+
+    /// **The alert of the month**, for « À intervenir »: `null` under the first threshold of `alerts` (50 % and 80 % by
+    /// default) with a projection under the cap; otherwise the highest threshold passed (100 at the cap), whether the
+    /// projection passes the cap, and the sentence to show. Read from `report`, at each look: a state, not a message.
+    pub fn alert_on(&self, today: &str) -> serde_json::Value {
+        use serde_json::json;
+        let r = self.report(&today[..7], today);
+        if let Some(e) = r["error"].as_str() {
+            return json!({ "threshold": null, "projection_over": false, "text": format!("the spending cap cannot be read: {e}") });
+        }
+        let (spent, cap, projection) = (r["spent"].as_f64().unwrap_or(0.0), r["cap"].as_f64().unwrap_or(0.0), r["projection"].as_f64().unwrap_or(0.0));
+        let alerts: Vec<f64> = Prices::load(&self.prices_path).map(|p| p.alerts).unwrap_or_else(|_| default_alerts());
+        let passed = if cap > 0.0 && spent >= cap {
+            Some(100.0)
+        } else {
+            alerts.iter().copied().filter(|a| cap > 0.0 && spent >= a * cap).map(|a| a * 100.0).fold(None, |m: Option<f64>, a| Some(m.map_or(a, |m| m.max(a))))
+        };
+        let projection_over = cap > 0.0 && projection > cap;
+        if passed.is_none() && !projection_over {
+            return serde_json::Value::Null;
+        }
+        let cur = r["currency"].as_str().unwrap_or("");
+        let text = match passed {
+            Some(t) if t >= 100.0 => format!(
+                "the monthly spending cap is reached: {spent:.2} / {cap:.0} {cur}; an agent's paid call is refused until the next month or a higher cap"
+            ),
+            Some(t) => format!("{t:.0} % of the monthly spending cap: {spent:.2} / {cap:.0} {cur}, projection {projection:.0} {cur}"),
+            None => format!("the month's spending is on course to pass its cap: projection {projection:.0} / {cap:.0} {cur} ({spent:.2} so far)"),
+        };
+        json!({ "threshold": passed, "projection_over": projection_over, "spent": spent, "cap": cap, "projection": projection, "currency": cur, "text": text })
+    }
+
+    /// [`alert_on`](Self::alert_on) today (UTC).
+    pub fn alert(&self) -> serde_json::Value {
+        self.alert_on(&utc_day(now_secs()))
+    }
+
+    /// **One line for `daemon_status`**: `spending: 41.20 / 200 USD (21 %), projection 59 USD`.
+    pub fn summary_line(&self) -> String {
+        let today = utc_day(now_secs());
+        let r = self.report(&today[..7], &today);
+        if let Some(e) = r["error"].as_str() {
+            return format!("spending: unknown ({e})");
+        }
+        let cur = r["currency"].as_str().unwrap_or("");
+        let mut s = format!(
+            "spending: {:.2} / {:.0} {cur} ({:.0} %), projection {:.0} {cur}",
+            r["spent"].as_f64().unwrap_or(0.0),
+            r["cap"].as_f64().unwrap_or(0.0),
+            r["percent"].as_f64().unwrap_or(0.0),
+            r["projection"].as_f64().unwrap_or(0.0)
+        );
+        if let Some(u) = r["unpriced"].as_array().filter(|u| !u.is_empty()) {
+            s.push_str(&format!("; without a price: {}", u.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")));
         }
         s
     }
@@ -430,32 +585,8 @@ impl Ledger {
         batch: bool,
     ) -> Result<Reservation, String> {
         let month = day[..7].to_string();
-        self.write_default_prices();
-        let prices = Prices::load(&self.prices_path);
-        // Free only by what the file says: a file that cannot be read frees nothing.
-        let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
         let _lock = self.lock(&month)?;
-        if !free {
-            let prices = prices.map_err(|e| format!("spending cap: {e}; a paid call is refused while the prices cannot be read"))?;
-            let tariff = prices.tariff(slug, &day).ok_or_else(|| {
-                format!(
-                    "spending cap: no price for `{slug}` on {day} in {}: a paid call without a price is refused, never counted at zero",
-                    self.prices_path.display()
-                )
-            })?;
-            let spent = self.spent(&prices, &month);
-            let at_most = bound.cost(tariff, batch);
-            if spent.total + at_most > prices.monthly_cap && !caller.human {
-                return Err(format!(
-                    "spending cap reached for {month}: {:.2} spent and {:.2} at most for this call, over the cap of {:.2} {} ({}); a human's own call still passes",
-                    spent.total,
-                    at_most,
-                    prices.monthly_cap,
-                    prices.currency,
-                    self.prices_path.display()
-                ));
-            }
-        }
+        let free = self.check_locked(&day, slug, private, bound, caller, batch)?;
         let line = Line {
             t: crate::host_log::now_iso(),
             day,
@@ -470,6 +601,81 @@ impl Ledger {
         };
         self.append(&month, &line)?;
         Ok(Reservation { line })
+    }
+
+    /// **Whether a call of this bound would pass**, without reserving (`usage check`, for a script that calls a paid
+    /// model itself): `Ok(free)`, or the refusal `reserve` would give.
+    pub fn check(&self, slug: &str, private: bool, bound: Tokens, caller: &Caller, batch: bool) -> Result<bool, String> {
+        let day = utc_day(now_secs());
+        let _lock = self.lock(&day[..7])?;
+        self.check_locked(&day, slug, private, bound, caller, batch)
+    }
+
+    /// **A call already made**, written whole (`usage record`, the bench's scripts): its reservation and its settle, at
+    /// the tokens the provider reported. Never refused: the money is spent; a slug without a price is written, listed
+    /// by the report as unpriced, and said in the returned warning.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record(&self, slug: &str, provider: &str, private: bool, tokens: Tokens, caller: &Caller, batch: bool) -> Result<Option<String>, String> {
+        self.write_default_prices();
+        let day = utc_day(now_secs());
+        let month = day[..7].to_string();
+        let prices = Prices::load(&self.prices_path);
+        let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
+        let warning = match &prices {
+            _ if free => None,
+            Ok(p) if p.tariff(slug, &day).is_some() => None,
+            Ok(_) => Some(format!("no price for `{slug}` on {day} in {}: written, and listed as unpriced", self.prices_path.display())),
+            Err(e) => Some(format!("written, but the prices cannot be read: {e}")),
+        };
+        let _lock = self.lock(&month)?;
+        let mut line = Line {
+            t: crate::host_log::now_iso(),
+            day,
+            id: new_id(),
+            kind: "reserve".into(),
+            slug: slug.into(),
+            provider: provider.into(),
+            tokens: Some(tokens),
+            free,
+            batch,
+            caller: caller.clone(),
+        };
+        self.append(&month, &line)?;
+        line.kind = "settle".into();
+        self.append(&month, &line)?;
+        Ok(warning)
+    }
+
+    /// The check of a reservation, the month's lock held: `Ok(free)` or the refusal.
+    #[allow(clippy::too_many_arguments)]
+    fn check_locked(&self, day: &str, slug: &str, private: bool, bound: Tokens, caller: &Caller, batch: bool) -> Result<bool, String> {
+        let month = &day[..7];
+        self.write_default_prices();
+        let prices = Prices::load(&self.prices_path);
+        // Free only by what the file says: a file that cannot be read frees nothing.
+        let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
+        if !free {
+            let prices = prices.map_err(|e| format!("spending cap: {e}; a paid call is refused while the prices cannot be read"))?;
+            let tariff = prices.tariff(slug, day).ok_or_else(|| {
+                format!(
+                    "spending cap: no price for `{slug}` on {day} in {}: a paid call without a price is refused, never counted at zero",
+                    self.prices_path.display()
+                )
+            })?;
+            let spent = self.spent(&prices, month);
+            let at_most = bound.cost(tariff, batch);
+            if spent.total + at_most > prices.monthly_cap && !caller.human {
+                return Err(format!(
+                    "spending cap reached for {month}: {:.2} spent and {:.2} at most for this call, over the cap of {:.2} {} ({}); a human's own call still passes",
+                    spent.total,
+                    at_most,
+                    prices.monthly_cap,
+                    prices.currency,
+                    self.prices_path.display()
+                ));
+            }
+        }
+        Ok(free)
     }
 
     /// Writes the default `prices.json` when there is none (never over a file, even an unreadable one), and says so.
