@@ -3397,7 +3397,9 @@ mod tests {
     #[test]
     fn build_bm25_query_multi_field_boolean() {
         let fields = vec!["title".to_string(), "body".to_string()];
-        let json = build_bm25_query("rust", &fields, BM25Mode::Contains, 2);
+        // At distance 0 (no penalty to share), one `contains` per field; a fuzzy one is a single `contains` with
+        // `fields` (`fields_tests`).
+        let json = build_bm25_query("rust", &fields, BM25Mode::Contains, 0);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed["type"], "boolean");
@@ -3405,7 +3407,7 @@ mod tests {
         assert_eq!(should.len(), 2);
         assert_eq!(should[0]["field"], "title");
         assert_eq!(should[0]["value"], "rust");
-        assert_eq!(should[0]["distance"], 2);
+        assert_eq!(should[0]["distance"], 0);
         assert_eq!(should[1]["field"], "body");
     }
 

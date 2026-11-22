@@ -37,3 +37,29 @@ fn a_typo_in_two_fields_costs_once() {
     hits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     assert_eq!(hits.first().map(|h| h.0), Some(1), "the typo in the name and the body is paid once: {:?}", hits.iter().map(|h| (h.0, h.1)).collect::<Vec<_>>());
 }
+
+/// **Every document with the word in one of the fields is found** (lucivy 4.5.0 returned one document out of six on
+/// rag3weaver's fixtures: the union of the fields lost the others). Six documents, each with the word in its body and
+/// its name: the six are found.
+#[test]
+fn every_document_with_the_word_in_a_field_is_found() {
+    use lucivy_core::blob_store::MemBlobStore;
+    use lucivy_core::query::QueryConfig;
+    use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+    let dir = tempfile::tempdir().unwrap();
+    let fields = vec!["content".to_string(), "name".to_string()];
+    let config = crate::fts_handle::build_schema_config(&fields, &[], 1).unwrap();
+    let storage = BlobShardStorage::new(std::sync::Arc::new(MemBlobStore::new()), crate::fts_handle::fts_index_name("Union"), dir.path());
+    let handle = ShardedHandle::create_with_storage(Box::new(storage), &config).expect("the index");
+    for (offset, suffix) in [(1_u64, "lower"), (2, "title"), (3, "upper"), (4, "plain"), (5, "frob"), (6, "phrase")] {
+        let name = format!("alpha_{suffix}");
+        crate::fts_handle::index_document(&handle, &[("content".into(), format!("pub fn {name}() -> u32 {{ 7 }}")), ("name".into(), name)], offset).unwrap();
+    }
+    handle.commit().unwrap();
+    let q: QueryConfig = serde_json::from_str(&build_bm25_query("alpha", &fields, BM25Mode::Contains, 1)).unwrap();
+    let mut found: Vec<u64> = crate::fts_handle::search_hits(&handle, &q, 20, None).unwrap().into_iter().map(|h| h.0).collect();
+    found.sort();
+    assert_eq!(found, [1, 2, 3, 4, 5, 6], "every document with « alpha » in a field");
+    let warnings = handle.query_warnings(&q);
+    assert!(!warnings.iter().any(|w| w.contains("is not read")), "lucivy says it does not read `fields`, which it reads: {warnings:?}");
+}
