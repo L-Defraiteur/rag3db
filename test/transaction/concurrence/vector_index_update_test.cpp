@@ -3723,34 +3723,29 @@ TEST_F(VectorIndexBridgeMeasure, InsertionCostByBatchAndEfc) {
 
 // L'insertion cherche avec l'efc de l'index (22 novembre 2026, pour ED ; page
 // docs/coeur-cpp-hotfixs-tickets/22-11-2026/01-le-cout-d-un-set-de-vecteur-sous-hnsw.md). Un nœud inséré
-// garde pour arêtes sortantes les ml premiers résultats de sa recherche (createRels, sans élagage tant
-// qu'il reste sous le seuil). Avec un efc plus grand que la table, cette recherche couvre tout le graphe :
-// ses ml voisins sont alors les ml plus proches exacts. Le témoin : 20 000 points gaussiens de dimension
-// 64, un index à efc 30 000, puis dix lignes créées une à une ; les arêtes de chacune doivent contenir
-// ses 60 plus proches parmi les lignes déjà là. Avec l'efs de requête par défaut (200), l'insertion en
-// manque. (À 2 000 points de dimension 32, un ef de 200 les trouvait déjà tous : vert sans correctif.)
+// prend pour arêtes sortantes les ml premiers résultats de sa recherche (createRels). Avec un efc plus
+// grand que la table, cette recherche couvre tout le graphe : ses ml voisins sont alors ses ml plus
+// proches exacts. Le témoin : 20 000 points gaussiens de dimension 64, un index à efc 30 000, puis dix
+// lignes créées une à une ; chacune est jugée **juste après son insertion** (les lignes suivantes, en lui
+// ajoutant des arêtes inverses, la feraient élaguer), contre ses ml plus proches rendus par le moteur
+// lui-même (QUERY_VECTOR_INDEX à efs 40 000 : la même métrique, au même arrondi). La première écriture
+// de ce témoin jugeait après les dix insertions, en distances doubles : elle mesurait l'élagage et la
+// frontière, rouge avec ou sans correctif.
 TEST_F(VectorIndexUpdate, AnInsertionSearchesWithTheIndexEfc) {
     constexpr int DIMENSION = 64;
     constexpr int64_t ROWS = 20000;
     constexpr int64_t NEW_ROWS = 10;
-    constexpr size_t ML = 60;
+    constexpr int64_t ML = 60;
     table = "Efc";
-    // Each vector written with six decimals, and read back from that text: the index and the
-    // exhaustive search see the same floats.
-    std::vector<std::vector<float>> vectors;
     std::vector<std::string> literals;
     for (int64_t id = 0; id < ROWS + NEW_ROWS; ++id) {
         std::mt19937 engine(static_cast<uint32_t>(id + 7));
         std::normal_distribution<float> normal(0, 1);
-        std::vector<float> values;
         std::string literal = "[";
         for (auto d = 0; d < DIMENSION; ++d) {
-            const auto text = std::to_string(normal(engine));
-            values.push_back(std::stof(text));
-            literal += (d ? "," : "") + text;
+            literal += (d ? "," : "") + std::to_string(normal(engine));
         }
         literal += "]";
-        vectors.push_back(std::move(values));
         literals.push_back(std::move(literal));
     }
     mustRun(stringFormat("CREATE NODE TABLE Efc(id INT64 PRIMARY KEY, vec FLOAT[{}]);", DIMENSION));
@@ -3764,12 +3759,6 @@ TEST_F(VectorIndexUpdate, AnInsertionSearchesWithTheIndexEfc) {
     mustRun(stringFormat("COPY Efc FROM '{}' (header=false);", csv));
     std::filesystem::remove(csv);
     mustRun("CALL CREATE_VECTOR_INDEX('Efc', 'doc_index', 'vec', metric := 'l2', efc := 30000);");
-    for (int64_t id = ROWS; id < ROWS + NEW_ROWS; ++id) {
-        mustRun(stringFormat("CREATE (:Efc {id: {}, vec: {}});", id, literals[id]));
-    }
-    if (HasFatalFailure()) {
-        return;
-    }
     std::string tableID;
     {
         auto tables = conn->query("CALL SHOW_TABLES() RETURN id, name;");
@@ -3782,42 +3771,50 @@ TEST_F(VectorIndexUpdate, AnInsertionSearchesWithTheIndexEfc) {
         }
     }
     const auto lower = stringFormat("_{}_doc_index_LOWER", tableID);
-    const auto distance = [&](int64_t a, int64_t b) {
-        double sum = 0;
-        for (auto d = 0; d < DIMENSION; ++d) {
-            const double diff = vectors[a][d] - vectors[b][d];
-            sum += diff * diff;
-        }
-        return sum;
-    };
-    mustRun("CALL ENABLE_INTERNAL_CATALOG=true;");
     int64_t missing = 0;
     std::string details;
     for (int64_t id = ROWS; id < ROWS + NEW_ROWS; ++id) {
+        mustRun(stringFormat("CREATE (:Efc {id: {}, vec: {}});", id, literals[id]));
+        if (HasFatalFailure()) {
+            return;
+        }
+        // Its ml nearest rows, by the engine itself searching the whole graph (itself excluded).
+        std::set<int64_t> nearest;
+        {
+            auto result = conn->query(stringFormat("CALL QUERY_VECTOR_INDEX('Efc', 'doc_index', {}, "
+                                                   "{}, efs := 40000) RETURN node.id ORDER BY distance;",
+                literals[id], ML + 1));
+            ASSERT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
+            while (result->hasNext() && static_cast<int64_t>(nearest.size()) < ML) {
+                const auto other = result->getNext()->getValue(0)->getValue<int64_t>();
+                if (other != id) {
+                    nearest.insert(other);
+                }
+            }
+        }
         std::set<int64_t> edges;
-        auto result = conn->query(stringFormat(
-            "MATCH (a:Efc)-[r:{}]->(b:Efc) WHERE a.id = {} RETURN b.id;", lower, id));
-        ASSERT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
-        while (result->hasNext()) {
-            edges.insert(result->getNext()->getValue(0)->getValue<int64_t>());
+        mustRun("CALL ENABLE_INTERNAL_CATALOG=true;");
+        {
+            auto result = conn->query(stringFormat(
+                "MATCH (a:Efc)-[r:{}]->(b:Efc) WHERE a.id = {} RETURN b.id;", lower, id));
+            ASSERT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
+            while (result->hasNext()) {
+                edges.insert(result->getNext()->getValue(0)->getValue<int64_t>());
+            }
         }
-        // The rows already there when it was inserted: the COPY, then the new rows before it.
-        std::vector<std::pair<double, int64_t>> all;
-        for (int64_t other = 0; other < id; ++other) {
-            all.emplace_back(distance(id, other), other);
-        }
-        std::partial_sort(all.begin(), all.begin() + ML, all.end());
+        mustRun("CALL ENABLE_INTERNAL_CATALOG=false;");
         int64_t missingHere = 0;
-        for (size_t i = 0; i < ML; ++i) {
-            missingHere += !edges.contains(all[i].second);
+        for (const auto other : nearest) {
+            missingHere += !edges.contains(other);
         }
         missing += missingHere;
-        details += stringFormat(" {}:{}/{}", id, ML - missingHere, ML);
+        details += stringFormat(" {}:{}/{}", id, static_cast<int64_t>(nearest.size()) - missingHere,
+            nearest.size());
     }
-    mustRun("CALL ENABLE_INTERNAL_CATALOG=false;");
     EXPECT_EQ(missing, 0) << "[check: insertion-searches-with-the-index-efc] of the " << ML
-                          << " nearest rows of each new row, its edges hold (row:found/" << ML
-                          << "):" << details;
+                          << " nearest rows of each new row, its edges hold right after its "
+                             "insertion (row:found/nearest):"
+                          << details;
 }
 } // namespace
 
