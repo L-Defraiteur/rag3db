@@ -1077,6 +1077,18 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        // **Fork an agent** (`--fork-agent`, 22 November 2026): `{backend, task, name?}`, the copy.
+        ("POST", "/ide/teammate/fork") => {
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.fork_agent(c["backend"].as_str().unwrap_or_default(), c["task"].as_str().unwrap_or_default(), c["name"].as_str()) {
+                    Ok(t) => json!({ "ok": true, "result": t }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         // **Reopen a closed agent** (`--pop-agent`, 22 November 2026): `{backend, name, new_name?}`, the new task.
         ("POST", "/ide/agents/reopen") => {
             let mut corps = Vec::new();
