@@ -4289,6 +4289,10 @@ fn query_params(chemin: &str) -> std::collections::HashMap<String, String> {
         .collect()
 }
 
+/// Witnesses: every data root follows the host's data folder (22 Nov 2026).
+#[cfg(test)]
+mod isolated_data_dirs_tests;
+
 #[cfg(test)]
 mod tests {
     // A lot's new witness goes in a file of its own, `daemon_host/tests/<lot>.rs` (c7, 21 November 2026).
