@@ -85,6 +85,10 @@ pub struct TeammatePolicy {
     /// **The browser family** (`teammate.browser`, tty, 21 November 2026): absent, the teammate has no browser tool.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub browser: Option<BrowserPolicy>,
+    /// **The teammate's background commands** (`teammate.background`, Lucie, 22 November 2026): how many may run at
+    /// once, their default time and the time they may not pass.
+    #[serde(default)]
+    pub background: BackgroundPolicy,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -208,6 +212,7 @@ impl Default for TeammatePolicy {
             fetch: FetchPolicy::default(),
             web_search: WebSearchPolicy::default(),
             browser: None,
+            background: BackgroundPolicy::default(),
         }
     }
 }
@@ -247,6 +252,23 @@ pub struct BrowserPolicy {
     pub domains: Vec<String>,
     pub max_chars: usize,
     pub timeout_s: u64,
+}
+
+/// **The bounds of the teammate's background commands** (Lucie, 22 November 2026): at most `max` at once in a task;
+/// a command given no `timeout_s` is stopped after `default_timeout_s` (10 minutes); none may ask more than
+/// `max_timeout_s`, and « never » (`timeout_s: 0`) is only for a declared server.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct BackgroundPolicy {
+    pub max: usize,
+    pub default_timeout_s: u64,
+    pub max_timeout_s: u64,
+}
+
+impl Default for BackgroundPolicy {
+    fn default() -> Self {
+        BackgroundPolicy { max: 4, default_timeout_s: 600, max_timeout_s: 1800 }
+    }
 }
 
 impl Default for BrowserPolicy {
