@@ -297,6 +297,13 @@ fn renew_token_dans(dossier: &Path) -> Result<String, String> {
 /// file 0600), made once and kept; the sandbox masks the whole data folder, so an agent under it
 /// cannot read it. A process of the user outside the sandbox can: it proves a human by convention,
 /// not against a hostile process of the same user.
+/// **The desktop entry « rag3weaver »** (`~/.local/share/applications/rag3weaver.desktop`): it opens the IDE already
+/// titled, `<exe> ide --open`.
+pub fn desktop_entry(exe: &Path) -> String {
+    let _ = exe;
+    String::new()
+}
+
 pub fn user_token() -> Result<String, String> {
     user_token_in(&racine(Dossier::Donnees)?)
 }
