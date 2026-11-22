@@ -649,6 +649,10 @@ impl Hote for DaemonClient {
 /// Le nom de l'outil d'état du démon, exposé par le client lui-même.
 pub const DAEMON_STATUS: &str = "daemon_status";
 
+/// The name of the spending report tool, exposed by the client itself: it reads the ledger's files, with or
+/// without a host.
+pub const USAGE_REPORT: &str = "usage_report";
+
 /// Comment le client joint l'hôte.
 pub enum Attach {
     /// `--daemon <adresse>` : cette adresse, jamais relancée.
@@ -1014,6 +1018,29 @@ impl McpClient {
         })
     }
 
+    fn usage_tool() -> Value {
+        json!({
+            "name": USAGE_REPORT,
+            "description": "What the paid language models cost this month (or the month given): the total against the \
+                            monthly cap, the projection on the days elapsed, the open reservations, the slugs without a \
+                            price, and the calls by slug (tokens, cost), by day and by caller (an agent, a human). Read \
+                            from the spending ledger and prices.json, never estimated.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "month": { "type": "string", "description": "The month, YYYY-MM (UTC); the current one when absent." } },
+                "additionalProperties": false
+            }
+        })
+    }
+
+    fn usage(arguments: &Value) -> Value {
+        let today = crate::usage_ledger::utc_day(
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0),
+        );
+        let month = arguments["month"].as_str().filter(|m| m.len() == 7).unwrap_or(&today[..7]).to_string();
+        crate::usage_ledger::user_ledger().report(&month, &today)
+    }
+
     fn status(&self) -> Value {
         let side = self.side.lock().unwrap_or_else(|p| p.into_inner());
         match &*side {
@@ -1028,6 +1055,7 @@ impl McpClient {
                     "backends": etat["backends"],
                     "closed_dead_sessions": etat["closed_dead_sessions"],
                     "background": etat["background"],
+                    "spending": crate::usage_ledger::user_ledger().summary_line(),
                 }),
                 Err(e) => json!({ "state": "injoignable", "reason": e, "log": crate::daemon_lifecycle::log_path() }),
             },
@@ -1077,7 +1105,7 @@ impl Hote for McpClient {
     }
 
     fn outils(&self) -> Vec<Value> {
-        let mut outils = vec![Self::status_tool()];
+        let mut outils = vec![Self::status_tool(), Self::usage_tool()];
         if let Side::Attached(c) = &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
             outils.extend(c.outils());
             outils.extend(outils_des_vues());
@@ -1088,6 +1116,9 @@ impl Hote for McpClient {
     fn appeler(&self, nom: &str, arguments: Value) -> Result<Value, String> {
         if nom == DAEMON_STATUS {
             return Ok(json!({ "result": self.status() }));
+        }
+        if nom == USAGE_REPORT {
+            return Ok(json!({ "result": Self::usage(&arguments) }));
         }
         let mut side = self.side.lock().unwrap_or_else(|p| p.into_inner());
         if let Side::Missing(_) = &*side {
@@ -1132,7 +1163,7 @@ impl Hote for McpClient {
     /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
     /// rend sinon une erreur d'outil qui dit pourquoi (page C, §4).
     fn accepte(&self, nom: &str) -> bool {
-        if nom == DAEMON_STATUS || nom == "views" || nom == "use_view" || nom == "open_view" || nom == "close_view" {
+        if nom == DAEMON_STATUS || nom == USAGE_REPORT || nom == "views" || nom == "use_view" || nom == "open_view" || nom == "close_view" {
             return true;
         }
         match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
