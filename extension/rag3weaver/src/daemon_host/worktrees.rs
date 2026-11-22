@@ -468,10 +468,22 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
     } else {
         b.catalog.lock().unwrap_or_else(|p| p.into_inner()).index_progress().map(|p| p.dense_missing() + p.sparse_missing()).unwrap_or(0)
     };
-    if !coupe && dette == 0 {
+    // **Une analyse d'avant** (22 novembre 2026, ticket `2026-11-22-une-montee-des-regles-n-est-vue-qu-a-un-index-entier`,
+    // la piste de c7) : des lignes `File` faites sous une autre version de l'analyse (`code::version_de_l_analyse` : le
+    // commit de codeparsers, `REGLES_DE_L_ANALYSE`, le gabarit). Seule la passe entière les compare ; la montre ne
+    // reprend que les fichiers changés sur le disque. Sans repasse, la base servirait l'analyse d'avant sans le dire :
+    // l'index repart de lui-même, quelle que soit la déclaration du manifeste.
+    let perimes = if coupe { 0 } else { fichiers_d_une_autre_analyse(b) };
+    if !coupe && dette == 0 && perimes == 0 {
         return;
     }
-    let pourquoi = if coupe { "son premier index avait été coupé".to_string() } else { format!("{dette} morceaux encore sans vecteur") };
+    let pourquoi = if coupe {
+        "son premier index avait été coupé".to_string()
+    } else if perimes > 0 {
+        format!("{perimes} fichier(s) analysés sous une autre version de l'analyse — la repasse de l'analyse")
+    } else {
+        format!("{dette} morceaux encore sans vecteur")
+    };
     let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(&hosted.manifest));
     match lancer_sur(b, &hosted.manifest, suivi) {
         Ok(j) => {
@@ -484,6 +496,24 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
         }
         Err(e) => eprintln!("[hôte] {} : {pourquoi}, mais l'index n'a pas pu repartir : {e}", hosted.manifest.display()),
     }
+}
+
+/// Les lignes `File` d'un backend de code dont l'analyse n'est pas la courante (0 pour un backend sans `File`, ou sans
+/// version d'analyse déclarée).
+fn fichiers_d_une_autre_analyse(b: &crate::backend::Backend) -> u64 {
+    let cat = b.catalog.lock().unwrap_or_else(|p| p.into_inner());
+    let courante = cat.version_de_l_analyse.clone();
+    if courante.is_empty() || cat.entity_config("File").is_none() {
+        return 0;
+    }
+    let visible = cat.condition_visible("f").map(|c| format!(" AND {c}")).unwrap_or_default();
+    cat.execute_raw_with_params(
+        &format!("MATCH (f:File) WHERE f.analyse <> $v{visible} RETURN count(f)"),
+        &[crate::connection::QueryParam::new("v", crate::connection::CypherValue::String(courante))],
+    )
+    .ok()
+    .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()))
+    .map_or(0, |n| n.max(0) as u64)
 }
 
 /// **La carte de l'avancement d'un dépôt dont l'index tourne**, que la page rend sous le
