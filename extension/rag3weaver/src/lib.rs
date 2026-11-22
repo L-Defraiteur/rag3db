@@ -118,6 +118,8 @@ pub mod burn_ppocr;
 pub mod code;
 #[cfg(all(test, feature = "code"))]
 mod empreinte_de_l_analyse;
+#[cfg(all(test, feature = "code"))]
+mod source_docs;
 /// Les gabarits (graphes, backends, composants, nœuds scriptés) indexés comme du code.
 #[cfg(feature = "code")]
 pub mod code_gabarits;
