@@ -203,6 +203,8 @@ pub struct LlamaServerDecider {
     n_probs: usize,
     temperature: f64,
     client: ureq::Agent,
+    /// The spending ledger its calls go through (ED's, 22 Nov 2026): at price zero for a private address.
+    ledger: std::sync::Arc<crate::usage_ledger::Ledger>,
 }
 
 #[cfg(feature = "daemon")]
@@ -220,7 +222,14 @@ impl LlamaServerDecider {
             client: ureq::Agent::new_with_config(
                 ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(std::time::Duration::from_secs(60))).build(),
             ),
+            ledger: crate::usage_ledger::user_ledger(),
         })
+    }
+
+    /// The ledger its calls go through (the witnesses' own).
+    pub fn with_ledger(mut self, ledger: std::sync::Arc<crate::usage_ledger::Ledger>) -> Self {
+        self.ledger = ledger;
+        self
     }
 
     /// La calibration du softmax quand l'appelant n'en donne pas (défaut 1).
