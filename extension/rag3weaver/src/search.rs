@@ -1720,6 +1720,10 @@ pub fn build_bm25_query(
         BM25Mode::ContainsSplit => split_query(query, fields, distance),
         // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
         // requête part sous sa seule forme (le doublement du 25 octobre 2026 est retiré).
+        // **Measure only** (banc, 22 November 2026): under `RAG3WEAVER_BM25_BUDGET`, the whole query over several
+        // fields goes to `contains_split` too, so that no boolean of fuzzy `contains` stays — at the price of
+        // splitting the phrase into words. Without the variable, the path of master.
+        BM25Mode::Contains if measure_budget().is_some() && fields.len() > 1 && distance > 0 => split_query(query, fields, distance),
         BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
         BM25Mode::Regex => build_contains_clauses(query, fields, distance, true, false),
         // distance is forced to 0: lucivy treats any distance > 0 as relaxed,
@@ -1734,12 +1738,27 @@ pub fn build_bm25_query(
 /// lucivy splits the value on spaces (the words with a letter or a digit; a value with none is searched whole) and
 /// reads no operator in it.
 fn split_query(query: &str, fields: &[String], distance: u8) -> serde_json::Value {
-    let split = |field: &String| serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
+    let budget = measure_budget();
+    let split = |field: &String| {
+        let mut q = serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
+        if let Some(b) = &budget {
+            q["budget"] = serde_json::json!(b);
+        }
+        q
+    };
     if fields.len() == 1 {
         split(&fields[0])
     } else {
         serde_json::json!({ "type": "boolean", "should": fields.iter().map(split).collect::<Vec<_>>() })
     }
+}
+
+/// **The error budget of lucivy 4.4.2 under measure** (banc, 22 November 2026): `RAG3WEAVER_BM25_BUDGET` = `flat`,
+/// `idf`, `window` or `soft` adds `"budget"` to each `contains_split`; empty or absent, nothing (the boolean of
+/// 4.4.1). A measure branch only, never for master.
+fn measure_budget() -> Option<String> {
+    let v = std::env::var("RAG3WEAVER_BM25_BUDGET").ok()?;
+    matches!(v.as_str(), "flat" | "idf" | "window" | "soft").then_some(v)
 }
 
 /// The witnesses of a query that is text only (21 November 2026), in a file of their own.
