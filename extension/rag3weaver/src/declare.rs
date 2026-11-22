@@ -428,7 +428,8 @@ pub fn tool_defs() -> Vec<ToolDef> {
         ToolDef {
             name: LIST.into(),
             description: "Lists the declaration files of this backend (manifest, graphs, schemas, \
-                          scripted nodes, views), as paths relative to its folder."
+                          scripted nodes, views), as paths relative to its folder: not the project's files \
+                          (list_files lists those)."
                 .into(),
             parameters: json!({"type": "object", "properties": {}, "additionalProperties": false}),
         },
@@ -534,7 +535,12 @@ impl DeclarationTools<'_> {
             _ => {}
         }
         match call.name.as_str() {
-            LIST => answer(json!({"ok": true, "paths": self.backend.list_declarations()})),
+            // Its paths are the backend's own files, never the project's (the dry run of 22 Nov 2026).
+            LIST => answer(json!({
+                "ok": true,
+                "note": "these are this backend's declarations (its manifest and its files), not the project's files: list the project with list_files",
+                "paths": self.backend.list_declarations()
+            })),
             READ => answer(match self.backend.read_declaration(&text("path")) {
                 Ok(content) => json!({"ok": true, "content": content}),
                 Err(error) => json!({"ok": false, "error": error}),
