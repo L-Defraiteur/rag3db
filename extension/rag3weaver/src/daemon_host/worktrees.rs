@@ -473,7 +473,7 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
     // commit de codeparsers, `REGLES_DE_L_ANALYSE`, le gabarit). Seule la passe entière les compare ; la montre ne
     // reprend que les fichiers changés sur le disque. Sans repasse, la base servirait l'analyse d'avant sans le dire :
     // l'index repart de lui-même, quelle que soit la déclaration du manifeste.
-    let perimes = if coupe { 0 } else { fichiers_d_une_autre_analyse(b) };
+    let perimes = if coupe { 0 } else { files_of_another_analysis(b) };
     if !coupe && dette == 0 && perimes == 0 {
         return;
     }
@@ -500,7 +500,7 @@ pub(super) fn a_l_ouverture(hote: &DaemonHost, hosted: &super::Hosted, b: &crate
 
 /// Les lignes `File` d'un backend de code dont l'analyse n'est pas la courante (0 pour un backend sans `File`, ou sans
 /// version d'analyse déclarée).
-fn fichiers_d_une_autre_analyse(b: &crate::backend::Backend) -> u64 {
+fn files_of_another_analysis(b: &crate::backend::Backend) -> u64 {
     let cat = b.catalog.lock().unwrap_or_else(|p| p.into_inner());
     let courante = cat.version_de_l_analyse.clone();
     if courante.is_empty() || cat.entity_config("File").is_none() {
