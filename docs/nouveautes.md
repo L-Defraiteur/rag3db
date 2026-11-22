@@ -12,6 +12,9 @@
   que la tâche demandée (ni le chat du dépôt, ni la carte d'une autre boîte), dit « tape ta demande, elle l'ouvrira »
   tant qu'elle n'existe pas, et dit ses refus en une phrase, tout de suite. En `--plain`, une carte qu'il ne peut pas
   répondre se dit, et il s'arrête au lieu d'attendre.
+- 22 novembre 2026 — **Une demande de code partie de l'IDE demande le bac.** L'agent avance, les règles de la porte
+  vérifient ; « Avancé » choisit, par projet, le juge ou une carte par commande. La page d'une tâche dit la porte en une
+  ligne en tête de la boîte.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
