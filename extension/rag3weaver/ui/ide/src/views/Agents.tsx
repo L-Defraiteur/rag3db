@@ -101,6 +101,8 @@ export function Agents({ state }: { state: HostState }) {
 
   // What waits for an intervention: a task or a conversation that waits for an answer (a question, an accord).
   const waiting = [
+    // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it.
+    ...(state.spending?.alert ? [{ key: "spending", text: state.spending.alert.text, link: undefined as string | undefined }] : []),
     ...(state.tasks ?? [])
       .filter((t) => t.awaits_answer)
       .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, link: `/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}` })),
@@ -118,8 +120,8 @@ export function Agents({ state }: { state: HostState }) {
         {waiting.length ? (
           <ul className="text-sm space-y-1">
             {waiting.map((w) => (
-              <li key={w.key}>
-                <a href={w.link} className="hover:underline">{w.text}</a>
+              <li key={w.key} data-waiting={w.key}>
+                {w.link ? <a href={w.link} className="hover:underline">{w.text}</a> : <span>{w.text}</span>}
               </li>
             ))}
           </ul>

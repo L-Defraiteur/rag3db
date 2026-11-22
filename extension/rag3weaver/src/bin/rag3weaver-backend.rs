@@ -379,6 +379,70 @@ fn ranger_une_lib(args: &[String]) -> Result<(), String> {
     }
 }
 
+/// **The spending ledger, for a script** (22 November 2026): a script that calls a paid model itself (the bench's
+/// measures) writes to the same ledger as the host, by the same form.
+/// - `usage check --slug S --provider P [--output N] [--input N]`: exit 0 if a call of that bound passes the monthly
+///   cap, 1 with the refusal otherwise. To ask before a paid call.
+/// - `usage record --slug S --provider P --input N --output N [--cache-write N] [--cache-read N] [--agent A]
+///   [--run R] [--batch]`: a call made, at the tokens the provider reported (`usage`), never an estimate.
+/// - `usage report [YYYY-MM]`: the month's report, as JSON.
+/// `--provider` is the address that served (`vertex`, `anthropic`, `http://127.0.0.1:8096/v1`): a private address is
+/// free when `prices.json` says so.
+fn usage_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend usage check|record --slug S --provider P [--input N] [--output N] [--cache-write N] [--cache-read N] [--agent A] [--run R] [--batch]\n       rag3weaver-backend usage report [YYYY-MM]";
+    use rag3weaver::usage_ledger::{is_private_address, user_ledger, utc_day, Caller, Tokens};
+    let Some((verbe, reste)) = args.split_first() else { return Err(USAGE.into()) };
+    if verbe == "report" {
+        let today = utc_day(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0));
+        let month = reste.first().cloned().unwrap_or_else(|| today[..7].to_string());
+        println!("{}", serde_json::to_string_pretty(&user_ledger().report(&month, &today)).unwrap_or_default());
+        return Ok(());
+    }
+    let mut opts: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    let mut batch = false;
+    let mut i = 0;
+    while i < reste.len() {
+        match reste[i].as_str() {
+            "--batch" => batch = true,
+            o if o.starts_with("--") && i + 1 < reste.len() => {
+                opts.insert(o.trim_start_matches("--").to_string(), reste[i + 1].clone());
+                i += 1;
+            }
+            o => return Err(format!("{o}: unknown or without its value\n{USAGE}")),
+        }
+        i += 1;
+    }
+    let n = |k: &str| -> Result<u64, String> { opts.get(k).map(|v| v.parse::<u64>().map_err(|e| format!("--{k} {v}: {e}"))).unwrap_or(Ok(0)) };
+    let slug = opts.get("slug").ok_or(USAGE)?.clone();
+    let provider = opts.get("provider").ok_or(USAGE)?.clone();
+    let tokens = Tokens { input: n("input")?, cache_write: n("cache-write")?, cache_read: n("cache-read")?, output: n("output")? };
+    let caller = Caller {
+        agent: opts.get("agent").cloned().unwrap_or_else(|| "script".into()),
+        run: opts.get("run").cloned().unwrap_or_default(),
+        ..Default::default()
+    };
+    let private = is_private_address(&provider);
+    match verbe.as_str() {
+        "check" => match user_ledger().check(&slug, private, tokens, &caller, batch) {
+            Ok(free) => {
+                println!("passes{}", if free { " (free)" } else { "" });
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        },
+        "record" => {
+            if let Some(w) = user_ledger().record(&slug, &provider, private, tokens, &caller, batch)? {
+                eprintln!("{w}");
+            }
+            Ok(())
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
 /// **Les gabarits livrés d'un manifeste** (`rag3weaver::builtin_templates`) :
 /// `templates drift <backend.json>` dit les copies locales qui diffèrent du
 /// gabarit livré du même nom ; `templates link <backend.json>` remplace par
@@ -1018,6 +1082,9 @@ fn run() -> Result<(), String> {
     }
     if tous.first().map(String::as_str) == Some("templates") {
         return gabarits_livres(&tous[1..]);
+    }
+    if tous.first().map(String::as_str) == Some("usage") {
+        return usage_cli(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("code-tree") {
         return code_tree(&tous[1..]);
