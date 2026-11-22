@@ -65,8 +65,8 @@ fn the_page_opens_a_folder_typed_with_a_tilde() {
     n.evaluer("document.querySelector('#ouvrir input[name=chemin]').focus()");
     n.commande("Input.insertText", json!({ "text": "~/x" }));
     n.evaluer("document.querySelector('#ouvrir').requestSubmit()");
-    n.attendre("(document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? '') !== ''", "the result said under the field");
-    let said = n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat').innerText").as_str().unwrap_or_default().to_string();
+    n.attendre("location.pathname.endsWith('/chat') && (document.querySelector('.chat-accueil')?.innerText ?? '') !== ''", "the chat of the folder opened");
+    let said = n.evaluer("document.querySelector('.chat-accueil').innerText").as_str().unwrap_or_default().to_string();
     assert!(said.contains("créé") && !said.contains("absolu"), "the page opens « ~/x »: {said}");
     assert!(home.join("x/.git").exists(), "the folder is created in the home");
     drop(n);
