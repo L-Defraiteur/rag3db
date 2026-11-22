@@ -60,6 +60,8 @@ impl DaemonHost {
                     "machine": machine,
                     "parent": Value::Null,
                     "children": tasks.iter().map(|t| t["id"].clone()).collect::<Vec<_>>(),
+                    // A Claude Code session has no chat in the IDE.
+                    "link": Value::Null,
                     "last_activity": derniere.unwrap_or_else(|| json!({ "at": null, "phrase": "aucune activité", "command": null })),
                     "unread": tasks.iter().filter_map(|t| t["unread"].as_u64()).sum::<u64>(),
                     "contacts": [],
@@ -70,7 +72,9 @@ impl DaemonHost {
             .collect();
         // Live roots first, then by name (the map already gave the names in order).
         roots.sort_by_key(|r| r["live"] != json!(true));
-        json!({ "roots": roots, "unrooted": sans_racine, "fields": fields() })
+        // The repositories' chats, agents of the bar too; a task's chat is its task's node.
+        let des_taches: std::collections::HashSet<String> = taches.iter().map(|t| t.id.clone()).collect();
+        json!({ "roots": roots, "unrooted": sans_racine, "chats": self.chat_nodes(&des_taches), "fields": fields() })
     }
 
     /// One task of the tree: its backend and repository, whether a step runs, its plan's doing
@@ -127,6 +131,7 @@ impl DaemonHost {
             "name": t.nom,
             // Its lifecycle (open here; rejected, merged or orphan once closed), apart from its `state` of the left bar.
             "lifecycle": "open",
+            "link": format!("/ide/code/{}/taches/{}", t.parent, t.nom),
             "running": self.teammate_running(&t.parent, &t.nom),
             "doing": doing,
             "views": t.vues,
@@ -172,6 +177,8 @@ fn closed_agent_task(t: &Value, machine: &str) -> Value {
         "contacts": contacts(&lignes, &id),
         "pending": 0,
         "lifecycle": state,
+        // A closed task has no page: it is reopened, then opened.
+        "link": Value::Null,
         "backend": t["parent"],
         "name": t["nom"],
         "state": "stopped",
@@ -264,6 +271,8 @@ fn fields() -> Value {
         "name": "the agent's name: its task's name, or the Claude session's",
         "state": "active (a step runs, or a live root), paused (paused.json, or every agent paused), stopped (closed, or a root no longer live), waiting (open, no step running)",
         "lifecycle": "a task's lifecycle: open, or once closed rejected, merged or orphan",
+        "link": "the IDE's route a click opens: a task's page /ide/code/<backend>/taches/<name>, a repository's chat /ide/code/<backend>/chat; null for a Claude Code root or a closed task",
+        "chats": "the repositories' chats, agents of the bar: {id: chat:<backend>, name, state, last_activity, unread, link}",
         "machine": "the hostname of the host that runs the agent",
         "parent": "the id of the root that launched the task (session:<name>), null for a root or a task without a parent",
         "children": "the ids of the agents it launched",
