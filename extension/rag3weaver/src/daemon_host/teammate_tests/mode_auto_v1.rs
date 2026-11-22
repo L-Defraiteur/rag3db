@@ -218,5 +218,5 @@ fn the_grant_quotes_the_line_word_for_word() {
     v.host.post_to_teammate(&v.id, "doc", "lucie", "answer", None, "oui", &json!({ "reply_to": card["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).unwrap();
     let b = v.wait("the grant", &|b| b.iter().any(|l| l["granted"].is_string()));
     let granted = b.iter().find_map(|l| l["granted"].as_str()).unwrap().to_string();
-    assert!(granted.contains("`echo un && rm vieux.txt`"), "the agent replays what it reads: {granted}");
+    assert!(granted.starts_with("commande accordée pour la tâche : echo un && rm vieux.txt — "), "the agent replays what it reads: {granted}");
 }
