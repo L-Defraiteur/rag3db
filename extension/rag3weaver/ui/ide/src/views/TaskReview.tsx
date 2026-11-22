@@ -184,6 +184,17 @@ function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; wait
   );
 }
 
+/** **The gate a request from the IDE asks for** (c7, 22 November 2026, after `gate-level`: « arrêtons de trop mettre de
+ * sécu »): `bac` by default; « Avancé » chooses another for a project (`judge`, `cards`), kept in this browser. */
+export function projectGate(backend: string): "bac" | "judge" | "cards" {
+  try {
+    const v = localStorage.getItem(`rag3weaver.gate.${backend}`);
+    return v === "judge" || v === "cards" ? v : "bac";
+  } catch {
+    return "bac";
+  }
+}
+
 function TeammateSection({ backend, task }: { backend: string; task: string }) {
   const [t, setT] = useState<Teammate | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -220,7 +231,7 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
   };
   const send = async () => {
     setNote("envoi…");
-    const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, task, kind: kind.current?.value ?? "request", item: item.current?.value || undefined, text: text.current?.value ?? "", from: "ide" }) })).json();
+    const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, task, kind: kind.current?.value ?? "request", item: item.current?.value || undefined, text: text.current?.value ?? "", from: "ide", gate: (kind.current?.value ?? "request") === "request" ? projectGate(backend) : undefined }) })).json();
     if (!r.ok) {
       setNote(r.error);
       return;
@@ -267,9 +278,13 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
         </div>
       ) : null}
       <h3 className="text-sm font-semibold">Boîte aux lettres</h3>
+      {(() => {
+        const g = [...t.mailbox].reverse().find((l) => l.kind === "gate_level" && l.from === "host");
+        return g ? <p className="gate-level text-xs text-muted-foreground">{String(g.text ?? `porte : ${String(g.level ?? "")}`)}</p> : null;
+      })()}
       {t.mailbox.length ? (
         <ul className="boite grid gap-1 text-sm">
-          {t.mailbox.map((l, k) => {
+          {t.mailbox.filter((l) => l.kind !== "gate_level").map((l, k) => {
             const v = ligneDeBoite(l);
             return (
               <li key={k} data-kind={String(l.kind)} data-from={String(l.from)} data-session={v.session ? "1" : undefined}>
