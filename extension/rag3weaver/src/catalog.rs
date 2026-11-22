@@ -32,6 +32,8 @@ mod reuse_by_text_hash_tests;
 mod shared_text_tests;
 #[cfg(all(test, feature = "rag3db-native"))]
 mod shared_text_write_tests;
+#[cfg(all(test, feature = "rag3db-native"))]
+mod shared_text_read_tests;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
@@ -4017,10 +4019,11 @@ fn read_threads() -> u64 {
         Ok(reports)
     }
 
-    /// **The chunk tables whose texts are shared** (lot L2a) : under the setting and out of
-    /// read only, those the migration has done for the registered models.
+    /// **The chunk tables whose texts are shared** (lots L2a, L3) : under the setting, those the
+    /// migration has done for the registered models. A read-only catalog reads them too ; it
+    /// writes none (its writes are refused before).
     pub(crate) fn shared_text_tables(&self) -> std::collections::HashSet<String> {
-        if !self.config.shared_text_vectors || self.lecture_seule {
+        if !self.config.shared_text_vectors {
             return Default::default();
         }
         let Ok(entries) = self.registered_embedding_models() else { return Default::default() };
@@ -10784,6 +10787,7 @@ fn read_threads() -> u64 {
         if let Some(slug) = self.current_embedding_slug() {
             services.register("embedding_slug", slug);
         }
+        services.register(crate::shared_text::SERVICE_SHARED_TEXT_TABLES, crate::shared_text::SharedTextTables::new(self.shared_text_tables()));
         if let Some(ref sparse) = self.sparse_embedder {
             services.register::<Arc<dyn crate::embedder::SparseEmbedder>>(
                 "sparse_embedder",

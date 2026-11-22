@@ -1123,7 +1123,26 @@ impl Node for VectorSearchNode {
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
             .cloned()
             .ok_or("'dialect' service not found")?;
-        if let Some(chute) = index_vectoriel_illisible(&*conn, dialect.as_ref(), &target.chunk_table, &index_name) {
+        // **The shared texts** (lot L3, `crate::shared_text`) : a chunk table that shares its
+        // texts is searched through the vector index of its texts, the view's filter staying on
+        // the chunks ; the results are the admitted chunks of the texts found.
+        let shared_text: Option<(String, String, String, String)> = ctx
+            .service::<crate::shared_text::SharedTextTables>(crate::shared_text::SERVICE_SHARED_TEXT_TABLES)
+            .filter(|t| t.contains(target.chunk_table.as_str()))
+            .and_then(|_| {
+                let models = ctx.service::<Vec<crate::embedding_storage::EmbeddingModelEntry>>("embedding_models")?;
+                let slug = ctx.service::<String>("embedding_slug")?;
+                models.iter().find(|e| e.slug() == *slug).cloned()
+            })
+            .map(|entry| {
+                let st = crate::shared_text::text_storage(&target.chunk_table, &entry);
+                (crate::shared_text::text_table_of(&target.chunk_table), crate::shared_text::has_text_rel_of(&target.chunk_table), st.index, st.column)
+            });
+        let (index_table, index_checked) = match &shared_text {
+            Some((text, _, index, _)) => (text.as_str(), index.as_str()),
+            None => (target.chunk_table.as_str(), index_name.as_str()),
+        };
+        if let Some(chute) = index_vectoriel_illisible(&*conn, dialect.as_ref(), index_table, index_checked) {
             return replier_la_branche(
                 ctx,
                 strict,
@@ -1137,18 +1156,39 @@ impl Node for VectorSearchNode {
         }
 
         let backend = moteur_de_recherche(ctx, &conn);
-        let chunk_results = search_vector_via_backend(
-            backend.as_ref(),
-            &target.chunk_table,
-            &index_name,
-            &column,
-            &embedding,
-            limite,
-            filter_where.as_deref(),
-            &filter_params,
-            filter_match.as_deref(),
-            &mut node_warnings,
-        );
+        let from_texts = shared_text.as_ref().and_then(|(text, rel, index, column)| {
+            crate::search::search_shared_texts_via_backend(
+                backend.as_ref(),
+                &target.chunk_table,
+                text,
+                rel,
+                index,
+                column,
+                &embedding,
+                limite,
+                filter_where.as_deref(),
+                &filter_params,
+                filter_match.as_deref(),
+            )
+        });
+        if shared_text.is_some() {
+            ctx.metric("dense_from_texts", from_texts.is_some() as u8 as f64);
+        }
+        let chunk_results = match from_texts {
+            Some(r) => r,
+            None => search_vector_via_backend(
+                backend.as_ref(),
+                &target.chunk_table,
+                &index_name,
+                &column,
+                &embedding,
+                limite,
+                filter_where.as_deref(),
+                &filter_params,
+                filter_match.as_deref(),
+                &mut node_warnings,
+            ),
+        };
         let chunk_results = match chunk_results {
             Ok(r) => r,
             Err(e) => {
