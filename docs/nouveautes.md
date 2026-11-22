@@ -50,6 +50,8 @@
 - 22 novembre 2026 — **Une demande de code dans le chat d'un dépôt mène à sa tâche.** Quand l'agent du dépôt ouvre la
   tâche de code (`open_code_task`), le fil dit « → Ta demande continue dans la tâche … (branche …) » avec son lien, et
   la page y va d'elle-même.
+- 22 novembre 2026 — **Les tâches orphelines quittent le chat.** Le chat d'un dépôt ne montre plus les anciennes
+  sessions dont le manifeste a disparu ; « Avancé » le dit en une ligne, « N tâches orphelines — voir ».
 - 22 novembre 2026 — **Ouvrir un dossier mène au chat de ce projet.** Après « Ouvrir », l'IDE va droit au chat du
   dossier ouvert, la saisie prête, avec un mot d'accueil qui dit ce qui vient d'être ouvert et ce que l'agent peut y
   faire (lire, chercher, expliquer, modifier, lancer des commandes, en demandant avant ce qui sort du dossier).
