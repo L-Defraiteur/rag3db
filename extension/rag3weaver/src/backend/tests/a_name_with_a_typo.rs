@@ -65,3 +65,14 @@ fn within_edits_counts_insertions_deletions_and_substitutions() {
     assert!(!within_edits("FuseResultsNode", "fuseresultsnode", 1), "the case counts");
     assert!(within_edits("abc", "abc", 0) && !within_edits("abc", "abd", 0));
 }
+
+/// A typo is read on a name of six characters or more, and another case is another name, not a typo.
+#[test]
+fn a_typo_is_neither_a_short_name_nor_another_case() {
+    use crate::search::typo_of;
+    assert!(typo_of("FuseResultsNode", "FuseResultNode"));
+    assert!(!typo_of("cos", "con"), "one edit on three letters is another name");
+    assert!(!typo_of("Beta", "beta") && !typo_of("BETA_NAME", "beta_name"), "another case is another name");
+    assert!(!typo_of("FuseResultsNode", "FuseResultsNode"), "the exact name is not a typo of itself");
+    assert!(!typo_of("memory safety", "memory safetx"), "a phrase is not a name");
+}
