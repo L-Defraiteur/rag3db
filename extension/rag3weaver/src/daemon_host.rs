@@ -464,6 +464,8 @@ pub mod user_title;
 /// The work lands in the user's folder at each turn that commits (22 Nov 2026).
 #[cfg(feature = "code")]
 mod land;
+/// A price written on the user\'s yes, and looked up for a proposal (22 Nov 2026).
+mod prices;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;
