@@ -363,8 +363,11 @@ du 22 ou relevé par l'audit de recherche. « À vérifier » : je le déduis, s
 ### I. Avant la première phrase
 
 **1. La signature humaine.** Vu.
-- *Exige* : lancer `rag3weaver-backend ide` dans un terminal pour obtenir une adresse à usage unique. Entrer
-  autrement marche, mais vos oui ne valent plus accord, sans que rien ne le dise.
+- *Exige* : lancer `rag3weaver-backend ide` dans un terminal pour obtenir une adresse à usage unique.
+- *Correction d'archi (22 h 5x), plus grave que ce que j'avais écrit* : entrer autrement marche, et **un oui non
+  humain accorde quand même** : la route d'accord ne lit pas qui répond. Un client qui tient le jeton de l'hôte, un
+  agent compris, peut accepter une carte. Le lot `human-yes-only` passe avant tout le reste : un oui ne vaut accord
+  que s'il est signé humain ; sinon la carte dit « pas accordé : seule ta réponse depuis ta session compte ».
 - *Devient* : ouvrir l'IDE depuis sa propre session est humain d'office (un lanceur du bureau, un cookie qui dure).
   Si l'entrée n'est pas humaine, un bandeau le dit, avec « c'est bien moi ».
 - *Premier lot* : le bandeau « tes réponses ne compteront pas », puis le lanceur. (archi)
