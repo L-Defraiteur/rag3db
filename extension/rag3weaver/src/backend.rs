@@ -4147,6 +4147,35 @@ thread_local! {
     static AGENT_OF_CALL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
+/// **The task invocation of a call** (Lucie, 21 November 2026: background commands that tell the agent when they
+/// end): the handle of the tool call, the bus and mailbox where its end goes, and the scope that bounds its life. Set
+/// by the teammate for its background commands only ([`with_task_invocation`]); every other call is as before.
+#[derive(Clone)]
+pub struct TaskInvocation {
+    pub handle: String,
+    pub bus: crate::events::EventBus,
+    pub inbox: String,
+    pub scope: Arc<crate::agent::RunScope>,
+}
+
+thread_local! {
+    static INVOCATION_OF_CALL: std::cell::RefCell<Option<TaskInvocation>> = const { std::cell::RefCell::new(None) };
+}
+
+/// **Runs `f` with the task invocation `inv`**: the backend calls made in this thread meanwhile give their graph the
+/// tool handle, the task's bus and mailbox, and its scope (the services a background command reads).
+pub fn with_task_invocation<T>(inv: Option<TaskInvocation>, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<TaskInvocation>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            INVOCATION_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let before = INVOCATION_OF_CALL.with(|c| c.replace(inv));
+    let _restore = Restore(before);
+    f()
+}
+
 /// The agent the call in this thread is made for (`as_agent`), if any: what a queued write keeps to be replayed under.
 pub fn current_agent() -> Option<String> {
     AGENT_OF_CALL.with(|c| c.borrow().clone())
@@ -6183,6 +6212,13 @@ impl Backend {
         // The agent the call is made for, if the host said it (`as_agent`): `writes.author`.
         if let Some(agent) = AGENT_OF_CALL.with(|c| c.borrow().clone()) {
             services.register(AGENT_SERVICE, agent);
+        }
+        // The task invocation, if the teammate set it (a background command of a task): as `GraphToolBox::call_with`.
+        if let Some(inv) = INVOCATION_OF_CALL.with(|c| c.borrow().clone()) {
+            services.register("tool_handle", inv.handle);
+            services.register("agent_bus", inv.bus);
+            services.register("agent_inbox", inv.inbox);
+            services.register("run_scope", inv.scope);
         }
         services.register(crate::read_view::READ_VIEW_SERVICE, self.read_view.clone());
         // Le modèle d'embarquement déclaré : l'estimation et le reçu de
