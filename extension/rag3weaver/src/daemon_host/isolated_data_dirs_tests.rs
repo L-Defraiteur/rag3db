@@ -44,3 +44,17 @@ fn in_service_nothing_moves() {
     let d = PathBuf::from("/home/someone/.local/share/rag3weaver");
     assert_eq!(r, DataRoots { data: d.clone(), tasks: d.join("taches"), chats: d.join("chats"), runs: d.join("runs") });
 }
+
+/// **The commands' journals too** (c7, 22 Nov 2026, 08 h: 54 968 index journals in `~/.cache/rag3weaver/commandes`
+/// at luciepc, written by the witnesses' indexes). Under the lib's witnesses, without `RAG3WEAVER_JOURNAUX_DIR`, the
+/// journals' folder is not the user's cache.
+#[test]
+fn the_witnesses_journals_stay_out_of_the_users_cache() {
+    if std::env::var_os("RAG3WEAVER_JOURNAUX_DIR").is_some() {
+        return;
+    }
+    let dossier = crate::dataflow::run_nodes::dossier_journaux();
+    if let Some(cache) = crate::commande::dossier_de_cache() {
+        assert!(!dossier.starts_with(&cache), "the witnesses write their journals in the user's cache: {}", dossier.display());
+    }
+}
