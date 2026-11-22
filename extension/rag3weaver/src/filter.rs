@@ -439,6 +439,7 @@ impl<'a> FilterParser<'a> {
             | FilterOp::StartsWith(_)
             | FilterOp::Contains(_)
             | FilterOp::ContainsFold(_)
+            | FilterOp::WithinEdits { .. }
             | FilterOp::ValuesCount { .. } => {
                 return self.build_special_op_clause(prop, op, params);
             }
@@ -529,6 +530,12 @@ impl<'a> FilterParser<'a> {
                 let p = self.next_param();
                 params.push(QueryParam::new(&p, CypherValue::String(s.to_lowercase())));
                 Some(self.dialect.filter_contains_fold(prop, &p))
+            }
+            FilterOp::WithinEdits { value, max } => {
+                let p = self.next_param();
+                params.push(QueryParam::new(&p, CypherValue::String(value.clone())));
+                // A dialect without an edit distance admits nothing: never an open filter.
+                Some(self.dialect.filter_within_edits(prop, &p, *max).unwrap_or_else(|| "false".to_string()))
             }
             FilterOp::ValuesCount { min, max } => {
                 let mut clauses = Vec::new();

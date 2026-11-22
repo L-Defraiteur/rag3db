@@ -45,3 +45,11 @@ fn a_name_typed_with_one_typo_gives_its_declaration_first() {
         "with one typo, the declaration is not first: {typo:?}"
     );
 }
+
+/// Only rag3db says an edit distance; another dialect says nothing, and the compiler then admits nothing.
+#[test]
+fn only_a_dialect_with_an_edit_distance_says_it() {
+    use crate::dialect::SchemaDialect;
+    assert_eq!(crate::dialect::Rag3dbDialect.filter_within_edits("n.name", "p0", 1).as_deref(), Some("levenshtein(n.name, $p0) <= 1"));
+    assert!(crate::dialect::PostgresDialect.filter_within_edits("m.name", "p0", 1).is_none());
+}
