@@ -2086,10 +2086,13 @@ pub const SEUIL_CONFIANCE: f64 = 0.88;
 /// 235 caractères.)
 pub const MAX_FUZZY_WHOLE_QUERY_CHARS: usize = 900;
 
-/// **The distance of the whole query** (the pass that puts a copied text first, Lucie, 25 October 2026): 1 up to
-/// [`MAX_FUZZY_WHOLE_QUERY_CHARS`], 0 beyond.
+/// **The distance of the whole query** (the pass that puts a copied text first, Lucie, 25 October 2026): 0 for a
+/// query of several words — a fuzzy `contains` ignores the separators, and the phrase would become one glued word
+/// searched within a typo (lucivy, 22 November 2026) —; 1 for a single token up to [`MAX_FUZZY_WHOLE_QUERY_CHARS`], 0
+/// beyond. A typo in a phrase is the words' search's to find.
 pub fn whole_query_distance(query: &str) -> u8 {
-    if query.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 }
+    let several_words = query.split_whitespace().take(2).count() > 1;
+    if !several_words && query.chars().count() <= MAX_FUZZY_WHOLE_QUERY_CHARS { 1 } else { 0 }
 }
 
 /// The witnesses of the whole query's distance (22 November 2026), in a file of their own.
