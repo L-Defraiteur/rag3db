@@ -56,22 +56,37 @@ struct Options {
 
 /// The repository of a folder: its git root, or the folder itself when it has none.
 fn folder_repository(folder: &std::path::Path) -> std::path::PathBuf {
-    folder.to_path_buf()
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(folder)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|t| !t.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| folder.to_path_buf())
 }
 
 /// A new conversation's name, from its date (`month0` from 0).
-fn new_conversation_name(_day: u32, _month0: u32, _hour: u32, _minute: u32) -> String {
-    String::new()
+fn new_conversation_name(day: u32, month0: u32, hour: u32, minute: u32) -> String {
+    format!("{day:02}-{:02}-{hour:02}h{minute:02}", month0 + 1)
 }
 
 /// **A card the plain mode cannot answer**: what it says, for an approval of the teammate; `None` for any other line.
-fn plain_cannot_answer(_l: &Value) -> Option<String> {
-    None
+fn plain_cannot_answer(l: &Value) -> Option<String> {
+    if l["from"] != "teammate" || l["kind"] != "approval" {
+        return None;
+    }
+    let quoi = l["command"].as_str().or_else(|| l["tool"].as_str()).or_else(|| l["text"].as_str()).unwrap_or("?");
+    Some(format!("une carte attend ton accord : {quoi} — réponds dans la vue (rag3weaver-tty sans --plain) ou dans l'IDE"))
 }
 
 /// The last conversation of a repository in the host's list of teammates.
-fn last_conversation(_list: &Value, _parent: &str) -> Option<String> {
-    None
+fn last_conversation(list: &Value, parent: &str) -> Option<String> {
+    let all = list["teammates"].as_array().or_else(|| list["result"]["teammates"].as_array())?;
+    all.iter().filter(|t| t["parent"] == parent).max_by_key(|t| t["at"].as_u64().unwrap_or(0)).and_then(|t| t["task"].as_str()).map(str::to_string)
 }
 
 fn options() -> Result<Options, String> {
@@ -96,14 +111,14 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
             "--user-token-cmd" => o.user_token_cmd = Some(valeur()?),
             "--address" | "--adresse" => o.adresse = Some(valeur()?),
+            "--continue" => o.continuer = true,
             "--since" | "--depuis" => o.depuis = Some(valeur()?.parse().map_err(|e| format!("--since : {e}"))?),
             "-h" | "--help" => return Err(String::new()),
             autre => return Err(format!("option inconnue : {autre}")),
         }
     }
-    if o.depot.is_empty() || o.task.is_empty() {
-        return Err("--repo et --task sont exigés".into());
-    }
+    // **Nothing is required** (Lucie, 22 November 2026): the repository is the current folder's, the conversation a
+    // new one; `--repo`, `--task` and `--continue` choose otherwise.
     Ok(o)
 }
 
@@ -146,8 +161,41 @@ fn lancer(o: Options) -> Result<(), String> {
         eprintln!("[tty] pas de jeton d'utilisateur (user/user_token à côté de daemon.json, ou --user-token-cmd) : ce que vous tapez part sans le titre d'humain, et ne vaut pas accord en mode auto");
     }
     let agent = client::agent();
-    // Le dépôt se désigne par son nom ou son chemin ; son id ne sert qu'au JSON.
-    let depot = client::resoudre(&agent, &ep, &o.depot)?;
+    let mut o = o;
+    // **Le dépôt du dossier courant** (Lucie, 22 nov.) : sans --repo, la racine git du dossier, ou le dossier ;
+    // l'hôte qui ne le connaît pas l'ouvre, comme « Ouvrir un dossier » de l'IDE.
+    let depuis_le_dossier = o.depot.is_empty();
+    if depuis_le_dossier {
+        let ici = std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?;
+        o.depot = folder_repository(&ici).display().to_string();
+    }
+    let depot = match client::resoudre(&agent, &ep, &o.depot) {
+        Ok(d) => d,
+        Err(_) if depuis_le_dossier || std::path::Path::new(&o.depot).is_absolute() => {
+            client::open_folder(&agent, &ep, &o.depot).map_err(|e| format!("l'hôte n'ouvre pas {} : {}", o.depot, tui::refusal_in_words(&e)))?;
+            client::resoudre(&agent, &ep, &o.depot).map_err(|e| tui::refusal_in_words(&e))?
+        }
+        Err(e) => return Err(tui::refusal_in_words(&e)),
+    };
+    // **La conversation** : nommée, reprise (--continue), ou neuve, nommée par sa date.
+    let quoi = if !o.task.is_empty() {
+        format!("conversation « {} »", o.task)
+    } else if o.continuer {
+        let liste = client::lire(&agent, &ep, "/ide/teammate/list?supervisor=supervisor").unwrap_or_default();
+        match last_conversation(&liste, &depot.id) {
+            Some(t) => {
+                o.task = t;
+                format!("reprise de « {} »", o.task)
+            }
+            None => return Err(format!("aucune conversation à reprendre dans {} : lance-en une sans --continue", depot.repo)),
+        }
+    } else {
+        let maintenant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        let (j, m, h, mi) = rag3weaver_tty::boite::local_parts(maintenant);
+        o.task = new_conversation_name(j, m, h, mi);
+        format!("conversation neuve ({})", o.task)
+    };
+    eprintln!("[tty] {} · {quoi}", depot.repo);
     // Le journal de séance : `--journal`, ou de lui-même sous mosh, qui ne garde
     // aucun historique au-delà de l'écran (lot tty-7). Un journal qui ne s'ouvre
     // pas de lui-même se dit, et la séance continue.
@@ -164,7 +212,6 @@ fn lancer(o: Options) -> Result<(), String> {
         (None, false) => None,
     };
     let mut depot = depot;
-    let mut o = o;
     if !o.plain {
         // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
         let mut theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
@@ -251,6 +298,11 @@ fn lancer(o: Options) -> Result<(), String> {
                         if !boite_au_flux.load(Ordering::SeqCst) {
                             ecrire(&plain::ligne_de_boite(l));
                         }
+                        // **A card the plain mode cannot answer** is said, and the session stops (c7, 22 nov.).
+                        if let Some(dit) = plain_cannot_answer(l).filter(|_| !lignes.iter().any(|r| r["reply_to"] == l["id"])) {
+                            eprintln!("[tty] {dit}");
+                            arret.store(true, Ordering::SeqCst);
+                        }
                         end_seen = (l["kind"] == "ended").then(std::time::Instant::now);
                     }
                     lues.store(lignes.len(), Ordering::SeqCst);
@@ -271,11 +323,18 @@ fn lancer(o: Options) -> Result<(), String> {
     // La demande part une fois l'abonnement pris : rien de son run ne manque.
     let mut demande = o.demande.clone();
     let mut erreur_de_demande: Option<String> = None;
+    let arret_de_la_demande = arret.clone();
     let mut ouvert = || {
         if let Some(texte) = demande.take() {
             match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": backend, "task": o.task, "kind": "request", "text": texte })) {
                 Ok(r) => eprintln!("[tty] demande posée ({})", if r["started"] == true { "l'équipier part" } else { "l'équipier tournait déjà" }),
-                Err(e) => erreur_de_demande = Some(e),
+                // **A refused request is said at once** (c7, 22 nov.: 280 s of silence): the session stops on it.
+                Err(e) => {
+                    let dit = tui::refusal_in_words(&e);
+                    eprintln!("[tty] la demande est refusée : {dit}");
+                    erreur_de_demande = Some(dit);
+                    arret_de_la_demande.store(true, Ordering::SeqCst);
+                }
             }
         }
     };

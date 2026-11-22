@@ -242,6 +242,28 @@ pub fn said_date(day: u32, month0: u32, hour: u32, minute: u32) -> String {
 
 /// **An instant in ms since the epoch, in local words** (« le 21 nov. à 16 h 05 »): local time by `localtime_r`;
 /// where it is not at hand (Windows), in UTC, and said so.
+/// **An instant's local day, month (from 0), hour and minute**; in UTC where local time is not at hand.
+pub fn local_parts(ms: u64) -> (u32, u32, u32, u32) {
+    let secs = (ms / 1000) as i64;
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r writes only into `tm`, which lives on this stack; `t` is a valid time_t.
+        let t = secs as libc::time_t;
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        if !unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
+            return (tm.tm_mday as u32, tm.tm_mon as u32, tm.tm_hour as u32, tm.tm_min as u32);
+        }
+    }
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    ((doy - (153 * mp + 2) / 5 + 1) as u32, if mp < 10 { mp + 2 } else { mp - 10 } as u32, (rem / 3600) as u32, ((rem % 3600) / 60) as u32)
+}
+
 pub fn local_date(ms: u64) -> String {
     let secs = (ms / 1000) as i64;
     #[cfg(unix)]
