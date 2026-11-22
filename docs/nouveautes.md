@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Les mots de l'habillage vivent dans le thème.** `templates/themes/labels/neutral.json` donne les
+  libellés neutres (l'agent d'accueil s'appelle « Accueil »), et chaque thème peut les ajuster : `daemon` dit « le
+  magicien du chaos ». Un seul jeu de clés pour l'IDE et le terminal.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
