@@ -1711,18 +1711,13 @@ pub fn build_bm25_query(
         BM25Mode::Auto => unreachable!("résolu à la ligne précédente"),
         // **No parser** (21 November 2026): the words, built explicitly — the query lucivy's `parse` built from a
         // plain phrase (`expand_parse_simple`), without its reading of `-`, `+`, quotes, AND/OR and parentheses.
-        BM25Mode::Words => words_query(query, fields),
+        // lucivy's `contains_split` with the fuzzy distance, as `ContainsSplit` (22 November 2026: the default search
+        // counts one error budget per document; a boolean of fuzzy `contains` made lucivy warn).
+        BM25Mode::Words => split_query(query, fields, distance),
         // **lucivy's `contains_split`** (4.4.2, 22 November 2026): it counts one error budget per document — a typo
         // in each of three words found costs less than two words missing. A boolean of fuzzy `contains` built here
         // kept one penalty per clause and none for a missing word. One per field, in a `should`.
-        BM25Mode::ContainsSplit => {
-            let split = |field: &String| serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
-            if fields.len() == 1 {
-                split(&fields[0])
-            } else {
-                serde_json::json!({ "type": "boolean", "should": fields.iter().map(split).collect::<Vec<_>>() })
-            }
-        }
+        BM25Mode::ContainsSplit => split_query(query, fields, distance),
         // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
         // requête part sous sa seule forme (le doublement du 25 octobre 2026 est retiré).
         BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
@@ -1735,25 +1730,16 @@ pub fn build_bm25_query(
     obj.to_string()
 }
 
-/// **The words of a query, built**: for each field and each word with a letter or a digit, a `contains` of the word, in
-/// a `should`; a single clause alone; a query with no such word searched whole. The exact query lucivy built from a
-/// plain phrase (`expand_parse_simple`), so the same results and scores, without any operator read in the text.
-fn words_query(query: &str, fields: &[String]) -> serde_json::Value {
-    let words: Vec<&str> = query.split_whitespace().filter(|w| w.chars().any(char::is_alphanumeric)).collect();
-    let mut should = Vec::new();
-    for field in fields {
-        if words.is_empty() {
-            should.push(serde_json::json!({ "type": "contains", "field": field, "value": query }));
-            continue;
-        }
-        for w in &words {
-            should.push(serde_json::json!({ "type": "contains", "field": field, "value": w }));
-        }
+/// **lucivy's `contains_split`, one per field**, with the fuzzy distance, in a `should` when there are several fields.
+/// lucivy splits the value on spaces (the words with a letter or a digit; a value with none is searched whole) and
+/// reads no operator in it.
+fn split_query(query: &str, fields: &[String], distance: u8) -> serde_json::Value {
+    let split = |field: &String| serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
+    if fields.len() == 1 {
+        split(&fields[0])
+    } else {
+        serde_json::json!({ "type": "boolean", "should": fields.iter().map(split).collect::<Vec<_>>() })
     }
-    if should.len() == 1 {
-        return should.pop().unwrap();
-    }
-    serde_json::json!({ "type": "boolean", "should": should })
 }
 
 /// The witnesses of a query that is text only (21 November 2026), in a file of their own.
