@@ -2161,23 +2161,28 @@ pub fn typo_of(name: &str, query: &str) -> bool {
         && within_edits(name, query, distance as usize)
 }
 
-/// **`a` within `max` edits of `b`** (Levenshtein, by characters, case included): the rule of a name typed with a
-/// typo, the same as rag3db's `levenshtein(a, b) <= max`.
+/// **`a` within `max` edits of `b`** (optimal string alignment, by characters, case included): an insertion, a
+/// deletion, a substitution, or two adjacent letters swapped each count one (c7, 22 November 2026: the swap is the
+/// most common typo). Levenshtein counts a swap two: the base preselects within twice the distance.
 pub fn within_edits(a: &str, b: &str, max: usize) -> bool {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
     if a.len().abs_diff(b.len()) > max {
         return false;
     }
-    let mut previous: Vec<usize> = (0..=b.len()).collect();
-    for (i, ca) in a.iter().enumerate() {
-        let mut current = vec![i + 1; b.len() + 1];
-        for (j, cb) in b.iter().enumerate() {
-            current[j + 1] = (previous[j] + usize::from(ca != cb)).min(previous[j + 1] + 1).min(current[j] + 1);
+    let width = b.len() + 1;
+    let mut before: Vec<usize> = Vec::new();
+    let mut previous: Vec<usize> = (0..width).collect();
+    for i in 1..=a.len() {
+        let mut current = vec![i; width];
+        for j in 1..=b.len() {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            let mut d = (previous[j - 1] + cost).min(previous[j] + 1).min(current[j - 1] + 1);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                d = d.min(before[j - 2] + 1);
+            }
+            current[j] = d;
         }
-        if current.iter().min().is_some_and(|m| *m > max) {
-            return false;
-        }
-        previous = current;
+        before = std::mem::replace(&mut previous, current);
     }
     previous[b.len()] <= max
 }
