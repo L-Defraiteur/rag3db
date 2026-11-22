@@ -4,7 +4,7 @@
 qui fait la maquette de l'écran, avant tout code. Ce qui est dit « aujourd'hui » a été relevé dans le code de master, sans
 être joué.*
 
-## Le leitmotiv (Lucie, 22 novembre, 23 h 15)
+## Le leitmotiv (Lucie, 22 novembre au soir)
 
 > « Arrêtons d'abuser sur la sécurité ; je vous ai laissé beaucoup en mettre pour que ça en soit des points de validation
 > pour le mode auto, pas pour que ça devienne un truc où l'user est censé être là H24. Nouveau leitmotiv : DES AGENTS ULTRA
@@ -197,7 +197,7 @@ Le novice ne connaît ni chemin ni réglage. L'agent d'accueil s'en charge :
 - **jamais un réglage à faire à la main** : le modèle, le mode auto, l'index sont des défauts ; l'agent les dit s'ils
   comptent pour la demande (« je n'ai pas encore indexé ce projet ; je le fais ? »).
 
-## 9 bis. Il prépare, il ne code pas (Lucie, 23 h)
+## 9 bis. Il prépare, il ne code pas (Lucie, 22 nov. au soir)
 
 « L'agent d'accueil doit bien comprendre que lui ne fait pas de code : il va préparer un agent avec un explicatif de la
 demande de l'utilisateur, et un dossier où le faire surgir selon les instructions (simplement, le cd de l'agent se trouve
@@ -213,7 +213,7 @@ là-bas). »
 - **Le témoin** : « regarde ce dépôt et corrige X » → l'accueil n'appelle aucun outil de code, et l'agent créé a le bon
   dossier et le brief.
 
-## 9 ter. Ce qu'il voit, et ce qu'il dit de lui-même (Lucie, 23 h 1x)
+## 9 ter. Ce qu'il voit, et ce qu'il dit de lui-même (Lucie, 22 nov. au soir)
 
 « Bien sûr il liste les agents actifs, etc., nous montre des tableaux des tickets ouverts / fermés, des PR mergées, reçoit
 des notifs quand quelque chose arrive et en parle à l'utilisateur, explique comment fonctionne l'IDE » ; et « nous ouvre
@@ -239,7 +239,7 @@ ses répliques des `report`, et l'hôte y pose les événements.
   fini ;
 - ils sont **regroupés** sur une fenêtre, sous une **borne de réveils par heure**, avec une option « calme » ; la dépense
   de ces réveils va au registre sous l'appelant « accueil » ;
-- ~~un pas réveillé par un événement n'a que la lecture~~ : **retiré par Lucie à 23 h 15** (le leitmotiv, en tête). Réveillé
+- ~~un pas réveillé par un événement n'a que la lecture~~ : **retiré par Lucie le 22 au soir** (le leitmotiv, en tête). Réveillé
   par un événement, l'accueil agit comme tout agent : il fait surgir un agent, lui parle, relance une tâche, sous la porte
   (classes, juge, survivant) ;
 - l'IDE montre ces lignes comme une réplique de l'agent, marquée « de lui-même ».
