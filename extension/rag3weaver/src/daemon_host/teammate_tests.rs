@@ -34,6 +34,7 @@ mod gate_level;
 mod commit_each_turn;
 mod turn_changes;
 mod missing_command;
+mod background_lock;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
