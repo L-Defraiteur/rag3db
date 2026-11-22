@@ -4453,6 +4453,11 @@ fn nodes_signature(dir: &Path) -> Vec<(String, u64, u128)> {
 }
 
 impl Backend {
+    /// The files the tools read (`read_file`, `grep_files`): the chat checks a cited path against it before it links it.
+    pub(crate) fn file_source(&self) -> Option<Arc<dyn crate::code_tools::FileSource>> {
+        self.file_source.clone()
+    }
+
     /// Les avertissements d'ouverture, pour le reçu du backend ; vide quand
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
