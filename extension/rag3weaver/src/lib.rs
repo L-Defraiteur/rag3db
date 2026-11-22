@@ -18,6 +18,9 @@ pub mod candle_embedder;
 pub mod allocateur;
 pub mod arbre;
 pub mod builtin_templates;
+#[cfg(test)]
+#[path = "theme_labels_tests.rs"]
+mod theme_labels_tests;
 pub mod couches;
 pub mod suivies;
 pub mod views;
