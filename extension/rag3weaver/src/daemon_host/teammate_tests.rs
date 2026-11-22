@@ -2806,6 +2806,7 @@ fn the_page_of_a_task_follows_its_teammate_and_answers_its_approval() {
     };
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    en_approbation(&manifeste);
     let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
             let results = tool_results(turns);
