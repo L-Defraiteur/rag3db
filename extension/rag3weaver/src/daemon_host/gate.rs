@@ -427,3 +427,8 @@ pub fn default_gate_dir() -> PathBuf {
 #[cfg(test)]
 #[path = "gate_ledger_tests.rs"]
 mod ledger_tests;
+
+/// Witnesses: a local install in the task's tree is a local write (22 Nov 2026).
+#[cfg(test)]
+#[path = "gate_install_tests.rs"]
+mod install_tests;
