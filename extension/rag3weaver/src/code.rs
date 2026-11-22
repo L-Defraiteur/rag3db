@@ -717,7 +717,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 16 (21 novembre 2026) : une fermeture ou une compréhension repliée dans sa fonction (`fold_lambdas`) ne garde aucun
 // rendez-vous : ils partaient d'un scope jamais écrit et le drain les écartait sans un mot (26 544 liens sur une
 // réécriture de 419 fichiers). Le graphe ne change pas ; l'analyse, si.
-pub const REGLES_DE_L_ANALYSE: u32 = 16;
+// 17 (22 novembre 2026) : une référence appartient au scope qui la contient — une classe, une interface ou un bloc
+// `impl` ne garde plus les références du corps de ses méthodes, et rien n'est recopié des méthodes vers une classe de
+// même nom (codeparsers, ticket de recherche `2026-11-21-usages-rend-une-classe-comme-usage-de-type-d-une-fonction`).
+pub const REGLES_DE_L_ANALYSE: u32 = 17;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
