@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une fonction appelée par une méthode n'a plus sa classe pour usager.** `usages` et `impact`
+  rendaient la classe (ou le bloc `impl`, ou la `struct` de même nom) parmi les usagers de ce que ses méthodes
+  appellent, parfois deux fois et en « usage de type ». Une référence appartient maintenant au scope qui la contient :
+  la méthode qui appelle, une fois, en appel. Une classe garde ce que son en-tête et ses champs nomment. C'est vrai en
+  Rust, Python, TypeScript et dans les autres langages à classes.
 - 22 novembre 2026 — **Une base analysée sous d'autres règles se repasse à son ouverture.** Chaque fichier
   indexé garde la version de l'analyse qui l'a fait (le commit de codeparsers, les règles, le gabarit). Seul un
   `index` entier la comparait : un hôte mis à jour rouvrait la base, ne reprenait que les fichiers changés sur le
