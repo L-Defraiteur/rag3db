@@ -500,13 +500,13 @@ fn indexer_et_dire(
 ) -> String {
     let (catalog, journal) = (catalog.clone(), journal.to_path_buf());
     // La ligne de fin est rendue, pas écrite : l'appelant l'écrit en dernier.
-    let fin = indexer_et_publier(&catalog, source, &journal, kept_bytes, generated, watch);
+    let fin = index_and_publish(&catalog, source, &journal, kept_bytes, generated, watch);
     // Its generation published (or the index stopped): the answers no longer read an analysis of before.
     *watch.analysis_repass.lock().unwrap_or_else(|e| e.into_inner()) = None;
     fin
 }
 
-fn indexer_et_publier(
+fn index_and_publish(
     catalog: &Arc<Mutex<Catalog>>,
     source: Arc<dyn FileSource>,
     journal: &std::path::Path,

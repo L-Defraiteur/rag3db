@@ -277,7 +277,7 @@ pub fn read_for_tool<'a>(
 ) -> CatalogRead<'a> {
     // **A repass of the analysis in progress, said** with every answer (c7, 22 November 2026): it reads the analysis
     // of before, and is not to be taken for a fault of the new one.
-    let lecture = read_for_tool_sans_la_repasse(catalog, view, entity, cell);
+    let lecture = read_for_tool_without_the_repass(catalog, view, entity, cell);
     #[cfg(feature = "code")]
     if let Some(ligne) = crate::dataflow::index_nodes::analysis_repass_line(catalog) {
         let ajoute = |status: Option<String>| Some(status.map(|s| format!("{s}\n{ligne}")).unwrap_or_else(|| ligne.clone()));
@@ -290,7 +290,7 @@ pub fn read_for_tool<'a>(
     lecture
 }
 
-fn read_for_tool_sans_la_repasse<'a>(
+fn read_for_tool_without_the_repass<'a>(
     catalog: &'a Arc<Mutex<Catalog>>,
     view: Option<&Arc<crate::read_view::ReadViewCell>>,
     entity: &str,
