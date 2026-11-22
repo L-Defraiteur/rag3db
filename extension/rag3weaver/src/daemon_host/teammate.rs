@@ -1598,7 +1598,8 @@ impl DaemonHost {
                     None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
                 });
                 let note = match accorde {
-                    Ok(Ok(cs)) => format!("commande accordée pour la tâche : {}", cs.join(" ; ")),
+                    // The line word for word: the grant is keyed by it, and the agent replays what it reads.
+                    Ok(Ok(_)) => format!("commande accordée pour la tâche : {ligne} — relance-la mot pour mot"),
                     Ok(Err(e)) | Err(e) => format!("l'accord n'a pas pu se poser : {e}"),
                 };
                 if let Some(o) = extra.as_object_mut() {
