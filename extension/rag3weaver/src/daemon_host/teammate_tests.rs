@@ -36,6 +36,7 @@ mod commit_each_turn;
 mod turn_changes;
 mod missing_command;
 mod bac_shell_lines;
+mod land_many_files;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
