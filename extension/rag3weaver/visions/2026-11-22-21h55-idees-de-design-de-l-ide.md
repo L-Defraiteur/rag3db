@@ -561,3 +561,83 @@ Idées qui en sortent, à ranger avec les autres :
   l'accueil raconte ce qui s'est décidé sans toi, et par qui (le juge, le survivant).
 - **30. La salle des agents.** Un fil commun où les agents d'un projet se parlent, lisible comme une conversation
   d'équipe ; on y entre pour dire un mot à tous.
+
+---
+
+## L'ambition d'origine, retrouvée
+
+*Ajout du 23 novembre, 0 h 20. Lucie : « retrouve mes plus anciennes visions ; il y a peut-être des idées naïves qui
+nous rappelleraient l'ambition initiale pour l'UX. On a la technique, on a beaucoup perdu ce qu'on voulait en UX. »*
+
+Les sources, lues en entier : le premier dossier de visions (25 août 2026, aujourd'hui
+`docs/orchestration/visions/vision-roadmap-09-2026/`), les pages 36, 49 et 51 des 24 et 25 août, et les visions
+d'octobre (`00-vision-generale.md`, « montrer nos produits », « plusieurs produits, un seul atelier »). La toute
+première page nommée vision, du 23 février, ne parle que de technique de recherche.
+
+### Ce que Lucie voulait, dans ses mots
+
+- « Un chaos contrôlé, un truc qui peut servir à tout. »
+- « rendre vraiment possible le futur comme dans les films »
+- « Je kifferais que les gens voient principalement des graphes. »
+- « surtout on voit en temps réel tous les DAG qu'il écrit, ce qui se passe on le voit visuellement aussi »
+- « nous on veut des agents qui se parlent, qui savent prendre des décisions »
+- « Il perd jamais la vision initiale utilisateur. »
+- « ne pas redemander 50 fois à l'user si ok pour lire la bdd si donné une fois »
+
+### Ce qu'on a perdu
+
+Une chose surtout : **voir**. L'ambition d'origine n'était pas un chat. C'était un écran où la chose change sous les
+yeux pendant qu'on parle : le site, les graphes, les fiches. Le plan d'aujourd'hui remet la parole au centre, et il
+a raison pour la première minute. Mais il ne doit pas en rester là : **on parle dans le fil, et l'écran montre.**
+
+### À reprendre telles quelles
+
+Elles tiennent avec les deux règles d'aujourd'hui.
+
+- **31. Le graphe en direct.** Pendant qu'un agent travaille, son graphe d'exécution se dessine, le nœud en cours
+  allumé. Un clic sur un nœud ouvre ce qu'il avait en main. C'est un composant du fil, épinglable, à un clic du chat
+  (« voir comment il réfléchit »). Le lien « graphe à côté » existe déjà : il devient vivant.
+- **32. Le magicien du chaos.** « Donne-moi des outils sur ce projet de code » : il monte ce qu'il faut et rend le
+  lien de l'agent dédié. C'est exactement l'agent d'accueil. Le nom est à lui.
+- **33. Le secret qu'on remplit sans le montrer.** « Tu lui remplis des variables dont il ne voit que le nom » : un
+  gabarit de saisie de secret dans le fil. L'agent demande « il me faut `STRIPE_KEY` », on la tape dans un champ à
+  part, il n'en voit jamais la valeur.
+- **34. Ne pas redemander cinquante fois.** Un accord donné une fois vaut pour la suite : c'est « tes mots font loi »
+  (11), avec le juge et le survivant.
+- **Déjà dans le plan, confirmées par l'origine** : chaque référence est un lien vers la chose réelle (9) ; un agent
+  lancé en fond qui revient parler, des agents qui construisent des agents (le leitmotiv) ; la voix (25) ; jamais
+  rien à compiler pour la personne.
+
+### À reprendre en les simplifiant
+
+La bonne intuition, sous une forme qui ne perd personne.
+
+- **35. L'intention gardée.** D'origine : un « agent vision », seul interlocuteur, qui garde la demande mot pour mot
+  et mesure la distance. Simplifié : pas un rôle de plus à l'écran. L'agent d'accueil garde ta demande d'origine,
+  épinglée, et à la fin d'un chantier il dit l'écart : « tu avais demandé ceci ; voici ce qui est fait, ce qui
+  manque ». Et il ose : « et si on faisait carrément ça ? »
+- **36. Le souffleur.** D'origine : un rôle qui écoute l'agent et injecte au bon moment. Simplifié : une ligne
+  discrète dans le fil, « rappel : d'après la fiche X… », quand la mémoire a quelque chose à dire. Pas d'écran.
+- **37. Des tempéraments.** D'origine : vision « ambitieux, visionnaire, observateur », design « abstractionniste,
+  optimiste, volontaire », code « attentif, minutieux, obéissant ». Simplifié : quand l'accueil propose une équipe
+  (4), chaque membre a son signe et sa ligne de caractère. On ne règle rien.
+- **38. Explorer les relations.** D'origine : un explorateur de graphes pour la personne. Simplifié : on le demande
+  (« montre-moi ce qui dépend de ça »), et l'agent compose la vue dans le fil, par un gabarit de graphe. L'explorateur
+  complet reste dans « Avancé ».
+- **39. Une fenêtre par vue.** Chaque composant et chaque agent a son adresse, et se détache dans une fenêtre.
+- **40. Montrer avant de faire.** D'origine : « jamais un refus, une confirmation », la migration montrée en essai à
+  blanc. Simplifié : une carte montre ce que l'action ferait (les fichiers touchés, la commande, le rayon d'impact)
+  avant qu'on dise oui.
+- **Rembobiner** (17) attend le commit par pas. **Éditer son site en ligne** est un usage de l'app à côté (15) et de
+  « montre du doigt » (16).
+
+### À laisser pour l'instant
+
+Elles sont du produit, pas de l'IDE : les vitrines publiques à quota, la page de démo éditée par tous, l'atelier par
+domaine (DXF, Blender), les applications qu'on emporte, le partage d'une capacité comme une PR, le pilotage d'une
+infrastructure entière. Elles reviendront quand un novice tiendra sa première minute.
+
+### Ce que ça change à l'ordre
+
+Après la première minute et le socle, **montrer passe devant** : l'app à côté (15) et le graphe en direct (31)
+remontent au rang du plan partagé. Ce sont eux qui rendent « le futur comme dans les films ».
