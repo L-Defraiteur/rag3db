@@ -34,7 +34,7 @@ impl Roots {
     pub fn of_user() -> Result<Self, String> {
         let home = std::env::var_os("HOME").map(PathBuf::from).ok_or("HOME n'est pas posé")?;
         let config = std::env::var_os("RAG3WEAVER_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".config/rag3weaver"));
-        let data = std::env::var_os("RAG3WEAVER_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share/rag3weaver"));
+        let data = crate::daemon_lifecycle::data_roots().data;
         Ok(Self { config, data })
     }
 
@@ -767,4 +767,42 @@ mod racine_de_l_atelier_tests {
         assert_eq!(racine_de_l_atelier(Path::new("/home/lucie/"), home), Path::new("/home/lucie/rw-code"));
         assert_eq!(racine_de_l_atelier(Path::new("/"), home), Path::new("/home/lucie/rw-code"));
     }
+}
+
+/// **Where the host's data lives, folder by folder** (22 Nov 2026: e2e hosts opened the tasks of the real data
+/// folder, and one wrote five tasks there). One source for every root: a root's own variable, else the data
+/// folder, whose order is `RAG3WEAVER_DATA_DIR`, `RAG3WEAVER_DAEMON_DIR` (the witnesses' host folder), then the
+/// user's (`$XDG_DATA_HOME/rag3weaver`, `~/.local/share/rag3weaver`). In service none is set: nothing moves.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DataRoots {
+    /// The code trees' bases, the register of granted roots, the user's title.
+    pub data: PathBuf,
+    /// The teammates' tasks (`RAG3WEAVER_TACHES_DIR`).
+    pub tasks: PathBuf,
+    /// The chat sessions (`RAG3WEAVER_CHATS_DIR`).
+    pub chats: PathBuf,
+    /// The runs' journal (`RAG3WEAVER_RUNS_DIR`).
+    pub runs: PathBuf,
+}
+
+/// [`DataRoots`] read from `get` (the environment, or a witness's table).
+pub fn data_roots_with(get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> DataRoots {
+    let var = |k: &str| get(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let home = var("HOME").unwrap_or_else(std::env::temp_dir);
+    let data = var("RAG3WEAVER_DATA_DIR")
+        .or_else(|| var("RAG3WEAVER_DAEMON_DIR"))
+        .unwrap_or_else(|| var("XDG_DATA_HOME").unwrap_or_else(|| home.join(".local/share")).join("rag3weaver"));
+    let tasks = var("RAG3WEAVER_TACHES_DIR").unwrap_or_else(|| data.join("taches"));
+    // Beside a tasks folder given on its own, as before; else in the data folder.
+    let chats = var("RAG3WEAVER_CHATS_DIR").unwrap_or_else(|| match var("RAG3WEAVER_TACHES_DIR") {
+        Some(t) => t.parent().map(|p| p.join("chats")).unwrap_or_else(|| data.join("chats")),
+        None => data.join("chats"),
+    });
+    let runs = var("RAG3WEAVER_RUNS_DIR").unwrap_or_else(|| data.join("runs"));
+    DataRoots { data, tasks, chats, runs }
+}
+
+/// [`DataRoots`] of this process's environment.
+pub fn data_roots() -> DataRoots {
+    data_roots_with(&|k| std::env::var_os(k))
 }

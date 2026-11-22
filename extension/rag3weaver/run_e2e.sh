@@ -978,6 +978,11 @@ for ligne in open(sys.argv[1]):
     # Les caches d'index de la suite (catalog::index_cache_dir) : sur le disque, à elle, effacés
     # avec elle ; ni dans son TMPDIR, ni dans le vrai cache de la personne.
     export RAG3WEAVER_CACHE_DIR="$E2E_DISQUE_PARENT/$nom/cache"
+    # **Les données de l'hôte aussi, à la suite** (22 nov. 2026 : des hôtes d'e2e ouvraient les tâches du vrai
+    # dossier, et un témoin y en a écrit cinq). Les tâches, les chats, les runs, les arbres de code et le registre
+    # des racines accordées en dérivent (daemon_lifecycle::data_roots).
+    export RAG3WEAVER_DATA_DIR="$E2E_DISQUE_PARENT/$nom/data"
+    unset RAG3WEAVER_TACHES_DIR RAG3WEAVER_CHATS_DIR RAG3WEAVER_RUNS_DIR
     # L'heure de départ de chaque suite : un pic du journal de charge
     # (échange, carte) s'attribue à la suite qui tournait.
     echo "     [départ $(date +%H:%M:%S)] $nom"

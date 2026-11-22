@@ -341,14 +341,7 @@ struct Changement {
 /// La racine des tâches : `RAG3WEAVER_TACHES_DIR`, sinon
 /// `~/.local/share/rag3weaver/taches`.
 pub(super) fn racine_par_defaut() -> PathBuf {
-    if let Some(d) = std::env::var_os("RAG3WEAVER_TACHES_DIR") {
-        return PathBuf::from(d);
-    }
-    let donnees = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .unwrap_or_else(std::env::temp_dir);
-    donnees.join("rag3weaver/taches")
+    crate::daemon_lifecycle::data_roots().tasks
 }
 
 /// `git -C dir args…` : sa sortie, ou ce qu'il dit en refusant.

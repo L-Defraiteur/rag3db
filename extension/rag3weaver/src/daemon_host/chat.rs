@@ -105,10 +105,7 @@ struct ChatFile {
 /// La racine des sessions : `RAG3WEAVER_CHATS_DIR`, sinon
 /// `~/.local/share/rag3weaver/chats` — à côté des tâches.
 pub(super) fn default_chats_root() -> PathBuf {
-    if let Some(d) = std::env::var_os("RAG3WEAVER_CHATS_DIR") {
-        return PathBuf::from(d);
-    }
-    super::taches::racine_par_defaut().parent().map(|p| p.join("chats")).unwrap_or_else(|| std::env::temp_dir().join("rag3weaver-chats"))
+    crate::daemon_lifecycle::data_roots().chats
 }
 
 /// Le modèle par défaut : `models.llm` du manifeste, sinon `gemini-3.8-flash`
