@@ -7,7 +7,7 @@ use super::*;
 /// file exists when the call returns — not `file: null` while the mirror is written behind.
 #[test]
 #[ignore]
-fn put_fiche_names_the_file_it_wrote() {
+fn the_put_of_a_card_names_the_file_it_wrote() {
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(dir.path(), |_| {});
     let r = appel(&b, "put_fiche", json!({"record": {"name": "named", "about": "a fiche with its file", "state": "current"}}));
