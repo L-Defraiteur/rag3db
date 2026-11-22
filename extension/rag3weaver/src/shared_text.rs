@@ -180,8 +180,17 @@ pub fn set_text_vectors(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, ch
 /// The fingerprints of the chunks of these parents : read **before** the chunks go, so the
 /// texts they leave orphan can be removed after.
 pub fn hashes_of_chunks_of(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, parents: &[String]) -> Result<Vec<String>, String> {
+    hashes_by(conn, &dialect.hashes_of_chunks_by_parent(chunk_table), parents)
+}
+
+/// The fingerprints of these chunks, by their own uuids : read before they go (the undo of an
+/// insertion).
+pub fn hashes_of_chunks(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, uuids: &[String]) -> Result<Vec<String>, String> {
+    hashes_by(conn, &dialect.hashes_of_chunks_by_uuid(chunk_table), uuids)
+}
+
+fn hashes_by(conn: &dyn DbConnection, q: &str, parents: &[String]) -> Result<Vec<String>, String> {
     use crate::connection::QueryParam;
-    let q = dialect.hashes_of_chunks_by_parent(chunk_table);
     let mut out = Vec::new();
     for packet in parents.chunks(PACKET) {
         let rows = conn.execute_with_params(&q, &[QueryParam::new("uuids", strings(packet))]).map_err(|e| format!("{e} — « {q} »"))?.rows;

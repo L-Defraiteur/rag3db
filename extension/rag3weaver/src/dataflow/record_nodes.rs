@@ -58,6 +58,8 @@ pub struct InsertRecordNode {
     conn: Option<Arc<dyn DbConnection>>,
     dialect: Option<Arc<dyn crate::dialect::SchemaDialect>>,
     proven_present: Option<ProvenPresent>,
+    /// The chunk tables that share their texts, for the undo (lot L2b).
+    shared_text_tables: Option<crate::shared_text::SharedTextTables>,
 }
 
 /// **Les uuids posés par une synchronisation, par table** — la preuve
@@ -105,7 +107,7 @@ pub enum InsertMode {
 
 impl InsertRecordNode {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), mode: InsertMode::Upsert, undo_data: None, conn: None, dialect: None, proven_present: None }
+        Self { name: name.into(), mode: InsertMode::Upsert, undo_data: None, conn: None, dialect: None, proven_present: None, shared_text_tables: None }
     }
 
     pub fn with_mode(mut self, mode: InsertMode) -> Self {
@@ -609,6 +611,7 @@ impl Node for InsertRecordNode {
             .ok_or("InsertRecordNode: 'dialect' service not registered")?;
         self.dialect = Some(dialect.clone());
         self.proven_present = ctx.service::<ProvenPresent>(PROVEN_PRESENT).cloned();
+        self.shared_text_tables = ctx.service::<crate::shared_text::SharedTextTables>(crate::shared_text::SERVICE_SHARED_TEXT_TABLES).cloned();
 
         ctx.trigger("done");
         ctx.set_output("inserted", PortValue::new(
@@ -645,11 +648,23 @@ impl Node for InsertRecordNode {
             let uuid_params = CypherValue::List(
                 uuid_list.iter().map(|u| CypherValue::String(u.to_string())).collect()
             );
+            // **The texts the undone chunks leave orphan go with them** (lot L2b, the same
+            // bounded removal as the four ways chunks are deleted).
+            let shared_hashes = match &self.shared_text_tables {
+                Some(t) if t.contains(entity_name.as_str()) => {
+                    let uuids: Vec<String> = uuid_list.iter().map(|u| u.to_string()).collect();
+                    crate::shared_text::hashes_of_chunks(conn.as_ref(), dialect.as_ref(), entity_name, &uuids)
+                        .map_err(|e| format!("InsertRecordNode undo: {e}"))?
+                }
+                _ => Vec::new(),
+            };
             let cypher = crate::dialect::ecriture(&**dialect, &rag3weaver_ir::Write::Delete { table: entity_name.to_string(), by: "_uuid".into(), cascade: true, count: false });
             conn.execute_with_params(
                 &cypher,
                 &[QueryParam { name: "uuids".into(), value: uuid_params }],
             ).map_err(|e| format!("InsertRecordNode undo failed: {e}"))?;
+            crate::shared_text::remove_orphan_texts(conn.as_ref(), dialect.as_ref(), entity_name, &shared_hashes)
+                .map_err(|e| format!("InsertRecordNode undo: {e}"))?;
             oublier_les_prouves(self.proven_present.as_ref(), entity_name, &uuid_list);
         }
         Ok(())

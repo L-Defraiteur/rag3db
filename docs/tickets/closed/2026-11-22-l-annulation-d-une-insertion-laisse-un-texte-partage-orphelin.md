@@ -1,6 +1,6 @@
 # L'annulation d'une insertion laisse un texte partagé orphelin
 
-- **État** : ouvert (22 novembre 2026, embarquement ; reste du lot L2a des textes partagés, à corriger avant L5)
+- **État** : corrigé (22 novembre 2026, lot L2b `shared-text-l2b`, témoin vu rouge puis vert ; ouvert le 22 novembre 2026, embarquement ; reste du lot L2a des textes partagés, à corriger avant L5)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : basse. Un texte sans morceau occupe sa ligne et son vecteur ; il ne fausse aucune recherche, puisque la
