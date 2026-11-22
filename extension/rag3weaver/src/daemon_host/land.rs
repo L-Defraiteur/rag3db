@@ -25,8 +25,7 @@ impl DaemonHost {
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
     pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles) {
         let Some(w) = t.workspace.as_ref().filter(|w| w.copie.is_none()) else { return };
-        let auto = self.with_backend_id(&t.id, |b| b.garde().map(|g| g.mode())).ok().flatten() == Some(crate::commande::Mode::Auto);
-        if !auto {
+        if self.gate_level(&t.id, files).is_none() {
             return;
         }
         let (dossier, arbre) = (&w.racine_principale, &w.racine);
