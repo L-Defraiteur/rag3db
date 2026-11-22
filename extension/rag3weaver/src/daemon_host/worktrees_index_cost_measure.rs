@@ -29,11 +29,19 @@ fn the_cost_of_a_full_index_of_a_frozen_tree() {
     let host = Arc::new(crate::daemon_host::tests::hote_isole());
     let h = host.hosted(&manifeste).unwrap();
     let debut = std::time::Instant::now();
-    host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+    let lance = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+    eprintln!("[mesure] index : {lance}");
     while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     let duree = debut.elapsed();
+    // What the index journal says of the links it could not lay (`dangling_links`), and of its end.
+    let journal = lance.to_string().split('"').find(|x| x.ends_with(".out") && x.contains("/index/")).map(str::to_string);
+    if let Some(j) = journal.as_deref() {
+        for l in std::fs::read_to_string(j).unwrap_or_default().lines().filter(|l| l.contains("lien") || l.contains("terminée") || l.contains("écart")) {
+            eprintln!("[mesure] journal : {l}");
+        }
+    }
     let compte = |q: &str| -> i64 {
         host.with_backend(&h, |b| b.catalog.lock().unwrap().execute_raw(q).ok().and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64())).unwrap_or(-1))
             .unwrap()
