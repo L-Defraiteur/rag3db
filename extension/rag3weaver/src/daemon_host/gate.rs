@@ -325,16 +325,30 @@ impl DaemonHost {
     /// **The gate of a teammate's step** in the auto mode: a safe class is granted and replayed; a judged
     /// class asks the judge, whose yes is a grant and whose anything else is the card. `None` out of the
     /// auto mode (the cards of before stay).
-    pub(crate) fn step_gate(&self, backend_id: &str, files: &TeammateFiles, racine: PathBuf) -> Option<StepGate> {
-        let garde = self.with_backend_id(backend_id, |b| b.garde().cloned()).ok().flatten()?;
-        if garde.mode() != crate::commande::Mode::Auto {
+    /// **The gate's level of a task** (Lucie, 22 Nov 2026, 23 h 20): `bac`, `judge` or `cards`. The level the launch
+    /// chose (the mailbox's last `gate_level` line) beats the project's declaration; without one, a project in the
+    /// auto mode is at `bac`, or `judge` when `rules.json` sets `judge_in_auto`; any other project has no level (the
+    /// cards of before).
+    pub(crate) fn gate_level(&self, backend_id: &str, files: &TeammateFiles) -> Option<String> {
+        if let Some(l) = files.mailbox().iter().rev().find(|l| l["from"] == "host" && l["kind"] == "gate_level").and_then(|l| l["level"].as_str().map(str::to_string)) {
+            return Some(l);
+        }
+        let mode = self.with_backend_id(backend_id, |b| b.garde().map(|g| g.mode())).ok().flatten()?;
+        if mode != crate::commande::Mode::Auto {
             return None;
         }
+        let rules = GateRules::read(self.gate_dir.as_deref().or(Some(default_gate_dir().as_path())));
+        Some(if rules.judge_in_auto { "judge" } else { "bac" }.to_string())
+    }
+
+    pub(crate) fn step_gate(&self, backend_id: &str, files: &TeammateFiles, racine: PathBuf) -> Option<StepGate> {
+        let garde = self.with_backend_id(backend_id, |b| b.garde().cloned()).ok().flatten()?;
+        let level = self.gate_level(backend_id, files)?;
         let rules = GateRules::read(self.gate_dir.as_deref().or(Some(default_gate_dir().as_path())));
         let juge = self.gate_judge.clone().or_else(|| rules.judge.as_ref().and_then(served_judge));
         let files = files.clone();
         Some(Arc::new(move |ligne: &str| -> GateOutcome {
-            let class = if rules.judge_in_auto { rule_class(ligne, &racine) } else { "auto".to_string() };
+            let class = if level == "bac" { "auto".to_string() } else { rule_class(ligne, &racine) };
             let accorder = |by: &str| -> GateOutcome {
                 let ctx = crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine: Some(racine.clone()) };
                 match garde.accorder_ligne(ligne, &ctx) {
@@ -342,9 +356,12 @@ impl DaemonHost {
                     Err(_) => GateOutcome::Card { class: class.clone() },
                 }
             };
-            // The auto mode trusts the sandbox, unless rules.json turns the judge on.
-            if !rules.judge_in_auto {
-                return accorder("auto");
+            // `bac` trusts the sandbox; `cards` asks for every command the guard holds (a write by the code tools never
+            // reaches here: it is no command).
+            match level.as_str() {
+                "bac" => return accorder("auto"),
+                "cards" => return GateOutcome::Card { class },
+                _ => {}
             }
             if !rules.judged.iter().any(|c| *c == class) {
                 return accorder("rules");
@@ -395,7 +412,7 @@ impl DaemonHost {
                 return OpenRootOutcome::Card { class: "open_root".into(), args };
             }
             let carte = |args: Value| OpenRootOutcome::Card { class: "open_root".into(), args };
-            let auto = h.with_backend_id(&backend_id, |b| b.garde().map(|g| g.mode())).ok().flatten() == Some(crate::commande::Mode::Auto);
+            let auto = matches!(h.gate_level(&backend_id, &files).as_deref(), Some("bac" | "judge"));
             let (Some(agent), Some(juge), true) = (h.agent_key_of_backend(&backend_id), &juge, auto) else { return carte(args) };
             let mut entree = judge_input(&files, &replay, "open_root");
             entree["action"]["open_root"] = json!({ "path": root, "mode": mode });

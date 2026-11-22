@@ -1698,6 +1698,13 @@ impl DaemonHost {
             Some(e) if e.as_str().is_some_and(|e| EXPECTS.contains(&e)) => {}
             Some(e) => return Err(format!("expects vaut report, approval ou none, pas {e}")),
         }
+        let gate = extra.get("gate").filter(|v| !v.is_null());
+        match gate {
+            None => {}
+            Some(_) if kind != "request" => return Err(format!("gate se déclare sur une request, pas sur un {kind}")),
+            Some(g) if g.as_str().is_some_and(|g| matches!(g, "bac" | "judge" | "cards")) => {}
+            Some(g) => return Err(format!("gate vaut bac, judge ou cards, pas {g}")),
+        }
         let ouverte = self.tache(parent, task).is_none();
         if ouverte {
             if kind != "request" {
@@ -1707,6 +1714,19 @@ impl DaemonHost {
         }
         let t = self.tache(parent, task).ok_or("la tâche vient de s'ouvrir et n'est plus là")?;
         let files = self.teammate_files(parent, task)?;
+        // **The launch's level of the gate** (Lucie, 22 Nov 2026, 23 h 20), said before the request so that its first
+        // step reads it; said again only when it changes.
+        if let Some(g) = gate.and_then(Value::as_str) {
+            let avant = files.mailbox().iter().rev().find(|l| l["from"] == "host" && l["kind"] == "gate_level").and_then(|l| l["level"].as_str().map(str::to_string));
+            if avant.as_deref() != Some(g) {
+                let dit = match g {
+                    "bac" => "porte : bac (toute commande que le bac lance passe)",
+                    "judge" => "porte : judge (le juge décide, une carte s'il dit non)",
+                    _ => "porte : cards (toute commande tenue demande ; les écritures des outils de code passent)",
+                };
+                files.append_with("host", "gate_level", None, dit, &json!({ "level": g }))?;
+            }
+        }
         // **Une réponse va à l'auteur de ce qu'elle répond** (le pont, archi) : une
         // `answer` sans `to` dont le `reply_to` vise la ligne d'un autre agent
         // (ni l'équipier ni l'hôte) lui est adressée. `mail reply` ne connaît que
