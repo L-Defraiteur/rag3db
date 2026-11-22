@@ -1048,6 +1048,8 @@ fn run() -> Result<(), String> {
         return servir_http(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("daemon") {
+        // The commands of its tasks find what the user's terminal finds (23 Nov 2026), set before any thread.
+        rag3weaver::login_path::adopt_the_login_path();
         return servir_le_demon(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("daemon-nouveau-jeton") {
