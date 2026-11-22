@@ -1,9 +1,9 @@
 %% tool: run
 %% description: Exécute une commande dans le projet et rend son résultat : code de sortie, durée, sortie. Pour compiler, lancer les tests, lire l'état de git. La sortie entière est gardée dans un journal dont le chemin est rendu — vous pouvez la relire ou la filtrer ensuite, sans relancer la commande.
 %% param: command string! -- La ligne à exécuter, ex. 'cargo test --lib'. Les enchaînements && ; || et les tuyaux sont acceptés et chaque commande est jugée séparément. Les substitutions $(…), les redirections > et les jokers * sont refusés : donnez les chemins.
-%% param: timeout_s int = 60 -- Secondes avant d'abandonner. Au-delà d'une minute ou deux, préférez `run_bg` qui vous rend la main tout de suite.
+%% param: timeout_s int = 60 -- Secondes avant d'abandonner. Au-delà d'une minute ou deux, lancez en fond (background: true), qui vous rend la main tout de suite. En fond, c'est le temps après lequel la commande est arrêtée (son groupe de processus) et sa fin vous est dite « arrêtée après … (délai atteint) » : sans timeout_s, 10 minutes ; jamais plus que le plafond du backend (teammate.background.max_timeout_s) ; 0 (jamais) n'est permis qu'à un service.
 %% param: max_output int = 20000 -- Caractères rendus par flux. Ce n'est pas une perte : le reste est dans le journal.
-%% param: background bool = false -- true : la commande part en fond et vous avez la main tout de suite, avec sa poignée (#cmd-N) et ses journaux. Lisez ce qu'elle écrit avec `tail` ; `tail` dit aussi quand elle a fini et avec quel code. Pas de plafond de durée en fond, sauf timeout_s donné. Une seule commande à la fois en fond (pas de &&).
+%% param: background bool = false -- true : la commande part en fond et vous avez la main tout de suite, avec sa poignée (#cmd-N) et ses journaux. Lisez ce qu'elle écrit avec `tail` ; `tail` dit aussi quand elle a fini et avec quel code. Sa fin vous est dite d'elle-même (son code, la fin de sa sortie), et vous réveille si vous attendiez. Une seule commande par ligne en fond (pas de &&), et au plus teammate.background.max à la fois dans la tâche.
 %% result: run.result
 %%
 %% **Rien ne s'exécute sans passer par la porte** (`crate::commande`). La ligne
