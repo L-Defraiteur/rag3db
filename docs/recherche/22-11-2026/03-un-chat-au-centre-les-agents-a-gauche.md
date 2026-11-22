@@ -157,10 +157,12 @@ calmes, la carte en dernier recours.
 - **Ses sous-agents** (ceux qu'il a fait surgir), puis **« En contact »** : les agents qui ne sont pas à lui mais avec
   qui il a parlé dans l'heure.
 - **La seconde ligne** (Lucie : « un petit trim du dernier message, ou de la dernière commande, selon communication ou
-  agent ») : dans la liste des agents et sous « Ses sous-agents », **sa dernière action** en phrase courte ; sous « En
+  agent ») : dans la liste des agents et sous « Ses sous-agents », **son étape en cours s'il a un plan**
+  (« étape 2/5 · écrire les tests »), **sinon sa dernière action** en phrase courte, et au survol les deux ; le plan
+  n'est jamais forcé (une petite demande n'en a pas) ; sous « En
   contact », **le dernier message échangé avec lui**, coupé, avec son sens (« → peux-tu relire le diff… »,
   « ← c'est vert, 12 tests ») et son heure.
 
 **Ce que la barre lit de l'hôte** (archi, arbre) : `/ide/agents` rend, par agent, l'état, le poste, le parent, les
 enfants, la dernière activité (heure, phrase courte, commande exacte), les non-lus, et les agents contactés :
-`contacts: [{id, last_message_at, last_message: {from, text}}]`.
+`contacts: [{id, last_message_at, last_message: {from, text}}]`, et `plan: {current, total, title}`, absent sans plan.
