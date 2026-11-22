@@ -4218,6 +4218,10 @@ mod ide_agents_tests;
 /// Ouvrir un dossier depuis l'IDE (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_ouvrir_tests;
+
+/// Open a folder typed with `~` (22 November 2026), its witnesses in their file.
+#[cfg(all(test, unix, feature = "code"))]
+mod open_folder_tilde_tests;
 /// La page « Poste » (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_poste_tests;
