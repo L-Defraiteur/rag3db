@@ -293,3 +293,37 @@ Trois questions, posées dans le vrai navigateur, en jouant le parcours d'une no
 
 Un écran qui ne passe pas les deux premières n'est pas prêt. Un écran qui ne passe pas la troisième est prêt, mais
 ne vend rien.
+
+---
+
+## Corrections après relecture (archi et recherche, 22 h 2x)
+
+Les deux sessions qui tiennent le code ont relu la page. Ce qui était faux, ou plus dur qu'écrit :
+
+- **2, épingler** : pas de champ `refresh` dans un gabarit. Un composant épinglé garde **sa source** (`{tool, args}`)
+  pour se remplir de nouveau, et seuls les outils **en lecture** peuvent nourrir un composant vivant ; sinon une
+  épingle relancerait une écriture. Chaque gabarit déclare les sujets du flux qu'il écoute, ce qui le rend vivant sans
+  sondage. Le bord se replie sur un écran étroit.
+- **3, le travail raconté** : les appels d'outils d'un pas sont au journal des runs, pas dans la boîte. `activity` lit
+  le journal.
+- **6, les mots du produit** : le témoin balaie l'habillage de l'IDE, pas le texte du modèle ni les blocs de code,
+  sinon il rougirait au hasard d'une réponse.
+- **7, les calques** : « les conflits avant qu'ils existent » se calcule à la demande (un `merge-tree` entre deux
+  branches), pas en continu.
+- **11, tes mots font loi** : trois choses manquent. Quand le juge laisse passer une commande, **rien ne l'écrit**
+  aujourd'hui : il faut une ligne `command_granted` (par le juge, avec la citation). Le nombre d'usages d'un accord
+  n'est compté nulle part. « Un clic retire » marche pour une racine (`revoke_root`), mais un accord de ligne vit dans
+  la garde de la tâche, sans route pour le retirer.
+- **12, le cadran** : sous le mode d'approbation des déclarations, le changement passe par `propose`, puis `apply`
+  après le oui, sur la carte.
+- **13, annuler un pas, et 17, repartir d'un point** : ils supposent qu'un pas d'équipier commite sur la branche de sa
+  tâche, ce qui n'est pas fait. Une génération de vue est un état de l'index, pas un commit : repartir d'une
+  génération ne rendrait pas les fichiers. Le chemin : un commit par pas, puis repartir d'un commit.
+- **1, l'accueil qui sait** : la dernière visite se tient par le cookie de l'entrée de l'utilisatrice.
+- **10, la carte vivante** : la plus lourde, à garder pour la fin.
+
+Deux lots en sortent, à faire tôt parce qu'ils servent la sûreté autant que l'écran : **la ligne `command_granted`**
+(une commande passée par le juge laisse une trace signée) et **un commit par pas d'équipier**.
+
+L'ordre retenu avec recherche : d'abord les réparations de son audit, avec (6), (3), les boutons de (13) et (1)
+fondus dedans ; puis (2) et (5) après `show` ; puis (8) et (11) sur la carte d'accord ; puis (15) ; puis (7).
