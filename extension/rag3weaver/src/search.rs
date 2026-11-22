@@ -1712,21 +1712,15 @@ pub fn build_bm25_query(
         // **No parser** (21 November 2026): the words, built explicitly — the query lucivy's `parse` built from a
         // plain phrase (`expand_parse_simple`), without its reading of `-`, `+`, quotes, AND/OR and parentheses.
         BM25Mode::Words => words_query(query, fields),
+        // **lucivy's `contains_split`** (4.4.2, 22 November 2026): it counts one error budget per document — a typo
+        // in each of three words found costs less than two words missing. A boolean of fuzzy `contains` built here
+        // kept one penalty per clause and none for a missing word. One per field, in a `should`.
         BM25Mode::ContainsSplit => {
-            let words: Vec<&str> = query.split_whitespace().collect();
-            if words.len() <= 1 {
-                // Single word: same as Contains
-                build_contains_clauses(query, fields, distance, false, false)
+            let split = |field: &String| serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
+            if fields.len() == 1 {
+                split(&fields[0])
             } else {
-                // Multi-word: boolean should of per-word contains across all fields
-                let word_clauses: Vec<serde_json::Value> = words
-                    .iter()
-                    .map(|word| build_contains_clauses(word, fields, distance, false, false))
-                    .collect();
-                serde_json::json!({
-                    "type": "boolean",
-                    "should": word_clauses,
-                })
+                serde_json::json!({ "type": "boolean", "should": fields.iter().map(split).collect::<Vec<_>>() })
             }
         }
         // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
