@@ -1758,24 +1758,9 @@ pub fn build_bm25_query(
         BM25Mode::Auto => unreachable!("résolu à la ligne précédente"),
         // **No parser** (21 November 2026): the words, built explicitly — the query lucivy's `parse` built from a
         // plain phrase (`expand_parse_simple`), without its reading of `-`, `+`, quotes, AND/OR and parentheses.
-        BM25Mode::Words => words_query(query, fields),
-        BM25Mode::ContainsSplit => {
-            let words: Vec<&str> = query.split_whitespace().collect();
-            if words.len() <= 1 {
-                // Single word: same as Contains
-                build_contains_clauses(query, fields, distance, false, false)
-            } else {
-                // Multi-word: boolean should of per-word contains across all fields
-                let word_clauses: Vec<serde_json::Value> = words
-                    .iter()
-                    .map(|word| build_contains_clauses(word, fields, distance, false, false))
-                    .collect();
-                serde_json::json!({
-                    "type": "boolean",
-                    "should": word_clauses,
-                })
-            }
-        }
+        // Measure only (banc, 22 November 2026): the words go to lucivy's `contains_split` with the fuzzy distance.
+        BM25Mode::Words => split_query(query, fields, distance),
+        BM25Mode::ContainsSplit => split_query(query, fields, distance),
         // Les deux apostrophes (« ' » et « ’ ») se confondent dans lucivy depuis 4.3.2 : la
         // requête part sous sa seule forme (le doublement du 25 octobre 2026 est retiré).
         BM25Mode::Contains => build_contains_clauses(query, fields, distance, false, false),
@@ -1788,6 +1773,25 @@ pub fn build_bm25_query(
     obj.to_string()
 }
 
+/// **lucivy's `contains_split`, one per field** (measure only, banc, 22 November 2026), with the fuzzy distance, and the
+/// budget of `RAG3WEAVER_BM25_BUDGET` (`flat`, `idf`, `window`, `soft`; absent or empty: none).
+fn split_query(query: &str, fields: &[String], distance: u8) -> serde_json::Value {
+    let budget = std::env::var("RAG3WEAVER_BM25_BUDGET").ok().filter(|v| matches!(v.as_str(), "flat" | "idf" | "window" | "soft"));
+    let split = |field: &String| {
+        let mut q = serde_json::json!({ "type": "contains_split", "field": field, "value": query, "distance": distance });
+        if let Some(b) = &budget {
+            q["budget"] = serde_json::json!(b);
+        }
+        q
+    };
+    if fields.len() == 1 {
+        split(&fields[0])
+    } else {
+        serde_json::json!({ "type": "boolean", "should": fields.iter().map(split).collect::<Vec<_>>() })
+    }
+}
+
+#[allow(dead_code)]
 /// **The words of a query, built**: for each field and each word with a letter or a digit, a `contains` of the word, in
 /// a `should`; a single clause alone; a query with no such word searched whole. The exact query lucivy built from a
 /// plain phrase (`expand_parse_simple`), so the same results and scores, without any operator read in the text.
