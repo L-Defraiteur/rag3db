@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 22 novembre 2026 — **Une fonction appelée par une méthode n'a plus sa classe pour usager.** `usages` et `impact`
+  rendaient la classe (ou le bloc `impl`, ou la `struct` de même nom) parmi les usagers de ce que ses méthodes
+  appellent, parfois deux fois et en « usage de type ». Une référence appartient maintenant au scope qui la contient :
+  la méthode qui appelle, une fois, en appel. Une classe garde ce que son en-tête et ses champs nomment. C'est vrai en
+  Rust, Python, TypeScript et dans les autres langages à classes.
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
