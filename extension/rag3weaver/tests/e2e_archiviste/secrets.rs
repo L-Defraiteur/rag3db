@@ -11,7 +11,7 @@ const TOKEN: &str = "ghp_0123456789abcdefABCDEF0123456789abcd";
 /// each says what was masked.
 #[test]
 #[ignore]
-fn a_secret_never_enters_a_fiche_a_source_an_apport_or_their_files() {
+fn a_secret_never_enters_the_memory_rows_or_their_files() {
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(dir.path(), |_| {});
     appel(&b, "put_fiche", json!({"record": {"name": "leaky", "about": format!("the deploy token is {TOKEN}, keep it"), "state": "current"}}));
