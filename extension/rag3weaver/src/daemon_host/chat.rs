@@ -706,6 +706,20 @@ impl DaemonHost {
         self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).and_then(|e| e.busy.clone())
     }
 
+    /// **A chat turn, said whose** (22 November 2026, the spending ledger): `by` is what the host signs
+    /// (`by_of`: the user's cookie or header, never the body). A human's own turn passes the monthly cap
+    /// and is counted; anyone else's is refused past it. The attribution holds for the model calls of
+    /// this turn, on this thread.
+    pub fn chat_turn_by(&self, backend_id: &str, message: &str, by: &Value) -> Result<Value, String> {
+        let _who = crate::usage_ledger::attribute(crate::usage_ledger::Caller {
+            agent: by["client"].as_str().unwrap_or_default().to_string(),
+            session: format!("chat:{backend_id}"),
+            run: String::new(),
+            human: by["kind"] == "human",
+        });
+        self.chat_turn(backend_id, message)
+    }
+
     /// **Un tour de chat** sur le backend `backend_id`. Rend le texte, le run,
     /// qui l'a arrêté s'il l'a été, et ce qu'il a consommé.
     pub fn chat_turn(&self, backend_id: &str, message: &str) -> Result<Value, String> {
