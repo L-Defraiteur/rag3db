@@ -4,6 +4,25 @@
 qui fait la maquette de l'écran, avant tout code. Ce qui est dit « aujourd'hui » a été relevé dans le code de master, sans
 être joué.*
 
+## Le leitmotiv (Lucie, 22 novembre, 23 h 15)
+
+> « Arrêtons d'abuser sur la sécurité ; je vous ai laissé beaucoup en mettre pour que ça en soit des points de validation
+> pour le mode auto, pas pour que ça devienne un truc où l'user est censé être là H24. Nouveau leitmotiv : DES AGENTS ULTRA
+> AUTONOMES, QUI SAVENT FAIRE POP D'AUTRES SESSIONS, qui savent communiquer entre elles… et arrêtons de trop mettre de
+> sécu. »
+
+Ce que cela change pour cette page, et pour tout agent :
+- **tout agent agit sans humain** : réveillé par un événement, il peut faire surgir un agent, lui parler, relancer une
+  tâche. `spawn_agent {brief, folder}` et `message_agent {agent, text}` sont à **tous** les agents, pas au seul accueil.
+  La règle « un pas réveillé par un événement n'a que la lecture » (section 9 ter) est **retirée** ;
+- **la porte sert à laisser faire** : les classes, puis le juge, puis le **survivant** (Gemini Flash) décident. La carte
+  humaine est le dernier recours, pas l'étape normale. Le survivant remplace l'humain absent ;
+- **un projet neuf part en mode auto** ;
+- **une garde neuve ne se pose que si elle sert la validation automatique** ;
+- **restent fermes** : un oui ne vaut accord que d'un humain (`human-yes-only` ; sans elle, un agent cliquerait son propre
+  oui et la porte ne validerait plus rien), sans jamais rien bloquer : quand l'humain n'est pas là, le survivant tranche ;
+  l'affichage d'un secret ; les dossiers protégés.
+
 ## Ce que Lucie veut
 
 Un IDE qui est d'abord un chat, avec une barre des agents à gauche, et un **agent d'accueil toujours là**, même quand rien
@@ -220,10 +239,9 @@ ses répliques des `report`, et l'hôte y pose les événements.
   fini ;
 - ils sont **regroupés** sur une fenêtre, sous une **borne de réveils par heure**, avec une option « calme » ; la dépense
   de ces réveils va au registre sous l'appelant « accueil » ;
-- **la règle de sûreté, en code** : un pas réveillé par un événement, sans tour humain, n'a que les outils de lecture et
-  `show`. Aucune carte, aucun outil qui agit (`open_folder`, `clone_repository`, `create_code_agent`, `message_agent`
-  compris). Il parle en une ligne calme, avec son lien ; il n'agit jamais à la place de l'utilisatrice. Un témoin le
-  prouve ;
+- ~~un pas réveillé par un événement n'a que la lecture~~ : **retiré par Lucie à 23 h 15** (le leitmotiv, en tête). Réveillé
+  par un événement, l'accueil agit comme tout agent : il fait surgir un agent, lui parle, relance une tâche, sous la porte
+  (classes, juge, survivant) ;
 - l'IDE montre ces lignes comme une réplique de l'agent, marquée « de lui-même ».
 
 ## 10. La maquette de l'écran
