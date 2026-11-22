@@ -10,6 +10,20 @@ continue à progresser d'une session à l'autre. »
 Ce n'est pas « un meilleur agent de code ». Ce qu'on vend, c'est de pouvoir confier un projet logiciel à une
 organisation d'agents qui en garde l'histoire, comprend ses contraintes et travaille sous contrôle.
 
+## Les phrases du produit (Lucie et c7, 22 nov. au soir)
+
+La tension à dire : beaucoup d'agents qui travaillent seuls, partout, et pourtant on comprend tout.
+
+> **Lâchez une équipe d'agents sur vos projets. Vous garderez le fil.**
+
+- la plus directe : « Ils travaillent seuls. Vous savez toujours où ils en sont. »
+- avec le mot de Lucie : « Une horde d'agents au travail, et vous comprenez tout. »
+- pour la nuit de travail : « Vos agents travaillent toute la nuit. Le matin, vous savez tout. »
+- pour la mémoire : « L'équipe d'agents qui se souvient. »
+
+« Plusieurs machines, plusieurs équipes, plusieurs projets » va dans la ligne du dessous, comme preuve, pas dans la
+promesse.
+
 ## Ce qui existe déjà et fait la différence
 
 Chaque brique prise seule a des concurrents (Devin, Cursor, Factory…). La valeur, c'est l'intégration :
