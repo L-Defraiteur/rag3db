@@ -332,6 +332,18 @@ function texteDAttente(a: Attente, maintenant: number): string {
   return `${a.what} attend… (${Math.floor(ecoule / 1000)} s)`;
 }
 
+/** **A request for code moved to its task** (`open_code_task`, 22 November 2026): the tool's result, read. */
+type MovedToTask = { kind: "moved_to_task"; task: string; backend?: string; branch?: string; link: string; request?: string };
+function movedToTask(p: Part): MovedToTask | null {
+  if (p.kind !== "tool" || p.name !== "open_code_task" || !p.result) return null;
+  try {
+    const v = JSON.parse(p.result) as MovedToTask;
+    return v?.kind === "moved_to_task" && typeof v.link === "string" && typeof v.task === "string" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function Chat({ id, state }: { id: string; state: HostState }) {
   const backend = state.backends.find((b) => b.id === id);
   // Le rag de chaque dépôt, tel que l'état de l'hôte le tient (les cartes relues s'en servent).
@@ -339,6 +351,21 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   for (const s of [...(state.chat_sessions ?? []).flatMap((c) => c.spaces), ...(state.tasks ?? []).flatMap((t) => t.spaces), ...(state.available_repos ?? [])]) ragDesDepots.set(s.backend, s.rag);
   const [chat, setChat] = useState<ChatState | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  // **The page follows the request to its task** (22 November 2026): a `moved_to_task` that arrives while the page is
+  // open (not one read back from the history) takes the page to the task, once.
+  const seenMoves = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const moves = items.flatMap((it) => (it.kind === "message" ? it.parts.flatMap((p) => (p.kind === "tool" && movedToTask(p) ? [{ id: p.id, m: movedToTask(p)! }] : [])) : []));
+    if (seenMoves.current === null) {
+      if (items.length) seenMoves.current = new Set(moves.map((x) => x.id));
+      return;
+    }
+    const fresh = moves.find((x) => !seenMoves.current!.has(x.id));
+    if (fresh) {
+      seenMoves.current.add(fresh.id);
+      location.assign(fresh.m.link);
+    }
+  }, [items]);
   const [status, setStatus] = useState("Prêt");
   const [busy, setBusy] = useState(false);
   // Les runs de réaction du dépôt en cours (la réindexation d'une montre) : à leur fin, les
@@ -949,6 +976,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                     ) : (
                       <div key={n} className="body whitespace-pre-wrap break-words">{withInlineCode(p.text, id)}</div>
                     )
+                  ) : movedToTask(p) ? (
+                    <p key={p.id} className="moved-to-task my-3 text-sm">
+                      → Ta demande continue dans la tâche <a href={movedToTask(p)!.link} className="font-medium underline">{movedToTask(p)!.task}</a>
+                      {movedToTask(p)!.branch ? <span className="text-muted-foreground"> (branche {movedToTask(p)!.branch})</span> : null}.
+                    </p>
                   ) : (
                     <Fragment key={p.id}>
                     <details className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
