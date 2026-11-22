@@ -678,6 +678,31 @@ impl Ledger {
         Ok(free)
     }
 
+    /// **Adds a tariff to `prices.json`** (22 November 2026, « un refus offre le geste »): the entry is appended to its
+    /// slug's list, the rest of the file kept as it is (its `about`, its notes, the other slugs); the new file must pass
+    /// the checks of [`Prices::load`] before it replaces the old one, written beside it then renamed. The caller says
+    /// who gave it: the host writes a price only on a human's yes (`DaemonHost::set_price`).
+    pub fn add_tariff(&self, slug: &str, tariff: &Tariff) -> Result<(), String> {
+        if slug.trim().is_empty() {
+            return Err("a price needs its model's slug".into());
+        }
+        self.write_default_prices();
+        let _lock = self.lock("prices")?;
+        let text = std::fs::read_to_string(&self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        let mut v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        let entry = serde_json::to_value(tariff).map_err(|e| e.to_string())?;
+        let prices = v.as_object_mut().ok_or("prices.json is not an object")?.entry("prices").or_insert_with(|| serde_json::json!({}));
+        let list = prices.as_object_mut().ok_or("`prices` is not an object")?.entry(slug.to_string()).or_insert_with(|| serde_json::json!([]));
+        list.as_array_mut().ok_or_else(|| format!("the prices of `{slug}` are not a list"))?.push(entry);
+        let new = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+        let parsed: Prices = serde_json::from_str(&new).map_err(|e| format!("the price of `{slug}`: {e}"))?;
+        parsed.check().map_err(|e| format!("the price of `{slug}`: {e}"))?;
+        let tmp = self.prices_path.with_extension("json.new");
+        std::fs::write(&tmp, format!("{new}\n")).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        Ok(())
+    }
+
     /// Writes the default `prices.json` when there is none (never over a file, even an unreadable one), and says so.
     fn write_default_prices(&self) {
         if self.prices_path.exists() {
@@ -710,6 +735,13 @@ impl Ledger {
         line.tokens = tokens;
         self.append(&month, &line)
     }
+}
+
+/// **The slug a refusal names when its model has no price** (the reservation's « no price for `slug` »), so that a
+/// caller can offer the gesture instead of the refusal.
+pub fn unpriced(message: &str) -> Option<String> {
+    let rest = message.split("no price for `").nth(1)?;
+    rest.split('`').next().map(str::to_string).filter(|s| !s.is_empty())
 }
 
 /// **The user's ledger**, one per process ([`Ledger::of_user`]).

@@ -461,6 +461,7 @@ pub mod web_search;
 mod agents;
 /// The title of a human: the user token, the IDE's entry codes, `by` (21 Nov 2026).
 pub mod user_title;
+mod prices;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;

@@ -804,7 +804,8 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
                 Ok(c) => match host.chat_turn_by(c["backend"].as_str().unwrap_or_default(), c["message"].as_str().unwrap_or_default(), &by) {
                     Ok(v) => json!({ "ok": true, "result": v }),
-                    Err(e) => json!({ "ok": false, "error": e }),
+                    // A model without a price: the refusal names it, and the page offers the gesture.
+                    Err(e) => json!({ "ok": false, "missing_price": crate::usage_ledger::unpriced(&e), "error": e }),
                 },
             };
             let _ = request.respond(json_(200, &v));
@@ -830,6 +831,22 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     Err(e) => json!({ "ok": false, "error": e }),
                 },
                 _ => json!({ "ok": false, "error": "l1: backend=<id>&run=<run>" }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/prices") => {
+            // **A price, on the user's yes** (`{slug, input, output, …}`): written by the host only when the call
+            // carries the user's title (`by_of`: the cookie or the header, never the body).
+            let utilisateur = entete(&request, "X-Rag3weaver-User").map(str::to_string);
+            let client = if utilisateur.is_some() { "tty" } else { "ide" };
+            let by = host.by_of(cookie(&request, COOKIE_USER).as_deref(), utilisateur.as_deref(), client);
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("unreadable body: {e}") }),
+                Ok(c) => match host.set_price(&by, &c) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
             };
             let _ = request.respond(json_(200, &v));
         }
