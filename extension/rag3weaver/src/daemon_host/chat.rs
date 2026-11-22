@@ -169,6 +169,14 @@ pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode:
     format!("{agent} {modifier}\n\n{declare}")
 }
 
+/// **The project first** (recherche's audit and Lucie's dry run, 22 Nov 2026: the chat of a folder described its
+/// backend's declarations as « ce projet », and proposed a README of internal manifests). Said to a code backend's chat:
+/// the person's project is its folder; the declarations are the IDE's machinery around it.
+pub fn project_first(racine: Option<&Path>, dans_une_tache: bool) -> String {
+    let _ = (racine, dans_une_tache);
+    String::new()
+}
+
 /// The chat's tool that opens a code task (a repository's chat, outside a task).
 pub const OPEN_CODE_TASK: &str = "open_code_task";
 
@@ -962,6 +970,12 @@ impl DaemonHost {
         }
         let dans_une_tache = tour.dans_une_tache;
         let mut prompt = system_prompt_du_backend(tour.prepared.manifest.kind, tour.mode, dans_une_tache);
+        if tour.prepared.manifest.kind == Some(crate::backend::BackendKind::Code) {
+            let premier = project_first(tour.prepared.workspace_root().as_deref(), dans_une_tache);
+            if !premier.is_empty() {
+                prompt = format!("{premier}\n\n{prompt}");
+            }
+        }
         // **La consigne déclarée du chat** (`chat_instructions`) : celle de l'atelier dit
         // l'ordre de ses outils.
         if let Some(c) = tour.prepared.manifest.chat_instructions.as_deref().filter(|c| !c.trim().is_empty()) {
