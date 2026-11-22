@@ -290,7 +290,14 @@ impl Ledger {
             let d = std::env::temp_dir().join(format!("rag3weaver-usage-witnesses-{}", std::process::id()));
             return Ledger::new(d.join("usage"), d.join("prices.json"));
         }
+        // The host's state folder, where `daemon_lifecycle` puts its journal; the same folder in a build without the
+        // host (`RAG3WEAVER_DAEMON_DIR`, else `~/.local/state/rag3weaver`).
+        #[cfg(feature = "daemon")]
         let state = crate::daemon_lifecycle::log_path().parent().map(Path::to_path_buf).unwrap_or_default();
+        #[cfg(not(feature = "daemon"))]
+        let state = std::env::var_os("RAG3WEAVER_DAEMON_DIR").map(PathBuf::from).unwrap_or_else(|| {
+            std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".local/state/rag3weaver")
+        });
         let config = std::env::var_os("RAG3WEAVER_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| {
             std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".config/rag3weaver")
         });
