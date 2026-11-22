@@ -29,7 +29,9 @@ fn a_base_analysed_under_another_version_repasses_on_open() {
         host.with_backend(&h, |b| {
             let cat = b.catalog.lock().unwrap();
             let courante = cat.version_de_l_analyse.clone();
-            let r = cat.execute_raw(&format!("MATCH (f:File) WHERE f.analyse <> '{courante}' RETURN count(f)")).unwrap();
+            // The visible rows only: a repass retires the rows of before (they stay, the history), it does not erase them.
+            let visible = cat.condition_visible("f").map(|c| format!(" AND {c}")).unwrap_or_default();
+            let r = cat.execute_raw(&format!("MATCH (f:File) WHERE f.analyse <> '{courante}'{visible} RETURN count(f)")).unwrap();
             r.rows[0][0].as_i64().unwrap()
         })
         .unwrap()
@@ -50,7 +52,8 @@ fn a_base_analysed_under_another_version_repasses_on_open() {
     let avant = host
         .with_backend(&h, |b| {
             let cat = b.catalog.lock().unwrap();
-            cat.execute_raw("MATCH (f:File) WHERE f.analyse = 'an-analysis-of-before' RETURN count(f)").unwrap().rows[0][0].as_i64().unwrap()
+            let visible = cat.condition_visible("f").map(|c| format!(" AND {c}")).unwrap_or_default();
+            cat.execute_raw(&format!("MATCH (f:File) WHERE f.analyse = 'an-analysis-of-before'{visible} RETURN count(f)")).unwrap().rows[0][0].as_i64().unwrap()
         })
         .unwrap();
     assert!(avant > 0, "the decor has rows of another analysis");
