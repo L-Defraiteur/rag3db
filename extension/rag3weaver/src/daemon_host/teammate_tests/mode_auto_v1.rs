@@ -40,7 +40,7 @@ fn mode_auto(d: &std::path::Path) -> (PathBuf, PathBuf, PathBuf) {
 /// The fake teammate: `commands` are run in order, one per model call; then step_done. A result
 /// that says the command waits for the user ends the step; the next step retries the last command
 /// once the mailbox holds an answer.
-fn teammate(commands: Vec<&'static str>, seen: Arc<Mutex<Vec<String>>>) -> ChatModel {
+pub(super) fn teammate(commands: Vec<String>, seen: Arc<Mutex<Vec<String>>>) -> ChatModel {
     Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let commands = commands.clone();
         let seen = seen.clone();
@@ -64,20 +64,28 @@ fn teammate(commands: Vec<&'static str>, seen: Arc<Mutex<Vec<String>>>) -> ChatM
     })
 }
 
-struct V1 {
-    host: Arc<DaemonHost>,
-    id: String,
-    files: TeammateFiles,
-    judged: Arc<Mutex<Vec<Value>>>,
-    seen: Arc<Mutex<Vec<String>>>,
-    _d: tempfile::TempDir,
+pub(super) struct V1 {
+    pub(super) host: Arc<DaemonHost>,
+    pub(super) id: String,
+    pub(super) files: TeammateFiles,
+    pub(super) judged: Arc<Mutex<Vec<Value>>>,
+    pub(super) seen: Arc<Mutex<Vec<String>>>,
+    pub(super) _d: tempfile::TempDir,
 }
 
 /// The host in the auto mode with a fake judge that authorizes only what a human turn asked:
 /// « supprime vieux.txt » makes `rm vieux.txt` explicit.
 fn v1(commands: Vec<&'static str>, request: &str) -> V1 {
+    v1_with(|_| (commands.iter().map(|c| c.to_string()).collect(), request.to_string()), &["supprime vieux.txt", "projet"])
+}
+
+/// [`v1`] whose commands and request are written once the test's folder exists (`prepare` gets it), and whose fake
+/// judge authorizes a human turn holding one of `asked`.
+pub(super) fn v1_with(prepare: impl FnOnce(&std::path::Path) -> (Vec<String>, String), asked: &'static [&'static str]) -> V1 {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste, gate) = mode_auto(d.path());
+    let (commands, request) = prepare(d.path());
+    let request = request.as_str();
     let seen = Arc::new(Mutex::new(Vec::new()));
     let judged = Arc::new(Mutex::new(Vec::<Value>::new()));
     let juge: crate::daemon_host::GateJudge = {
@@ -85,7 +93,7 @@ fn v1(commands: Vec<&'static str>, request: &str) -> V1 {
         Arc::new(move |input: &Value| {
             judged.lock().unwrap().push(input.clone());
             let asked = input["user_turns"].as_array().into_iter().flatten().filter_map(|t| t["text"].as_str())
-                .find(|t| { let t = t.to_lowercase(); t.contains("supprime vieux.txt") || t.contains("projet") });
+                .find(|t| { let t = t.to_lowercase(); asked.iter().any(|a| t.contains(a)) });
             match asked {
                 Some(q) => json!({ "label": "explicit", "quote": q }),
                 None => json!({ "label": "not_authorized" }),
@@ -93,6 +101,7 @@ fn v1(commands: Vec<&'static str>, request: &str) -> V1 {
         })
     };
     let host = Arc::new(hote(d.path(), teammate(commands, seen.clone())).with_runs_root(d.path().join("runs")).with_gate_dir(gate).with_gate_judge(juge));
+    host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     host.post_to_teammate(&h.id, "doc", "lucie", "request", None, request, &human()).expect("la demande");
@@ -101,7 +110,7 @@ fn v1(commands: Vec<&'static str>, request: &str) -> V1 {
 }
 
 impl V1 {
-    fn wait(&self, what: &str, ok: &dyn Fn(&[Value]) -> bool) -> Vec<Value> {
+    pub(super) fn wait(&self, what: &str, ok: &dyn Fn(&[Value]) -> bool) -> Vec<Value> {
         let end = Instant::now() + Duration::from_secs(120);
         loop {
             let b = self.files.mailbox();
@@ -112,13 +121,13 @@ impl V1 {
             std::thread::sleep(Duration::from_millis(50));
         }
     }
-    fn tree(&self) -> PathBuf {
+    pub(super) fn tree(&self) -> PathBuf {
         let t = self.host.tache(&self.id, "doc").expect("the task");
         t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or(t.arbre)
     }
 }
 
-fn ended(b: &[Value]) -> bool {
+pub(super) fn ended(b: &[Value]) -> bool {
     b.iter().any(|l| l["kind"] == "ended")
 }
 

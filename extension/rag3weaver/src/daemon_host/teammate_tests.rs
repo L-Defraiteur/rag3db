@@ -14,6 +14,7 @@ mod agents;
 mod background;
 mod card;
 mod mode_auto_v1;
+mod judge_all;
 mod attente_commande;
 mod browser_read;
 mod nom_d_enfant;
