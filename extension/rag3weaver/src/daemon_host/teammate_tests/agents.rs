@@ -47,8 +47,8 @@ fn the_agents_of_the_machine_are_a_tree_of_roots_and_tasks() {
 }
 
 /// **The tree says each agent's last activity and its closed agents** (c7 for Lucie, 22 November 2026: reopen an agent
-/// already launched, `--pop-agent`): an open task gives its agent key and `last_activity_ms` (its last mailbox line, else
-/// its opening); a task closed (rejected here) stays under its root with `state: "rejected"`, its agent key, its closing
+/// already launched, `--pop-agent`): an open task gives its agent key and `last_activity.at` (its last mailbox line, else
+/// its opening); a task closed (rejected here) stays under its root, stopped (`closed_state: "rejected"`), its agent key, its closing
 /// time, its archive, the last line of its archived mailbox, and `reopenable: true` while its archive is there.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
@@ -74,14 +74,14 @@ fn the_agents_say_their_last_activity_and_their_closed_agents() {
     let taches = a["roots"][0]["tasks"].as_array().expect("the root's tasks");
     let vive = taches.iter().find(|t| t["name"] == "archi-vive").expect("the open task");
     assert!(vive["agent_key"].as_str().is_some_and(|k| k.starts_with("agent:")), "the open task says no agent key: {vive}");
-    assert_eq!(vive["last_activity_ms"], ligne["at"], "the open task's last activity is not its last mailbox line: {vive}");
+    assert_eq!(vive["last_activity"]["at"], ligne["at"], "the open task's last activity is not its last mailbox line: {vive}");
     let finie = taches.iter().find(|t| t["name"] == "archi-finie").unwrap_or_else(|| panic!("the closed task is not under its root: {a:#}"));
-    assert_eq!(finie["state"], json!("rejected"), "{finie}");
+    assert_eq!((&finie["state"], &finie["closed_state"]), (&json!("stopped"), &json!("rejected")), "{finie}");
     assert_eq!(finie["agent_key"], json!(cle_finie), "{finie}");
     assert!(finie["closed_ms"].as_u64().is_some(), "{finie}");
     assert!(finie["archive"].as_str().is_some_and(|p| std::path::Path::new(p).is_dir()), "{finie}");
     assert_eq!(finie["last_line"]["kind"], json!("request"), "the closed task does not say its archived mailbox's last line: {finie}");
-    assert!(finie["last_activity_ms"].as_u64() >= finie["closed_ms"].as_u64(), "a closed task's last activity is its closing: {finie}");
+    assert!(finie["last_activity"]["at"].as_u64() >= finie["closed_ms"].as_u64(), "a closed task's last activity is its closing: {finie}");
     assert_eq!(finie["reopenable"], json!(true), "{finie}");
 }
 
