@@ -2215,6 +2215,9 @@ impl DaemonHost {
                 Ok(r) => {
                     failed = 0;
                     unavailable = 0;
+                    // **The turn's commits land in the user's folder** (the terminal's night, 22 Nov 2026).
+                    #[cfg(feature = "code")]
+                    self.land_the_turn(&t, &files);
                     // By the declared scripted node when there is one (its `nodes/` folder is the live backend's), else
                     // the Rust block; a failing script falls back to the Rust block, and the box says it once.
                     let dossier = policy
