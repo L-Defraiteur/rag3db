@@ -665,6 +665,8 @@ impl Node for ForEachNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// A cited graph cites the neighbours of its own template (22 Nov. 2026): the witnesses, in a file of their own.
+    mod cited_from_their_template;
     use crate::dataflow::graph::DataflowGraph;
     use crate::dataflow::node_factories::register_builtins;
     use crate::dataflow::runtime::DataflowRuntime;
