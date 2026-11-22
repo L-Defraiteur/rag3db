@@ -98,3 +98,62 @@ mettre de sécu : elle sert de points de validation au mode auto, pas à exiger 
 **Lots, après l'accueil-chat** : le menu « Reprendre / Dupliquer » (sur les routes d'archi, les pendants des options de
 tty) ; la barre en arbre parent → enfants ; les lignes entre agents dans les deux fils ; les accords tranchés en lignes
 calmes, la carte en dernier recours.
+
+## La barre gauche (Lucie, 23 h 4x)
+
+« Pas une liste de trucs complexes, juste la liste des agents auxquels j'ai accès, peu importe l'hôte. »
+
+### À l'accueil : une seule liste d'agents
+
+```
+┌───────────────────────────┐
+│ 🔍 un agent…              │
+│                           │
+│ ◐ essai-auto        2  ⋯  │   ◐ t'attend · 2 non lus
+│   il y a 30 s · modifie   │   une phrase courte du travail raconté,
+│   README.md               │   la commande exacte au survol
+│ ● rag3db · lot B  gros PC │   le poste : un petit signe s'il y en a deux
+│   il y a 2 min · lance    │
+│   les tests               │
+│ ‖ cartographe             │   ‖ en pause
+│   il y a 1 h · a lu 4     │
+│   fichiers                │
+│ ○ lucivy                  │   ○ à l'arrêt
+│   hier · a poussé lot 3   │
+└───────────────────────────┘
+```
+
+- Une ligne par agent, sur deux niveaux : le **nom et une pastille d'état** (● actif, ‖ en pause, ○ à l'arrêt, ◐ t'attend),
+  un **compteur de non-lus** ; dessous, en petit, **depuis quand** et **une phrase courte** de ce qu'il vient de faire
+  (~30 caractères, tirée du travail raconté : « lance les tests », « modifie total.ts ») ; la commande exacte au survol.
+- **L'ordre** : ceux qui t'attendent, puis les actifs, puis les autres du plus récent au plus ancien.
+- **Le poste** : rien s'il n'y en a qu'un ; un petit signe (« ici », « gros PC ») s'il y en a deux ; jamais un tri.
+- **« ⋯ »** : Reprendre, Dupliquer, Pause.
+- Aucun sous-niveau ici : les sous-agents se voient quand on entre dans leur parent.
+
+### Dans un agent : son voisinage
+
+```
+┌───────────────────────────┐
+│ ← Retour            ◐ 1   │   une pastille si un agent hors d'ici t'attend
+│                           │
+│ SES SOUS-AGENTS           │
+│ ● cartographe             │
+│   il y a 10 s · lit       │
+│   catalog.rs              │
+│ ○ relecteur  fini         │
+│                           │
+│ AVEC QUI IL A PARLÉ       │   dans l'heure qui précède, pas à lui
+│ ● lucivy                  │
+│   il y a 12 min · répond  │
+│   sur la 4.5.1            │
+└───────────────────────────┘
+```
+
+- **« ← Retour »** ramène à la liste de l'accueil, avec une pastille si un agent hors de ce voisinage t'attend.
+- **Ses sous-agents** (ceux qu'il a fait surgir), puis **les agents qui ne sont pas à lui mais avec qui il a parlé dans
+  l'heure** ; mêmes lignes à deux niveaux.
+
+**Ce que la barre lit de l'hôte** (archi, arbre) : `/ide/agents` rend, par agent, l'état, le poste, le parent, les
+enfants, la dernière activité (heure, phrase courte, commande exacte), les non-lus, et les agents contactés avec l'heure
+du dernier message.
