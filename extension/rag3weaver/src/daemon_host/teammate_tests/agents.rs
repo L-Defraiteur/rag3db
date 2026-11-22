@@ -140,3 +140,40 @@ fn the_agents_give_the_contract_of_the_left_bar() {
     assert_eq!(tc["state"], json!("stopped"), "a closed agent is stopped: {tc}");
     assert!(ta["unread"].as_u64().is_some(), "{ta}");
 }
+
+/// **The left bar's second lines** (recherche for Lucie, 22 November 2026): a contact gives its last message exchanged
+/// (`last_message: {from, text}`, the text cut), and an agent with a plan gives `plan: {current, total, title}` (its
+/// step doing, or its first not done); without a plan, no `plan`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_agents_give_their_last_message_by_contact_and_their_plan_step() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model here".into()) });
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    for nom in ["archi-a", "archi-b"] {
+        host.ouvrir_une_tache(&h.id, nom).expect("la tâche s'ouvre");
+        host.donner_les_vues(&h.id, nom, "archi", vec!["backend".into()], Some("backend".into())).unwrap();
+    }
+    let a = host.teammate_files(&h.id, "archi-a").unwrap();
+    a.append_with("teammate", "message", None, "Tu as fini la porte ?", &json!({ "to": "agent:autre-123" })).unwrap();
+    let long = format!("C'est vert, 12 tests. {}", "x".repeat(300));
+    a.append_with("agent:autre-123", "answer", None, &long, &json!({ "to": "teammate" })).unwrap();
+    let plans: super::super::teammate::Plans = serde_json::from_value(json!({ "plans": [{ "number": 1, "request": "r", "proposal": "p", "state": "active",
+        "items": [{ "id": "lire", "text": "Lire", "status": "done" }, { "id": "tests", "text": "écrire les tests", "status": "doing" },
+                  { "id": "c", "text": "C", "status": "todo" }, { "id": "d", "text": "D", "status": "todo" }, { "id": "e", "text": "E", "status": "todo" }] }] })).unwrap();
+    a.write_plans(&plans).unwrap();
+    let tout = host.agents();
+    let taches = tout["roots"][0]["tasks"].as_array().unwrap();
+    let ta = taches.iter().find(|t| t["name"] == "archi-a").unwrap();
+    let tb = taches.iter().find(|t| t["name"] == "archi-b").unwrap();
+    let message = &ta["contacts"][0]["last_message"];
+    assert_eq!(message["from"], json!("agent:autre-123"), "{ta}");
+    let texte = message["text"].as_str().expect("the last message's text");
+    assert!(texte.starts_with("C'est vert, 12 tests.") && texte.chars().count() <= 121, "the last message is not cut: {texte}");
+    assert_eq!(ta["plan"], json!({ "current": 2, "total": 5, "title": "écrire les tests" }), "{ta}");
+    assert!(tb.get("plan").is_none(), "an agent without a plan gives a plan: {tb}");
+    assert!(tout["fields"]["plan"].as_str().is_some() && tout["fields"]["contacts"].as_str().is_some_and(|t| t.contains("last_message")), "{}", tout["fields"]);
+}
