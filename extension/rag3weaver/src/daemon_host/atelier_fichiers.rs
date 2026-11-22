@@ -840,7 +840,8 @@ pub(super) mod tests {
         configurer(&mut m);
         std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let racines = crate::code_tree::Roots { config: d.join("config"), data: d.join("data") };
-        let host = Arc::new(hote(d, model).with_racines_de_code(racines).with_runs_root(d.join("runs")));
+        // The witnesses' person: the host's token is her title too (human-yes-only, 22 Nov 2026).
+        let host = Arc::new(hote(d, model).with_racines_de_code(racines).with_runs_root(d.join("runs")).with_user_token("j".to_string()));
         host.se_connaitre();
         let h = host.hosted(&manifeste).unwrap();
         host.with_backend(&h, |_| ()).expect("l'atelier s'ouvre");
