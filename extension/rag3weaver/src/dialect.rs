@@ -1399,6 +1399,11 @@ pub trait SchemaDialect: Send + Sync {
     /// contains filter expression.
     fn filter_contains(&self, prop: &str, param: &str) -> String;
 
+    /// contains without the case: the field in lower case, the parameter already lowered by the compiler.
+    fn filter_contains_fold(&self, prop: &str, param: &str) -> String {
+        self.filter_contains(&format!("lower({prop})"), param)
+    }
+
     /// Scalar membership in the parameter array, whose type must match the field.
     fn filter_in(&self, prop: &str, param: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("filter_in"); }

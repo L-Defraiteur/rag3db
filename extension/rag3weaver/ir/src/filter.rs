@@ -30,6 +30,9 @@ pub enum FilterOp {
     NotIn(Vec<Value>),
     StartsWith(String),
     Contains(String),
+    /// `Contains` without the case: the field and the value, both in lower case (22 November 2026, the words of
+    /// `search_code`'s `exclude`, `must` and `phrase`).
+    ContainsFold(String),
     ValuesCount {
         min: Option<usize>,
         max: Option<usize>,

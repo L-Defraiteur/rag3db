@@ -237,6 +237,8 @@ pub struct ResultsView {
     pub has_graph: bool,
     /// Ce que le domaine de travail ne montre pas, en une phrase.
     pub domain: Option<String>,
+    /// What was searched, when `exclude`, `must` or `phrase` narrowed it (`cherché : « … » ; sans « … » ; …`).
+    pub searched: Option<String>,
     /// **Ce que le moteur a dit de cette recherche.** « La recherche floue
     /// ignore les séparateurs », un regex sans littéral, une attribution de
     /// chunk douteuse. Vide la plupart du temps ; quand ça ne l'est pas, c'est
@@ -547,6 +549,7 @@ pub fn build_view_with(
         types,
         has_graph,
         domain: None,
+        searched: None,
         warnings: Vec::new(),
         provenance: None,
         total: None,
@@ -1072,6 +1075,7 @@ impl Node for RenderResultsNode {
             if let Some(qp) = &query {
                 view.query = Some(qp.query.clone());
                 view.target = Some(qp.target_name.clone());
+                view.searched = qp.options.text.describe(&qp.query);
             }
             // **Distinguer « ça n'existe pas » de « je n'ai pas cherché ce que
             // tu crois ».** C'est la même règle que le domaine juste en

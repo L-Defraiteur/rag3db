@@ -43,6 +43,9 @@
   0,37 ms, le tiers d'un nœud TypeScript.
 - 21 novembre 2026 — **Une vue fermée ne laisse rien derrière elle.** `close_view` retire le worktree et son target,
   et efface maintenant aussi par défaut les générations de la vue dans la base. `keep: true` les garde.
+- 22 novembre 2026 — **`search_code` écarte, exige et cite, par des paramètres.** `exclude`, `must` et `phrase`
+  (des listes) et `exact` filtrent le texte de chaque résultat avant la limite, pour chaque signal : `exclude: ["test"]`
+  écarte aussi `Test` et `TEST`, sauf sous `exact: true`. La réponse dit ce qui a été cherché (« cherché : … »).
 - 21 novembre 2026 — **La requête de `search_code` n'est que du texte.** Aucun caractère n'y est un opérateur :
   `--save-dev`, `-test`, un guillemet, `AND` ou une parenthèse sont cherchés tels quels. Une phrase reste pesée mot à
   mot (un « contient » par mot et par champ), construite par rag3weaver ; aucun analyseur de requêtes de lucivy ne

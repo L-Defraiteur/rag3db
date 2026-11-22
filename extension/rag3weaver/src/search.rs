@@ -475,6 +475,10 @@ pub struct SearchOptions {
     /// gabarit, jamais par le JSON des options.
     #[serde(skip)]
     pub portee: crate::work_domain::QueryScope,
+    /// **The words to exclude, to require, and the phrases** (`exclude`, `must`, `phrase`, `exact` of the tool),
+    /// composed in `Must` like the scope. Set by the template, never by the options JSON.
+    #[serde(skip)]
+    pub text: crate::work_domain::TextConstraints,
     /// Fan-out : chercher dans plusieurs cellules et fusionner par rang (RRF).
     /// Les scores ne sont pas comparables entre cellules (IDF distincts) ;
     /// `meta.warnings` le rappelle. Prime sur `scope`.
@@ -519,6 +523,7 @@ impl Default for SearchOptions {
     fn default() -> Self {
         Self {
             portee: Default::default(),
+            text: Default::default(),
             limit: 10,
             offset: 0,
             strict_signals: false,

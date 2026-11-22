@@ -438,6 +438,7 @@ impl<'a> FilterParser<'a> {
             | FilterOp::Between(_, _)
             | FilterOp::StartsWith(_)
             | FilterOp::Contains(_)
+            | FilterOp::ContainsFold(_)
             | FilterOp::ValuesCount { .. } => {
                 return self.build_special_op_clause(prop, op, params);
             }
@@ -523,6 +524,11 @@ impl<'a> FilterParser<'a> {
                 let p = self.next_param();
                 params.push(QueryParam::new(&p, CypherValue::String(s.clone())));
                 Some(self.dialect.filter_contains(prop, &p))
+            }
+            FilterOp::ContainsFold(s) => {
+                let p = self.next_param();
+                params.push(QueryParam::new(&p, CypherValue::String(s.to_lowercase())));
+                Some(self.dialect.filter_contains_fold(prop, &p))
             }
             FilterOp::ValuesCount { min, max } => {
                 let mut clauses = Vec::new();
