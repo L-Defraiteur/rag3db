@@ -5,6 +5,8 @@
 //! command that takes the branch. Never a non-fast-forward merge, never a forced checkout. A module of its own.
 
 use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
+use crate::daemon_host::teammate::TeammateFiles;
+use crate::daemon_host::DaemonHost;
 use super::mode_auto_v1::{ended, teammate};
 use super::*;
 use std::time::{Duration, Instant};
