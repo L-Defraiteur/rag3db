@@ -142,7 +142,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -153,7 +153,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -708,7 +708,7 @@ version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d314cc62af2b6b0c65780555abb4d02a03dd3b799cd42419044f0c38d99738c0"
 dependencies = [
- "darling 0.20.11",
+ "darling 0.21.3",
  "ident_case",
  "prettyplease 0.2.37",
  "proc-macro2",
@@ -1584,7 +1584,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2537,6 +2537,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
+ "strsim",
  "syn 2.0.115",
 ]
 
@@ -2836,7 +2837,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3129,7 +3130,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4930,7 +4931,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "ld-lucivy"
 version = "4.5.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -4989,7 +4990,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-bitpacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "bitpacking",
 ]
@@ -4997,7 +4998,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-columnar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -5012,7 +5013,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-common"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -5024,7 +5025,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-query-grammar"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "fnv",
  "nom 7.1.3",
@@ -5036,7 +5037,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-sstable"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "futures-util",
  "itertools 0.14.0",
@@ -5048,7 +5049,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-stacker"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "ld-lucivy-common",
  "murmurhash32",
@@ -5057,7 +5058,7 @@ dependencies = [
 [[package]]
 name = "ld-lucivy-tokenizer-api"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "serde",
 ]
@@ -5065,7 +5066,7 @@ dependencies = [
 [[package]]
 name = "ld-ownedbytes"
 version = "0.27.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -5287,7 +5288,7 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 [[package]]
 name = "luciole"
 version = "4.5.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "flume",
 ]
@@ -5295,7 +5296,7 @@ dependencies = [
 [[package]]
 name = "lucistore"
 version = "4.5.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "serde",
  "serde_json",
@@ -5304,7 +5305,7 @@ dependencies = [
 [[package]]
 name = "lucivy-core"
 version = "4.5.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "ld-lucivy",
  "luciole",
@@ -5318,7 +5319,7 @@ dependencies = [
 [[package]]
 name = "lucivy-fst"
 version = "0.1.1"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "utf8-ranges",
 ]
@@ -7350,7 +7351,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7778,7 +7779,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7795,7 +7796,7 @@ dependencies = [
 [[package]]
 name = "sparse-vector"
 version = "4.5.0"
-source = "git+https://github.com/L-Defraiteur/lucivy?rev=16b2297b2bf2#16b2297b2bf23a4c3baf7b54d3e873448a9d996f"
+source = "git+https://github.com/L-Defraiteur/lucivy?rev=61c32a653da4#61c32a653da4c99b060e31057a0003688a968bb7"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -8511,10 +8512,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0136791f7c95b1f6dd99f9cc786b91bb81c3800b639b3478e561ddb7be95e5f1"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10035,7 +10036,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

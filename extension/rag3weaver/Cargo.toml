@@ -527,11 +527,11 @@ debug = false
 # tag exact du lock ; tout le reste est identique à crates.io.
 [patch.crates-io]
 # lucivy fixed under measure (22 November 2026, branch contains-fields-any-distance): a measure branch, not a lot.
-lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "16b2297b2bf2" }
-ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "16b2297b2bf2" }
-lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "16b2297b2bf2" }
-sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "16b2297b2bf2" }
-luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "16b2297b2bf2" }
+lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "61c32a653da4" }
+ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "61c32a653da4" }
+lucistore = { git = "https://github.com/L-Defraiteur/lucivy", rev = "61c32a653da4" }
+sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "61c32a653da4" }
+luciole = { git = "https://github.com/L-Defraiteur/lucivy", rev = "61c32a653da4" }
 burn = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-autodiff = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
 burn-backend = { git = "https://github.com/L-Defraiteur/burn", rev = "21674205" }
