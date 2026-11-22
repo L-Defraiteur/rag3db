@@ -1219,6 +1219,22 @@ impl StepTools<'_> {
     /// une ligne `approval` (la commande, telle que l'agent l'a écrite) ; le
     /// pas continue sans elle, et un « oui » (`answer`, `approved: true`, en
     /// réponse à cette ligne) l'accorde pour la suite de la tâche.
+    /// **A background command belongs to the task, not to the step** (Lucie, 21 November 2026): the backend's tools
+    /// reach the graph through `Backend::call`, which sees no invocation of the loop; for a background `run_command`,
+    /// the task's (its scope, its bus and mailbox, whose ends wake the teammate) is set for the call's thread.
+    fn in_task(&self, call: &ToolCall, handle: Option<&str>, f: impl FnOnce() -> Turn) -> Turn {
+        let task_inv = match &self.step.background {
+            Some(bg) if call.name == "run_command" && serde_json::from_str::<Value>(&call.arguments).is_ok_and(|a| a["background"] == true) => Some(crate::backend::TaskInvocation {
+                handle: handle.map_or_else(|| format!("#run_command-{}", self.step.number), str::to_string),
+                bus: bg.bus.clone(),
+                inbox: bg.inbox.clone(),
+                scope: bg.scope.clone(),
+            }),
+            _ => None,
+        };
+        crate::backend::with_task_invocation(task_inv, f)
+    }
+
     #[cfg(feature = "code")]
     fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
         if turn.content.contains(crate::dataflow::run_nodes::EN_ATTENTE) {
@@ -1265,26 +1281,13 @@ impl StepTools<'_> {
 
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call(call))))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, || self.inner.call(call)))))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call_in(call, run))))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, || self.inner.call_in(call, run)))))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        // **A background command belongs to the task, not to the step** (Lucie, 21 November 2026): its death goes to
-        // the task's scope, and its end to the task's mailbox, which wakes the teammate.
-        // The backend's tools reach the graph through `Backend::call`, which sees no invocation: the task's is set for
-        // the call's thread, and only for a background command.
-        let task_inv = match (&self.step.background, call.name.as_str()) {
-            (Some(bg), "run_command") if serde_json::from_str::<Value>(&call.arguments).is_ok_and(|a| a["background"] == true) => {
-                Some(crate::backend::TaskInvocation { handle: inv.handle.clone(), bus: bg.bus.clone(), inbox: bg.inbox.clone(), scope: bg.scope.clone() })
-            }
-            _ => None,
-        };
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| {
-            let turn = crate::backend::with_task_invocation(task_inv, || self.inner.call_with(call, run, inv));
-            self.noted(call, self.after(call, turn))
-        })
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, Some(&inv.handle), || self.inner.call_with(call, run, inv)))))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
