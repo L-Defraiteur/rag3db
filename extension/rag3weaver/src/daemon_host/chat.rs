@@ -422,6 +422,47 @@ impl DaemonHost {
         std::fs::rename(&neuf, &chemin).map_err(|e| format!("{} : {e}", chemin.display()))
     }
 
+    /// **The chats of the repositories, as agents of the left bar** (recherche for Lucie, 22 November 2026): a node
+    /// per backend's chat whose id is not in `taches` (a task's chat is its task's node): `{id: chat:<backend>, name
+    /// (the repository's), state (active while a turn runs, else waiting), last_activity {at, phrase, command}, unread,
+    /// link}`.
+    pub(super) fn chat_nodes(&self, taches: &std::collections::HashSet<String>) -> Vec<Value> {
+        let chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
+        let mut noeuds: Vec<Value> = chats
+            .iter()
+            .filter(|(id, _)| !taches.contains(*id))
+            .map(|(id, e)| {
+                // The repository's name: the folder above `templates` in the manifest's path, else the backend's id.
+                let nom = e
+                    .manifest
+                    .ancestors()
+                    .find(|a| a.file_name().is_some_and(|n| n == "templates"))
+                    .and_then(|a| a.parent())
+                    .and_then(|a| a.file_name())
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| id.clone());
+                let dernier = e.session.turns.iter().rev().find(|t| t.role == "assistant" || t.role == "user");
+                let phrase = dernier
+                    .map(|t| {
+                        let texte: String = t.content.trim().chars().take(80).collect();
+                        format!("{} : {}", if t.role == "user" { "toi" } else { "l'agent" }, texte)
+                    })
+                    .unwrap_or_else(|| "aucun tour".into());
+                json!({
+                    "id": format!("chat:{id}"),
+                    "name": nom,
+                    "state": if e.busy.is_some() { "active" } else { "waiting" },
+                    "last_activity": { "at": e.last_call.map(|c| c.at_ms), "phrase": phrase, "command": null },
+                    "unread": 0,
+                    "link": format!("/ide/code/{id}/chat"),
+                    "backend": id,
+                })
+            })
+            .collect();
+        noeuds.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+        noeuds
+    }
+
     /// **Take back a conversation** (an agent reopened or forked, 22 November 2026): the session kept under
     /// `ancien_id` becomes the session of the backend `neuf_id`, whose manifest is `manifeste`, and is written under its
     /// id. `false` when there is none to take back.
