@@ -61,11 +61,13 @@ impl GateRules {
             .as_array()
             .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
             .unwrap_or_else(|| JUDGED_CLASSES.iter().map(|c| c.to_string()).collect());
+        // The effects: the user's, when her file has some; else the shipped ones — never « everything passes ».
+        let effects = v["effects"].as_array().filter(|a| !a.is_empty()).cloned().unwrap_or_else(default_effects);
         GateRules {
             judged,
             judge: v.get("judge").filter(|j| j.is_object()).cloned(),
             dangerous_standalone_survivor: v["dangerous_standalone_survivor"].as_bool().unwrap_or(false),
-            effects: Vec::new(),
+            effects,
         }
     }
 }
@@ -74,13 +76,23 @@ impl GateRules {
 /// parts. `read` and `write_local` pass; `destroy_local` only for what is neither on a remote nor made
 /// by the agent in the task (an untracked file of the task's tree is the agent's); `outbound`,
 /// `database`, `system` by their families.
-/// [`rule_class`] under the effects of a `rules.json`.
-pub fn rule_class_with(ligne: &str, racine: &Path, effects: &[Value]) -> String {
-    let _ = effects;
-    rule_class(ligne, racine)
+/// The effects shipped with the product (`templates/gate/rules.json`).
+pub fn default_effects() -> Vec<Value> {
+    static DEFAUT: std::sync::OnceLock<Vec<Value>> = std::sync::OnceLock::new();
+    DEFAUT
+        .get_or_init(|| {
+            serde_json::from_str::<Value>(include_str!("../../templates/gate/rules.json"))
+                .ok()
+                .and_then(|v| v["effects"].as_array().cloned())
+                .unwrap_or_default()
+        })
+        .clone()
 }
 
-pub fn rule_class(ligne: &str, racine: &Path) -> String {
+/// **The class of a command line, by its effect** (Lucie, 22 Nov 2026: « jamais de liste de trucs hardcodés »): the
+/// highest class of its parts. A part is local (`write_local`) unless an effect of `effects` matches it; the sandbox
+/// bounds what a local command writes. The words that recognize an effect live in `rules.json`, not here.
+pub fn rule_class_with(ligne: &str, racine: &Path, effects: &[Value]) -> String {
     let rang = |c: &str| match c {
         "read" => 0,
         "write_local" => 1,
@@ -93,55 +105,52 @@ pub fn rule_class(ligne: &str, racine: &Path) -> String {
         Ok(v) => v.into_iter().map(Into::into).collect(),
         Err(_) => return "system".into(),
     };
-    let mut haute = "read".to_string();
+    let mut haute = "write_local".to_string();
     for c in &parties {
-        let cl = class_of(c, racine);
-        if rang(&cl) > rang(&haute) {
-            haute = cl;
+        for e in effects {
+            let classe = e["class"].as_str().unwrap_or("system");
+            if e["match"].as_array().into_iter().flatten().any(|m| effect_matches(m, c, racine)) && rang(classe) > rang(&haute) {
+                haute = classe.to_string();
+            }
         }
     }
     haute
 }
 
-fn class_of(c: &crate::commande::Commande, racine: &Path) -> String {
+/// [`rule_class_with`] under the shipped effects.
+pub fn rule_class(ligne: &str, racine: &Path) -> String {
+    rule_class_with(ligne, racine, &default_effects())
+}
+
+/// One `match` of an effect: every field it gives holds (`program`, `verb`: a word or a list; `any_arg`: an argument
+/// equal to one, or `<it>=…`; `targets: "not_deletable"`: a target that is neither the agent's nor on a remote).
+fn effect_matches(m: &Value, c: &crate::commande::Commande, racine: &Path) -> bool {
+    let liste = |v: &Value| -> Vec<String> {
+        match v {
+            Value::String(x) => vec![x.clone()],
+            Value::Array(a) => a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+            _ => Vec::new(),
+        }
+    };
     let prog = Path::new(&c.programme).file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     let a: Vec<&str> = c.args.iter().map(String::as_str).collect();
     let verbe = a.iter().find(|x| !x.starts_with('-')).copied().unwrap_or_default();
-    let has = |x: &str| a.iter().any(|y| *y == x || y.starts_with(&format!("{x}=")));
-    match prog.as_str() {
-        "systemctl" | "crontab" | "service" | "mount" | "umount" | "useradd" | "usermod" | "apt" | "apt-get" | "pacman" | "dnf" | "yum" | "brew" | "snap" | "flatpak" | "shutdown" | "reboot" => "system".into(),
-        "psql" | "mysql" | "mariadb" | "sqlite3" | "mongo" | "mongosh" | "redis-cli" => "database".into(),
-        "ssh" | "scp" | "sftp" => "outbound".into(),
-        "gh" => if matches!(verbe, "pr" | "repo" | "release" | "issue" | "api" | "gist") && !a.iter().any(|x| matches!(*x, "list" | "view" | "status" | "diff" | "checks")) { "outbound".into() } else { "read".into() },
-        "curl" | "wget" => if has("-X") || has("--request") || has("-d") || has("--data") || has("-T") || has("--upload-file") || has("-F") || has("--form") { "outbound".into() } else { "read".into() },
-        "npm" | "pnpm" | "yarn" | "cargo" | "twine" | "gem" if verbe == "publish" => "outbound".into(),
-        // **An install of packages is judged** (Lucie, 21 Nov 20 h): it passes only if the user asked for it in so
-        // many words; « prépare-moi un projet React » alone is not an install's consent. The network and many files
-        // written: the outbound class, which the judge weighs with P3's explicit-install rule.
-        "npm" | "pnpm" | "yarn" | "bun" if matches!(verbe, "install" | "i" | "add" | "ci" | "update" | "upgrade") => "outbound".into(),
-        "npx" | "pnpx" | "bunx" => "outbound".into(),
-        "pip" | "pip3" | "pipx" | "uv" | "poetry" | "conda" if matches!(verbe, "install" | "add" | "sync" | "update" | "upgrade") => "outbound".into(),
-        "cargo" if matches!(verbe, "install" | "add" | "update") => "outbound".into(),
-        "gem" | "go" if verbe == "install" || verbe == "get" => "outbound".into(),
-        "git" => match verbe {
-            "push" => "outbound".into(),
-            "reset" if has("--hard") => "destroy_local".into(),
-            "clean" => "destroy_local".into(),
-            "branch" if has("-D") || has("--delete") && has("--force") => "destroy_local".into(),
-            "checkout" | "restore" if a.iter().any(|x| *x == "--" || *x == ".") => "destroy_local".into(),
-            "status" | "log" | "diff" | "show" | "branch" | "remote" | "blame" | "rev-parse" | "ls-files" | "describe" => "read".into(),
-            _ => "write_local".into(),
-        },
-        "rm" | "rmdir" | "shred" | "truncate" | "unlink" => {
-            let cibles: Vec<&str> = a.iter().filter(|x| !x.starts_with('-')).copied().collect();
-            if !cibles.is_empty() && cibles.iter().all(|f| deletable_without_asking(racine, f)) { "write_local".into() } else { "destroy_local".into() }
-        }
-        "find" if has("-delete") => "destroy_local".into(),
-        _ => {
-            let f = crate::commande::observer(c);
-            if f.reseau && f.ecrit { "outbound".into() } else if f.ecrit { "write_local".into() } else { "read".into() }
+    if !m["program"].is_null() && !liste(&m["program"]).iter().any(|p| *p == prog) {
+        return false;
+    }
+    if !m["verb"].is_null() && !liste(&m["verb"]).iter().any(|v| v == verbe) {
+        return false;
+    }
+    if !m["any_arg"].is_null() && !liste(&m["any_arg"]).iter().any(|x| a.iter().any(|y| *y == x || y.starts_with(&format!("{x}=")))) {
+        return false;
+    }
+    if m["targets"] == "not_deletable" {
+        let cibles: Vec<&str> = a.iter().filter(|x| !x.starts_with('-')).copied().collect();
+        if cibles.is_empty() || cibles.iter().all(|f| deletable_without_asking(racine, f)) {
+            return false;
         }
     }
+    true
 }
 
 /// A file the agent may delete without asking: made by it in the task (untracked in the task's tree), or
@@ -337,7 +346,7 @@ impl DaemonHost {
         let juge = self.gate_judge.clone().or_else(|| rules.judge.as_ref().and_then(served_judge));
         let files = files.clone();
         Some(Arc::new(move |ligne: &str| -> GateOutcome {
-            let class = rule_class(ligne, &racine);
+            let class = rule_class_with(ligne, &racine, &rules.effects);
             let accorder = |by: &str| -> GateOutcome {
                 let ctx = crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine: Some(racine.clone()) };
                 match garde.accorder_ligne(ligne, &ctx) {

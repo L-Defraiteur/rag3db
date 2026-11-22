@@ -209,10 +209,11 @@ fn showing_a_secret_is_refused_with_its_alternative() {
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn an_install_the_user_did_not_ask_for_opens_the_card() {
-    let v = v1(vec!["npm install left-pad"], "Prépare-moi un projet React.");
+    // A global install (a local one is a local write since effect-classes, 22 Nov 2026).
+    let v = v1(vec!["npm install -g left-pad"], "Prépare-moi un projet React.");
     let b = v.wait("the card", &|b| b.iter().any(|l| l["kind"] == "approval"));
     let card = b.iter().find(|l| l["kind"] == "approval").unwrap();
-    assert_eq!(card["class"], json!("outbound"), "{card}");
+    assert_eq!(card["class"], json!("system"), "{card}");
     assert!(v.judged.lock().unwrap().is_empty(), "the install rule sends it to the card before the judge");
 }
 

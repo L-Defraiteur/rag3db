@@ -1,0 +1,27 @@
+{
+  "about": "The gate's rules, shipped with the product. A command runs in the sandbox, which bounds what it writes (the task's tree, its caches): it is local by default, whatever its program. Only these effects go to the judge, and these words recognize them. A rules.json in the user's gate folder replaces this list; one that is absent, unreadable or without effects falls back on it.",
+  "judged_classes": ["destroy_local", "outbound", "database", "system"],
+  "effects": [
+    { "class": "outbound", "why": "sends out of the machine (a push, a publication, a request with a body, a remote shell)", "match": [
+      { "verb": ["push", "publish"] },
+      { "program": ["curl", "wget", "http", "xh"], "any_arg": ["-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "-F", "--form", "-T", "--upload-file", "-X", "--request", "--post-data", "--post-file"] },
+      { "program": ["ssh", "scp", "sftp", "rsync"] },
+      { "program": "gh", "verb": ["pr", "release", "repo", "issue", "gist", "api"] }
+    ] },
+    { "class": "destroy_local", "why": "removes what is on no remote", "match": [
+      { "program": ["rm", "rmdir", "shred", "truncate", "unlink"], "targets": "not_deletable" },
+      { "program": "git", "verb": "reset", "any_arg": ["--hard"] },
+      { "program": "git", "verb": "clean" },
+      { "program": "git", "verb": "branch", "any_arg": ["-D"] },
+      { "program": "git", "verb": ["checkout", "restore"], "any_arg": ["--", "."] },
+      { "program": "find", "any_arg": ["-delete"] }
+    ] },
+    { "class": "system", "why": "changes the machine itself, outside any project", "match": [
+      { "verb": ["install", "i", "add"], "any_arg": ["-g", "--global"] },
+      { "program": ["systemctl", "crontab", "service", "mount", "umount", "useradd", "usermod", "shutdown", "reboot", "sudo", "doas"] }
+    ] },
+    { "class": "database", "why": "talks to a database server", "match": [
+      { "program": ["psql", "mysql", "mariadb", "mongo", "mongosh", "redis-cli"] }
+    ] }
+  ]
+}
