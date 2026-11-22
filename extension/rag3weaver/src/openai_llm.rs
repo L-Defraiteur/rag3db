@@ -429,6 +429,14 @@ impl OpenAiLlm {
         if let Some(format) = &opts.response_format {
             body.insert("response_format".into(), format.to_openai_json());
         }
+        // The most likely tokens, read back by `TokenSink::on_top_logprobs` (the gate's judge, 22 November 2026).
+        if let Some(n) = opts.top_logprobs {
+            body.insert("logprobs".into(), json!(true));
+            body.insert("top_logprobs".into(), json!(n));
+        }
+        if let Some(kwargs) = &opts.template_kwargs {
+            body.insert("chat_template_kwargs".into(), kwargs.clone());
+        }
         // `opts.stop` n'est **délibérément pas** envoyé. Ne pas « corriger »
         // ceci : le fournisseur écrase `Finish::stop(seq)` et `Finish::eos()` en
         // un seul `finish_reason: "stop"`, si bien qu'on ne saurait plus dire
@@ -674,6 +682,9 @@ impl TokenSink for PuitsCompte<'_> {
     }
     fn on_retry(&mut self, event: &crate::llm::RetryEvent<'_>) -> Flow {
         self.inner.on_retry(event)
+    }
+    fn on_top_logprobs(&mut self, position: usize, alternatives: &[(String, f64)]) {
+        self.inner.on_top_logprobs(position, alternatives)
     }
 }
 
@@ -1463,6 +1474,7 @@ fn read_sse(
     let mut pending = String::new();
     let mut emitted = 0usize;
     let mut reason: Option<String> = None;
+    let mut logprob_position = 0usize;
     // Lignes hors protocole SSE (voir plus bas).
     let mut stray = String::new();
 
@@ -1552,6 +1564,17 @@ fn read_sse(
         let Some(choice) = chunk["choices"].get(0) else { continue };
         if let Some(r) = choice["finish_reason"].as_str() {
             reason = Some(r.to_string());
+        }
+        // The most likely tokens of each position this chunk carries, when the call asked them.
+        for entry in choice["logprobs"]["content"].as_array().into_iter().flatten() {
+            let alternatives: Vec<(String, f64)> = entry["top_logprobs"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|a| Some((a["token"].as_str()?.to_string(), a["logprob"].as_f64()?)))
+                .collect();
+            sink.on_top_logprobs(logprob_position, &alternatives);
+            logprob_position += 1;
         }
         let delta = &choice["delta"];
 
@@ -3323,3 +3346,7 @@ mod tests {
         assert_eq!(llm.context_len(), 1_000_000);
     }
 }
+
+#[cfg(test)]
+#[path = "openai_llm/logprobs_tests.rs"]
+mod logprobs_tests;

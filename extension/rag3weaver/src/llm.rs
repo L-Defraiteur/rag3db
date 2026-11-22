@@ -236,6 +236,12 @@ pub trait TokenSink: Send {
     /// Appelé une seule fois, à la toute fin, quelle que soit la raison.
     fn on_finish(&mut self, _reason: &Finish) {}
 
+    /// **The most likely tokens at one position of the output** (22 November 2026, the gate's judge through
+    /// `connect_llm`): sent when the call asks `GenOptions::top_logprobs` and the provider gives them, `position`
+    /// counting the generated tokens from 0, each alternative with its log probability. A sink that does not read
+    /// them ignores them.
+    fn on_top_logprobs(&mut self, _position: usize, _alternatives: &[(String, f64)]) {}
+
     /// Appelé **avant** puis **pendant** chaque attente de réessai. Rendre
     /// [`Flow::Stop`] interrompt l'attente et abandonne l'appel.
     ///
@@ -575,6 +581,13 @@ pub struct GenOptions {
     /// cause, ses reprises et le budget, au lieu de dormir. `None` = le plafond de
     /// la politique seul. Voir [`BUDGET_DES_RECULS_DU_CHAT`] et ses voisins.
     pub retry_budget: Option<std::time::Duration>,
+    /// **The most likely tokens of each output position**, this many (22 November 2026): sent to the provider that
+    /// gives them (`logprobs` and `top_logprobs` of the OpenAI protocol, llama-server included), read back by
+    /// [`TokenSink::on_top_logprobs`]. `None` = nothing asked.
+    pub top_logprobs: Option<u8>,
+    /// **The parameters of the chat template** (`chat_template_kwargs` of llama-server, `{"enable_thinking": false}`
+    /// for a Qwen that must not think). `None` = nothing sent.
+    pub template_kwargs: Option<serde_json::Value>,
 }
 
 /// Le budget des reculs d'un tour de chat de l'IDE : cinq minutes. Au-delà, la
@@ -599,6 +612,8 @@ impl Default for GenOptions {
             response_format: None,
             reasoning: None,
             retry_budget: None,
+            top_logprobs: None,
+            template_kwargs: None,
         }
     }
 }

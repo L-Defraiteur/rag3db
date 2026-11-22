@@ -207,7 +207,8 @@ impl Drop for Attribution {
     }
 }
 
-fn current_caller() -> Caller {
+/// The caller this thread's calls are attributed to ([`attribute`]); nobody's when none was said.
+pub fn current_caller() -> Caller {
     CALLER.with(|c| c.borrow().clone().unwrap_or_default())
 }
 

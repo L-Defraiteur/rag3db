@@ -77,19 +77,70 @@ pub fn web_search(policy: &WebSearchPolicy, args: &Value) -> Result<Value, Strin
             .build(),
     );
     let body = json!({ "contents": [{ "role": "user", "parts": [{ "text": query }] }], "tools": [{ "googleSearch": {} }] });
+    // **The spending ledger** (22 November 2026): reserved before the call, at the query's bytes and Gemini's largest
+    // output; refused past the cap like any paid call; settled with `usageMetadata`. Google Search's own charge per
+    // grounded request is not counted yet (ticket 2026-11-22, la recherche web compte ses jetons, pas sa requête).
+    let ledger = crate::usage_ledger::user_ledger();
+    let provider = policy.endpoint.clone().filter(|e| !e.trim().is_empty()).unwrap_or_else(|| "vertex".to_string());
+    let private = provider != "vertex" && crate::usage_ledger::is_private_address(&provider);
+    let bound = crate::usage_ledger::Tokens { input: body.to_string().len() as u64, output: GEMINI_MAX_OUTPUT_TOKENS, ..Default::default() };
+    let reservation = ledger
+        .reserve(&model, &provider, private, bound, &crate::usage_ledger::current_caller(), false)
+        .map_err(|e| format!("web_search: {e}"))?;
+    let settle = |tokens: Option<crate::usage_ledger::Tokens>| {
+        if let Err(e) = ledger.settle(&reservation, tokens) {
+            eprintln!("[usage] web_search: the settle could not be written ({e}): it counts at its bound");
+        }
+    };
     let mut req = agent.post(&url).header("content-type", "application/json");
     if let Some(t) = &token {
         req = req.header("authorization", &format!("Bearer {t}"));
     }
-    let mut resp = req.send(body.to_string().as_bytes()).map_err(|e| format!("web_search: {e}"))?;
+    let mut resp = match req.send(body.to_string().as_bytes()) {
+        Ok(r) => r,
+        Err(e) => {
+            settle(Some(Default::default()));
+            return Err(format!("web_search: {e}"));
+        }
+    };
     let status = resp.status().as_u16();
-    let text = resp.body_mut().with_config().limit(16 * 1024 * 1024).read_to_string().map_err(|e| format!("web_search: reading the reply: {e}"))?;
+    let text = match resp.body_mut().with_config().limit(16 * 1024 * 1024).read_to_string() {
+        Ok(t) => t,
+        Err(e) => {
+            settle(None);
+            return Err(format!("web_search: reading the reply: {e}"));
+        }
+    };
     if status >= 400 {
+        settle(Some(Default::default()));
         let said: String = text.chars().take(600).collect();
         return Err(format!("web_search: Vertex answered HTTP {status} for {model}: {said}"));
     }
-    let v: Value = serde_json::from_str(&text).map_err(|e| format!("web_search: the reply is not JSON ({e})"))?;
+    let v: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            settle(None);
+            return Err(format!("web_search: the reply is not JSON ({e})"));
+        }
+    };
+    settle(usage_of(&v));
     Ok(read_reply(&v, policy.max_sources.max(1), &model))
+}
+
+/// Gemini's largest output, in tokens: the bound of a call that sets no `maxOutputTokens`.
+const GEMINI_MAX_OUTPUT_TOKENS: u64 = 65_536;
+
+/// The tokens of a `generateContent` reply (`usageMetadata`), as the ledger counts them; `None` when it says nothing.
+fn usage_of(v: &Value) -> Option<crate::usage_ledger::Tokens> {
+    let u = &v["usageMetadata"];
+    let prompt = u["promptTokenCount"].as_u64()?;
+    let cached = u["cachedContentTokenCount"].as_u64().unwrap_or(0);
+    Some(crate::usage_ledger::Tokens {
+        input: prompt.saturating_sub(cached),
+        cache_read: cached,
+        output: u["candidatesTokenCount"].as_u64().unwrap_or(0) + u["thoughtsTokenCount"].as_u64().unwrap_or(0),
+        ..Default::default()
+    })
 }
 
 /// The reply of `generateContent`, read: the answer, the queries, the sources bounded at `max`.
@@ -142,3 +193,7 @@ fn read_reply(v: &Value, max: usize, model: &str) -> Value {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "web_search_ledger_tests.rs"]
+mod ledger_tests;

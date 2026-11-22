@@ -208,10 +208,13 @@ fn a_declared_model_goes_through_the_ledger() {
 }
 
 /// **No paid client is built around the ledger**: outside tests, the clients are built in `model_source.rs`, and the
-/// regime's model in `regime.rs`, which the product takes only through `regime::metered`.
+/// regime's model in `regime.rs`, which the product takes only through `regime::metered`; and no file posts to a
+/// model's route (`/chat/completions`, `/v1/messages`, `:generateContent`, llama-server's `/completion`) but the two
+/// clients and the files that write to the ledger themselves.
 #[test]
 fn no_paid_client_is_built_outside_the_metered_paths() {
     let builds = ["OpenAiLlm::new(", "OpenAiLlm::vertex", "OpenAiLlm::from_env(", "AnthropicLlm::new(", "AnthropicLlm::from_env("];
+    let routes = ["/chat/completions", "/v1/messages", ":generateContent", ":streamGenerateContent", "/completion\""];
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut offenders = Vec::new();
     let mut stack = vec![root.clone()];
@@ -231,10 +234,15 @@ fn no_paid_client_is_built_outside_the_metered_paths() {
             let end = lines.iter().position(|l| l.trim() == "#[cfg(test)]").unwrap_or(lines.len());
             for (i, l) in lines[..end].iter().enumerate().filter(|(_, l)| !l.trim_start().starts_with("//")) {
                 let built = builds.iter().any(|b| l.contains(b)) && !["model_source.rs", "regime.rs"].contains(&rel.as_str());
+                // A model's route posted to directly (22 November 2026, archi's yes): only the two clients, or a file
+                // that writes to the ledger itself (`usage_ledger::`).
+                let routed = routes.iter().any(|r| l.contains(r))
+                    && !["openai_llm.rs", "anthropic_llm.rs"].contains(&rel.as_str())
+                    && !text.contains("usage_ledger::");
                 // The regime's model is taken through `regime::metered`, within the same statement.
                 let unmetered = l.contains("regime::modele_agentique")
                     && !lines[i..(i + 12).min(end)].iter().any(|n| n.contains("regime::metered("));
-                if built || unmetered {
+                if built || unmetered || routed {
                     offenders.push(format!("{rel}:{}: {}", i + 1, l.trim()));
                 }
             }
