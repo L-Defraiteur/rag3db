@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 fn a_turn_of_hundreds_of_files_is_held_and_said() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     let commandes = vec![
         "sh -c 'mkdir -p deps && for i in $(seq 1 400); do echo $i > deps/f$i.txt; done'".to_string(),
         "git add deps".to_string(),

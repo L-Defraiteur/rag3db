@@ -30,6 +30,7 @@ fn scripted(steps: Vec<(&'static str, Value)>, seen: Arc<Mutex<Vec<String>>>) ->
 fn a_turn_that_writes_without_committing_lands_in_the_users_folder() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     let seen = Arc::new(Mutex::new(Vec::new()));
     let steps = vec![
         ("edit_file", json!({ "path": "particules.ts", "content": "export const n = 1000;\n" })),
