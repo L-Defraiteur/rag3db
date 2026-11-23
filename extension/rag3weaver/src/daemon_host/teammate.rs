@@ -1342,6 +1342,15 @@ impl StepTools<'_> {
             {
                 match gate(&m) {
                     super::gate::OpenRootOutcome::Granted => return rejouer(call),
+                    // **At `bac`, a path outside the tree is refused with a sentence** (c7, 23 Nov 2026, 06:11): no card,
+                    // no suspended turn; the agent reads why and goes on.
+                    super::gate::OpenRootOutcome::Card { args, .. } if self.step.gate_level.as_deref() == Some("bac") => {
+                        turn.content = format!(
+                            "**Hors de ton projet** : `{}` n'est pas dans l'arbre de la tâche, et la porte `bac` ne l'ouvre pas. Reste dans ton projet ; si tu en as vraiment besoin, dis-le dans ton compte rendu.",
+                            args["root"].as_str().unwrap_or_default()
+                        );
+                        return turn;
+                    }
                     super::gate::OpenRootOutcome::Card { class, args } => {
                         let ouverte = super::card::open_card(&self.step.files, "run_command", &args, &class, "once")
                             .and_then(|id| self.step.files.mailbox().into_iter().find(|l| l["id"] == id.as_str()).ok_or_else(|| "the card's line".to_string()));
@@ -2159,13 +2168,9 @@ impl DaemonHost {
         let cle = format!("{parent}/{task}");
         let pair = self.pair_de_la_tache(parent, task, true);
         // The turn's start, for its facts at the end (23 Nov 2026).
+        // The turn's start, kept for its facts (at its end, or before it waits), and its failures emptied.
         #[cfg(feature = "code")]
-        let debut = self.task_tree_head(parent, task);
-        #[cfg(feature = "code")]
-        let debut_copie = self.task_copy_snapshot(parent, task);
-        // The failures of a turn before this one are not this turn's.
-        #[cfg(feature = "code")]
-        let _ = super::land::take_turn_failures(&files);
+        self.mark_turn_start(parent, task, &files);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
@@ -2177,10 +2182,7 @@ impl DaemonHost {
         }
         // **The facts of the turn, by the host**, before its end: what git sees changed, or that nothing did.
         #[cfg(feature = "code")]
-        let faits = match debut {
-            Some((arbre, avant)) => self.say_turn_changes(&files, &arbre, &avant),
-            None => debut_copie.and_then(|(racine, exclus, avant)| self.say_copy_turn_changes(&files, &racine, &exclus, &avant)),
-        };
+        let faits = self.say_turn_facts(&files);
         #[cfg(not(feature = "code"))]
         let faits: Option<Value> = None;
         let line = files.append("host", "ended", None, &outcome.ended)?;
@@ -2568,6 +2570,11 @@ impl DaemonHost {
             if let Some((rang, q)) = open_question(files) {
                 if rang >= debut_du_pas {
                     let heure = jiff::Zoned::now().strftime("%H:%M").to_string();
+                    // The turn's facts before it waits (23 Nov 2026): its work may have landed already.
+                    #[cfg(feature = "code")]
+                    if let Some(l) = self.say_turn_facts(&files) {
+                        publish(bus.as_ref(), task, &l);
+                    }
                     let texte = format!("en attente du superviseur depuis {heure} : {} {}", q["kind"].as_str().unwrap_or("question"), q["id"].as_str().unwrap_or(""));
                     if let Ok(line) = files.append_with("host", "report", None, &texte, &json!({ "awaiting": q["id"] })) {
                         publish(bus.as_ref(), task, &line);
@@ -2589,6 +2596,10 @@ impl DaemonHost {
                 } else if let Some(manque) = missing_deliverable(&files.mailbox()) {
                     // **Le livrable exigé manque** : l'équipier attend la boîte, sans
                     // appeler le modèle ; une ligne du superviseur le relance.
+                    #[cfg(feature = "code")]
+                    if let Some(l) = self.say_turn_facts(&files) {
+                        publish(bus.as_ref(), task, &l);
+                    }
                     let line = files.append("host", "report", None, &format!("fait sans le livrable demandé ({manque}) : j'attends le superviseur"))?;
                     publish(bus.as_ref(), task, &line);
                     continue;
@@ -2605,6 +2616,10 @@ impl DaemonHost {
                         relance = Some(texte);
                         encore = true;
                         continue;
+                    }
+                    #[cfg(feature = "code")]
+                    if let Some(l) = self.say_turn_facts(&files) {
+                        publish(bus.as_ref(), task, &l);
                     }
                     let line = files.append("host", "report", None, "fait sans le livrable demandé (une ligne de l'équipier dans la boîte) : j'attends le superviseur")?;
                     publish(bus.as_ref(), task, &line);
