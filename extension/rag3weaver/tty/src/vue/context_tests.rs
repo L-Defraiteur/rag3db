@@ -20,7 +20,9 @@ fn the_living_line_says_the_active_context_and_its_cached_part() {
     // The next call sends less (turns cut): the number drops, it is not a total.
     v.trame(&ev(json!({ "kind": "LlmCall", "prompt_tokens": 4200, "cached_prompt_tokens": 0, "cache_reported": false, "completion_tokens": 3, "finish": "ToolCall" })));
     let l = vivante(&v);
-    assert!(l.contains("contexte 4,2 k") && !l.contains("10,1 k") && !l.contains("en cache"), "{l}");
+    // The active part only: the session's total that follows may carry a cached part.
+    let actif = l.split(" · cumul").next().unwrap_or_default().to_string();
+    assert!(actif.contains("contexte 4,2 k") && !actif.contains("10,1 k") && !actif.contains("en cache"), "{l}");
 }
 
 #[test]
