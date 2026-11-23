@@ -1,0 +1,8 @@
+%% tool: recall_search
+%% description: One source of recall_for_request (the element: {tier, target, query, options}), cited once per source through a ForEachNode: the structured search of its entity, its hits tagged with its tier.
+%% result: tag.result
+
+graph LR
+    search["GraphNode(graph='@builtin:tools/search_structured.mmd', target=$element.target, query=$element.query, options=$element.options)"]
+    tag["RhaiNode(script='#{tier: input.tier, results: input.value}', inputs='tier', tier=$element.tier)"]
+    search -->|result:value| tag

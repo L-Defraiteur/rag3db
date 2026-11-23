@@ -196,6 +196,11 @@
 - 23 novembre 2026 — **Chaque outil dit combien de temps ont pris ses nœuds.** La réponse de tout outil porte
   `metadata.timings_ms` : la durée de chaque nœud de son graphe, en millisecondes, et le total du run. Un banc ou
   l'IDE la lisent telle quelle, sans instrumenter l'outil ; elle n'entre pas dans le texte que lit le modèle.
+- 23 novembre 2026 — **Le rappel automatique d'un tour.** `recall_for_request` cherche, pour la demande du tour, les
+  tours des fenêtres déjà résumées (jamais un passage encore en clair), puis les apports L1, puis les fiches ; il les
+  fusionne par rang pondéré et rend les meilleurs passages en entier, dans un bloc étiqueté « Rappel automatique » que
+  l'hôte pose en dernier dans le contexte, ou rien sous son seuil. Mode `direct` : la demande telle quelle, sans appel de
+  modèle. Il filtre par `author` (« me ») et accepte `swarm`.
 
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
