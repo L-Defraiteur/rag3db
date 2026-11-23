@@ -204,6 +204,8 @@ pub struct Vue {
     pub still: bool,
     /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
     turn_in_flight: bool,
+    /// The turn's run finished and its `ended` has not come: the host reviews it (23 Nov. 2026).
+    reviewing: bool,
     /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
     turn: usize,
     calls_this_turn: usize,
@@ -310,6 +312,7 @@ impl Vue {
             thinking_since: Instant::now(),
             still: false,
             turn_in_flight: false,
+            reviewing: false,
             turn: 0,
             calls_this_turn: 0,
             empty_in_a_row: 0,
@@ -356,6 +359,7 @@ impl Vue {
     fn changer(&mut self, e: Etat) {
         if matches!(e, Etat::Fini(_)) {
             self.turn_in_flight = false;
+            self.reviewing = false;
             // No tool line left on screen once the turn ended (23 Nov. 2026).
             self.discret = None;
         }
@@ -383,6 +387,8 @@ impl Vue {
         match &self.etat {
             Etat::Reflechit | Etat::Ecrit => Some(Quelle::Reflechit),
             Etat::Agit(o) => Some(*self.politiques.get(o).unwrap_or(&Quelle::Lit)),
+            // From the request to the ended the turn runs, even without run events (23 Nov. 2026).
+            Etat::Attend if self.turn_in_flight => Some(Quelle::Reflechit),
             _ if self.etat_hote.as_deref() == Some("error") => None,
             Etat::Fini(_) if !self.repondu => None,
             _ => Some(Quelle::Repos),
@@ -548,6 +554,7 @@ impl Vue {
             }
             // L'hôte ne dit `LlmCall` qu'au retour du modèle : dès qu'un run part, l'équipier réfléchit.
             "RunStarted" | "LlmCall" => {
+                self.reviewing = false;
                 // Un appel au modèle part : au départ du run, ou au retour du précédent.
                 self.attente_depuis = Instant::now();
                 self.thinking_live = false;
@@ -713,6 +720,11 @@ impl Vue {
                 self.changer(Etat::Reflechit);
             }
             "RunFinished" => {
+                // Its ended not come yet: the host reviews the turn (23 Nov. 2026).
+                if self.turn_in_flight {
+                    self.reviewing = true;
+                    self.attente_depuis = Instant::now();
+                }
                 // Its last words may come after it: the text stays open until a silence (23 Nov. 2026).
                 if self.en_cours.is_empty() && self.bloc.is_none() {
                     self.clore();
@@ -805,6 +817,12 @@ impl Vue {
         }
         match (l["from"].as_str(), l["kind"].as_str()) {
             (Some("supervisor"), Some("request" | "instruction")) => {
+                // A turn runs from its request to its ended, whoever sent it and whatever events the view missed.
+                if !self.turn_in_flight {
+                    self.turn_in_flight = true;
+                    self.attente_depuis = Instant::now();
+                }
+                self.reviewing = false;
                 self.turn += 1;
                 self.calls_this_turn = 0;
                 self.repondu = false;
@@ -1133,6 +1151,9 @@ impl Vue {
                 self.clore();
                 self.valider_avec_tete(Genre::Boite, "› ", &texte);
                 self.retenir_l_envoi(&texte);
+                if !self.turn_in_flight {
+                    self.attente_depuis = Instant::now();
+                }
                 self.turn_in_flight = true;
                 Some(Action::Envoyer(texte, genre))
             }
@@ -1409,9 +1430,12 @@ impl Vue {
                 let cible = self.appels.last().and_then(|a| a.cible()).map(|c| format!(" {c}")).unwrap_or_default();
                 format!("{o}{cible} travaille… ({n} s)")
             }
+            Etat::Attend if self.turn_in_flight && self.reviewing => format!("relecture du tour… ({n} s)"),
+            Etat::Attend if self.turn_in_flight => format!("le modèle réfléchit… ({n} s)"),
+            // « répond » only when text arrives, and then the text itself flows (23 Nov. 2026): until then it thinks.
             Etat::Reflechit => match &self.modele {
-                Some(m) => format!("le modèle répond… ({m}, {n} s)"),
-                None => format!("le modèle répond… ({n} s)"),
+                Some(m) => format!("le modèle réfléchit… ({m}, {n} s)"),
+                None => format!("le modèle réfléchit… ({n} s)"),
             },
             _ => String::new(),
         }
@@ -2348,7 +2372,8 @@ mod tests {
         let mut v = Vue::new(120, true);
         v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "host", "kind": "ended", "text": "fait sans plan" }));
         v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "supervisor", "kind": "instruction", "text": "encore" }));
-        assert_eq!(v.quelle(), Some(Quelle::Repos), "la consigne seule : l'équipier n'est pas encore parti");
+        // Since a trial on 23 Nov., a turn runs from its request to its ended, even before its run starts.
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit), "la consigne posée : le tour tourne");
         v.trame(&json!({ "evenement": { "kind": "RunStarted", "name": "chat:x" } }));
         assert_eq!(v.quelle(), Some(Quelle::Reflechit), "parti, il réfléchit : {}", v.ligne_d_etat());
         v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "step_done" } }));
@@ -2356,7 +2381,9 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
         // The text closes after a silence once its run ended (23 Nov. 2026).
         v.tick(Instant::now() + Duration::from_secs(5));
-        assert_eq!(v.quelle(), Some(Quelle::Repos), "le run fini, l'invite au repos : {}", v.ligne_d_etat());
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit), "le run fini, le tour se relit jusqu'à son ended : {}", v.ligne_d_etat());
+        v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        assert_ne!(v.quelle(), Some(Quelle::Reflechit), "au ended, plus au travail : {}", v.ligne_d_etat());
     }
 
     /// **Jamais un mot d'état nu** (Lucie, 15 nov. : « pourquoi ça m'écrit "attend", c'est
@@ -2404,13 +2431,13 @@ mod tests {
         let mut v = Vue::new(160, true);
         let a = |v: &Vue, s: u64| v.ligne_vivante(160, v.attente_depuis + Duration::from_secs(s)).spans.iter().map(|s| s.content.to_string()).collect::<String>();
         v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
-        assert!(a(&v, 12).ends_with(" le modèle répond… (12 s)"), "{}", a(&v, 12));
+        assert!(a(&v, 12).ends_with(" le modèle réfléchit… (12 s)"), "{}", a(&v, 12));
         v.trame(&json!({ "evenement": { "kind": "LlmCall", "model": "google/gemini-3.8-flash", "ms": 2457 } }));
         v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "run_command", "arguments": "{\"command\":\"cargo check\"}" } }));
         // The turn's count sits at the right, muted (23 Nov. 2026).
         assert!(a(&v, 40).contains(" run_command cargo check travaille… (40 s)") && a(&v, 40).ends_with("appel 1 du tour"), "{}", a(&v, 40));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "run_command", "ok": true, "ms": 40_000 } }));
-        assert!(a(&v, 3).ends_with(" le modèle répond… (gemini-3.8-flash, 3 s)"), "{}", a(&v, 3));
+        assert!(a(&v, 3).ends_with(" le modèle réfléchit… (gemini-3.8-flash, 3 s)"), "{}", a(&v, 3));
     }
 
     /// **La réponse s'affiche une fois** (essai de Lucie sur l'atelier, 15 nov. : trois fois le même
@@ -2433,6 +2460,8 @@ mod tests {
         v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "Bilan du test des outils :\ntout passe." }));
         v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "teammate", "kind": "report", "text": "le pas 2 s'est terminé sans step_done ; sa réponse : Bilan du test des outils :\ntout passe." }));
         assert_eq!(ecrites(&mut v), Vec::<String>::new(), "la réponse est déjà à l'écran");
+        // The turn ends at its ended (23 Nov. 2026).
+        v.ligne_de_boite(&json!({ "id": "d/t:3b", "from": "host", "kind": "ended", "text": "fait" }));
         assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu");
         // Une réponse que le texte n'a pas dite s'écrit, sans le mot de l'hôte.
         v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "teammate", "kind": "report", "text": "le pas 3 s'est terminé sans step_done ; sa réponse : Autre chose." }));
