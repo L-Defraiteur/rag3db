@@ -7111,7 +7111,9 @@ impl Backend {
                 cancel.on_cancel(move || handle.cancel_by("parent"));
             }
         });
+        let depart = std::time::Instant::now();
         let output = runtime.execute_as(&mut graph, &run)?;
+        let total_ms = depart.elapsed().as_millis() as u64;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
                 .get(node, port)
@@ -7137,6 +7139,11 @@ impl Backend {
             let fields = terminal.as_object().ok_or("les métadonnées terminales doivent être un objet")?;
             metadata.extend(fields.clone());
         }
+        // **How long each node took, and the run** (23 November 2026): read by the bench and the IDE as they are.
+        let mut timings: serde_json::Map<String, Value> =
+            output.timings().iter().map(|(n, ms)| (n.clone(), json!(ms))).collect();
+        timings.insert("total".into(), json!(total_ms));
+        metadata.insert("timings_ms".into(), Value::Object(timings));
         let mut response = json!({"result":result,"metadata":metadata,"run":run});
         if result_port.1 == "results" && output.get(result_port.0, "text").is_some() {
             response["presentation"] = read(result_port.0, "text")?;

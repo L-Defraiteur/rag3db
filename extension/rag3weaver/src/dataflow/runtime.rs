@@ -166,6 +166,11 @@ impl DataflowOutput {
         self
     }
 
+    pub(super) fn with_timings(mut self, timings: std::collections::BTreeMap<String, u64>) -> Self {
+        self.timings = timings;
+        self
+    }
+
     /// Combien d'éléments la sortie `node.port` a envoyés sur ses canaux.
     pub(crate) fn sent(&self, node: &str, port: &str) -> usize {
         self.sent.get(&(node.to_string(), port.to_string())).copied().unwrap_or(0)
@@ -736,6 +741,7 @@ impl DataflowRuntime {
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
         let mut skipped: HashMap<String, String> = HashMap::new();
+        let mut timings: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
         let order = graph.topological_sort()?;
         let stream_ports = stream_ports_of(graph)?;
         // Un graphe à flux, sous points de reprise : l'exécuteur concurrent,
@@ -978,6 +984,7 @@ impl DataflowRuntime {
             // ── Phase 3 : persister et ranger, dans l'ordre (séquentiel) ──
             for done in injected.into_iter().chain(results) {
                 let DoneNode { name: node_name, idx: node_idx, node_type, mut ctx, result: exec_result, duration_ms } = done;
+                *timings.entry(node_name.clone()).or_insert(0) += duration_ms;
                 let node_name = &node_name;
                 // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
                 // finit sans la poser est en faute, dit comme tel — pas un saut.
@@ -1141,7 +1148,7 @@ impl DataflowRuntime {
 
         let stopped = annul.cancelled();
         self.note_stop(&run_id, stopped.as_ref());
-        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings: Default::default() })
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1327,6 +1334,7 @@ impl DataflowRuntime {
             std::mem::take(&mut graph.initial_inputs);
         let mut completed: HashSet<String> = HashSet::new();
         let mut skipped: HashMap<String, String> = HashMap::new();
+        let mut timings: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
         let order = graph.topological_sort()?;
         let stream_ports = stream_ports_of(graph)?;
         // **Un flux, et l'exécuteur concurrent** (page 05) : un graphe de
@@ -1522,6 +1530,7 @@ impl DataflowRuntime {
             // ── Phase 3 : ranger, dans l'ordre (séquentiel) ──────────────
             for done in results {
                 let DoneNode { name: node_name, node_type, mut ctx, result: exec_result, duration_ms, .. } = done;
+                *timings.entry(node_name.clone()).or_insert(0) += duration_ms;
                 // **Une sortie requise doit émettre** (11 octobre 2026) : un nœud qui
                 // finit sans la poser est en faute, dit comme tel — pas un saut.
                 // Seule une sortie optionnelle vide fait sauter l'aval.
@@ -1629,7 +1638,7 @@ impl DataflowRuntime {
 
         let stopped = annul.cancelled();
         self.note_stop(&run_id, stopped.as_ref());
-        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings: Default::default() })
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings })
     }
 }
 
