@@ -488,6 +488,15 @@ pub(crate) fn in_her_folder(folders: Option<&(String, String)>, text: &str) -> S
 
 /// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
 /// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
+/// **The turn was opened by a human**: its last request or instruction comes from a human.
+pub(crate) fn human_turn(lignes: &[Value]) -> bool {
+    lignes
+        .iter()
+        .rev()
+        .find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
+        .is_some_and(|l| l["by"]["kind"] == "human")
+}
+
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
     let n = lignes.iter().rposition(|l| {
         matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host" && l["by"]["kind"] == "human"
@@ -555,6 +564,8 @@ pub struct Step {
     wrote_text: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The step_dones refused for want of a word, and whether the step ended without one.
     text_refusals: AtomicUsize,
+    /// The step called a tool of work (not step_done nor report): a text must follow its last one.
+    used_tools: std::sync::atomic::AtomicBool,
     answered_nothing: std::sync::atomic::AtomicBool,
     text_first: String,
     reply_first: String,
@@ -752,6 +763,7 @@ impl Step {
             last_context: std::sync::Arc::new(AtomicUsize::new(0)),
             wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             text_refusals: AtomicUsize::new(0),
+            used_tools: std::sync::atomic::AtomicBool::new(false),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
             text_first: crate::backend::TeammatePolicy::default().text_first,
             reply_first: crate::backend::TeammatePolicy::default().reply_first,
@@ -840,6 +852,14 @@ impl Step {
     /// The head of the teammate's prompt (`teammate.reply_first`).
     pub fn reply_first(&self) -> &str {
         &self.reply_first
+    }
+
+    /// **A tool call of the step**: a tool of work resets « a text was written », so that a text must follow it.
+    pub fn tool_of_work(&self, name: &str) {
+        if !matches!(name, STEP_DONE | REPORT) {
+            self.used_tools.store(true, Ordering::SeqCst);
+            self.wrote_text.store(false, Ordering::SeqCst);
+        }
     }
 
     /// Set when the step's reply streams a token of text ([`Self::wrote_text`]).
@@ -1096,7 +1116,18 @@ impl Step {
     fn step_done(&self, args: &Value) -> Result<Value, String> {
         // **A word to the user first** (23 Nov 2026, `~/essai-3`): in a turn a human opened that has no line of the
         // agent yet, a step without text is refused twice, then accepted and said by the host.
-        if !self.wrote_text.load(Ordering::SeqCst) && silent_turn(&self.files.mailbox()).is_some() {
+        // And a step that used tools ends with a word after its last one (the replay of 23 Nov 2026, 18 h 26: a turn
+        // of 15 files whose only text was its first sentence): the end-of-turn explanation.
+        let boite = self.files.mailbox();
+        // Only the step_done that closes the turn asks for it (Lucie, 23 Nov 2026: an explanation at the end of the
+        // turn, not a comment after each step): nothing left, and no other item of the active plan still to do.
+        let cet_element = args["item"].as_str().unwrap_or_default();
+        let clot = args["remaining"].as_str().unwrap_or_default().trim().is_empty() && {
+            let plans = self.files.read_plans();
+            plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
+        };
+        let apres_outil = self.used_tools.load(Ordering::SeqCst) && human_turn(&boite) && clot;
+        if !self.wrote_text.load(Ordering::SeqCst) && (silent_turn(&boite).is_some() || apres_outil) {
             // Numbered: two refusals in the same words would stop the run as a repeated error.
             let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
             if n < 2 {
@@ -1496,16 +1527,19 @@ impl StepTools<'_> {
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call(c));
+        self.step.tool_of_work(&call.name);
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call_in(c, run));
+        self.step.tool_of_work(&call.name);
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
         // A replay (the gate's yes, a granted root, the bac's shell line) goes the way of the call itself: with its
         // invocation, so a background command stays in the task's background scope (23 Nov 2026).
         let rejouer = |c: &ToolCall| self.in_task(c, Some(&inv.handle), |c| self.inner.call_with(c, run, inv));
+        self.step.tool_of_work(&call.name);
         self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {

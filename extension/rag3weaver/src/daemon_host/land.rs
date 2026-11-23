@@ -253,7 +253,7 @@ impl DaemonHost {
         let depart = if let Some((arbre, head)) = self.task_tree_head(parent, task) {
             // **What the user had changed at the turn's start** (23 Nov 2026, the agent in her folder): each changed
             // file's blob, so that the turn's commit and facts leave what the turn did not touch.
-            json!({ "tree": arbre, "head": head, "from_line": from_line, "dirty": changed_blobs(&arbre) })
+            json!({ "tree": arbre, "head": head, "from_line": from_line, "dirty": changed_blobs(&arbre), "branch": git(&arbre, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default() })
         } else if let Some((racine, exclus, avant)) = self.task_copy_snapshot(parent, task) {
             json!({ "copy": racine, "exclude": exclus, "prints": avant, "from_line": from_line })
         } else {
@@ -314,6 +314,18 @@ impl DaemonHost {
     /// rag3weaver, of only what the turn changed; what she had changed before and the turn left stays uncommitted, said;
     /// a file both changed goes in, named; never during a merge or a rebase, said.
     fn land_in_place(&self, t: &Tache, files: &TeammateFiles, dossier: &Path, interrupted: bool) {
+        // **Her branch is not changed behind her back** (the replay of 23 Nov 2026, 18 h 40: `git checkout -b particles`
+        // by the agent): a turn that ends on another branch than it started on says so, once.
+        if let Some(depart) = std::fs::read(depart_du_tour(files)).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()) {
+            let avant = depart["branch"].as_str().unwrap_or_default().to_string();
+            let maintenant = git(dossier, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+            let debut = depart["from_line"].as_u64().map(|n| n as usize).unwrap_or(0);
+            let deja = files.mailbox().iter().skip(debut).any(|l| !l["branch_changed"].is_null());
+            if !avant.is_empty() && !maintenant.is_empty() && avant != maintenant && !deja {
+                let texte = format!("l'agent a changé ta branche : de {avant} à {maintenant} ; le travail du tour y est. Pour revenir : git -C {} switch {avant}", dossier.display());
+                let _ = files.append_with("host", "report", None, &texte, &json!({ "branch_changed": { "from": avant, "to": maintenant } }));
+            }
+        }
         let en_cours = ["MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD"]
             .iter()
             .any(|m| git(dossier, &["rev-parse", "--git-path", m]).map(|p| dossier.join(p).exists()).unwrap_or(false));

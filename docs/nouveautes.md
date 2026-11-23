@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **L'agent écrit dans ton dossier, garde ta branche, et t'explique la fin de son travail.** En
+  place, il n'est plus refusé sur les fichiers du dossier que tu as ouvert (refusé, il contournait : une branche à lui,
+  un fichier encodé à la main, qui a corrompu une page). S'il change quand même ta branche, l'hôte le dit en une ligne,
+  avec la commande pour revenir. Et le `step_done` qui clôt un tour, après un travail par outils, attend un texte écrit
+  après le dernier : l'explication de fin de tour arrive, sans commentaire à chaque pas d'un plan.
 - 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
   commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
   courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
