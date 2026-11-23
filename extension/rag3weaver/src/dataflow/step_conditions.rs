@@ -66,26 +66,84 @@ fn kind_param() -> Vec<ConfigParam> {
     choice("kind", "any", &["approval", "question", "any"], "The kind of card.")
 }
 
-fn text_after_last_tool(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+fn flag(step: &Value, key: &str, yes: &str, no: &str) -> (bool, String) {
+    let holds = step[key].as_bool().unwrap_or(false);
+    (holds, if holds { yes } else { no }.to_string())
 }
-fn wrote_in_step(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+fn text_after_last_tool(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    Ok(flag(step, "text_since_last_tool", "a text after the last tool", "no text after the last tool"))
 }
-fn used_tools(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+fn wrote_in_step(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    Ok(flag(step, "text_in_step", "the step wrote to the user", "the step wrote nothing to the user"))
 }
-fn turn_asked_by(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+fn used_tools(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    Ok(flag(step, "used_tools", "the step used tools", "the step used no tool"))
 }
-fn turn_has_teammate_line(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+/// The turn's lines (`turn`), none when absent.
+fn turn(step: &Value) -> &[Value] {
+    step["turn"].as_array().map(Vec::as_slice).unwrap_or(&[])
 }
-fn closing_step_done(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+/// The rank of the turn's last request or instruction that neither the teammate nor the host wrote.
+fn request(lines: &[Value]) -> Option<usize> {
+    lines.iter().rposition(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
 }
-fn open_card(_step: &Value, _config: &Value) -> Result<(bool, String), String> {
-    Ok((false, "not written yet".into()))
+
+fn turn_asked_by(step: &Value, config: &Value) -> Result<(bool, String), String> {
+    let lines = turn(step);
+    let Some(n) = request(lines) else { return Ok((false, "no request in the turn".into())) };
+    let human = lines[n]["by"]["kind"] == "human";
+    let holds = match config["who"].as_str().unwrap_or("any") {
+        "human" => human,
+        "agent" => !human,
+        _ => true,
+    };
+    Ok((holds, format!("the turn's request is {}'s", if human { "a human" } else { "an agent" })))
+}
+
+fn turn_has_teammate_line(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    let lines = turn(step);
+    let Some(n) = request(lines) else { return Ok((false, "no request in the turn".into())) };
+    let holds = lines[n + 1..].iter().any(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question" | "approval" | "message" | "answer")));
+    Ok((holds, if holds { "the teammate wrote to the asker" } else { "no line of the teammate since the request" }.into()))
+}
+
+fn closing_step_done(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    let d = &step["step_done"];
+    if d.is_null() {
+        return Ok((false, "no step_done".into()));
+    }
+    if d["succeeded"] != true {
+        return Ok((false, "the step_done did not succeed".into()));
+    }
+    if !d["remaining"].as_str().unwrap_or_default().trim().is_empty() {
+        return Ok((false, "the step_done says something is left".into()));
+    }
+    let item = d["item"].as_str().unwrap_or_default();
+    let reste = step["plan"]["items"].as_array().into_iter().flatten().any(|i| i["id"] != item && !matches!(i["status"].as_str(), Some("done" | "dropped")));
+    Ok((!reste, if reste { "the active plan has items still to do" } else { "the step_done closes the turn" }.into()))
+}
+
+fn open_card(step: &Value, config: &Value) -> Result<(bool, String), String> {
+    let lines = turn(step);
+    let kind = config["kind"].as_str().unwrap_or("any");
+    let ouverte = lines.iter().find(|l| {
+        l["from"] == "teammate"
+            && match kind {
+                "approval" => l["kind"] == "approval",
+                "question" => l["kind"] == "question",
+                _ => matches!(l["kind"].as_str(), Some("approval" | "question")),
+            }
+            && !lines.iter().any(|r| !l["id"].is_null() && r["reply_to"] == l["id"])
+    });
+    Ok(match ouverte {
+        Some(l) => (true, format!("the card {} waits for an answer", l["id"].as_str().unwrap_or("?"))),
+        None => (false, "no card waits".into()),
+    })
 }
 
 /// A condition's node: it reads `step`, asks its question, gives its verdict on `holds`.
