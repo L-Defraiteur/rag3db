@@ -34,6 +34,7 @@ mod gate_level;
 mod commit_each_turn;
 mod commit_what_was_written;
 mod conversation_memory;
+mod copy_lands;
 mod turn_changes;
 mod missing_command;
 mod background_lock;
