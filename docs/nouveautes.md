@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un prix manquant se donne d'un oui.** Un modèle sans prix n'est plus seulement refusé : le
+  refus nomme le modèle (`missing_price`), et un prix s'écrit dans `prices.json` par `POST /ide/prices`, à partir du
+  jour, avec sa source, sur la seule signature de l'utilisatrice ; un agent, le jeton de l'hôte ou un corps qui se dit
+  humain n'écrivent rien. Au premier appel, le fichier de prix par défaut se pose entier : un appel au même instant le
+  trouvait vide et refusait tous les modèles.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
