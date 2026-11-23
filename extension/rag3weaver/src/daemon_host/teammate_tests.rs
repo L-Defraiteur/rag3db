@@ -32,6 +32,7 @@ mod facts_when_waiting;
 mod fork;
 mod gate_level;
 mod human_yes_only;
+mod in_place;
 mod instruction_turn_facts;
 mod judge_all;
 mod land_each_turn;
