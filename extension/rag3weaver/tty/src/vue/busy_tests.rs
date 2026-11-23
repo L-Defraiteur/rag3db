@@ -32,3 +32,18 @@ fn after_its_run_the_turn_is_reviewed_until_ended() {
     v.ligne_de_boite(&json!({ "id": "b/t:9", "from": "host", "kind": "ended", "text": "fait sans plan" }));
     assert_ne!(v.quelle(), Some(Quelle::Reflechit), "at the ended, no longer at work");
 }
+
+/// **« le modèle répond » only when text arrives** (23 Nov. 2026: « je vois encore des "le modèle répond" sans lire
+/// aucune réponse »): while a model call is out and nothing came, the living line says the model thinks; a call that
+/// only returns a tool call never makes it say it answers.
+#[test]
+fn the_model_answers_only_when_its_text_arrives() {
+    let mut v = Vue::new(160, true);
+    v.ligne_de_boite(&json!({ "id": "b/t:0", "from": "supervisor", "kind": "request", "text": "fais-le" }));
+    v.trame(&json!({ "evenement": { "kind": "RunStarted", "run": "r1" } }));
+    let l = vivante(&v, v.attente_depuis + Duration::from_secs(8));
+    assert!(l.contains("le modèle réfléchit") && !l.contains("répond"), "{l}");
+    v.trame(&json!({ "evenement": { "kind": "LlmCall", "run": "r1", "model": "google/gemini-3.8-flash", "completion_tokens": 39, "finish": "ToolCall" } }));
+    let l = vivante(&v, v.attente_depuis + Duration::from_secs(3));
+    assert!(!l.contains("répond"), "a call that returned only a tool call: {l}");
+}
