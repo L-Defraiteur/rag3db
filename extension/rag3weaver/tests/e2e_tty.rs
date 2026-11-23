@@ -427,7 +427,9 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
         if let (Some(id), Ok(v)) = (t.id, serde_json::from_str::<Value>(&t.data)) {
             trames.push((id, v));
         }
-        let fini = trames.iter().any(|(_, v)| v["evenement"]["kind"] == "RunFinished") && !tokens(&trames).is_empty();
+        // Cut at the end of the run that carries the words, not at the first run that finishes.
+        let run_des_mots = trames.iter().find(|(_, v)| v["evenement"]["kind"] == "Token").and_then(|(_, v)| v["evenement"]["run"].as_str().map(str::to_string));
+        let fini = run_des_mots.is_some_and(|r| trames.iter().any(|(_, v)| v["evenement"]["kind"] == "RunFinished" && v["evenement"]["run"].as_str() == Some(r.as_str())));
         if fini || Instant::now() > fin_au_plus_tard {
             flux::Suite::Couper
         } else {
@@ -452,7 +454,8 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
     let ailleurs: Vec<&Value> = mots.iter().map(|(_, v)| v).filter(|v| v["backend"].as_str() != Some(tache.as_str())).collect();
     assert!(ailleurs.is_empty(), "every word carries the task's backend {tache}, which the terminal filters on: {} elsewhere, first {:?}", ailleurs.len(), ailleurs.first());
     let premier_mot = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "Token").unwrap();
-    let fin_du_run = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "RunFinished").expect("le run du pas finit");
+    let run_des_mots = mots[0].1["evenement"]["run"].as_str().unwrap_or_default().to_string();
+    let fin_du_run = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "RunFinished" && v["evenement"]["run"].as_str() == Some(run_des_mots.as_str())).expect("le run du pas finit");
     assert!(premier_mot < fin_du_run, "the first word arrives before the step's run finishes (live, not at the end)");
     let rendu: String = trames.iter().filter(|(_, v)| v["backend"].as_str() == Some(tache.as_str())).filter_map(|(_, v)| plain::trame(v)).collect();
     assert!(rendu.contains("mot0") && rendu.contains(&format!("mot{}", MOTS - 1)), "--plain renders the words of the task: {}", &rendu[..rendu.len().min(200)]);
