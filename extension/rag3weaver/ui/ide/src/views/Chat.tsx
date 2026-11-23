@@ -5,6 +5,7 @@ import { marked } from "marked";
 import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
 import { ToolResultView, toolContext } from "@/lib/toolview";
 import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
+import { PriceCard } from "@/components/PriceCard";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { fileTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
@@ -52,7 +53,7 @@ type ToolBlock = { id: string; name: string; args: string; result?: string; ok?:
 // réponse à la fin ; le flux et la relecture rendent la même suite.
 type Part = { kind: "text"; text: string } | ({ kind: "tool" } & ToolBlock);
 type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
-type Item = Message | { kind: "info"; text: string; cls?: string };
+type Item = Message | { kind: "info"; text: string; cls?: string } | { kind: "price"; slug: string; resend: string };
 type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]>; missed: { sujet: string; count: number }[] };
 
 const textOf = (m: Message) => m.parts.filter((p) => p.kind === "text").map((p) => (p as { text: string }).text).join("");
@@ -769,21 +770,24 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       // run — and the card stayed at « read_file… »). The host writes the session before it
       // answers: read it, then add the error.
       const erreur = (e as Error).message;
+      // A model without a price: the gesture instead of the refusal (« un refus offre le geste »).
+      const manque = (e as { missingPrice?: string | null }).missingPrice;
+      const fin: Item = manque ? { kind: "price", slug: manque, resend: text } : message("error", erreur);
       etatsRecus.current.clear();
       const s = await fetchChat(id).catch(() => null);
       if (s) {
         setChat(s);
         toursRef.current = s.turns;
         follow.current = true;
-        setItems([...fromTurns(s.turns), message("error", erreur)]);
+        setItems([...fromTurns(s.turns), fin]);
       } else {
         setItems((cur) => [
           ...cur.filter((i) => !(i.kind === "message" && i.live && i.parts.length === 0))
             .map((i) => i.kind === "message" && i.live ? { ...i, live: false } : i),
-          message("error", erreur),
+          fin,
         ]);
       }
-      setStatus("Erreur");
+      setStatus(manque ? "un prix manque" : "Erreur");
     } finally {
       epoqueDesTours.current += 1;
       envoiDeLaPage.current = false;
@@ -918,6 +922,17 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           {items.map((it, k) =>
             it.kind === "info" ? (
               <p key={k} className={`text-xs text-muted-foreground ${it.cls ?? ""}`}>{it.text}</p>
+            ) : it.kind === "price" ? (
+              <PriceCard
+                key={k}
+                slug={it.slug}
+                onWritten={() => {
+                  // The price written, the message refused goes again by itself.
+                  setItems((cur) => cur.filter((x) => x !== it));
+                  if (input.current) input.current.value = it.resend;
+                  void send();
+                }}
+              />
             ) : (
               <article key={k} className={`message ${it.role} ${it.live ? "en-cours" : ""} mb-7`} data-role={it.role} data-run={it.run}>
                 <div className={`role text-xs font-semibold mb-1.5 ${it.role === "user" ? "text-blue-400" : it.role === "error" ? "text-destructive" : "text-primary"}`}>

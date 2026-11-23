@@ -87,3 +87,42 @@ fn the_default_prices_are_written_whole_under_concurrent_first_calls() {
         assert!(errors.is_empty(), "a first call found no whole prices: {errors:?}");
     }
 }
+
+/// A Vertex of a test: it answers each `generateContent` with the next text of `answers`.
+fn fake_search(answers: Vec<&'static str>) -> (String, std::thread::JoinHandle<()>) {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", server.server_addr().to_ip().unwrap());
+    let thread = std::thread::spawn(move || {
+        for text in answers {
+            let request = server.recv().unwrap();
+            let reply = json!({ "candidates": [{ "content": { "parts": [{ "text": text }] },
+                "groundingMetadata": { "groundingChunks": [{ "web": { "uri": "https://example.com/pricing", "title": "Pricing" } }] } }] });
+            request.respond(tiny_http::Response::from_string(reply.to_string())).unwrap();
+        }
+    });
+    (address, thread)
+}
+
+/// **« Je le cherche »: a price looked up is a proposal, never written**: the web search's answer, prose and a code
+/// fence around its JSON, gives the four prices and the page; an answer without them is said, not guessed. Nothing is
+/// written to `prices.json`: the user accepts the proposal by `set_price`.
+#[test]
+fn a_price_looked_up_is_a_proposal_with_its_source_never_written() {
+    let (address, thread) = fake_search(vec![
+        "Here is the price:\n```json\n{\"input\": 0.5, \"output\": 2.5, \"cache_read\": 0.05, \"cache_write\": null, \"source\": \"https://provider.example/pricing\"}\n```",
+        "I could not find an official price for that model.",
+    ]);
+    let policy = crate::backend::WebSearchPolicy { model: Some("gemini-price-lookup-witness".into()), endpoint: Some(address), ..Default::default() };
+    let s = slug("looked-up-model");
+    let found = lookup_price(&policy, &s).expect("a proposal");
+    assert_eq!(
+        found["proposal"],
+        json!({ "input": 0.5, "output": 2.5, "cache_read": 0.05, "cache_write": null, "source": "https://provider.example/pricing" }),
+        "{found:#}"
+    );
+    let e = lookup_price(&policy, &s).unwrap_err();
+    assert!(e.contains("not found in a form to propose"), "{e}");
+    thread.join().unwrap();
+    let still = user_ledger().reserve(&s, "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
+    assert!(still.contains("no price for"), "a lookup writes nothing: {still}");
+}
