@@ -1,5 +1,7 @@
-// recall_fuse — the fusion of recall_for_request: a hit is recalled only on evidence — a lexical signal (bm25, sparse)
-// found it, or its dense similarity reaches min_similarity (never a nearest neighbour recalled to fill); then each hit scores weight(tier) × decay(its age rank in its tier) /
+// recall_fuse — the fusion of recall_for_request: a hit is recalled only on evidence — its dense similarity reaches
+// min_similarity (never a nearest neighbour recalled to fill). A lexical hit is evidence only for a hit with no dense
+// signal: measured on 23 November 2026, bm25 finds an unrelated question by its common words (« how is the weather »:
+// 0.68) above a relevant one (0.58), while the similarity separates them (0.29 and 0.44 against 0.69 and 0.82); then each hit scores weight(tier) × decay(its age rank in its tier) /
 // (60 + its rank in its tier); the best `top`, deduplicated, rendered in full under the budget as one block labelled
 // « Rappel automatique », placed last in the context by the host. Nothing found (or nothing above min_score): no block,
 // and it is not a fallback.
@@ -31,11 +33,15 @@ let min_similarity = if i.min_similarity == () { 0.5 } else { 0.0 + i.min_simila
 fn evidence(r, min_similarity) {
     let sigs = if r.signals == () { [] } else { r.signals };
     if sigs.is_empty() { return true; }
+    let dense = false;
     for s in sigs {
-        if s.label == "bm25" || s.label == "sparse" { return true; }
-        if s.label == "vector" && 0.0 + s.score >= min_similarity { return true; }
+        if s.label == "vector" {
+            dense = true;
+            if 0.0 + s.score >= min_similarity { return true; }
+        }
     }
-    false
+    // No dense signal for this hit (an entity without vectors): the lexical signals are the only evidence there is.
+    !dense
 }
 let top = if i.top == () { 2 } else { i.top };
 let budget_chars = (if i.budget_tokens == () { 1500 } else { i.budget_tokens }) * 4;
