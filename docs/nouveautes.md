@@ -14,6 +14,9 @@
   il dit ce qu'il va faire quand ça aide, et répond à la fin du tour. Et ce qu'il produit t'appartient : ni nom, ni
   logo, ni couleurs, ni « propulsé par » de lui, de son modèle, de son fournisseur ou d'une autre IA, sauf si tu le
   demandes ; le nom du modèle et du fournisseur viennent de la session.
+- 23 novembre 2026 — **Les mots de l'agent arrivent entre le début et la fin de leur tour.** Le flux de l'hôte relaie
+  les événements du run et ses mots par un même fil : un mot ne passe plus avant le début de son run ni après sa fin.
+  Mesuré bout à bout sur un pas de 300 mots : 132 à 162 mots arrivaient après la fin, il n'y en a plus aucun.
 - 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
   puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
   fermer une étape n'est pas une réponse.
