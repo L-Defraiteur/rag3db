@@ -77,11 +77,19 @@ fn faits_du_tour(changes: &[String], echecs: &[String]) -> String {
 const TOO_MANY_FILES: usize = 300;
 
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| e.to_string())?;
-    if o.status.success() {
-        Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
-    } else {
-        Err(String::from_utf8_lossy(&o.stderr).trim().to_string())
+    // **An index lock held a moment by another git in the same tree is waited for**, 5 s at most (23 Nov 2026: the
+    // end-of-step commit found `index.lock` taken, and the step's work stayed uncommitted).
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| e.to_string())?;
+        if o.status.success() {
+            return Ok(String::from_utf8_lossy(&o.stdout).trim().to_string());
+        }
+        let erreur = String::from_utf8_lossy(&o.stderr).trim().to_string();
+        if !erreur.contains("index.lock") || std::time::Instant::now() >= fin {
+            return Err(erreur);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
 
