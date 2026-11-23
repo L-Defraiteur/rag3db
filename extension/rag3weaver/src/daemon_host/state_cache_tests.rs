@@ -22,9 +22,14 @@ fn a_second_read_of_the_state_rereads_no_index_until_an_event_says_it_changed() 
     let avant = a.host.lectures_d_index.load(Ordering::SeqCst);
     let _ = a.host.state();
     assert_eq!(a.host.lectures_d_index.load(Ordering::SeqCst), avant, "the second read rereads no index");
-    // An event relayed for the repository: its index part is read again, and its alone.
+    // An event relayed for the repository: its index part is read again, and its alone — even while another read of the
+    // state runs beside (the host publishes its state in the background at an index's end: a full lib pass on 23 Nov.
+    // counted 5 reads for 4, the two reads both missing the cache before either kept it).
     a.host.ide_flux().publier("files", &manifeste, serde_json::json!({ "kind": "FileChanged", "path": "src/lib.rs" }));
-    let _ = a.host.state();
+    std::thread::scope(|s| {
+        s.spawn(|| a.host.state());
+        let _ = a.host.state();
+    });
     assert_eq!(a.host.lectures_d_index.load(Ordering::SeqCst), avant + 1, "the repository's index is read again, the others not");
 }
 
