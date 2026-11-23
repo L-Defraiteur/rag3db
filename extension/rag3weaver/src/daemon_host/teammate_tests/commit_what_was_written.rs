@@ -30,6 +30,7 @@ fn scripted(steps: Vec<(&'static str, Value)>, seen: Arc<Mutex<Vec<String>>>) ->
 fn the_host_commits_what_the_agent_wrote_and_says_what_commands_left() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     let steps = vec![
         ("edit_file", json!({ "path": "src/app.ts", "content": "export const app = 1;\n" })),
         ("run_command", json!({ "command": "sh -c 'mkdir -p backend/node_modules && for i in $(seq 1 400); do echo $i > backend/node_modules/f$i; done'" })),
