@@ -60,7 +60,7 @@ et rejoué sur une copie neuve.
 | b | voisin (19, 53 s) | voisin (18, 74 s) | **exact**, corrigé (7, 31 s) |
 | c | **exact**, corrigé (92, 259 s) | **exact**, corrigé, désigné par git (93, 651 s) | **exact**, corrigé (32, 154 s) |
 | d | **exact**, corrigé (40, 115 s) | **exact**, sans édition (26, 95 s) | **exact**, corrigé (7, 30 s) |
-| e | voisin (40, 152 s) | raté (25, 128 s) | raté, autre cause (25, 111 s) |
+| e | voisin (40, 152 s) | raté (25, 128 s) | raté, mais un vrai défaut trouvé sur master (25, 111 s) |
 | **total** | 3 exacts, 2 voisins | 3 exacts, 1 voisin, 1 raté | 4 exacts, 1 raté |
 
 Correctifs atterris : identiques à master au bit près pour a et c ; d place `taches` après `worktree_du_backend`
@@ -122,20 +122,25 @@ questions comme « symptôme → lieu », avec les requêtes de l'agent telles q
 5. **b est un raté de lecture** : la région lue, la ligne sous les yeux, quatre causes générales et des
    contournements à la place.
 
-## Une trouvaille sur master
+## Une trouvaille sur master, confirmée
 
 Au cas e, le témoin n'a pas vu le défaut planté mais a trouvé un trou qui existe sur master, relu sur
 `origin/master` : `src/dataflow/record_nodes.rs:4981`, `reindex_fts_rows`. Hors transaction par lot (sans tampon),
 une ligne absente du `NodeIdCache` n'est pas réindexée en plein texte : `continue`, sans erreur ni journal. Le
 cache naît vide à l'ouverture, donc une ligne écrite avant le dernier démarrage puis mise à jour garde son ancien
 document. Le chemin d'effacement du même fichier a le repli par la base (`select_node_ids`, commentaire ligne
-4093) ; la mise à jour ne l'a pas. **Pas encore prouvé par un test rouge** ; donné à attribuer.
+4093) ; la mise à jour ne l'a pas.
+
+**Trouvé par l'essai, confirmé depuis** par un test rouge, avec un chemin produit : le retour arrière d'une
+migration (`UpdateRecordNode::undo`, hors lot, après un redémarrage) laisse l'ancien document plein texte. Le
+correctif est le lot `cx-memoire-fts-unbuffered`. Un témoin parti dans une autre direction que le défaut planté
+a donc trouvé un vrai défaut : c'est un résultat de l'essai en soi.
 
 ## Pour un prochain jeu
 
 - **Défauts sans commentaire voisin qui les trahit**, et dont le symptôme ne partage aucun mot avec le code.
-- **Témoin à modèle égal** : une option de l'hôte qui retire le socle de recherche à un agent (`tools_only`, ou
-  `index: false`).
+- **Témoin à modèle égal** : un réglage déclaré des outils d'un équipier, pour que l'hôte lance son propre agent sans
+  les outils de recherche (demandé comme petit lot).
 - **Lancer un agent depuis une branche donnée** : aujourd'hui une tâche part toujours du HEAD du dépôt
   (`ouvrir_une_tache_depuis(…, depuis: None)`). Graine produit.
 - **Un tour de « corrige » mesuré**, quand la mémoire entre deux tours sera posée.
