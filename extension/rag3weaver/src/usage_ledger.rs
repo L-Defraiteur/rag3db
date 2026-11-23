@@ -60,6 +60,17 @@ pub struct Tariff {
     pub read_on: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// **A price set by the host so that the work goes on** (23 November 2026, Lucie: « vaut mieux une erreur là-dessus
+    /// et avancer que se bloquer »): looked up on the provider's page, or the dearest of its family when the lookup
+    /// failed. The user's yes makes a price definitive, and removes the provisional ones of its slug.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provisional: Option<bool>,
+}
+
+impl Tariff {
+    pub fn is_provisional(&self) -> bool {
+        self.provisional == Some(true)
+    }
 }
 
 /// `prices.json`: the currency, the monthly cap, the alerts, and the tariffs per slug.
@@ -251,6 +262,8 @@ pub struct Call {
     /// `None`: no price for its slug on its day.
     pub cost: Option<f64>,
     pub open: bool,
+    /// Counted at a provisional price, waiting for the user's confirmation.
+    pub provisional: bool,
 }
 
 /// The days of a month (`YYYY-MM`).
@@ -281,10 +294,42 @@ pub struct Reservation {
 }
 
 /// The ledger: `<dir>/<YYYY-MM>.jsonl`, its lock `<dir>/<YYYY-MM>.lock`, and the prices it reads.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Ledger {
     pub dir: PathBuf,
     pub prices_path: PathBuf,
+    /// The price lookup of this ledger; the one the host set ([`set_price_finder`]) when `None`.
+    finder: Option<PriceFinder>,
+}
+
+impl std::fmt::Debug for Ledger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ledger").field("dir", &self.dir).field("prices_path", &self.prices_path).field("finder", &self.finder.is_some()).finish()
+    }
+}
+
+/// **How the host looks a price up** (its web search on the provider's page): a tariff with its source, or why not.
+pub type PriceFinder = Arc<dyn Fn(&str) -> Result<Tariff, String> + Send + Sync>;
+
+static FINDER: std::sync::Mutex<Option<PriceFinder>> = std::sync::Mutex::new(None);
+
+thread_local! {
+    /// A lookup in progress on this thread: the lookup's own model call never looks up again.
+    static FINDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The host's price lookup, for every ledger that has none of its own.
+pub fn set_price_finder(finder: PriceFinder) {
+    *FINDER.lock().unwrap_or_else(|p| p.into_inner()) = Some(finder);
+}
+
+/// The family of a slug, for a prudent price: up to its first `-` after its last `/` (`claude-`, `google/gemini-`).
+fn family(slug: &str) -> &str {
+    let start = slug.rfind('/').map(|i| i + 1).unwrap_or(0);
+    match slug[start..].find('-') {
+        Some(i) => &slug[..start + i + 1],
+        None => slug,
+    }
 }
 
 /// The UTC day of a Unix second.
@@ -309,7 +354,83 @@ struct MonthLock(#[allow(dead_code)] std::fs::File);
 
 impl Ledger {
     pub fn new(dir: impl Into<PathBuf>, prices_path: impl Into<PathBuf>) -> Self {
-        Ledger { dir: dir.into(), prices_path: prices_path.into() }
+        Ledger { dir: dir.into(), prices_path: prices_path.into(), finder: None }
+    }
+
+    /// This ledger with its own price lookup (a witness's).
+    pub fn with_finder(mut self, finder: PriceFinder) -> Self {
+        self.finder = Some(finder);
+        self
+    }
+
+    /// **A model without a price gets a provisional one, and the work goes on** (c7, 23 November 2026): looked up on
+    /// its provider's page by the host, or, when the lookup fails or there is none, the dearest price of its family
+    /// (the dearest known price without a family), said in its note. Written to `prices.json` as provisional, from the
+    /// call's day; the user confirms or corrects it, and a confirmed price replaces it. Returns the tariff set, if one
+    /// was; nothing when the prices cannot be read (then the paid call is refused, said).
+    pub fn ensure_price(&self, slug: &str, day: &str, private: bool) -> Option<Tariff> {
+        self.write_default_prices();
+        let prices = Prices::load(&self.prices_path).ok()?;
+        if prices.tariff(slug, day).is_some() || (private && prices.free_private_hosts) {
+            return None;
+        }
+        let finder = self.finder.clone().or_else(|| FINDER.lock().unwrap_or_else(|p| p.into_inner()).clone());
+        let looked = match finder {
+            Some(f) if !FINDING.get() => {
+                FINDING.set(true);
+                let r = f(slug);
+                FINDING.set(false);
+                r
+            }
+            Some(_) => Err("a lookup is already in progress on this call".to_string()),
+            None => Err("this host has no price lookup".to_string()),
+        };
+        let mut tariff = match looked {
+            Ok(t) => t,
+            Err(why) => {
+                let fam = family(slug);
+                let known: Vec<&Tariff> = prices
+                    .prices
+                    .iter()
+                    .filter(|(s, _)| s.starts_with(fam) && fam != slug)
+                    .filter_map(|(s, _)| prices.tariff(s, day))
+                    .filter(|t| !t.is_provisional())
+                    .collect();
+                let (known, of) = if known.is_empty() {
+                    (prices.prices.keys().filter_map(|s| prices.tariff(s, day)).filter(|t| !t.is_provisional()).collect::<Vec<_>>(), "of every known model".to_string())
+                } else {
+                    (known, format!("of its family `{fam}`"))
+                };
+                if known.is_empty() {
+                    return None;
+                }
+                let max = |f: &dyn Fn(&Tariff) -> f64| known.iter().map(|t| f(t)).fold(0.0f64, f64::max);
+                Tariff {
+                    from: day.to_string(),
+                    input: max(&|t| t.input),
+                    cache_write: Some(max(&|t| t.cache_write.unwrap_or(t.input))),
+                    cache_read: Some(max(&|t| t.cache_read.unwrap_or(t.input))),
+                    output: max(&|t| t.output),
+                    batch: None,
+                    currency: None,
+                    source: Some("prudent default".into()),
+                    read_on: Some(day.to_string()),
+                    note: Some(format!("the dearest price {of} on {day}: the price could not be looked up ({why})")),
+                    provisional: None,
+                }
+            }
+        };
+        tariff.from = day.to_string();
+        tariff.provisional = Some(true);
+        self.add_tariff(slug, &tariff).ok()?;
+        Some(tariff)
+    }
+
+    /// The provisional prices in force today, by slug: what waits for the user's confirmation.
+    pub fn provisional_prices(&self) -> Vec<(String, Tariff)> {
+        let day = utc_day(now_secs());
+        let Ok(prices) = Prices::load(&self.prices_path) else { return Vec::new() };
+        prices.prices.keys().filter_map(|s| prices.tariff(s, &day).filter(|t| t.is_provisional()).map(|t| (s.clone(), t.clone()))).collect()
     }
 
     /// The user's ledger: `usage/` under the host's state folder (`$XDG_STATE_HOME/rag3weaver` or
@@ -391,12 +512,10 @@ impl Ledger {
                 let open = settle.is_none();
                 let tokens = settle.as_ref().and_then(|l| l.tokens).or_else(|| reserve.as_ref().and_then(|l| l.tokens));
                 let line = settle.or(reserve)?;
-                let cost = if line.free {
-                    Some(0.0)
-                } else {
-                    prices.tariff(&line.slug, &line.day).map(|t| tokens.map(|k| k.cost(t, line.batch)).unwrap_or(0.0))
-                };
-                Some(Call { line, tokens, cost, open })
+                let tariff = prices.tariff(&line.slug, &line.day);
+                let provisional = !line.free && tariff.is_some_and(Tariff::is_provisional);
+                let cost = if line.free { Some(0.0) } else { tariff.map(|t| tokens.map(|k| k.cost(t, line.batch)).unwrap_or(0.0)) };
+                Some(Call { line, tokens, cost, open, provisional })
             })
             .collect();
         (calls, unreadable)
@@ -435,11 +554,15 @@ impl Ledger {
         let mut by_slug: BTreeMap<String, serde_json::Value> = BTreeMap::new();
         let mut by_day: BTreeMap<String, f64> = BTreeMap::new();
         let mut by_caller: BTreeMap<String, f64> = BTreeMap::new();
+        let mut provisional_cost = 0.0;
         for c in &calls {
+            if c.provisional {
+                provisional_cost += c.cost.unwrap_or(0.0);
+            }
             let cost = c.cost.unwrap_or(0.0);
             let k = c.tokens.unwrap_or_default();
             let e = by_slug.entry(c.line.slug.clone()).or_insert_with(|| {
-                json!({ "provider": c.line.provider, "calls": 0, "input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost": 0.0, "priced": c.cost.is_some(), "free": c.line.free })
+                json!({ "provider": c.line.provider, "calls": 0, "input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost": 0.0, "priced": c.cost.is_some(), "free": c.line.free, "provisional": c.provisional })
             });
             for (key, n) in [("calls", 1), ("input", k.input), ("cache_write", k.cache_write), ("cache_read", k.cache_read), ("output", k.output)] {
                 e[key] = json!(e[key].as_u64().unwrap_or(0) + n);
@@ -464,6 +587,7 @@ impl Ledger {
             "percent": if prices.monthly_cap > 0.0 { spent.total / prices.monthly_cap * 100.0 } else { 0.0 },
             "projection": projection,
             "open_reservations": spent.open,
+            "provisional_cost": provisional_cost,
             "unpriced": spent.unpriced,
             "unreadable_lines": unreadable,
             "by_slug": by_slug,
@@ -554,6 +678,9 @@ impl Ledger {
             r["percent"].as_f64().unwrap_or(0.0),
             r["projection"].as_f64().unwrap_or(0.0)
         );
+        if let Some(p) = r["provisional_cost"].as_f64().filter(|p| *p > 0.0) {
+            s.push_str(&format!(", of which {p:.2} {cur} at a provisional price to confirm"));
+        }
         if let Some(u) = r["unpriced"].as_array().filter(|u| !u.is_empty()) {
             s.push_str(&format!("; without a price: {}", u.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")));
         }
@@ -614,6 +741,8 @@ impl Ledger {
         batch: bool,
     ) -> Result<Reservation, String> {
         let month = day[..7].to_string();
+        // A model without a price gets a provisional one before the month's lock (a lookup takes seconds).
+        self.ensure_price(slug, &day, private);
         let _lock = self.lock(&month)?;
         let free = self.check_locked(&day, slug, private, bound, caller, batch)?;
         let line = Line {
@@ -722,7 +851,12 @@ impl Ledger {
         let entry = serde_json::to_value(tariff).map_err(|e| e.to_string())?;
         let prices = v.as_object_mut().ok_or("prices.json is not an object")?.entry("prices").or_insert_with(|| serde_json::json!({}));
         let list = prices.as_object_mut().ok_or("`prices` is not an object")?.entry(slug.to_string()).or_insert_with(|| serde_json::json!([]));
-        list.as_array_mut().ok_or_else(|| format!("the prices of `{slug}` are not a list"))?.push(entry);
+        let list = list.as_array_mut().ok_or_else(|| format!("the prices of `{slug}` are not a list"))?;
+        // A definitive price replaces the provisional ones of its slug.
+        if !tariff.is_provisional() {
+            list.retain(|t| t["provisional"] != serde_json::json!(true));
+        }
+        list.push(entry);
         let new = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
         let parsed: Prices = serde_json::from_str(&new).map_err(|e| format!("the price of `{slug}`: {e}"))?;
         parsed.check().map_err(|e| format!("the price of `{slug}`: {e}"))?;

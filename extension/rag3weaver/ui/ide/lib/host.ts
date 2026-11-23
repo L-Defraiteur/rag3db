@@ -56,7 +56,7 @@ export type ChatSession = {
   spaces: Space[];
 };
 export type SessionTask = { id: string; session: string; parent_task?: string | null; name: string; state?: RunState | null; awaits_answer?: boolean; spaces: Space[] };
-export type HostState = { backends: Backend[]; spending?: { alert: { text: string; threshold: number | null; projection_over: boolean } | null; line: string }; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
+export type HostState = { backends: Backend[]; spending?: { alert: { text: string; threshold: number | null; projection_over: boolean } | null; line: string; provisional?: { slug: string; tariff: PriceProposal }[] }; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
 
 /// **The machine at a glance** (`GET /poste` of the host, by `/ide/poste/etat`).
 export type Poste = {
@@ -408,6 +408,8 @@ export type TurnResult = {
   fichiers: string[];
   /// The month's spending past an alert, said once in this thread (50 %, 80 %, the cap, or a projection past it).
   spending_notice?: string | null;
+  /// The chat's model counted at a provisional price, set by the host to go on: to confirm or correct.
+  provisional_price?: { slug: string; tariff: PriceProposal & { note?: string } } | null;
 };
 
 export async function sendChat(backend: string, message: string): Promise<TurnResult> {

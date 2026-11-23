@@ -3037,7 +3037,12 @@ impl DaemonHost {
             "closed_dead_sessions": self.closed_dead.load(std::sync::atomic::Ordering::SeqCst),
             "background": self.background_state(),
             // The spending of the month (22 November 2026): its alert, for « À intervenir », and its line.
-            "spending": { "alert": crate::usage_ledger::user_ledger().alert(), "line": crate::usage_ledger::user_ledger().summary_line() },
+            "spending": {
+                "alert": crate::usage_ledger::user_ledger().alert(),
+                "line": crate::usage_ledger::user_ledger().summary_line(),
+                // The prices set by the host to go on, waiting for the user's confirmation.
+                "provisional": crate::usage_ledger::user_ledger().provisional_prices().into_iter().map(|(s, t)| json!({ "slug": s, "tariff": t })).collect::<Vec<_>>(),
+            },
         })
     }
 
@@ -3930,6 +3935,11 @@ impl DaemonServer {
     /// chaque requête porte `Authorization: Bearer <jeton>`, sauf
     /// `GET /sante`, que les clients sondent avant de connaître le jeton.
     pub fn serve(self, host: Arc<DaemonHost>, token: Option<String>) {
+        // **The host looks a missing price up itself** (23 November 2026): a model without a price gets a provisional
+        // one from its provider's page, and the work goes on. Never in a unit test: no witness calls a real Vertex.
+        if !cfg!(test) {
+            crate::daemon_host::prices::install_price_finder();
+        }
         use std::sync::atomic::Ordering;
         let stopper = self.stopper();
         // Les bilans de session des backends qui les déclarent (page 04).

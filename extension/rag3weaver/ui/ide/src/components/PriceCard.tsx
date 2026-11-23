@@ -16,9 +16,10 @@ const num = (v: string): number | null => {
   return v.trim() === "" || !Number.isFinite(n) || n < 0 ? null : n;
 };
 
-export function PriceCard({ slug, onWritten }: { slug: string; onWritten: () => void }) {
-  const [step, setStep] = useState<Step>("ask");
-  const [proposal, setProposal] = useState<PriceProposal | null>(null);
+export function PriceCard({ slug, onWritten, provisional }: { slug: string; onWritten: () => void; provisional?: PriceProposal & { note?: string } }) {
+  // A provisional price (set by the host to go on) opens on its proposal: confirm or correct, nothing stopped.
+  const [step, setStep] = useState<Step>(provisional ? "proposal" : "ask");
+  const [proposal, setProposal] = useState<PriceProposal | null>(provisional ?? null);
   const [given, setGiven] = useState({ input: "", output: "", cache_read: "" });
   const [error, setError] = useState<string | null>(null);
 
@@ -58,10 +59,17 @@ export function PriceCard({ slug, onWritten }: { slug: string; onWritten: () => 
     <article className="price-card mb-7 rounded-lg border border-primary/50 px-3.5 py-3 text-sm grid gap-2.5" data-slug={slug} data-step={step}>
       <p className="flex items-start gap-2">
         <CircleDollarSign className="size-4 mt-0.5 shrink-0 text-primary" />
-        <span>
-          Le modèle <code>{slug}</code> n'a pas de prix, et le plafond des dépenses ne sait pas le compter. Je le cherche sur
-          la page de son fournisseur, ou tu le donnes ?
-        </span>
+        {provisional ? (
+          <span>
+            Le modèle <code>{slug}</code> n'avait pas de prix : j'ai pris un prix provisoire pour continuer
+            {provisional.note ? ` (${provisional.note})` : ""}. Tu le confirmes, ou tu le corriges ?
+          </span>
+        ) : (
+          <span>
+            Le modèle <code>{slug}</code> n'a pas de prix, et le plafond des dépenses ne sait pas le compter. Je le cherche
+            sur la page de son fournisseur, ou tu le donnes ?
+          </span>
+        )}
       </p>
       {step === "ask" || step === "looking" ? (
         <div className="flex flex-wrap gap-2">
@@ -90,11 +98,11 @@ export function PriceCard({ slug, onWritten }: { slug: string; onWritten: () => 
             .
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => write(proposal)} data-action="accept">
-              C'est bon, écris-le
+            <Button size="sm" onClick={() => write({ ...proposal, source: proposal.source || "confirmed by the user" })} data-action="accept">
+              {provisional ? "Confirmer" : "C'est bon, écris-le"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setStep("giving")} data-action="give">
-              Je le donne moi-même
+              {provisional ? "Corriger" : "Je le donne moi-même"}
             </Button>
           </div>
         </div>

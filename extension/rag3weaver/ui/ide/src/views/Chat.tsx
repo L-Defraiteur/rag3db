@@ -53,7 +53,11 @@ type ToolBlock = { id: string; name: string; args: string; result?: string; ok?:
 // réponse à la fin ; le flux et la relecture rendent la même suite.
 type Part = { kind: "text"; text: string } | ({ kind: "tool" } & ToolBlock);
 type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
-type Item = Message | { kind: "info"; text: string; cls?: string } | { kind: "price"; slug: string; resend: string };
+type Item =
+  | Message
+  | { kind: "info"; text: string; cls?: string }
+  | { kind: "price"; slug: string; resend: string }
+  | { kind: "provisional"; slug: string; tariff: NonNullable<TurnResult["provisional_price"]>["tariff"] };
 type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]>; missed: { sujet: string; count: number }[] };
 
 const textOf = (m: Message) => m.parts.filter((p) => p.kind === "text").map((p) => (p as { text: string }).text).join("");
@@ -757,6 +761,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         }),
       );
       // The month's spending past an alert: a calm line in the thread, once per level.
+      // The model counted at a provisional price: a confirmation that stops nothing, once per slug in the thread.
+      const prov = r.provisional_price;
+      if (prov) setItems((cur) => (cur.some((i) => i.kind === "provisional" && i.slug === prov.slug) ? cur : [...cur, { kind: "provisional", slug: prov.slug, tariff: prov.tariff }]));
       if (r.spending_notice) setItems((cur) => [...cur, { kind: "info", text: `Dépenses du mois : ${r.spending_notice}`, cls: "spending-notice" }]);
       setStatus(r.stopped_by ? `arrêté ${r.stopped_by === "ide" ? "dans l'IDE" : `par ${r.stopped_by}`}` : "fini");
       // Les compteurs du tour, un total par unité, le modèle nommé une fois.
@@ -924,6 +931,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           {items.map((it, k) =>
             it.kind === "info" ? (
               <p key={k} className={`text-xs text-muted-foreground ${it.cls ?? ""}`}>{it.text}</p>
+            ) : it.kind === "provisional" ? (
+              <PriceCard key={k} slug={it.slug} provisional={it.tariff} onWritten={() => setItems((cur) => cur.filter((x) => x !== it))} />
             ) : it.kind === "price" ? (
               <PriceCard
                 key={k}

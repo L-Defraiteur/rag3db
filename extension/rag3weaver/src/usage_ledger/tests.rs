@@ -108,17 +108,17 @@ fn two_writers_at_the_edge_of_the_cap_only_one_goes_through() {
     assert_eq!(lines.len(), 401);
 }
 
-/// **What is refused, said**: a slug without a price, a prices file that cannot be read, a tariff in another currency
-/// than the cap. Without a file, the ledger writes the default one, which frees the private addresses: a local model is
-/// free because the file says so, never by default.
+/// **What goes on and what is refused**: a slug without a price goes on at a provisional price (never at zero); a
+/// prices file that cannot be read and a tariff in another currency than the cap are refused. Without a file, the
+/// ledger writes the default one, which frees the private addresses: a local model is free because the file says so,
+/// never by default.
 #[test]
-fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
+fn a_slug_without_a_price_goes_on_and_unreadable_prices_and_another_currency_are_refused() {
     let (_d, l) = ledger(Some(PRICES));
-    let e = l.reserve("unknown", "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(e.contains("no price for `unknown`") && e.contains("never counted at zero"), "{e}");
+    l.reserve("unknown", "vertex", false, Tokens::default(), &Caller::default(), false).expect("a provisional price, the work goes on");
+    let t = Prices::load(&l.prices_path).unwrap().tariff("unknown", &utc_day(now_secs())).cloned().unwrap();
+    assert!(t.is_provisional() && t.input > 0.0 && t.output > 0.0, "never at zero: {t:?}");
     let (_d, l) = ledger(None);
-    let e = l.reserve("paid", "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(e.contains("no price for `paid`"), "{e}");
     l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false)
         .expect("the shipped prices know the regime's default model");
     let written = Prices::load(&l.prices_path).expect("the default file is written");
@@ -126,9 +126,9 @@ fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
     assert_eq!((written.currency.as_str(), written.monthly_cap, written.free_private_hosts), ("USD", 200.0, true));
     let r = l.reserve("qwen", "http://192.168.1.20:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap();
     assert!(r.line.free, "free because the written file says so");
-    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200}"#));
-    let e = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(e.contains("no price for `qwen`"), "a file that does not free the private addresses: {e}");
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200,"prices":{"paid":[{"from":"2026-01-01","input":1,"output":2}]}}"#));
+    let r = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap();
+    assert!(!r.line.free, "a file that does not free the private addresses: a provisional price, not free");
     let (_d, l) = ledger(Some("{ not json"));
     let e = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap_err();
     assert!(e.contains("a paid call is refused while the prices cannot be read"), "an unreadable file frees nothing: {e}");
@@ -189,8 +189,8 @@ fn beyond_the_cap_an_agent_is_refused_and_a_human_goes_through() {
     assert!((l.spent(&prices, &month()).total - 1.8).abs() < 1e-9);
 }
 
-/// **Every declared model is metered**: a paid model built by `connect_llm` is refused before the network when its slug
-/// has no price.
+/// **Every declared model is metered**: a paid model built by `connect_llm` reserves before the network, at a
+/// provisional price when its slug has none; the call then fails on the network, never on the ledger.
 #[cfg(feature = "openai-llm")]
 #[test]
 fn a_declared_model_goes_through_the_ledger() {
@@ -203,8 +203,11 @@ fn a_declared_model_goes_through_the_ledger() {
         Ok(crate::openai_llm::OpenAiLlm::new("http://127.0.0.1:9/v1", model))
     })
     .unwrap();
-    let e = call(&*llm, 10).err().expect("refused by the ledger, before the network");
-    assert!(e.to_string().contains("no price for `unpriced-model`"), "{e}");
+    let ledger = Ledger::new(_d.path().join("usage"), _d.path().join("prices.json"));
+    let e = call(&*llm, 10).err().expect("nothing answers at that address");
+    assert!(!e.to_string().contains("no price") && !e.to_string().contains("spending cap"), "{e}");
+    let (lines, _) = ledger.lines(&month());
+    assert!(lines.iter().any(|x| x.slug == "unpriced-model" && x.kind == "reserve"), "reserved before the network: {lines:#?}");
 }
 
 /// **No paid client is built around the ledger**: outside tests, the clients are built in `model_source.rs`, and the
@@ -360,4 +363,57 @@ fn the_months_alert_is_said_once_per_level_in_a_thread() {
     assert!(l.alert_to_say_on("chat:b", "2026-11-30").is_some(), "another thread says its own");
     spend(30);
     assert_eq!(l.alert_to_say_on("chat:a", "2026-11-30").expect("the next level")["threshold"], json!(80.0));
+}
+
+/// **A model without a price goes on at a provisional price looked up** (c7, 23 November 2026: the host looks it up
+/// itself, the turn goes): the price found on the provider's page is written provisional with its source; the calls
+/// counted at it are said provisional; the user's price replaces it.
+#[test]
+fn a_model_without_a_price_goes_on_at_a_provisional_price_looked_up_and_the_users_replaces_it() {
+    let (_d, l) = ledger(Some(PRICES));
+    let finder: PriceFinder = Arc::new(|slug: &str| {
+        Ok(Tariff { from: "2026-01-01".into(), input: 0.5, cache_write: None, cache_read: Some(0.05), output: 2.0, batch: None, currency: None,
+            source: Some(format!("https://provider.example/{slug}")), read_on: None, note: None, provisional: None })
+    });
+    let l = Arc::new(Ledger::new(l.dir.clone(), l.prices_path.clone()).with_finder(finder));
+    let m = MeteredLlm::new(model(Usage { prompt_tokens: 10, completion_tokens: 1_000_000, ..Default::default() }), l.clone(), "new-model", "vertex", false);
+    call(&m, 10).expect("the work goes on");
+    let t = Prices::load(&l.prices_path).unwrap().tariff("new-model", &utc_day(now_secs())).cloned().unwrap();
+    assert!(t.is_provisional() && t.output == 2.0 && t.source.as_deref() == Some("https://provider.example/new-model"), "{t:?}");
+    let r = l.report(&month(), &utc_day(now_secs()));
+    assert_eq!(r["by_slug"]["new-model"]["provisional"], json!(true), "{r:#}");
+    assert!(r["provisional_cost"].as_f64().unwrap() > 1.9, "{r:#}");
+    assert_eq!(l.provisional_prices().len(), 1);
+    let given = Tariff { provisional: None, output: 3.0, source: Some("given by the user".into()), ..t };
+    l.add_tariff("new-model", &given).unwrap();
+    assert!(l.provisional_prices().is_empty(), "the user's price replaces the provisional one");
+    assert_eq!(Prices::load(&l.prices_path).unwrap().prices["new-model"].len(), 1);
+}
+
+/// **A failed lookup takes the dearest price of the model's family, said**, and the work goes on: never zero, never a
+/// refusal.
+#[test]
+fn a_failed_lookup_takes_the_dearest_price_of_its_family() {
+    let (_d, l) = ledger(Some(
+        r#"{"currency":"USD","monthly_cap":200,"prices":{
+            "claude-opus-5":[{"from":"2026-01-01","input":5,"output":25,"cache_read":0.5}],
+            "claude-sonnet-5":[{"from":"2026-01-01","input":2,"output":10}],
+            "paid":[{"from":"2026-01-01","input":9,"output":90}]}}"#,
+    ));
+    let l = Ledger::new(l.dir.clone(), l.prices_path.clone()).with_finder(Arc::new(|_: &str| Err("the provider's page did not answer".into())));
+    l.reserve("claude-opus-9", "anthropic", false, Tokens::default(), &Caller::default(), false).expect("the work goes on");
+    let t = Prices::load(&l.prices_path).unwrap().tariff("claude-opus-9", &utc_day(now_secs())).cloned().unwrap();
+    assert_eq!((t.input, t.output, t.is_provisional()), (5.0, 25.0, true), "the dearest of `claude-`, not of every model: {t:?}");
+    let note = t.note.unwrap_or_default();
+    assert!(note.contains("family `claude-`") && note.contains("did not answer"), "{note}");
+}
+
+/// **The models shipped by default have their shipped price**: a first launch never needs a lookup.
+#[test]
+fn the_models_shipped_by_default_have_their_price() {
+    let p = Prices::default_file();
+    let today = utc_day(now_secs());
+    assert!(p.tariff(crate::regime::MODELE_VERTEX_PAR_DEFAUT, &today).is_some_and(|t| !t.is_provisional()));
+    #[cfg(feature = "anthropic-llm")]
+    assert!(p.tariff(crate::anthropic_llm::DEFAULT_MODEL, &today).is_some_and(|t| !t.is_provisional()));
 }

@@ -1143,8 +1143,14 @@ impl DaemonHost {
             }
             self.journal.ajouter(backend_id, run_id, ajouts);
         }
+        // The chat's model at a provisional price: the thread asks a confirmation that stops nothing.
+        let provisional_price = crate::usage_ledger::user_ledger()
+            .provisional_prices()
+            .into_iter()
+            .find(|(s, _)| s == llm.name())
+            .map(|(s, t)| json!({ "slug": s, "tariff": t }));
         let reponse = |text: &str| {
-            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers, "spending_notice": spending_notice })
+            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers, "spending_notice": spending_notice, "provisional_price": provisional_price })
         };
         match fait {
             Ok(run) => {

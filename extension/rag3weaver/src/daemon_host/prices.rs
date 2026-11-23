@@ -38,6 +38,7 @@ impl DaemonHost {
             source: Some(body["source"].as_str().filter(|s| !s.trim().is_empty()).unwrap_or("given by the user").to_string()),
             read_on: Some(body["read_on"].as_str().unwrap_or(&today).to_string()),
             note: body["note"].as_str().map(str::to_string),
+            provisional: None,
         };
         let ledger = crate::usage_ledger::user_ledger();
         ledger.add_tariff(slug, &tariff)?;
@@ -78,6 +79,33 @@ pub fn lookup_price(policy: &crate::backend::WebSearchPolicy, slug: &str) -> Res
         "sources": found["sources"],
         "answer": answer,
     }))
+}
+
+/// **The host's price lookup, for the ledger** ([`crate::usage_ledger::set_price_finder`]): the web search on the
+/// host's own model, its proposal as a tariff with its source. The ledger writes it as provisional.
+pub fn install_price_finder() {
+    crate::usage_ledger::set_price_finder(std::sync::Arc::new(|slug: &str| {
+        tariff_of(&lookup_price(&crate::backend::WebSearchPolicy::default(), slug)?)
+    }));
+}
+
+/// The tariff of a lookup's proposal, read on the day of the lookup.
+pub fn tariff_of(found: &Value) -> Result<crate::usage_ledger::Tariff, String> {
+    let p = &found["proposal"];
+    let today = crate::usage_ledger::utc_day(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0));
+    Ok(crate::usage_ledger::Tariff {
+        from: today.clone(),
+        input: p["input"].as_f64().ok_or("the proposal has no input price")?,
+        cache_write: p["cache_write"].as_f64(),
+        cache_read: p["cache_read"].as_f64(),
+        output: p["output"].as_f64().ok_or("the proposal has no output price")?,
+        batch: None,
+        currency: None,
+        source: p["source"].as_str().filter(|s| !s.is_empty()).map(str::to_string).or_else(|| Some("the host's web search".into())),
+        read_on: Some(today),
+        note: Some("looked up by the host on the provider's page, to confirm".into()),
+        provisional: Some(true),
+    })
 }
 
 /// The first `{…}` of a text that parses as JSON (a model's answer may wrap it in prose or a code fence).

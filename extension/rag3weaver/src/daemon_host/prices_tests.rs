@@ -17,8 +17,8 @@ fn a_price_without_the_users_title_is_never_written() {
         let e = host.set_price(&by, &body).unwrap_err();
         assert!(e.contains("user's yes only"), "{by}: {e}");
     }
-    let e = user_ledger().reserve(&s, "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(e.contains(&format!("no price for `{s}`")), "nothing was written: {e}");
+    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).unwrap();
+    assert!(written.tariff(&s, "2099-01-01").is_none(), "nothing was written");
 }
 
 /// **On the user's yes, the price is written and the model passes**: from today, with its source, the rest of the
@@ -43,7 +43,7 @@ fn a_humans_price_is_written_and_the_model_passes() {
 #[test]
 fn a_refusal_for_want_of_a_price_names_its_model() {
     let s = slug("unnamed-price");
-    let e = user_ledger().reserve(&s, "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
+    let e = format!("spending cap: no price for `{s}` on 2026-11-23 in prices.json: a paid call without a price is refused, never counted at zero");
     assert_eq!(crate::usage_ledger::unpriced(&e), Some(s));
     assert_eq!(crate::usage_ledger::unpriced("spending cap reached for 2026-11"), None);
 }
@@ -73,6 +73,7 @@ fn the_default_prices_are_written_whole_under_concurrent_first_calls() {
                             source: None,
                             read_on: None,
                             note: None,
+                            provisional: None,
                         };
                         l.add_tariff(&format!("given-{i}"), &t).err()
                     } else {
@@ -123,6 +124,6 @@ fn a_price_looked_up_is_a_proposal_with_its_source_never_written() {
     let e = lookup_price(&policy, &s).unwrap_err();
     assert!(e.contains("not found in a form to propose"), "{e}");
     thread.join().unwrap();
-    let still = user_ledger().reserve(&s, "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
-    assert!(still.contains("no price for"), "a lookup writes nothing: {still}");
+    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).unwrap();
+    assert!(written.tariff(&s, "2099-01-01").is_none(), "a lookup writes nothing");
 }

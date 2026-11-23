@@ -103,6 +103,8 @@ export function Agents({ state }: { state: HostState }) {
   const waiting = [
     // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it.
     ...(state.spending?.alert ? [{ key: "spending", text: state.spending.alert.text, link: undefined as string | undefined }] : []),
+    // A price the host set to go on, to confirm.
+    ...(state.spending?.provisional ?? []).map((p) => ({ key: `price:${p.slug}`, text: `le prix de ${p.slug} est provisoire (${p.tariff.input} / ${p.tariff.output} $ par million) : à confirmer`, link: undefined as string | undefined })),
     ...(state.tasks ?? [])
       .filter((t) => t.awaits_answer)
       .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, link: `/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}` })),
