@@ -51,3 +51,17 @@ fn without_the_steps_the_texts_stay_distinct_paragraphs() {
     tour(&mut v);
     assert_eq!(ordre(&mut v), vec!["Texte A.", "Texte B.", "Texte C."]);
 }
+
+/// **Without the tools in the thread, the living line says the tool running and the turn's count** (23 Nov. 2026),
+/// in words, never a bare number beside a command.
+#[test]
+fn the_living_line_says_the_tool_running_and_the_turns_count() {
+    let mut v = Vue::new(200, true);
+    v.ligne_de_boite(&json!({ "id": "b/t:1", "from": "supervisor", "kind": "request", "text": "fais-le" }));
+    v.trame(&ev(json!({ "kind": "RunStarted", "run": "r1" })));
+    v.trame(&ev(json!({ "kind": "ToolCallStarted", "run": "r1", "tool": "read_file", "call_id": "c1", "arguments": "{\"path\":\"a.rs\"}" })));
+    v.trame(&ev(json!({ "kind": "ToolCallFinished", "run": "r1", "call_id": "c1", "ok": true, "ms": 3 })));
+    v.trame(&ev(json!({ "kind": "ToolCallStarted", "run": "r1", "tool": "run_command", "call_id": "c2", "arguments": "{\"command\":\"ls\"}" })));
+    let l: String = v.ligne_vivante(200, Instant::now()).spans.iter().map(|s| s.content.to_string()).collect();
+    assert!(l.contains("run_command ls") && l.contains("appel 2 du tour"), "{l}");
+}
