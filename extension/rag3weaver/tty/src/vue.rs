@@ -664,6 +664,18 @@ impl Vue {
             }
             _ => {}
         }
+        // **A stopped turn says so** (a trial of the stop, 23 Nov. 2026): read from the host's fields, never from its
+        // sentence; what already landed is said, and the turn is not « sans répondre ».
+        if l["from"] == "host" && l["kind"] == "ended" && l["stopped"] == true {
+            let n = l["landed"].as_array().map_or(0, Vec::len);
+            let dit = if n == 0 { "tour arrêté : rien n'a encore changé dans ton dossier".to_string() } else { format!("tour arrêté : {n} fichier(s) déjà dans ton dossier") };
+            self.clore();
+            self.valider_avec_tete(Genre::Boite, "› ", &dit);
+            self.repondu = true;
+            self.done_step = None;
+            self.changer(Etat::Fini(l["text"].as_str().unwrap_or_default().to_string()));
+            return;
+        }
         let mut corps_seul: Option<String> = None;
         // **La plomberie de l'équipier** (Lucie, 15 nov.) : une étape faite et la fin du pas ne
         // s'écrivent pas ; l'étape se dit en sourdine sur la ligne du haut, la fin change l'état.
