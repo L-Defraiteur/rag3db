@@ -39,6 +39,10 @@ fn default_vector_extension() -> PathBuf {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TeammatePolicy {
+    /// **A report that the facts contradict is given back once** (23 Nov 2026): the words that say « I wrote » and « the
+    /// tests pass », declared; off by default, on in the code template.
+    #[serde(default)]
+    pub facts_check: FactsCheckPolicy,
     /// **Only these tools of the backend** (23 Nov 2026: a witness agent with grep and reading only): the backend's
     /// tools offered to the model are these and no other; the step's own tools stay. `None`: all of them. A launch
     /// overrides it (the request's `tools_only`).
@@ -203,6 +207,19 @@ impl TeammatePolicy {
     }
 }
 
+/// **The check of a report against the turn's facts** (23 Nov 2026): when a report holds one of `wrote_words` and the
+/// turn changed no file, or one of `pass_words` and a command of the turn failed, the host gives the fact back to the
+/// agent once. No judge of text: words, declared.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FactsCheckPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub wrote_words: Vec<String>,
+    #[serde(default)]
+    pub pass_words: Vec<String>,
+}
+
 /// **The memory of the conversation** (Lucie, 23 Nov 2026, 08 h 28 and 08 h 34): what a turn receives of the turns
 /// before it. It shapes only the context assembled for a turn: the mailbox, the thread and the journals keep every
 /// turn whole, whatever the setting. A launch overrides it (the request's `conversation`).
@@ -330,6 +347,7 @@ impl Default for TeammatePolicy {
             web_search: WebSearchPolicy::default(),
             browser: None,
             background: BackgroundPolicy::default(),
+            facts_check: FactsCheckPolicy::default(),
             tools_only: None,
             conversation: ConversationPolicy::default(),
             input_max_chars: Self::input_max_chars_default(),

@@ -1709,6 +1709,35 @@ impl DaemonHost {
         Some(b)
     }
 
+    /// **The fact that contradicts the turn's report**, if any (`teammate.facts_check`): the report says it wrote and
+    /// no file changed, or says the tests pass and a command failed.
+    #[cfg(feature = "code")]
+    fn report_against_facts(&self, parent: &str, task: &str, files: &TeammateFiles) -> Option<String> {
+        let t = self.tache(parent, task)?;
+        let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default().facts_check;
+        if !policy.enabled {
+            return None;
+        }
+        let boite = files.mailbox();
+        let demande = boite.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host")?;
+        let dit: String = boite[demande..]
+            .iter()
+            .filter(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "step_done")))
+            .filter_map(|l| l["text"].as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+        let (changes, echecs) = self.peek_turn_facts(files)?;
+        let parle = |mots: &[String]| mots.iter().find(|m| dit.contains(&m.to_lowercase())).cloned();
+        if let (Some(mot), 0) = (parle(&policy.wrote_words), changes) {
+            return Some(format!("Ton compte rendu dit « {mot} », et aucun fichier n'a changé dans ce tour. Fais-le, ou dis ce qui manque et pourquoi."));
+        }
+        if let (Some(mot), false) = (parle(&policy.pass_words), echecs.is_empty()) {
+            return Some(format!("Ton compte rendu dit « {mot} », et ce tour a une commande en échec : {}. Relance-la et lis sa sortie, ou dis ce qui échoue.", echecs.join(" ; ")));
+        }
+        None
+    }
+
     /// The task's background commands die with the task (closed, merged or rejected).
     pub(crate) fn end_task_background(&self, parent: &str, task: &str) {
         if let Some(b) = self.task_backgrounds.lock().unwrap_or_else(|p| p.into_inner()).remove(&format!("{parent}/{task}")) {
@@ -2258,10 +2287,24 @@ impl DaemonHost {
         #[cfg(feature = "code")]
         self.mark_turn_start(parent, task, &files);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
-        let outcome = match self.teammate_loop(parent, task, &files) {
+        #[allow(unused_mut)]
+        let mut outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
             Err(e) => Outcome { steps: Vec::new(), ended: format!("erreur : {e}") },
         };
+        // **A report that the facts contradict is given back once** (23 Nov 2026), before the turn ends.
+        #[cfg(feature = "code")]
+        if let Some(fait) = self.report_against_facts(parent, task, &files) {
+            if let Ok(line) = files.append_with("host", "report", None, &fait, &json!({ "contradiction": true })) {
+                if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
+                    publish(Some(&bus), task, &line);
+                }
+            }
+            outcome = match self.teammate_loop(parent, task, &files) {
+                Ok(o) => o,
+                Err(e) => Outcome { steps: Vec::new(), ended: format!("erreur : {e}") },
+            };
+        }
         // A pair stays reachable between two works: idle, until its task is closed.
         if let Some(p) = &pair {
             p.statut(&cle, false);

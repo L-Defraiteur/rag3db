@@ -170,6 +170,30 @@ impl DaemonHost {
         let _ = std::fs::write(depart_du_tour(files), depart.to_string());
     }
 
+    /// **The turn's facts, read without writing them**: how many files changed since its start, and its failed
+    /// commands (the failures stay for the facts' line).
+    pub(crate) fn peek_turn_facts(&self, files: &TeammateFiles) -> Option<(usize, Vec<String>)> {
+        let depart: serde_json::Value = serde_json::from_slice(&std::fs::read(depart_du_tour(files)).ok()?).ok()?;
+        let echecs: Vec<String> = std::fs::read_to_string(echecs_du_tour(files)).unwrap_or_default().lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+        let n = if let (Some(arbre), Some(head)) = (depart["tree"].as_str(), depart["head"].as_str()) {
+            let arbre = Path::new(arbre);
+            let mut c: Vec<String> = git(arbre, &["diff", "--name-only", head]).ok()?.lines().map(str::to_string).collect();
+            c.extend(git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string));
+            c.sort();
+            c.dedup();
+            c.len()
+        } else {
+            let racine = depart["copy"].as_str()?;
+            let exclus: Vec<String> = serde_json::from_value(depart["exclude"].clone()).unwrap_or_default();
+            let avant: std::collections::BTreeMap<String, String> = serde_json::from_value(depart["prints"].clone()).unwrap_or_default();
+            let (apres, _) = super::taches::empreintes_de(Path::new(racine), &exclus).ok()?;
+            let mut tous: std::collections::BTreeSet<&String> = avant.keys().collect();
+            tous.extend(apres.keys());
+            tous.into_iter().filter(|p| avant.get(*p) != apres.get(*p)).count()
+        };
+        Some((n, echecs))
+    }
+
     /// **The turn's facts, once** (at its end, or before it waits): from its kept start; nothing if they were said
     /// since the turn's last request.
     pub(crate) fn say_turn_facts(&self, files: &TeammateFiles) -> Option<serde_json::Value> {
