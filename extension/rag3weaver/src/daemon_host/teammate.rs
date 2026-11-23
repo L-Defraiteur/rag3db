@@ -1983,6 +1983,14 @@ impl DaemonHost {
             if let Some(run) = self.run_du_chat_en_cours(&t.id) {
                 let _ = self.stop_run(&t.id, &run, from);
             }
+            // **The tool calls in flight stop too** (23 Nov 2026: a wait_output held 300 s after a stop): every run of
+            // the task's backend, the tools' graphs included. A background command lives on with its task.
+            let _ = self.with_backend_id(&t.id, |b| {
+                let registre = b.runs_in_flight_registry();
+                for run in registre.runs() {
+                    let _ = registre.stop(&run, from);
+                }
+            });
         }
         // **Seule une ligne adressée à l'équipier le lance** (archi, 7 novembre
         // 2026) : une parole d'un agent à un autre rangée dans cette boîte, ou une
@@ -2185,7 +2193,27 @@ impl DaemonHost {
         let faits = self.say_turn_facts(&files);
         #[cfg(not(feature = "code"))]
         let faits: Option<Value> = None;
-        let line = files.append("host", "ended", None, &outcome.ended)?;
+        // **A stopped turn says so in fields** (23 Nov 2026, for the views): who stopped it, what landed.
+        let line = if outcome.ended.starts_with("arrêté") {
+            let boite = files.mailbox();
+            let qui = boite.iter().rev().find(|l| l["kind"] == "stop").map(|l| match l["by"]["kind"].as_str() {
+                Some("human") => "human",
+                Some("agent") => "agent",
+                _ => "host",
+            });
+            let debut = boite.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
+            let mut atterris: Vec<Value> = Vec::new();
+            for l in boite[debut..].iter().filter(|l| l["from"] == "host" && l["kind"] == "merged") {
+                for p in l["paths"].as_array().or(l["files"].as_array()).into_iter().flatten() {
+                    if !atterris.contains(p) {
+                        atterris.push(p.clone());
+                    }
+                }
+            }
+            files.append_with("host", "ended", None, &outcome.ended, &json!({ "stopped": true, "by": qui.unwrap_or("host"), "landed": atterris }))?
+        } else {
+            files.append("host", "ended", None, &outcome.ended)?
+        };
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
             if let Some(f) = &faits {
                 publish(Some(&bus), task, f);
@@ -2259,7 +2287,11 @@ impl DaemonHost {
             let avant = read;
             read = lines.len();
             files.write_cursor(read);
-            if news.iter().any(|l| l["kind"] == "stop") {
+            // **A stop is worth for the turn in progress only** (23 Nov 2026: it ate the next message): it ends the
+            // turn when nothing addressed came after it.
+            let dernier_stop = news.iter().rposition(|l| l["kind"] == "stop");
+            let derniere_demande = news.iter().rposition(|l| l["kind"] != "stop");
+            if dernier_stop.is_some_and(|s| derniere_demande.is_none_or(|d| s > d)) {
                 outcome.ended = "arrêté par la boîte".into();
                 return Ok(outcome);
             }
@@ -2383,7 +2415,7 @@ impl DaemonHost {
                     unavailable = 0;
                     // **The turn's commits land in the user's folder** (the terminal's night, 22 Nov 2026).
                     #[cfg(feature = "code")]
-                    self.land_the_turn(&t, &files, &step.wrote());
+                    self.land_the_turn(&t, &files, &step.wrote(), !r["stopped_by"].is_null());
                     // By the declared scripted node when there is one (its `nodes/` folder is the live backend's), else
                     // the Rust block; a failing script falls back to the Rust block, and the box says it once.
                     let dossier = policy
