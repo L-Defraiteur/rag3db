@@ -137,7 +137,7 @@ french_identifiers() { # <id> <head> <parent> <author>
 # 1 272 since the 20th named sessions, two named an AI tool). The messages of the lot (from its base on master, or from
 # its parent's head) are read at the deposit: a warning until PUSHER_COMMIT_NAMES_REFUSE_FROM (a date, the 24th by
 # default), a refusal from then on. Said on the output, to the log and to the inbox.
-COMMIT_NAMES='claude|co-authored|generated|\bc7\b|\barchi\b|recherche for|orchestr|\(G\)|guet de G'
+COMMIT_NAMES='claude|co-authored-by|generated (with|by)|\bc7\b|\barchi\b|recherche (for|→|dit)|agreed with|\(G\)|guet de G'
 commit_message_names() { # <id> <head> <parent> <author> → 0, or 1 when refused
   local base ph hits n from
   base=$(g merge-base origin/master "$2" 2>/dev/null) || return 0
@@ -145,7 +145,8 @@ commit_message_names() { # <id> <head> <parent> <author> → 0, or 1 when refuse
     ph=$(origin_head "$3")
     [ -n "$ph" ] && g merge-base --is-ancestor "$ph" "$2" 2>/dev/null && base=$ph
   fi
-  hits=$(g log --format='%h %s%n%b' "$base..$2" 2>/dev/null | grep -iE "$COMMIT_NAMES" | grep -v '^$' | head -10)
+  # The scope of a title (docs(rag3weaver-archi), docs(orchestration): a folder) is not read.
+  hits=$(g log --format='%h %s%n%b' "$base..$2" 2>/dev/null | sed -E 's/^([0-9a-f]{7,} )[a-z]+\([^)]*\)!?:/\1/' | grep -iE "$COMMIT_NAMES" | grep -v '^$' | head -10)
   [ -n "$hits" ] || return 0
   n=$(printf '%s\n' "$hits" | grep -c .)
   from=${PUSHER_COMMIT_NAMES_REFUSE_FROM:-2026-11-24}
