@@ -45,6 +45,7 @@ mod posture_auto;
 mod prompt_roots;
 mod reopen;
 mod run_du_pas;
+mod silent_turn;
 mod stop_stops;
 mod turn_changes;
 mod turn_failures;
