@@ -1583,53 +1583,60 @@ fn conversation_before(lines: &[Value]) -> Option<String> {
     Some(format!("Earlier in this conversation (oldest first):\n- {}", lignes.join("\n- ")))
 }
 
-fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
-    let mut m = format!("[Pas {step}]\n");
+fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value], t: &super::prompts::Texts) -> String {
+    let mut m = format!("{}\n", t.get("frontier.step", &[("step", &step.to_string())]));
     if !request.is_empty() && !news.iter().any(|l| l["kind"] == "request" && l["text"] == request) {
-        m.push_str(&format!("\nLa demande en cours : {request}\n"));
+        m.push_str(&format!("\n{}\n", t.get("frontier.request", &[("request", request)])));
     }
     if !faits.is_empty() {
-        m.push_str("\nTes pas faits, tels que tes step_done les ont dits (tu ne vois plus leurs appels d'outils : relis un fichier s'il te le faut) :\n");
+        m.push_str(&format!("\n{}\n", t.get("frontier.facts_head", &[])));
         let debut = faits.len().saturating_sub(MAX_FAITS_RAPPELES);
         if debut > 0 {
-            m.push_str(&format!("- … {debut} pas plus anciens, voir le plan\n"));
+            m.push_str(&format!("{}\n", t.get("frontier.facts_older", &[("n", &debut.to_string())])));
         }
         for f in &faits[debut..] {
-            let issue = if f["succeeded"] == true { "réussi" } else { "raté" };
-            let item = f["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" (élément {i})")).unwrap_or_default();
-            let reste = f["remaining"].as_str().filter(|r| !r.is_empty()).map(|r| format!(" — reste : {r}")).unwrap_or_default();
-            m.push_str(&format!("- {issue}{item} : {}{reste}\n", f["done"].as_str().unwrap_or("")));
+            let issue = if f["succeeded"] == true { t.get("frontier.fact_succeeded", &[]) } else { t.get("frontier.fact_failed", &[]) };
+            let item = f["item"].as_str().filter(|i| !i.is_empty()).map(|i| t.get("frontier.fact_item", &[("item", i)])).unwrap_or_default();
+            let reste = f["remaining"].as_str().filter(|r| !r.is_empty()).map(|r| t.get("frontier.fact_left", &[("left", r)])).unwrap_or_default();
+            let done = f["done"].as_str().unwrap_or("");
+            m.push_str(&format!("{}\n", t.get("frontier.fact", &[("issue", &issue), ("item", &item), ("done", done), ("left", &reste)])));
         }
     }
     if !news.is_empty() {
-        m.push_str("\nBoîte aux lettres, depuis le pas précédent :\n");
+        m.push_str(&format!("\n{}\n", t.get("frontier.mailbox_head", &[])));
         for l in news {
-            let item = l["item"].as_str().map(|i| format!(" (élément {i})")).unwrap_or_default();
+            let item = l["item"].as_str().map(|i| t.get("frontier.fact_item", &[("item", i)])).unwrap_or_default();
             let accord = l["granted"].as_str().map(|g| format!(" — {g}")).unwrap_or_default();
-            m.push_str(&format!("- {} de {}{item} : {}{accord}\n", l["kind"].as_str().unwrap_or("?"), l["from"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or("")));
+            let line = t.get(
+                "frontier.mailbox_line",
+                &[("kind", l["kind"].as_str().unwrap_or("?")), ("from", l["from"].as_str().unwrap_or("?")), ("item", &item), ("text", l["text"].as_str().unwrap_or("")), ("granted", &accord)],
+            );
+            m.push_str(&format!("{line}\n"));
         }
     }
     let active = plans.active();
     let paused = plans.paused();
     if let Some(p) = active {
-        m.push_str(&format!("\nTon plan actif (n° {}) :\n```json\n{}\n```\n", p.number, serde_json::to_string_pretty(p).unwrap_or_default()));
+        m.push_str(&format!("\n{}\n```json\n{}\n```\n", t.get("frontier.active_plan", &[("n", &p.number.to_string())]), serde_json::to_string_pretty(p).unwrap_or_default()));
     }
     if !paused.is_empty() {
-        m.push_str("\nTes plans en pause (à reprendre ou à clore, jamais à oublier) :\n");
+        m.push_str(&format!("\n{}\n", t.get("frontier.paused_head", &[])));
         for p in &paused {
-            m.push_str(&format!("- n° {} — demande : {} — en pause : {}\n", p.number, p.request, p.reason.as_deref().unwrap_or("")));
+            let line = t.get("frontier.paused_line", &[("n", &p.number.to_string()), ("request", &p.request), ("reason", p.reason.as_deref().unwrap_or(""))]);
+            m.push_str(&format!("{line}\n"));
         }
     }
     let new_request = news.iter().any(|l| l["kind"] == "request" || l["kind"] == "instruction");
     m.push('\n');
-    match (active, new_request, last) {
-        (Some(_), true, _) => m.push_str("Une demande nouvelle est arrivée pendant un plan actif : décide d'abord par edit_plan (continue, pause ou close), puis travaille, puis step_done.\n"),
-        (Some(_), false, true) if !paused.is_empty() => m.push_str("Il ne reste rien de faisable ni de bloqué dans le plan actif : clos-le (edit_plan close), puis reprends un plan en pause (resume) ou clos-le aussi, puis step_done.\n"),
-        (Some(_), false, true) => m.push_str("Il ne reste rien de faisable ni de bloqué : dis dans le texte de ta réponse ce qui est fait, clos le plan comme accompli (edit_plan close), puis appelle step_done.\n"),
-        (Some(_), false, false) => m.push_str("Travaille un élément (le premier faisable seul, ou celui que la boîte débloque), puis step_done.\n"),
-        (None, _, _) if !paused.is_empty() && !new_request => m.push_str("Aucun plan actif : reprends un plan en pause (resume) ou clos-le, puis travaille, puis step_done.\n"),
-        (None, _, _) => m.push_str("Réponds ou agis : une demande de texte se répond par le texte lui-même, dans le texte de ta réponse, pas par une phrase sur lui. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.\n"),
-    }
+    let consigne = match (active, new_request, last) {
+        (Some(_), true, _) => "frontier.new_request_during_plan",
+        (Some(_), false, true) if !paused.is_empty() => "frontier.nothing_left_with_paused",
+        (Some(_), false, true) => "frontier.nothing_left",
+        (Some(_), false, false) => "frontier.work_an_item",
+        (None, _, _) if !paused.is_empty() && !new_request => "frontier.resume_or_close_paused",
+        (None, _, _) => "frontier.answer_or_act",
+    };
+    m.push_str(&format!("{}\n", t.get(consigne, &[("user", "the user")])));
     m
 }
 
@@ -2448,7 +2455,9 @@ impl DaemonHost {
             }
             attente_bornee = None;
             let faits: Vec<Value> = lines.iter().skip(premiere_ouverte.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
-            let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits);
+            // The loop's texts, read at each step: an edit of the user's texts.json is in the next step (23 Nov 2026).
+            let textes = self.prompt_texts();
+            let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits, &textes);
             // **Its tree is not her folder** (23 Nov 2026, `~/essai-2`).
             if let Some(w) = t.workspace.as_ref().filter(|w| w.racine != w.racine_principale) {
                 message.push_str(&format!(
@@ -2649,7 +2658,7 @@ impl DaemonHost {
                         publish(bus.as_ref(), task, &line);
                     }
                 }
-                relance = Some("Your previous step ended without step_done. Continue until the request is done: do what is left now, with your tools; call step_done when it is done, or when you need something you cannot get yourself.".to_string());
+                relance = Some(textes.get("relaunch.no_step_done", &[]));
                 encore = true;
             }
             {
@@ -2753,7 +2762,7 @@ impl DaemonHost {
                     relancee = Some(demande);
                     let line = files.append("host", "report", None, "relance : l'agent n'a rien écrit à l'utilisatrice pendant ce tour ; le pas suivant lui écrit ce qu'il a fait")?;
                     publish(bus.as_ref(), task, &line);
-                    relance = Some("You wrote nothing to the user during this turn. What the user reads is the text of your reply, written before any tool call; step_done's `done` is never shown to them. Write to the user now, in the text of your reply, a few sentences: what you did, how to use it (the commands to run in their folder), and what is left; then call step_done.".to_string());
+                    relance = Some(textes.get("relaunch.silent", &[]));
                     encore = true;
                     continue;
                 } else if let Some(demande) = (!trace).then(|| request_without_a_line(&files.mailbox())).flatten() {
@@ -2763,7 +2772,7 @@ impl DaemonHost {
                         // pas raté ni un pas sans suite.
                         relancee = Some(demande);
                         let dit = declared.as_ref().and_then(|d| d["done"].as_str()).map(str::trim).filter(|d| !d.is_empty()).unwrap_or("fait");
-                        let texte = format!("relance : ta demande attend une réponse dans la boîte ; ton step_done dit « {dit} », et rien n'y est arrivé ; écris le contenu demandé (report) ou dis pourquoi (question)");
+                        let texte = textes.get("relaunch.request_unanswered", &[("done", dit)]);
                         let line = files.append("host", "report", None, &texte)?;
                         publish(bus.as_ref(), task, &line);
                         relance = Some(texte);
@@ -2790,7 +2799,7 @@ impl DaemonHost {
                                 relancee = Some(demande);
                                 let line = files.append("host", "report", None, "ended without the requested content: your reports describe the work, they are not the requested text; the next step starts to write it")?;
                                 publish(bus.as_ref(), task, &line);
-                                relance = Some("Your step ended without the text the request asks for: your reports describe the work, they are not the text. Write the text itself now, in your answer, then call step_done.".to_string());
+                                relance = Some(textes.get("relaunch.text_missing", &[]));
                                 encore = true;
                                 continue;
                             }
@@ -2819,7 +2828,7 @@ impl DaemonHost {
                                 if rouges <= policy.verify_relaunches {
                                     let line = files.append("host", "report", None, &format!("verification red ({rouges}/{}): `{commande}` failed; the next step starts from its output", policy.verify_relaunches))?;
                                     publish(bus.as_ref(), task, &line);
-                                    relance = Some(format!("Your step_done met the verification gate, and it is red: `{commande}` failed. Its output, the end of it:\n{tail}\nFix the tree so that it passes, play it yourself, then call step_done. Never say done on a red tree."));
+                                    relance = Some(textes.get("relaunch.verify_red", &[("command", commande.as_str()), ("tail", tail.as_str())]));
                                     encore = true;
                                     continue;
                                 }
@@ -3125,10 +3134,10 @@ mod tests {
         assert_eq!(s.decision().as_deref(), Some("pause"));
         let plans = s.files.read_plans();
         assert_eq!((plans.active().unwrap().number, plans.paused()[0].number), (2, 1));
-        let m = frontier_message(3, &[], &plans, false, "", &[]);
+        let m = frontier_message(3, &[], &plans, false, "", &[], &crate::daemon_host::prompts::Texts::shipped());
         assert!(m.contains("plans en pause") && m.contains("la doc") && m.contains("le superviseur demande autre chose"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "close": { "outcome": "accomplished", "reason": "centré" } }))).unwrap();
-        let m = frontier_message(4, &[], &s.files.read_plans(), false, "", &[]);
+        let m = frontier_message(4, &[], &s.files.read_plans(), false, "", &[], &crate::daemon_host::prompts::Texts::shipped());
         assert!(m.contains("reprends un plan en pause"), "{m}");
         s.ours(&call(EDIT_PLAN, json!({ "resume": 1 }))).unwrap();
         let plans = s.files.read_plans();
@@ -3158,10 +3167,10 @@ mod tests {
 
     #[test]
     fn the_frontier_says_what_the_step_expects() {
-        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false, "", &[]);
+        let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false, "", &[], &crate::daemon_host::prompts::Texts::shipped());
         assert!(m.contains("Bonjour") && m.contains("Réponds ou agis"), "{m}");
         let plans = Plans { plans: vec![Plan { number: 1, request: "r".into(), proposal: "p".into(), items: vec![], state: PlanState::Active, reason: None, steps: vec![], concepts: vec![] }] };
-        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false, "", &[]);
+        let m = frontier_message(2, &[json!({ "kind": "request", "from": "c7", "text": "autre chose" })], &plans, false, "", &[], &crate::daemon_host::prompts::Texts::shipped());
         assert!(m.contains("décide d'abord"), "{m}");
     }
 
