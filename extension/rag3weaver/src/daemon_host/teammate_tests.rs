@@ -36,6 +36,8 @@ mod commit_what_was_written;
 mod conversation_memory;
 mod copy_lands;
 mod turn_failures;
+mod bac_outside_root;
+mod facts_when_waiting;
 mod turn_changes;
 mod missing_command;
 mod background_lock;
