@@ -18,6 +18,10 @@ impl DaemonHost {
     pub(super) fn outils_importes<'a>(&'a self, b: &crate::backend::Backend, backend_id: &str) -> OutilsImportes<'a> {
         let p = b.prepared();
         let mut defs = Vec::new();
+        // Nothing imported: nothing to read, no lock taken (most backends).
+        if p.manifest.imports.is_empty() {
+            return OutilsImportes::new(defs, |_| None);
+        }
         let mut routes: HashMap<String, Arc<Hosted>> = HashMap::new();
         for import in &p.manifest.imports {
             let chemin = if import.backend.is_absolute() { import.backend.clone() } else { p.directory.join(&import.backend) };
@@ -34,9 +38,11 @@ impl DaemonHost {
                 Err(e) => eprintln!("[démon] {} : les outils importés de {} ne sont pas offerts : {e}", p.directory.display(), chemin.display()),
             }
         }
-        let agent = self.agent_key_of_backend(backend_id);
+        let backend_id = backend_id.to_string();
         OutilsImportes::new(defs, move |call| {
             let h = routes.get(&call.name)?;
+            // The agent's key, read at the call: the task's registry is not locked while the toolbox is built.
+            let agent = self.agent_key_of_backend(&backend_id);
             let tour = crate::backend::as_agent(agent.as_deref(), || self.with_backend(h, |o| crate::backend_tools::BackendTools { backend: o }.call(call)));
             Some(tour.unwrap_or_else(|e| crate::llm::Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": e }).to_string())))
         })

@@ -1360,7 +1360,7 @@ pub(crate) struct OutilsImportes<'a> {
 impl<'a> OutilsDuChat<'a> {
     /// The tools imported from other backends.
     pub(crate) fn avec_les_imports(mut self, importes: OutilsImportes<'a>) -> Self {
-        self.importes = Some(importes);
+        self.importes = Some(importes).filter(|i| !i.defs.is_empty());
         self
     }
 }
@@ -1623,7 +1623,7 @@ impl OutilsDuChat<'_> {
 
     /// A call to an imported tool, sent to its backend; `None` for the others.
     fn importe(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
-        let i = self.importes.as_ref()?;
+        let i = self.importes.as_ref().filter(|i| i.defs.iter().any(|d| d.name == call.name))?;
         if self.inner.tool_defs().iter().any(|d| d.name == call.name) {
             return None;
         }
