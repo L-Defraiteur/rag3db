@@ -1511,6 +1511,9 @@ mod escape_tests;
 /// What a turn did, said truly (23 November 2026).
 #[cfg(test)]
 mod turn_calls_tests;
+/// The active context, said quietly (23 November 2026).
+#[cfg(test)]
+mod context_tests;
 
 #[cfg(test)]
 mod tests {
