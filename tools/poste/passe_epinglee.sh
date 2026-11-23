@@ -60,7 +60,10 @@ export RAG3WEAVER_TARGET_REPRENDRE=1
 # 23 novembre 2026, 08 h 3x : lib 3a2639714e, bâtie à d5034c8670 avec vector-index-special-names (les noms des tables
 # d'un index vectoriel entre accents graves), posée aux deux magasins ; verdict e2e_code 36/36, e2e_lectures 28/28,
 # e2e_demon_hote 27/27, VERT.
-export RAG3DB_LIB=rag3db-build-3a2639714e99716fa7f5afa698800a43e03f0a67-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+# 24 novembre 2026, 00 h 4x : lib fc64aca6f3, bâtie à ffd68fa780 avec region-delete-seed (un survivant d'une suppression
+# de région gardé joignable dans la couche basse du HNSW), posée aux deux magasins ; verdict e2e_code 36/36,
+# e2e_lectures 28/28, e2e_demon_hote 27/27, VERT.
+export RAG3DB_LIB=rag3db-build-fc64aca6f33a64e40ac4ed1b296629ef2fa6e2c5-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 # Depuis le 20 novembre 2026 (fenêtre de G, train C++ train-20-11 : la quarantaine du dernier lecteur au point de
 # reprise de hotfixs et la course des groupes du cœur) : lib 4ad394f4d2 (le commit moteur de master du train, mêmes sources que 501d7ccc90, BUILD_ID seul différent) posée aux deux postes, hôtes source baccb2ea6e
 # (l'hôte répété de la bascule vers les versions) ; les passes de cette source ne demandent plus MOTEUR_ANCIEN.
