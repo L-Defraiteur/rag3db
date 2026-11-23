@@ -2,6 +2,10 @@
 
 - 23 novembre 2026 — **L'avancement et la fin d'un index se voient de nouveau à chaque relecture de l'état.** L'hôte
   ne garde entre deux lectures que l'état d'un index posé ; un index en cours se relit à chaque fois.
+- 23 novembre 2026 — **L'agent répond toujours à la fin de son tour, à une personne comme à un agent.** Sa phrase
+  d'annonce n'est plus prise pour la réponse : après son dernier outil, il écrit la réponse entière (les commandes
+  exactes, l'explication) avant de clore. Et une question posée par un agent superviseur reçoit sa réponse comme
+  celle d'une personne : un `step_done` muet juste après un outil y est refusé aussi.
 - 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
   l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
   dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
