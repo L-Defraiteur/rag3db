@@ -486,21 +486,6 @@ pub(crate) fn in_her_folder(folders: Option<&(String, String)>, text: &str) -> S
     }
 }
 
-/// **The turn was opened by a human**: its last request or instruction comes from a human.
-pub(crate) fn human_turn(lignes: &[Value]) -> bool {
-    lignes
-        .iter()
-        .rev()
-        .find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
-        .is_some_and(|l| l["by"]["kind"] == "human")
-}
-
-/// **The turn was opened by someone's request**, a human's or an agent's: a request or instruction neither the teammate
-/// nor the host wrote.
-pub(crate) fn asked_turn(lignes: &[Value]) -> bool {
-    lignes.iter().any(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
-}
-
 /// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
 /// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
@@ -573,7 +558,6 @@ pub struct Step {
     /// **The step wrote text to the user** (its reply's tokens, seen as they stream).
     wrote_text: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The step_dones refused for want of a word, and whether the step ended without one.
-    text_refusals: AtomicUsize,
     /// **Delivered up to this line of the mailbox** (Lucie's trial of 23 Nov 2026): what arrives during the step comes
     /// at the head of its next tool result; the next frontier still recalls it, with the rest of the step's news.
     delivered: AtomicUsize,
@@ -588,7 +572,6 @@ pub struct Step {
     /// The step wrote text at some point (kept across its tool calls): the rule of the silent turn reads it.
     wrote_any: std::sync::atomic::AtomicBool,
     answered_nothing: std::sync::atomic::AtomicBool,
-    text_first: String,
     reply_first: String,
     /// Ce que `step_done` a déclaré.
     done: Mutex<Option<Value>>,
@@ -796,7 +779,6 @@ impl Step {
             context_window: std::sync::Arc::new(AtomicUsize::new(0)),
             context_share: crate::backend::TeammatePolicy::default().step_context_share,
             wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            text_refusals: AtomicUsize::new(0),
             delivered: AtomicUsize::new(0),
             texts: None,
             at_step_done: None,
@@ -804,7 +786,6 @@ impl Step {
             used_tools: std::sync::atomic::AtomicBool::new(false),
             wrote_any: std::sync::atomic::AtomicBool::new(false),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
-            text_first: crate::backend::TeammatePolicy::default().text_first,
             reply_first: crate::backend::TeammatePolicy::default().reply_first,
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
@@ -876,7 +857,6 @@ impl Step {
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
         self.max_output_tokens = policy.max_output_tokens.max(256);
-        self.text_first = policy.text_first.clone();
         self.reply_first = policy.reply_first.clone();
         self
     }
@@ -952,13 +932,6 @@ impl Step {
         turn.content = format!("{tete}
 {}", turn.content);
         turn
-    }
-
-    pub fn with_text_first(mut self, text: Option<String>) -> Self {
-        if let Some(t) = text {
-            self.text_first = t.trim().to_string();
-        }
-        self
     }
 
     /// The head of the teammate's prompt (`teammate.reply_first`).
@@ -1261,33 +1234,8 @@ impl Step {
                 Err(e) => eprintln!("[équipier] at_step_done : {e} ; l'appel est accepté"),
             }
         }
-        // **A word to the user first** (23 Nov 2026, `~/essai-3`): in a turn a human opened that has no line of the
-        // agent yet, a step without text is refused twice, then accepted and said by the host.
-        // And a step that used tools ends with a word after its last one (the replay of 23 Nov 2026, 18 h 26: a turn
-        // of 15 files whose only text was its first sentence): the end-of-turn explanation.
-        let boite = self.files.mailbox();
-        // Only the step_done that closes the turn asks for it (Lucie, 23 Nov 2026: an explanation at the end of the
-        // turn, not a comment after each step): nothing left, and no other item of the active plan still to do.
-        let cet_element = args["item"].as_str().unwrap_or_default();
-        let clot = args["remaining"].as_str().unwrap_or_default().trim().is_empty() && {
-            let plans = self.files.read_plans();
-            plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
-        };
-        let depuis_l_outil = self.wrote_text.load(Ordering::SeqCst);
-        let dans_le_pas = depuis_l_outil || self.wrote_any.load(Ordering::SeqCst);
-        // Asked by a human, or by an agent once the teammate wrote to it (the replay of 23 Nov 2026, 20 h 30: a
-        // supervisor's question went unanswered after a first sentence); an agent's request with no line at all is
-        // the relaunch's ([`request_without_a_line`]).
-        let demande = human_turn(&boite) || (asked_turn(&boite) && (dans_le_pas || request_without_a_line(&boite).is_none()));
-        let apres_outil = self.used_tools.load(Ordering::SeqCst) && demande && clot;
-        if (!dans_le_pas && silent_turn(&boite).is_some()) || (!depuis_l_outil && apres_outil) {
-            // Numbered: two refusals in the same words would stop the run as a repeated error.
-            let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
-            if n < 2 {
-                return Err(format!("{} ({}/2)", self.text_first, n + 1));
-            }
-            self.answered_nothing.store(true, Ordering::SeqCst);
-        }
+        // The two rules of a silent step_done (a turn with no word to the user; a closing step_done right after tools)
+        // live in `templates/teammate/graphs/at_step_done.mmd` and its table, asked just above.
         let item = args["item"].as_str().unwrap_or_default();
         let succeeded = args["succeeded"].as_bool().ok_or("succeeded manque (true ou false)")?;
         let done = args["done"].as_str().unwrap_or_default();
@@ -2694,7 +2642,7 @@ impl DaemonHost {
             }
             step.woke_by = woke_by.take();
             // The refusal of a silent step_done, from the user's own template file, read at each step.
-            step = step.with_text_first(self.user_prompt("text_first")).with_delivery(read, textes.clone()).with_at_step_done(self.at_step_done_graph());
+            step = step.with_delivery(read, textes.clone()).with_at_step_done(self.at_step_done_graph());
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
             // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
