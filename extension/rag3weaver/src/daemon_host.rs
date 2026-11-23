@@ -4583,6 +4583,8 @@ mod tests {
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod index_on_demand;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
+    mod worktree_reuses_repo_index;
+    #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod new_project_index;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod index_offer;
