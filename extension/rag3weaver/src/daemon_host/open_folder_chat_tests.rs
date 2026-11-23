@@ -118,6 +118,7 @@ fn the_input_takes_the_focus_when_the_chat_is_ready_before_it_is_mounted() {
     let order = n.evaluer("JSON.stringify({ chat_on_at: window.__chat_on_at, input_at: window.__input_at, disabled_at_mount: window.__input_disabled_at_mount })");
     let order: serde_json::Value = serde_json::from_str(order.as_str().unwrap_or("{}")).unwrap_or_default();
     let (chat_on_at, input_at) = (order["chat_on_at"].as_f64(), order["input_at"].as_f64());
+    eprintln!("[focus] the order obtained: {order}");
     assert!(
         matches!((chat_on_at, input_at), (Some(c), Some(i)) if c < i),
         "the forced order did not happen (the chat ready before the input mounted): {order}"
