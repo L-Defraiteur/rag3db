@@ -336,6 +336,14 @@ pub struct DaemonHost {
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
     soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
+    /// A publication of the host's state runs in the background; one asked meanwhile is redone after it.
+    publication_en_cours: std::sync::atomic::AtomicBool,
+    publication_a_refaire: std::sync::atomic::AtomicBool,
+    /// The witnesses' count of the states published, and their slow state.
+    #[cfg(test)]
+    publications_faites: std::sync::atomic::AtomicU64,
+    #[cfg(test)]
+    etat_lent_ms: std::sync::atomic::AtomicU64,
     /// **The background commands of each task** (`parent/task`; Lucie, 21 November 2026): their scope outlives the
     /// teammate's steps, and their ends come back to the task's mailbox.
     task_backgrounds: Mutex<std::collections::HashMap<String, Arc<teammate::TaskBackground>>>,
@@ -475,6 +483,9 @@ pub mod prices;
 /// The page says when it is not entered as the user (22 November 2026), its witness in its file.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_not_human_tests;
+/// The host publishes its state without holding its caller (23 November 2026).
+#[cfg(test)]
+mod state_publication_tests;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;
@@ -610,6 +621,12 @@ impl DaemonHost {
     pub fn with_opener(opener: Opener) -> Self {
         Self {
             soi: std::sync::OnceLock::new(),
+            publication_en_cours: std::sync::atomic::AtomicBool::new(false),
+            publication_a_refaire: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            publications_faites: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            etat_lent_ms: std::sync::atomic::AtomicU64::new(0),
             task_backgrounds: Default::default(),
             racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
@@ -738,6 +755,8 @@ impl DaemonHost {
         let (statut, v) = self.handle("GET", "/etat", None, &[]);
         if statut == 200 {
             self.ide_flux().publier_etat("hote", "*", v);
+            #[cfg(test)]
+            self.publications_faites.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -2938,6 +2957,8 @@ impl DaemonHost {
     }
 
     pub fn state(&self) -> Value {
+        #[cfg(test)]
+        std::thread::sleep(std::time::Duration::from_millis(self.etat_lent_ms.load(std::sync::atomic::Ordering::SeqCst)));
         self.reap_dead_sessions();
         let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
         let backends: Vec<Value> = hotes
