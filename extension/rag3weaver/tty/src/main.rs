@@ -83,6 +83,12 @@ fn plain_cannot_answer(l: &Value) -> Option<String> {
     Some(format!("une carte attend ton accord : {quoi} — réponds dans la vue (rag3weaver-tty sans --plain) ou dans l'IDE"))
 }
 
+/// **Whether the plain mode stops**: only when the teammate is suspended on a card it cannot answer (a host line « en
+/// attente du superviseur » after an approval still unanswered); a card while the teammate works on is said, not a stop.
+fn plain_suspended_on_a_card(_lines: &[Value]) -> bool {
+    false
+}
+
 /// The last conversation of a repository in the host's list of teammates.
 fn last_conversation(list: &Value, parent: &str) -> Option<String> {
     let all = list["teammates"].as_array().or_else(|| list["result"]["teammates"].as_array())?;
@@ -485,5 +491,23 @@ mod plain_approval_tests {
         let said = plain_cannot_answer(&card).expect("an approval is said");
         assert!(said.contains("python3 fizzbuzz.py") && said.contains("sans --plain"), "{said}");
         assert_eq!(plain_cannot_answer(&serde_json::json!({ "from": "teammate", "kind": "report", "text": "fait" })), None);
+    }
+}
+
+#[cfg(test)]
+mod plain_suspension_tests {
+    use super::*;
+
+    /// **The plain mode stops only when the teammate is suspended on a card** (essai de la demande 4, 23 Nov.: it
+    /// stopped on the card while the teammate went on, and its answer was lost).
+    #[test]
+    fn the_plain_mode_stops_only_when_the_teammate_is_suspended_on_a_card() {
+        let card = serde_json::json!({ "id": "b/t:3", "from": "teammate", "kind": "approval", "command": "find / -name pytest" });
+        let working = vec![card.clone(), serde_json::json!({ "from": "teammate", "kind": "report", "text": "j'avance sans la commande" })];
+        assert!(!plain_suspended_on_a_card(&working), "a card while the teammate works on is not a stop");
+        let suspended = vec![card.clone(), serde_json::json!({ "from": "host", "kind": "report", "text": "en attente du superviseur depuis 01:26 : approval b/t:3" })];
+        assert!(plain_suspended_on_a_card(&suspended), "suspended on it: stop");
+        let answered = vec![card, serde_json::json!({ "from": "host", "kind": "report", "text": "en attente du superviseur depuis 01:26 : approval b/t:3" }), serde_json::json!({ "from": "user", "kind": "answer", "reply_to": "b/t:3", "approved": true })];
+        assert!(!plain_suspended_on_a_card(&answered), "answered elsewhere: no stop");
     }
 }
