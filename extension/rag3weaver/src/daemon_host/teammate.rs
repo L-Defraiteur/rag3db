@@ -575,6 +575,10 @@ pub struct Step {
     delivered: AtomicUsize,
     /// The loop's texts, for what is delivered during the step.
     texts: Option<super::prompts::Texts>,
+    /// The graph asked at each `step_done` (`templates/teammate/graphs/at_step_done.mmd`), and how many times each of
+    /// its refusing verdicts refused in this step.
+    at_step_done: Option<std::sync::Arc<super::step_graphs::StepGraph>>,
+    verdict_refusals: std::sync::Mutex<std::collections::BTreeMap<String, usize>>,
     /// The step called a tool of work (not step_done nor report): a text must follow its last one.
     used_tools: std::sync::atomic::AtomicBool,
     /// The step wrote text at some point (kept across its tool calls): the rule of the silent turn reads it.
@@ -778,6 +782,8 @@ impl Step {
             text_refusals: AtomicUsize::new(0),
             delivered: AtomicUsize::new(0),
             texts: None,
+            at_step_done: None,
+            verdict_refusals: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             used_tools: std::sync::atomic::AtomicBool::new(false),
             wrote_any: std::sync::atomic::AtomicBool::new(false),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
@@ -859,6 +865,35 @@ impl Step {
 
     /// The refusal of a silent step_done, from the user's own template file when she has one (read at each step).
     /// **What the mailbox received before the step**: read by its frontier; what comes after is delivered during it.
+    /// The graph asked at each `step_done`.
+    pub(crate) fn with_at_step_done(mut self, graph: Option<std::sync::Arc<super::step_graphs::StepGraph>>) -> Self {
+        self.at_step_done = graph;
+        self
+    }
+
+    /// **The facts of the step**, as the step's graphs read them (`at_step_done.mmd`, `end_of_step.mmd`): whether it
+    /// wrote after its last tool and in the step, whether it used tools, the `step_done` being called, the active plan,
+    /// and the turn's mailbox lines since the last `ended`. A fact the step does not know is absent: it reads false.
+    pub(crate) fn step_facts(&self, step_done: Option<&Value>) -> Value {
+        let boite = self.files.mailbox();
+        let debut = boite.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
+        let turn: Vec<Value> = boite[debut..]
+            .iter()
+            .map(|l| json!({ "from": l["from"], "kind": l["kind"], "by": l["by"], "id": l["id"], "reply_to": l["reply_to"], "expects": l["expects"] }))
+            .collect();
+        let plans = self.files.read_plans();
+        let plan = plans.active().map(|p| json!({ "items": p.items.iter().map(|i| json!({ "id": i.id, "status": i.status })).collect::<Vec<_>>() }));
+        let since_tool = self.wrote_text.load(Ordering::SeqCst);
+        json!({
+            "text_since_last_tool": since_tool,
+            "text_in_step": since_tool || self.wrote_any.load(Ordering::SeqCst),
+            "used_tools": self.used_tools.load(Ordering::SeqCst),
+            "step_done": step_done.map(|a| json!({ "item": a["item"], "succeeded": a["succeeded"], "remaining": a["remaining"] })),
+            "plan": plan,
+            "turn": turn,
+        })
+    }
+
     pub(crate) fn with_delivery(mut self, read: usize, texts: super::prompts::Texts) -> Self {
         self.delivered = AtomicUsize::new(read);
         self.texts = Some(texts);
@@ -1175,6 +1210,29 @@ impl Step {
     }
 
     fn step_done(&self, args: &Value) -> Result<Value, String> {
+        // **The declared decision first** (`at_step_done.mmd`, 23 Nov 2026): a verdict whose table says `refuse` sends
+        // its text back to the model, numbered, up to its `max_refusals`; then the call is accepted, said answered
+        // nothing. A graph that fails is said, and the step goes on as if it accepted.
+        if let Some(graph) = &self.at_step_done {
+            match graph.decide(&self.step_facts(Some(args))) {
+                Ok((verdict, _why, a)) if a.action == "refuse" => {
+                    let n = {
+                        let mut counts = self.verdict_refusals.lock().unwrap_or_else(|p| p.into_inner());
+                        let c = counts.entry(verdict).or_insert(0);
+                        *c += 1;
+                        *c - 1
+                    };
+                    if n < a.max_refusals {
+                        let key = a.text_key.unwrap_or_default();
+                        let text = self.texts.clone().unwrap_or_else(super::prompts::Texts::shipped).get(&key, &[]);
+                        return Err(format!("{text} ({}/{})", n + 1, a.max_refusals));
+                    }
+                    self.answered_nothing.store(true, Ordering::SeqCst);
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("[équipier] at_step_done : {e} ; l'appel est accepté"),
+            }
+        }
         // **A word to the user first** (23 Nov 2026, `~/essai-3`): in a turn a human opened that has no line of the
         // agent yet, a step without text is refused twice, then accepted and said by the host.
         // And a step that used tools ends with a word after its last one (the replay of 23 Nov 2026, 18 h 26: a turn
@@ -2602,7 +2660,7 @@ impl DaemonHost {
             }
             step.woke_by = woke_by.take();
             // The refusal of a silent step_done, from the user's own template file, read at each step.
-            step = step.with_text_first(self.user_prompt("text_first")).with_delivery(read, textes.clone());
+            step = step.with_text_first(self.user_prompt("text_first")).with_delivery(read, textes.clone()).with_at_step_done(self.at_step_done_graph());
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
             // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
@@ -3433,3 +3491,7 @@ mod carry_over_tests {
     #[cfg(feature = "wasm-nodes")]
     mod wasm_previous_step;
 }
+
+/// The witness of the lot `step-hooks`, in a file of its own.
+#[cfg(test)]
+mod step_graph_tests;
