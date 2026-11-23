@@ -410,6 +410,9 @@ impl Vue {
         std::mem::take(&mut self.traces)
     }
 
+    /// The view at `now`, between events.
+    pub fn tick(&mut self, _now: Instant) {}
+
     pub fn prendre_lignes(&mut self) -> Vec<Validee> {
         std::mem::take(&mut self.validees)
     }
@@ -1613,6 +1616,9 @@ mod context_tests;
 /// By default the view shows what speaks to the user (23 November 2026).
 #[cfg(test)]
 mod quiet_tests;
+/// The agent's text is not cut in two by its run's end (23 November 2026).
+#[cfg(test)]
+mod late_tokens_tests;
 /// The agent's text is seen as it is written (23 November 2026).
 #[cfg(test)]
 mod streamed_text_tests;
