@@ -1111,7 +1111,7 @@ impl DaemonHost {
         let spending_notice = crate::usage_ledger::user_ledger().alert_to_say(&format!("chat:{backend_id}")).and_then(|a| a["text"].as_str().map(str::to_string));
         if let Some(n) = &spending_notice {
             prompt.push_str(&format!(
-                "\n\nThe month's spending of paid models: {n}. Say it to the user in one calm sentence at the start of your answer, this turn only, then answer; it is no reason to stop working."
+                "\n\nThe month's spending of paid models: {n}. Say it to the user in one calm sentence after your answer to what they wrote, this turn only; it is no reason to stop working."
             ));
         }
         // Le message système suit le mode de la déclaration : il est réécrit à

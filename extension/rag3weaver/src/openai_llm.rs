@@ -447,7 +447,9 @@ impl OpenAiLlm {
             // Measured on Vertex (23 November 2026): the thought summaries come back in `content`, marked `thought`,
             // and the level is held as `reasoning_effort` would hold it.
             let mut config = json!({ "include_thoughts": true });
-            if let Some(e) = effort {
+            // **A low effort does not switch the thinking off** (23 November 2026: `low` gave 0 thinking tokens in
+            // every call; without a level, Vertex thinks as it sees fit): only `medium` and `high` send a level.
+            if let Some(e) = effort.filter(|e| matches!(e, crate::llm::ReasoningEffort::Medium | crate::llm::ReasoningEffort::High)) {
                 config["thinking_level"] = json!(e.as_str());
             }
             google.insert("thinking_config".into(), config);
@@ -2560,7 +2562,7 @@ mod tests {
     fn minimal_reasoning_goes_to_google_as_low() {
         let opts = GenOptions::default().with_reasoning(ReasoningEffort::Minimal);
         let google = OpenAiLlm::new("http://x/v1", "m").with_google_extras();
-        assert_eq!(google.request_body(&hello(), &opts)["extra_body"]["google"]["thinking_config"]["thinking_level"], "low");
+        assert!(google.request_body(&hello(), &opts)["extra_body"]["google"]["thinking_config"]["thinking_level"].is_null(), "minimal sends no level with the summaries");
         let hidden = OpenAiLlm::new("http://x/v1", "m").with_google_extras().with_thoughts(Thoughts::Hidden);
         assert_eq!(hidden.request_body(&hello(), &opts)["reasoning_effort"], "low");
         let other = OpenAiLlm::new("http://x/v1", "m");
