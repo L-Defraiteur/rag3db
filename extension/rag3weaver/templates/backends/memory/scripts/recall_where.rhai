@@ -1,6 +1,6 @@
 // recall_where — the sources of recall_for_request, one element per source: the turns of the summarised windows (only
 // with a run and active_since: never a passage still in clear), the L1 apports (not the recopied ones), the cards (not
-// the retired ones). The author filter: « me » is the agent the call is made for (`caller`, given by the host).
+// the retired ones). `recent` is for the preparation (prepare « model »), not read here. The author filter: « me » is the agent the call is made for (`caller`, given by the host).
 let i = input;
 if i.request == () || i.request == "" { throw "recall_for_request: request is empty"; }
 let limit = if i.limit == () { 10 } else { i.limit };

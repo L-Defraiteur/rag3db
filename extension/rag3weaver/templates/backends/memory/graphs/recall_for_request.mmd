@@ -16,7 +16,7 @@
 %% result: fuse.result
 
 graph LR
-    where["RhaiNode(script_id=recall_where, inputs='request,run,active_since,author,caller,limit', request=$request, run=$run, active_since=$active_since, author=$author, limit=$limit)"]
+    where["RhaiNode(script_id=recall_where, inputs='request,run,active_since,author,caller,limit,recent', recent=$recent, request=$request, run=$run, active_since=$active_since, author=$author, limit=$limit)"]
     search["ForEachNode(graph='@graphs/recall_search.mmd')"]
     fuse["RhaiNode(script_id=recall_fuse, inputs='prepare,top,weights,recency,min_score,budget_tokens,swarm', prepare=$prepare, top=$top, weights=$weights, recency=$recency, min_score=$min_score, budget_tokens=$budget_tokens, swarm=$swarm)"]
     where -->|result:elements| search
