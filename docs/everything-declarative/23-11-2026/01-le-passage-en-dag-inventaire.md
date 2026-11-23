@@ -1,5 +1,10 @@
 # Le passage en DAG : l'inventaire du code en dur
 
+> **Le principe à ne jamais oublier** (Lucie, 24 novembre 2026, vers 0 h 05) : « quand on fait notre produit de code,
+> en fait, ça doit devenir notre premier **software as DAG** ». L'agent de code de rag3weaver est le premier logiciel
+> écrit en graphes déclarés : sa boucle, sa porte, ses relances, son atterrissage. C'est lui qui prouve le produit.
+> **Chaque lot se juge sur une question : rapproche-t-il l'agent de code d'un logiciel entièrement en graphes ?**
+
 23 novembre 2026, session everything declarative. Lucie, vers 17 h 20, relayée par c7 : « une fois qu'on a l'agent de
 code fixé pour de bon, on se fait une opération passage en DAG du code au max : tout ce qui peut devenir un DAG purement
 et moins de code en dur le devient, dans la boucle de l'agent, donc définissable par mermaid et gabarits aussi, tout,
