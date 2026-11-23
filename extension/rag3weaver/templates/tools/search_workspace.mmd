@@ -48,6 +48,13 @@
 %% un résultat qui contient la requête passe devant les signaux qui ne l'ont
 %% qu'approchée.
 %%
+%% **Un saut d'appel autour des premiers rangs** (23 novembre 2026, essai 6
+%% du banc) : un symptôme nomme ce que sa cause appelle. `CallersHopNode`
+%% prend les appelants de chacun des `from` premiers résultats (les usages de
+%% genre `call`, déclarés comme dans `usages.mmd`), garde les `per_source`
+%% qui recoupent le mieux la requête et les pose juste après leur source,
+%% « via call ». `from=0` le fait passer, comme `RerankNode(candidates=0)`.
+%%
 %% Ce graphe demande la politique `read_files` : le balayage lit les
 %% fichiers de la source, comme `read` ou `grep`.
 
@@ -60,6 +67,7 @@ graph LR
     exact_name["ExactNameNode(field='name', leaf='folds', limit=20)"]
     fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact', exact_name='name', exact_name_leaf='folds')"]
     rerank["RerankNode(keep_signal=true)"]
+    hop["CallersHopNode(from=3, per_source=2, pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, edge_field=resolution, edge_guessed='nom|dossier', edge_doubtful=ambigu, scope=$scope, language=$language)"]
     paginate["PaginateNode"]
     highlight["HighlightNode"]
     resolve["ResolveParentNode"]
@@ -71,6 +79,7 @@ graph LR
     source -->|query| exact_name
     source -->|query| fuse
     source -->|query| rerank
+    source -->|query| hop
     source -->|query| paginate
     source -->|query| highlight
     source -->|query| resolve
@@ -91,7 +100,8 @@ graph LR
     sparse -->|results:sparse| fuse
     sparse -->|status| fuse
     fuse -->|results| rerank
-    rerank -->|results| paginate
+    rerank -->|results| hop
+    hop -->|results| paginate
     paginate -->|results| highlight
     highlight -->|results| resolve
     resolve -->|results| render

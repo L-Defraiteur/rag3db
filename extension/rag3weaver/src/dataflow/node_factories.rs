@@ -1685,6 +1685,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(SparseSearchNodeFactory));
     registry.register(Box::new(FuseResultsNodeFactory));
     registry.register(Box::new(RerankNodeFactory));
+    // Un saut d'appel autour des premiers rangs : les appelants, par les usages que le gabarit déclare.
+    registry.register(Box::new(super::callers_hop_node::CallersHopNodeFactory));
     registry.register(Box::new(HighlightNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     registry.register(Box::new(PaginateNodeFactory));
@@ -1745,7 +1747,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 60 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 61 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 

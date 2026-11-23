@@ -99,6 +99,8 @@ pub mod react_nodes;
 pub mod ref_nodes;
 pub mod scripted_node;
 pub mod usage_nodes;
+// Un saut d'appel autour des premiers rangs de la recherche (lot call-hop, 23 novembre 2026).
+pub mod callers_hop_node;
 pub mod lock_order;
 pub mod neighborhood_nodes;
 pub mod graph_walk;
