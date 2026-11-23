@@ -53,7 +53,7 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - A plan is not mandatory. A greeting or a small change (center a div) needs none: answer or act, then call step_done. Write a mini-plan (edit_plan) only when the request needed a real analysis or splits into several items.
 - A plan holds the request as you understand it, what you propose, then items. Each item has a status (todo, doing, done, blocked, dropped) and is either `alone` (doable without validation) or needs validation, with the `question` you ask; questions are sent to the supervisor when you set them. Edit it whenever you see fit; close it (accomplished or obsolete, with a reason) when it is.
 - At most one plan is active. When a new request arrives while a plan is active, decide explicitly with edit_plan: `continue` (the request joins it or waits), `pause` (with a reason), or `close` as obsolete. A paused plan stays listed at every step until you `resume` it or close it.
-- Work the request through in your step until the request is done: chain your tool calls (read, edit, run), one after the other. Call step_done { item, succeeded, done, remaining } (item may be empty without a plan) only when the request is done, or when you need something you cannot get yourself (a question, an approval). Never stop to describe what you will do next: do it now. `remaining` says what is left; leave it empty (\"\") when nothing is left: a non-empty `remaining` starts another step.
+- Work the request through in your step until the request is done: chain your tool calls (read, edit, run), one after the other. Call step_done { item, succeeded, done, remaining } (item may be empty without a plan) only when the request is done, or when you need something you cannot get yourself (a question, an approval). Never stop to describe what you will do next: do it now. step_done closes a step, it is not an answer: before it, write to the user, in your answer, a few sentences on what you did and what is left. `remaining` says what is left; leave it empty (\"\") when nothing is left: a non-empty `remaining` starts another step.
 - Maximum autonomy: you close your items and your plan (accomplished) yourself, and you ask nothing about what is in the plan. A `question` is only for a real blocker you cannot decide. Never wait for an answer: send the blocking questions first, then work on what you can do alone.
 - Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (suggest: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
 - Each step starts with the mailbox (answers, new requests) and your plans. Read them before acting.
@@ -493,6 +493,16 @@ pub const EXPECTS: [&str; 3] = ["report", "approval", "none"];
 /// `None` quand une ligne y est, ou quand la demande déclare `expects` (sa garde est la sienne,
 /// `none` compris). La boucle ne relance que si l'équipier n'a rien laissé d'autre non plus : ni
 /// fichier écrit, ni commande, ni plan clos (forme B de c7).
+/// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
+/// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
+pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
+    let n = lignes.iter().rposition(|l| {
+        matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host" && l["by"]["kind"] == "human"
+    })?;
+    let ligne = lignes[n + 1..].iter().any(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question" | "approval" | "message" | "answer")));
+    (!ligne).then_some(n)
+}
+
 pub(crate) fn request_without_a_line(lignes: &[Value]) -> Option<usize> {
     let n = lignes.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host")?;
     if !lignes[n]["expects"].is_null() {
@@ -2622,6 +2632,15 @@ impl DaemonHost {
                     }
                     let line = files.append("host", "report", None, &format!("fait sans le livrable demandé ({manque}) : j'attends le superviseur"))?;
                     publish(bus.as_ref(), task, &line);
+                    continue;
+                } else if let Some(demande) = silent_turn(&files.mailbox()).filter(|d| relancee != Some(*d)) {
+                    // **A turn never ends without a word to its user** (Lucie's trial, 23 Nov 2026: files written,
+                    // step_done, and not a sentence to her): relaunched once, whatever the step left behind.
+                    relancee = Some(demande);
+                    let line = files.append("host", "report", None, "relance : l'agent n'a rien écrit à l'utilisatrice pendant ce tour ; le pas suivant lui écrit ce qu'il a fait")?;
+                    publish(bus.as_ref(), task, &line);
+                    relance = Some("You wrote nothing to the user during this turn: step_done closes a step, it is not an answer. Write to the user now, in your answer, a few sentences on what you did and what is left, then call step_done.".to_string());
+                    encore = true;
                     continue;
                 } else if let Some(demande) = (!trace).then(|| request_without_a_line(&files.mailbox())).flatten() {
                     if relancee != Some(demande) {
