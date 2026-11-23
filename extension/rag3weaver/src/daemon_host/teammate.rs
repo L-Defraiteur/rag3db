@@ -2040,6 +2040,9 @@ impl DaemonHost {
         // **The pair mode**: the entry in the sessions registry lives as long as the teammate.
         let cle = format!("{parent}/{task}");
         let pair = self.pair_de_la_tache(parent, task, true);
+        // The turn's start, for its facts at the end (23 Nov 2026).
+        #[cfg(feature = "code")]
+        let debut = self.task_tree_head(parent, task);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
@@ -2049,8 +2052,16 @@ impl DaemonHost {
         if let Some(p) = &pair {
             p.statut(&cle, false);
         }
+        // **The facts of the turn, by the host**, before its end: what git sees changed, or that nothing did.
+        #[cfg(feature = "code")]
+        let faits = debut.and_then(|(arbre, avant)| self.say_turn_changes(&files, &arbre, &avant));
+        #[cfg(not(feature = "code"))]
+        let faits: Option<Value> = None;
         let line = files.append("host", "ended", None, &outcome.ended)?;
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
+            if let Some(f) = &faits {
+                publish(Some(&bus), task, f);
+            }
             publish(Some(&bus), task, &line);
         }
         // **Le curseur reste où la boucle l'a laissé** : le marquer au bout de
