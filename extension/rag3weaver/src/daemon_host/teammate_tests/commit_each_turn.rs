@@ -54,4 +54,7 @@ fn a_turn_that_writes_without_committing_lands_in_the_users_folder() {
     assert!(depot.join(".gitignore").is_file());
     assert!(!depot.join("dist/bundle.js").exists(), "what the .gitignore leaves out stays out");
     assert!(b.iter().any(|l| l["from"] == "host" && l["kind"] == "merged"), "the line says where the work is: {b:#?}");
+    // The host's commit is signed by rag3weaver, never by the machine's git config (c7, 23 Nov 2026).
+    let auteur = std::process::Command::new("git").arg("-C").arg(&depot).args(["log", "-1", "--format=%an <%ae>"]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&auteur.stdout).trim(), "rag3weaver <rag3weaver@localhost>", "the host's commit's author");
 }
