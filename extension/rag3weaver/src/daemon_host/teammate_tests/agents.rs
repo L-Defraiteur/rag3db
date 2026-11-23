@@ -198,7 +198,7 @@ fn a_repositorys_chat_is_a_node_and_each_node_gives_its_link() {
     host.ouvrir_une_tache(&h.id, "archi-a").expect("la tâche s'ouvre");
     host.donner_les_vues(&h.id, "archi-a", "archi", vec!["backend".into()], Some("backend".into())).unwrap();
     let t = host.tache(&h.id, "archi-a").unwrap();
-    let session = |texte: &str| crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant(texte)] };
+    let session = |texte: &str| crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant(texte)], ..Default::default() };
     std::fs::create_dir_all(d.path().join("chats")).unwrap();
     for (id, m, texte) in [(&h.id, &manifeste, "Le dépôt répond."), (&t.id, &t.manifest, "La tâche répond.")] {
         std::fs::write(d.path().join("chats").join(format!("{id}.json")), json!({ "manifest": m, "session": session(texte), "last_call": null }).to_string()).unwrap();
