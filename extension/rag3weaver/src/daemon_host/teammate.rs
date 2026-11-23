@@ -1119,7 +1119,14 @@ impl Step {
         // And a step that used tools ends with a word after its last one (the replay of 23 Nov 2026, 18 h 26: a turn
         // of 15 files whose only text was its first sentence): the end-of-turn explanation.
         let boite = self.files.mailbox();
-        let apres_outil = self.used_tools.load(Ordering::SeqCst) && human_turn(&boite);
+        // Only the step_done that closes the turn asks for it (Lucie, 23 Nov 2026: an explanation at the end of the
+        // turn, not a comment after each step): nothing left, and no other item of the active plan still to do.
+        let cet_element = args["item"].as_str().unwrap_or_default();
+        let clot = args["remaining"].as_str().unwrap_or_default().trim().is_empty() && {
+            let plans = self.files.read_plans();
+            plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
+        };
+        let apres_outil = self.used_tools.load(Ordering::SeqCst) && human_turn(&boite) && clot;
         if !self.wrote_text.load(Ordering::SeqCst) && (silent_turn(&boite).is_some() || apres_outil) {
             // Numbered: two refusals in the same words would stop the run as a repeated error.
             let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
