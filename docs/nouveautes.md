@@ -1,6 +1,6 @@
 # Nouveautés
 
-- 23 novembre 2026 — **L'agent te répond avant de dire qu'il a fini.** Dans un tour que tu as ouvert, s'il veut
+- 23 novembre 2026 — **L'agent te répond avant de dire qu'il a fini.** Son invite commence désormais par « tu ne lis que le texte de ses réponses : il t'écrit d'abord en clair, puis il appelle ses outils » (sans elle, le modèle ne rendait que des appels d'outils). Dans un tour que tu as ouvert, s'il veut
   clore son étape sans t'avoir écrit un mot, l'hôte le lui refuse aussitôt et il écrit sa réponse dans le même appel :
   plus de pas relancé ni de juge d'une minute pour un « bonjour ». S'il s'obstine, le tour finit sur une ligne claire
   (« l'agent n'a pas répondu ; reformule ou réessaie »), jamais sur la description qu'il se faisait de son travail.

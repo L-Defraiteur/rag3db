@@ -1085,6 +1085,11 @@ impl DaemonHost {
         }
         if let Some(s) = step {
             prompt.push_str("\n\n");
+            // **Text first, then the tools** (23 Nov 2026), at the head of the teammate's prompt.
+            if !s.reply_first().trim().is_empty() {
+                prompt.push_str(s.reply_first().trim());
+                prompt.push_str("\n\n");
+            }
             prompt.push_str(s.system_prompt());
             prompt.push_str("\n");
             prompt.push_str(&sign_nothing(llm.name()));

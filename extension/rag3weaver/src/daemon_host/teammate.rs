@@ -573,6 +573,7 @@ pub struct Step {
     text_refusals: AtomicUsize,
     answered_nothing: std::sync::atomic::AtomicBool,
     text_first: String,
+    reply_first: String,
     /// Ce que `step_done` a déclaré.
     done: Mutex<Option<Value>>,
     /// The pair entry of the task, and its key (mode pair, lot 3).
@@ -769,6 +770,7 @@ impl Step {
             text_refusals: AtomicUsize::new(0),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
             text_first: crate::backend::TeammatePolicy::default().text_first,
+            reply_first: crate::backend::TeammatePolicy::default().reply_first,
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
@@ -839,7 +841,13 @@ impl Step {
         self.background_policy = policy.background.clone();
         self.max_output_tokens = policy.max_output_tokens.max(256);
         self.text_first = policy.text_first.clone();
+        self.reply_first = policy.reply_first.clone();
         self
+    }
+
+    /// The head of the teammate's prompt (`teammate.reply_first`).
+    pub fn reply_first(&self) -> &str {
+        &self.reply_first
     }
 
     /// Set when the step's reply streams a token of text ([`Self::wrote_text`]).
