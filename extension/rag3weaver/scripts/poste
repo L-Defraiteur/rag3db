@@ -629,25 +629,25 @@ fi
 # pousseur) ont rempli le swap de luciepc, et systemd-oomd a tué la session graphique, qui tenait le plus de swap
 # (ticket docs/optimiseur/tickets/2026-11-23-poste-compte-les-coeurs-pas-la-memoire.md). Les places comptaient les
 # cœurs, jamais la mémoire. Un lourd qui a sa place n'entre que si :
-# - MemAvailable couvre son pic attendu (POSTE_PIC_ATTENDU, défaut 14G : un peu plus que le p90 d'une passe ; un
-#   travail plus petit le déclare plus bas) plus la réserve du poste à écran (POSTE_RESERVE_ECRAN, défaut 12G) ;
-# - au moins POSTE_MEM_RECUL secondes (défaut 90) ont passé depuis l'entrée du lourd d'avant : sa croissance ne se
+# - MemAvailable couvre son pic attendu (POSTE_EXPECTED_PEAK, défaut 14G : un peu plus que le p90 d'une passe ; un
+#   travail plus petit le déclare plus bas) plus la réserve du poste à écran (POSTE_SCREEN_RESERVE, défaut 12G) ;
+# - au moins POSTE_MEM_SPACING secondes (défaut 90) ont passé depuis l'entrée du lourd d'avant : sa croissance ne se
 #   voit pas encore dans MemAvailable.
 # Sinon il garde son rang et attend, en disant pourquoi. POSTE_MEMINFO : un autre meminfo, pour les témoins. Un
 # meminfo illisible n'arrête rien.
-mem_admet() {
-  raison=""
-  _disp=$(awk '$1 == "MemAvailable:" {printf "%d", $2 * 1024}' "${POSTE_MEMINFO:-/proc/meminfo}" 2>/dev/null)
-  [ -n "$_disp" ] || return 0
-  _pic=$(to_bytes "${POSTE_PIC_ATTENDU:-14G}"); _res=$(to_bytes "${POSTE_RESERVE_ECRAN:-12G}")
-  if [ "$_disp" -lt $(( ${_pic:-0} + ${_res:-0} )) ]; then
-    raison="mémoire : $((_disp / 1073741824)) Gio disponibles, il en faut $(( (${_pic:-0} + ${_res:-0}) / 1073741824 )) (pic attendu + réserve de l'écran)"
+mem_admits() {
+  reason=""
+  _avail=$(awk '$1 == "MemAvailable:" {printf "%d", $2 * 1024}' "${POSTE_MEMINFO:-/proc/meminfo}" 2>/dev/null)
+  [ -n "$_avail" ] || return 0
+  _pic=$(to_bytes "${POSTE_EXPECTED_PEAK:-14G}"); _res=$(to_bytes "${POSTE_SCREEN_RESERVE:-12G}")
+  if [ "$_avail" -lt $(( ${_pic:-0} + ${_res:-0} )) ]; then
+    reason="mémoire : $((_avail / 1073741824)) Gio disponibles, il en faut $(( (${_pic:-0} + ${_res:-0}) / 1073741824 )) (pic attendu + réserve de l'écran)"
     return 1
   fi
-  _der=$(cat "$V/derniere-entree" 2>/dev/null); _recul=${POSTE_MEM_RECUL:-90}
-  case "$_der" in ''|*[!0-9]*) _der=0 ;; esac
-  if [ $(( $(date +%s) - _der )) -lt "$_recul" ]; then
-    raison="mémoire : un lourd est entré il y a moins de $_recul s, sa croissance ne se voit pas encore"
+  _last=$(cat "$V/last-entry" 2>/dev/null); _spacing=${POSTE_MEM_SPACING:-90}
+  case "$_last" in ''|*[!0-9]*) _last=0 ;; esac
+  if [ $(( $(date +%s) - _last )) -lt "$_spacing" ]; then
+    reason="mémoire : un lourd est entré il y a moins de $_spacing s, sa croissance ne se voit pas encore"
     return 1
   fi
   return 0
@@ -815,7 +815,7 @@ case "$mode" in
     # Les billets valent /dev/null quand ce travail n'en a pas : jamais un chemin vide à effacer.
     trap '[ "$billet" = /dev/null ] || rm -f -- "$billet"; [ "$gpu_ticket" = /dev/null ] || rm -f -- "$gpu_ticket"; rm -f -- "$fiche"' EXIT
     [ -z "$GPU_NESTED" ] && exec 9>>"$V/poste.lock"
-    debut=$(date +%s); raison_dite=""
+    debut=$(date +%s); reason_said=""
     while :; do
       if [ -n "$GPU_NESTED" ]; then exec 8>>"$V/gpu.lock"; else exec 8>>"$V/porte.lock"; fi
       if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ]; then prendre -w "$POSTE_LOURD_ATTENTE_MAX" -x 8; else prendre -x 8; fi
@@ -829,8 +829,8 @@ case "$mode" in
         [ -e "$V/place-pousseur" ] && [ "${POSTE_VOIE:-}" != pousseur ] && [ "$max" -ge 2 ] && max=$((max - 1))
         { [ "$tenus" -lt "$max" ] && [ "$rang" -lt $((max - tenus)) ]; } || passe=0
         # Le budget mémoire, une fois la place acquise ; la raison d'attendre dite une fois, quand elle change.
-        if [ "$passe" = 1 ] && ! mem_admet; then
-          passe=0; [ "$raison" = "$raison_dite" ] || { echo "poste: attend — $raison" >&2; raison_dite=$raison; }
+        if [ "$passe" = 1 ] && ! mem_admits; then
+          passe=0; [ "$reason" = "$reason_said" ] || { echo "poste: attend — $reason" >&2; reason_said=$reason; }
         fi
       fi
       if [ "$mode" = gpu ] && [ "$passe" = 1 ]; then
@@ -841,7 +841,7 @@ case "$mode" in
       fi
       if [ "$passe" = 1 ] && { [ -n "$GPU_NESTED" ] || flock -n -s 9; }; then
         [ "$billet" = /dev/null ] || rm -f -- "$billet"; [ "$gpu_ticket" = /dev/null ] || rm -f -- "$gpu_ticket"
-        [ "$prend_cpu" = 1 ] && date +%s > "$V/derniere-entree"
+        [ "$prend_cpu" = 1 ] && date +%s > "$V/last-entry"
         dire tient
         if [ "$mode" = gpu ] && [ -z "$GPU_NESTED" ]; then flock -u 7; exec 7>&-; fi
         flock -u 8; exec 8>&-
