@@ -200,6 +200,12 @@ fn lancer(o: Options) -> Result<(), String> {
         let ici = std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?;
         o.depot = folder_repository(&ici).display().to_string();
     }
+    // **The theme is the host's** (23 November 2026): read beside the repository's resolution, not before it, so that
+    // the start pays no request in series; `--plain` draws no theme and asks none.
+    let theme_en_vol = (!o.plain).then(|| {
+        let (a, e, nom) = (agent.clone(), ep.clone(), o.theme.clone().unwrap_or_else(|| "daemon".into()));
+        std::thread::spawn(move || Theme::de_l_hote(&a, &e, &nom))
+    });
     let depot = match client::resoudre(&agent, &ep, &o.depot) {
         Ok(d) => d,
         Err(_) if depuis_le_dossier || std::path::Path::new(&o.depot).is_absolute() => {
@@ -247,8 +253,8 @@ fn lancer(o: Options) -> Result<(), String> {
     };
     let mut depot = depot;
     if !o.plain {
-        // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
-        let mut theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
+        // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu, ou un hôte qui ne le sert pas, s'y dit.
+        let mut theme = theme_en_vol.ok_or("no theme was asked")?.join().map_err(|_| "the theme's request failed".to_string())??;
         loop {
             match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme, journal.take(), mosh) {
                 Ok(tui::Fin::Quitter) => return Ok(()),

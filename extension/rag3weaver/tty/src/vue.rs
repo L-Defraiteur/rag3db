@@ -292,7 +292,14 @@ pub fn colonnes(s: &str) -> usize {
 }
 
 impl Vue {
+    /// A view on the theme « daemon » of the repository, for a witness.
+    #[cfg(test)]
     pub fn new(largeur: u16, demande_posee: bool) -> Self {
+        Self::avec_theme(largeur, demande_posee, Theme::daemon())
+    }
+
+    /// A view on `theme`, read from the host: the terminal embeds none.
+    pub fn avec_theme(largeur: u16, demande_posee: bool, theme: Theme) -> Self {
         Self {
             largeur: largeur.max(8),
             en_cours: String::new(),
@@ -300,7 +307,7 @@ impl Vue {
             etat: Etat::Attend,
             saisie: crate::saisie::Saisie::default(),
             demande_posee,
-            theme: Theme::daemon(),
+            theme,
             capacites: Capacites { couleurs: Niveau::Vraie, glyphes: Glyphes::Surs },
             graine: 0x5eed,
             politiques: HashMap::new(),
@@ -2253,9 +2260,9 @@ mod tests {
     /// sombre.
     #[test]
     fn every_theme_colours_its_circle_cells() {
-        for (nom, _) in crate::theme::THEMES {
+        for nom in crate::theme::noms_du_depot() {
             let mut v = Vue::new(100, true);
-            v.theme = crate::theme::Theme::par_nom(nom).unwrap();
+            v.theme = crate::theme::Theme::du_depot(&nom);
             v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
             let mut t = Terminal::with_options(TestBackend::new(100, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
             let instant = v.depuis;
