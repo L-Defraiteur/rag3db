@@ -37,7 +37,13 @@ impl DaemonHost {
             let dit = boite.iter().rev().find(|l| l["from"] == "teammate" && l["kind"] == "step_done").or_else(|| boite.iter().rev().find(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host"));
             let premier = dit.and_then(|l| l["text"].as_str()).and_then(|t| t.lines().next()).unwrap_or("le travail du pas").chars().take(72).collect::<String>();
             let message = format!("{premier}\n\nCommité par l'hôte à la fin d'un pas : l'agent avait laissé ces changements.");
-            if let Err(e) = git(arbre, &["add", "-A"]).and_then(|_| git(arbre, &["commit", "-q", "-m", &message])) {
+            // **Under rag3weaver's identity** (the task's declared one, else `rag3weaver <rag3weaver@localhost>`), by
+            // `-c`: never the machine's git config, which may carry an address that must not enter these repositories.
+            let identite = self.with_backend_id(&t.id, |b| b.prepared().manifest.workspace.as_ref().and_then(|w| w.git_identity.clone())).ok().flatten();
+            let ident = crate::backend_code::git_identity_or_default(identite.as_ref()).git_args();
+            let mut commit: Vec<&str> = ident.iter().map(String::as_str).collect();
+            commit.extend(["commit", "-q", "-m", &message]);
+            if let Err(e) = git(arbre, &["add", "-A"]).and_then(|_| git(arbre, &commit)) {
                 let texte = format!("le travail du pas est resté dans l'arbre de la tâche, non commité : {e}");
                 let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "tree": arbre, "command": format!("git -C {} add -A && git -C {} commit", arbre.display(), arbre.display()) }));
                 return;
