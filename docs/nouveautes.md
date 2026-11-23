@@ -11,6 +11,10 @@
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
+- 23 novembre 2026 — **Échap dans le terminal de l'agent : une pression, une action.** Il ferme d'abord la visionneuse,
+  sinon efface le texte saisi, sinon arrête le tour en cours (de l'envoi à sa fin) ; au repos, il ne fait rien et
+  n'envoie plus d'arrêt qui stoppait le tour suivant. Échap maintenu ne compte que pour une pression. Ctrl-G et Ctrl-C
+  suivent la même règle.
 - 23 novembre 2026 — **Un tour arrêté se dit dans le terminal de l'agent.** Après Échap ou Ctrl-C, la vue dit « tour
   arrêté : 2 fichier(s) déjà dans ton dossier » (ou « rien n'a encore changé »), d'après ce que l'hôte a fait atterrir,
   et plus « il a fini sans répondre ».
