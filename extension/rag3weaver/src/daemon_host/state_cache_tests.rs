@@ -2,7 +2,6 @@
 //! to 7 s with 84 backends, each reading its index; the IDE paid ~14 s at each arrival on a chat). The index part of a
 //! backend's state is kept until an event says it changed: an event relayed for that backend, or its opening or
 //! closing.
-use super::*;
 use crate::daemon_host::atelier_fichiers::tests::{atelier, attendre_l_index, petit_depot};
 use std::sync::atomic::Ordering;
 
