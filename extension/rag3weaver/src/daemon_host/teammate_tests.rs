@@ -44,6 +44,7 @@ mod output_limit;
 mod posture_auto;
 mod prompt_roots;
 mod reopen;
+mod reply_channel;
 mod run_du_pas;
 mod silent_turn;
 mod stop_stops;
