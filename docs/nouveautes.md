@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Ce que le modèle a vraiment répondu, appel par appel.** Chaque appel au modèle garde, dans le
+  journal de son run, ce que le fournisseur a rendu tel quel : le texte, la réflexion, les appels d'outils avec leurs
+  arguments, la raison de fin et l'heure du premier et du dernier morceau (borné, la coupe dite).
+  `rag3weaver-backend trace <conversation>` l'imprime, une ligne JSON par appel, pour comparer ce que le modèle a dit
+  à ce que la vue a montré.
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin

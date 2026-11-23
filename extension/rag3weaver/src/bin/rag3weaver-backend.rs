@@ -1047,6 +1047,22 @@ fn run() -> Result<(), String> {
     if tous.first().map(String::as_str) == Some("serve") {
         return servir_http(&tous[1..]);
     }
+    #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+    if tous.first().map(String::as_str) == Some("trace") {
+        // **What the model returned, call by call** (23 Nov 2026): one JSON line per model call of a conversation.
+        let Some(conversation) = tous.get(1) else {
+            return Err("trace : la conversation manque (rag3weaver-backend trace <conversation>, le nom du dossier sous runs/)".into());
+        };
+        let racine = rag3weaver::daemon_host::journal_des_runs::racine_par_defaut();
+        let appels = rag3weaver::daemon_host::journal_des_runs::model_calls(&racine, conversation);
+        if appels.is_empty() {
+            return Err(format!("trace : aucun appel au modèle sous {}", racine.join(conversation).display()).into());
+        }
+        for a in appels {
+            println!("{a}");
+        }
+        return Ok(());
+    }
     if tous.first().map(String::as_str) == Some("daemon") {
         // The commands of its tasks find what the user's terminal finds (23 Nov 2026), set before any thread.
         rag3weaver::login_path::adopt_the_login_path();
