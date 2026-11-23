@@ -1880,20 +1880,13 @@ pub fn analyze_in_project_avec(
         }
     }
     let aucune = std::collections::HashSet::new();
-    // The libraries whose provenance is certain (`builtin`, `dependency`): a member of one is never a
-    // project scope. One of unknown provenance (a project package the tree does not declare, `rag3db` in
-    // `tools/python_api`) keeps its rendez-vous.
-    let externes_sures: std::collections::HashSet<String> = analysis
-        .libraries
-        .iter()
-        .filter(|l| matches!(l.provenance.as_deref(), Some("builtin" | "dependency")))
-        .map(|l| l.name.clone())
-        .collect();
-    // **The dependencies the repository declares, by language** (23 November 2026, ticket
-    // `2026-11-23-le-graphe-depend-de-la-taille-des-paquets`): `externes_sures` reads the libraries imported by the
-    // files of this batch, so a member of a declared dependency (`tempfile::tempdir()` in a file that does not
-    // `use tempfile`) was external when another file of the batch imported it, and a rendez-vous otherwise — a file
-    // edited alone, in a batch of one, invented them. The manifests are the repository's, whatever the batch.
+    // **A library's certain provenance, decided by the file alone** (23 November 2026, ticket
+    // `2026-11-23-le-graphe-depend-de-la-taille-des-paquets`): a library of its language's standard
+    // (`est_builtin`) or a dependency its repository declares (the manifests, by language), never the libraries of
+    // the batch. The set `externes_sures` read them on the whole batch, keyed by name across languages: a member of a
+    // declared dependency (`tempfile::tempdir()` in a file that does not `use tempfile`) was external when another
+    // file of the batch imported it, a Rust `use std` made a C++ `std::to_string` external, and a library `queue` of
+    // another language changed the provenance of Python's `queue` — a file edited alone invented rendez-vous.
     let dependances_du_depot: HashMap<String, std::collections::HashSet<String>> = manifestes
         .map(|m| {
             m.dependances_par_langue
@@ -1908,6 +1901,9 @@ pub fn analyze_in_project_avec(
             l => l.to_string(),
         };
         dependances_du_depot.get(&langue).is_some_and(|d| d.contains(&racine.trim().to_lowercase().replace('-', "_")))
+    };
+    let sure = |fichier: &str, bibliotheque: &str| -> bool {
+        codeparsers::import_resolution::provenance::est_builtin(fichier, bibliotheque) || dependance_declaree(fichier, bibliotheque)
     };
     // **Ce qu'un `export * from './x'` réexporte** (20 novembre 2026) : les noms de premier niveau que `./x` définit
     // dans ce lot, et eux seuls — on ne devine pas un nom qui n'y est pas.
@@ -2062,7 +2058,7 @@ pub fn analyze_in_project_avec(
                 // qualifier comes from an import of a library of this file whose provenance is certain
                 // (`process.platform` after `const process = require("process")`, `path.join(…)`): the
                 // member is the library's.
-                if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source) && externes_sures.contains(&o.source)) {
+                if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source) && sure(abs, &o.source)) {
                     continue;
                 }
                 // Une abstention concerne cette occurrence seulement : un autre `std::env::var`
@@ -2072,12 +2068,11 @@ pub fn analyze_in_project_avec(
                 if let Some(path_root) = path_root {
                     // **The file alone decides** (23 November 2026, ticket `2026-11-23-le-graphe-depend-de-la-taille-des-paquets`):
                     // a standard namespace of its language (`std::to_string` in C++), a library it uses itself whose
-                    // provenance is certain, a dependency its repository declares. `externes_sures` alone held the
+                    // provenance is certain, a dependency its repository declares. The batch's set (`externes_sures`) held the
                     // libraries of the whole batch, across languages: a Rust `use std::…` in the batch made a C++
                     // `std::to_string` external, and a batch without Rust made it a rendez-vous.
                     if codeparsers::import_resolution::provenance::est_builtin(abs, path_root)
                         || codeparsers::import_resolution::provenance::est_espace_standard(abs, path_root)
-                        || (externes_sures.contains(path_root) && libraries.contains(path_root))
                         || dependance_declaree(abs, path_root)
                     {
                         continue;
