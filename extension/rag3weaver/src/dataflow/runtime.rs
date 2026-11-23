@@ -147,6 +147,8 @@ pub struct DataflowOutput {
     /// Combien d'éléments chaque sortie a envoyés sur ses canaux (un
     /// sous-graphe délégué : ce que ses nœuds ont posé sur les arêtes du parent).
     sent: HashMap<(String, String), usize>,
+    /// How long each node took, in milliseconds, by name (23 November 2026).
+    timings: std::collections::BTreeMap<String, u64>,
 }
 
 impl DataflowOutput {
@@ -156,7 +158,7 @@ impl DataflowOutput {
         stopped: Option<super::node::CancelCause>,
         dropped: HashMap<(String, String), usize>,
     ) -> Self {
-        Self { data, skipped, stopped, dropped, sent: HashMap::new() }
+        Self { data, skipped, stopped, dropped, sent: HashMap::new(), timings: Default::default() }
     }
 
     pub(super) fn with_sent(mut self, sent: HashMap<(String, String), usize>) -> Self {
@@ -180,6 +182,11 @@ impl DataflowOutput {
         self.stopped.as_ref()
     }
 
+    /// How long each node took, in milliseconds, by name (a node run several times: the sum).
+    pub fn timings(&self) -> &std::collections::BTreeMap<String, u64> {
+        &self.timings
+    }
+
     /// Get a specific output value.
     pub fn get(&self, node: &str, port: &str) -> Option<&PortValue> {
         self.data.get(node).and_then(|ports| ports.get(port))
@@ -193,6 +200,7 @@ impl DataflowOutput {
             stopped: None,
             dropped: HashMap::new(),
             sent: HashMap::new(),
+            timings: Default::default(),
         }
     }
 
@@ -1133,7 +1141,7 @@ impl DataflowRuntime {
 
         let stopped = annul.cancelled();
         self.note_stop(&run_id, stopped.as_ref());
-        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings: Default::default() })
     }
 
     /// Execute the graph. Returns all output values.
@@ -1621,7 +1629,7 @@ impl DataflowRuntime {
 
         let stopped = annul.cancelled();
         self.note_stop(&run_id, stopped.as_ref());
-        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new() })
+        Ok(DataflowOutput { data, skipped, stopped, dropped: HashMap::new(), sent: HashMap::new(), timings: Default::default() })
     }
 }
 
@@ -2807,3 +2815,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "runtime/timings_tests.rs"]
+mod timings_tests;
