@@ -422,6 +422,8 @@ impl OpenAiLlm {
         body.insert("max_tokens".into(), json!(opts.max_tokens));
         // **Gemini 3 keeps its own sampling** (Google's guide « Get started with Gemini 3 »: keep the temperature at its
         // default, 1.0; below it, looping or degraded performance): no temperature nor top_p toward it.
+        // PROVISIONAL, a name test: it goes with the lot `model-temperature`, which declares the temperature per model
+        // (ticket rag3weaver-archi/tickets/2026-11-23-la-regle-provisoire-pas-de-temperature-pour-gemini-3.md).
         if !(self.google_extras && self.model.contains("gemini-3")) {
             body.insert("temperature".into(), json!(opts.temperature));
             body.insert("top_p".into(), json!(opts.top_p));
