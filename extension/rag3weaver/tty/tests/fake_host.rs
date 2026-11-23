@@ -57,3 +57,22 @@ fn tempfile_dir(tag: &str) -> PathBuf {
     std::fs::create_dir_all(&d).unwrap();
     d
 }
+
+/// **The terminal resolves its repository without waiting for the host's whole state** (a measure on 23 November
+/// 2026: the terminal read `/ide/etat` after each resolution, only for the branch, 6.5 s each with 84 backends; the
+/// start took 19 s). With a host whose state takes 3 s, the resolution answers in under a second, with the branch.
+#[test]
+fn the_resolution_does_not_wait_for_the_hosts_state() {
+    let d = tempfile_dir("etat-lent");
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("mesures/faux_hote.py");
+    let dj = d.join("daemon.json");
+    let mut h = Command::new("python3").arg(&script).arg("0").arg(d.join("faux.jsonl")).arg(&dj).env("FAUX_ETAT_MS", "3000").stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("python3 runs the fake host");
+    let ep = rag3weaver_tty::endpoint::Endpoint { address: address(&dj), token: "jeton-de-mesure".into(), user_token: None };
+    let t0 = Instant::now();
+    let r = rag3weaver_tty::client::resoudre(&rag3weaver_tty::client::agent(), &ep, "faux");
+    let duree = t0.elapsed();
+    let _ = h.kill();
+    let depot = r.expect("the repository resolves");
+    assert_eq!(depot.branch, "master", "the branch comes with the resolution");
+    assert!(duree < Duration::from_secs(1), "the resolution waited for the host's state: {duree:?}");
+}
