@@ -17,8 +17,9 @@ fn a_price_without_the_users_title_is_never_written() {
         let e = host.set_price(&by, &body).unwrap_err();
         assert!(e.contains("user's yes only"), "{by}: {e}");
     }
-    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).unwrap();
-    assert!(written.tariff(&s, "2099-01-01").is_none(), "nothing was written");
+    // No file yet is nothing written too.
+    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).map(|p| p.tariff(&s, "2099-01-01").is_some()).unwrap_or(false);
+    assert!(!written, "nothing was written");
 }
 
 /// **On the user's yes, the price is written and the model passes**: from today, with its source, the rest of the
@@ -124,6 +125,6 @@ fn a_price_looked_up_is_a_proposal_with_its_source_never_written() {
     let e = lookup_price(&policy, &s).unwrap_err();
     assert!(e.contains("not found in a form to propose"), "{e}");
     thread.join().unwrap();
-    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).unwrap();
-    assert!(written.tariff(&s, "2099-01-01").is_none(), "a lookup writes nothing");
+    let written = crate::usage_ledger::Prices::load(&user_ledger().prices_path).map(|p| p.tariff(&s, "2099-01-01").is_some()).unwrap_or(false);
+    assert!(!written, "a lookup writes nothing");
 }
