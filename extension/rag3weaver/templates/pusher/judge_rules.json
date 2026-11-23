@@ -1,0 +1,41 @@
+{
+  "about": "The rules of the lot judge (Lucie, 24 November 2026: « qu'il sorte un rapport des choses qui violent les règles : des trucs hardcodés, pas en anglais, ou mal templatisés »). The judge reads a lot's diff (origin/master...head), the repository's AGENTS.md and these rules, and gives findings; it blocks nothing. Each rule has an id, the question the judge answers on the diff's added lines, its severity, and examples of what violates it.",
+  "rules": [
+    {
+      "id": "hardcoded_list",
+      "severity": "medium",
+      "question": "Does an added line hard-code a list of commands, programs, providers, model names, file extensions or hosts in code, where a template, a rules file or a declared graph would hold it?",
+      "violates": ["a match arm per provider name", "a const array of command names in Rust", "a model slug written in a test or in code instead of read from the registry"]
+    },
+    {
+      "id": "identifier_not_english",
+      "severity": "low",
+      "question": "Does an added line declare or name a new identifier that is not English (function, type, field, variable, test name, file, route, JSON key, node type)? Prose, comments and user-facing texts in French are fine.",
+      "violates": ["fn avec_theme", "let reponse =", "a test named la_page_s_ouvre"]
+    },
+    {
+      "id": "model_text_outside_a_template",
+      "severity": "medium",
+      "question": "Does an added line write, in code, a text meant for a language model (a prompt, a system message, a relaunch, a refusal sent back to the model) instead of reading it from a template file?",
+      "violates": ["format!(\"You are a teammate…\")", "a refusal text built in Rust and returned as a tool result"]
+    },
+    {
+      "id": "composite_rule_in_code",
+      "severity": "high",
+      "question": "Does an added Rust function compose several decisions (conditions chained by if/else, a priority list of guards, a policy) where a declared graph (conditions, FirstMatch, Decide, Route) would do, instead of a primitive node that does one thing?",
+      "violates": ["a step_done that checks text, tools, plan and mailbox in one function", "a match over verdicts that decides what to do in code"]
+    },
+    {
+      "id": "test_without_red",
+      "severity": "high",
+      "question": "Does the lot add or change behaviour without a witness that could fail on the old code: a test that only checks that something compiles, a test that passes on master too, a fix without a failing test committed before it?",
+      "violates": ["a test whose assertions hold before the change", "a fix commit with no red commit before it"]
+    },
+    {
+      "id": "agents_md",
+      "severity": "high",
+      "question": "Does the diff break a rule of AGENTS.md (a mention of an AI assistant in a commit message or a file, a heavy run without the machine lock, a known defect left without a ticket)?",
+      "violates": ["Co-Authored-By: an assistant", "cargo test -j$(nproc) in a script"]
+    }
+  ]
+}

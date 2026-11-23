@@ -425,3 +425,7 @@ mod le_tls_ne_tire_pas_openssl {
         }
     }
 }
+
+/// The witness of the lot judge's graph (24 November 2026).
+#[cfg(test)]
+mod lot_judge_tests;
