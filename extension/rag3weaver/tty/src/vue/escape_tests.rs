@@ -20,3 +20,30 @@ fn escape_stops_a_turn_and_does_nothing_at_rest() {
     assert_eq!(v.touche(Touche::Echap), None, "the turn ended: Échap is at rest again");
     assert!(v.prendre_lignes().iter().any(|l| l.texte.contains("fais ça")), "the history stays");
 }
+
+/// **Échap empties the input first, and one press is one action** (23 Nov. 2026): with text typed and a turn
+/// running, Échap held down empties the input and the turn goes on, whatever the keyboard's repeats; a second
+/// press, after the key was released, stops the turn.
+#[test]
+fn escape_empties_the_input_first_and_a_held_key_is_one_press() {
+    let mut v = Vue::new(120, true);
+    for c in "go".chars() {
+        v.touche(Touche::Car(c));
+    }
+    assert!(matches!(v.touche(Touche::Entree), Some(Action::Envoyer(..))));
+    v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+    for c in "et puis".chars() {
+        v.touche(Touche::Car(c));
+    }
+    let t0 = Instant::now();
+    assert_eq!(v.touche_a(Touche::Echap, t0), None, "the first press empties the input");
+    assert!(v.saisie.est_vide());
+    // Held: the terminal repeats after ~600 ms, then every ~30 ms; none of it stops the turn.
+    let mut t = t0 + Duration::from_millis(600);
+    while t < t0 + Duration::from_millis(1500) {
+        assert_eq!(v.touche_a(Touche::Echap, t), None, "a repeat of the held key at {:?}", t - t0);
+        t += Duration::from_millis(30);
+    }
+    // Released, then pressed again.
+    assert_eq!(v.touche_a(Touche::Echap, t + Duration::from_millis(800)), Some(Action::Arreter), "a new press stops the turn");
+}
