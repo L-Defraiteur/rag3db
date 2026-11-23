@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Désigner un dépôt ne fait plus attendre l'hôte.** La résolution d'un dépôt par son nom ou son
+  chemin lit la table des dépôts attachés au lieu de recalculer tout l'état de l'hôte (6,5 s avec 84 dépôts), et dit
+  la branche du dépôt trouvé.
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin
