@@ -82,6 +82,28 @@ Des gardes de sécurité, qu'aucun fichier ne doit pouvoir éteindre :
    l'action, le mode, la durée et ce qui l'a fondé (ses mots, ou la justification). Ce qu'elle lit lui permet de
    retirer l'accord (`revoke_root`, déjà là).
 
+## Le critère d'acceptation (Lucie, 24 novembre) : jamais compiler pour poser un classifieur
+
+« Assure-toi que ce soit des hooks comme on a dit, tout ça : qu'on ne doive jamais compiler pour mettre des
+classifiers ou autre là où ça nous plaît. »
+
+- **Le juge et le détecteur sont des nœuds d'un graphe déclaré** : le graphe livré de la porte
+  (`templates/teammate/graphs/gate.mmd`), le `Decide` et la table des classes en fichier de règles ; aucun appel câblé
+  dans `gate.rs`, qui ne fait plus qu'exécuter le graphe et appliquer son verdict.
+- **Ajouter, déplacer ou retirer un classifieur est une modification de fichier** : le graphe livré, ou une surcouche
+  de l'utilisatrice (`<config>/templates/teammate/graphs/…`) qui se branche sur la sortie d'un nœud du graphe livré,
+  par son nom ou par son genre. Le graphe se relit à chaque tour, comme les textes d'invite : ni bâti, ni relance de
+  l'hôte.
+- **Les témoins d'acceptation**, dans le lot : pendant qu'un hôte tourne, un fichier de surcouche pose un `Decide` sur
+  la sortie d'un nœud du graphe livré (avant toute commande), et le tour suivant passe par lui ; un second témoin
+  retire le fichier, et le comportement d'origine revient au tour suivant.
+- **Ce qui ne peut pas l'être** : les scellés et « seul un message humain vaut ses mots » (plus haut). Une surcouche
+  peut ajouter un juge, jamais ouvrir un scellé ; l'hôte les applique avant et après le graphe.
+- **Ce qui attend la surcouche d'ED** : le branchement d'un fichier de l'utilisatrice sur la sortie d'un nœud livré.
+  Tant qu'elle n'existe pas, le lot livre le graphe de la porte comme un fichier remplaçable en entier par
+  l'utilisatrice (sa copie dans `<config>` l'emporte, relue à chaque tour), et le témoin d'acceptation joue sur ce
+  remplacement.
+
 ## Les lots
 
 1. **La table de la porte par niveau** : `cards` → carte ; `bac`, `judge` → refus en résultat d'outil, avec la ligne
