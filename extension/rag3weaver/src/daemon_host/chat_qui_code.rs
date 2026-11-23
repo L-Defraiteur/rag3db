@@ -212,6 +212,7 @@ fn le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page() {
     };
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    en_copie(&manifeste);
     let avant = empreinte(&depot);
     let (taches, chats) = (d.path().join("taches"), d.path().join("chats"));
     let vus = Arc::new(Mutex::new(Vec::new()));
