@@ -9,12 +9,43 @@ use crate::llm::{CallbackLlm, Llm, MockLlm, Turn};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
-/// The witnesses of a lot, each in a file of its own (c7, 21 Nov. 2026).
+/// The witnesses of a lot, each in a file of its own (21 Nov. 2026), **sorted, one per line** (23 Nov. 2026): two
+/// lots that add a witness then write at different places, never on the same last line.
+mod agent_key;
+mod agent_message;
 mod agents;
+mod attente_commande;
+mod author;
+mod bac_outside_root;
+mod bac_shell_lines;
 mod background;
+mod background_lock;
+mod browser_read;
 mod card;
-mod mode_auto_v1;
+mod closing;
+mod commit_each_turn;
+mod commit_what_was_written;
+mod conversation_memory;
+mod copy_lands;
+mod facts_when_waiting;
+mod fork;
+mod gate_level;
 mod human_yes_only;
+mod judge_all;
+mod land_each_turn;
+mod land_many_files;
+mod missing_command;
+mod mode_auto_v1;
+mod nom_d_enfant;
+mod observed_content;
+mod posture_auto;
+mod prompt_roots;
+mod reopen;
+mod run_du_pas;
+mod stop_stops;
+mod turn_changes;
+mod turn_failures;
+mod web;
 
 /// **A witness of the approval card** declares the approval mode, committed (since 22 Nov 2026 a new project's
 /// template is in the auto mode, where every command the sandbox runs passes).
@@ -27,30 +58,6 @@ pub(super) fn en_approbation(manifeste: &std::path::Path) {
         assert!(std::process::Command::new("git").args(args).current_dir(&decl).status().unwrap().success());
     }
 }
-
-mod posture_auto;
-mod land_each_turn;
-mod gate_level;
-mod commit_each_turn;
-mod commit_what_was_written;
-mod conversation_memory;
-mod stop_stops;
-mod copy_lands;
-mod turn_failures;
-mod bac_outside_root;
-mod facts_when_waiting;
-mod turn_changes;
-mod missing_command;
-mod background_lock;
-mod bac_shell_lines;
-mod land_many_files;
-mod judge_all;
-mod prompt_roots;
-mod attente_commande;
-mod browser_read;
-mod nom_d_enfant;
-mod observed_content;
-mod run_du_pas;
 
 /// Le numéro du pas, lu dans le message de la frontière.
 fn step_of(turns: &[Turn]) -> usize {
@@ -85,26 +92,6 @@ fn answer(turns: &[Turn], opts: &crate::llm::GenOptions, sink: &mut dyn crate::l
     // the three-item plan overflowed the inner mock's window, not the teammate's (19 Nov. 2026).
     MockLlm::new(text).with_context_len(16384).with_tool_calls(tool_calls).generate(turns, opts, sink)
 }
-
-/// The witnesses of `fetch` and `web_search` (the teammate's base, 20 November 2026), in a module of their own:
-/// a new witness goes where no other lot in flight writes (page 03 of ED, 21 November 2026).
-mod web;
-
-/// The witnesses of the agent's key (21 November 2026), in a module of their own.
-mod agent_key;
-mod closing;
-
-/// The witnesses of reopening a closed agent (`--pop-agent`, 22 November 2026), in a module of their own.
-mod reopen;
-
-/// The witnesses of forking an agent (`--fork-agent`, 22 November 2026), in a module of their own.
-mod fork;
-
-/// The witness of the event of a message between agents (22 November 2026), in a module of its own.
-mod agent_message;
-
-/// The witnesses of the author set by the host (M7, 21 November 2026), in a module of their own.
-mod author;
 
 /// Ce que le faux modèle a vu : les frontières, pas par pas, et les refus.
 #[derive(Default)]
