@@ -25,6 +25,78 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 impl DaemonHost {
+    /// **The work of a copy lands in the user's folder** (c7, 23 Nov 2026): what the agent's code tools wrote and the
+    /// files that existed at the start and changed, never what commands produced (said instead); a file she changed in
+    /// her folder since is not overwritten (said with where the task's version is). No git there: nothing to undo by,
+    /// and the line says so.
+    fn land_the_copy(&self, w: &super::taches::WorkspaceDeTache, c: &super::taches::CopieDEspace, files: &TeammateFiles, wrote: &[String]) {
+        use super::taches::{empreinte, empreintes_de};
+        let Ok((maintenant, _)) = empreintes_de(&w.racine, &c.exclus) else { return };
+        let registre = files.mailbox_path().with_file_name("landed-copy.json");
+        let mut deja: std::collections::BTreeMap<String, String> = std::fs::read(&registre).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        let (mut poses, mut gardes, mut laisses) = (Vec::new(), Vec::new(), Vec::new());
+        for (p, h) in &maintenant {
+            let de_l_agent = wrote.iter().any(|x| x == p) || deja.contains_key(p);
+            if !de_l_agent && !c.empreintes.contains_key(p) {
+                laisses.push(p.clone());
+                continue;
+            }
+            if c.empreintes.get(p) == Some(h) || deja.get(p) == Some(h) {
+                continue;
+            }
+            let cible = w.racine_principale.join(p);
+            let sien = empreinte(&cible);
+            let libre = sien.as_ref() == c.empreintes.get(p) || (sien.is_some() && sien.as_ref() == deja.get(p));
+            if !libre {
+                gardes.push(p.clone());
+                continue;
+            }
+            if let Some(d) = cible.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            if std::fs::copy(w.racine.join(p), &cible).is_ok() {
+                deja.insert(p.clone(), h.clone());
+                poses.push(p.clone());
+            }
+        }
+        let _ = std::fs::write(&registre, serde_json::to_vec(&deja).unwrap_or_default());
+        let dossier = &w.racine_principale;
+        if !poses.is_empty() {
+            let texte = format!("{} fichier(s) dans ton dossier {} (pas de git ici : rien pour revenir en arrière) : {}", poses.len(), dossier.display(), poses.iter().take(12).cloned().collect::<Vec<_>>().join(", "));
+            let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "files": poses, "copy": true }));
+        }
+        if !gardes.is_empty() {
+            let texte = format!("tu as modifié {} dans ton dossier depuis le départ : je ne l'écrase pas ; la version de la tâche est dans {}", gardes.join(", "), w.racine.display());
+            let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "files": gardes, "copy": w.racine }));
+        }
+        if !laisses.is_empty() && !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == laisses.len()) {
+            let texte = format!("{} fichier(s) produits par des commandes restent dans la copie de la tâche, pas dans ton dossier ({}) : écris-les par tes outils si on doit les garder", laisses.len(), laisses.iter().take(3).cloned().collect::<Vec<_>>().join(", "));
+            let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": laisses.len() }));
+        }
+    }
+
+    /// The copy's state at a turn's start (a folder without git), for [`Self::say_copy_turn_changes`].
+    pub(crate) fn task_copy_snapshot(&self, parent: &str, task: &str) -> Option<(std::path::PathBuf, Vec<String>, std::collections::BTreeMap<String, String>)> {
+        let t = self.tache(parent, task)?;
+        let w = t.workspace.as_ref()?;
+        let c = w.copie.as_ref()?;
+        let (avant, _) = super::taches::empreintes_de(&w.racine, &c.exclus).ok()?;
+        Some((w.racine.clone(), c.exclus.clone(), avant))
+    }
+
+    /// **The facts of a turn in a folder without git**: the copy's diff since the turn's start.
+    pub(crate) fn say_copy_turn_changes(&self, files: &TeammateFiles, racine: &Path, exclus: &[String], avant: &std::collections::BTreeMap<String, String>) -> Option<serde_json::Value> {
+        let (apres, _) = super::taches::empreintes_de(racine, exclus).ok()?;
+        let mut tous: std::collections::BTreeSet<&String> = avant.keys().collect();
+        tous.extend(apres.keys());
+        let changes: Vec<String> = tous.into_iter().filter(|p| avant.get(*p) != apres.get(*p)).cloned().collect();
+        let texte = match changes.len() {
+            0 => "aucun fichier modifié dans ce tour".to_string(),
+            n => format!("{n} fichier(s) modifié(s) dans ce tour : {}{}", changes.iter().take(12).cloned().collect::<Vec<_>>().join(", "), if n > 12 { format!(" (et {} autres)", n - 12) } else { String::new() }),
+        };
+        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "copy": true })).ok()
+    }
+
     /// The task's tree and its head, at a turn's start (for [`Self::say_turn_changes`]).
     pub(crate) fn task_tree_head(&self, parent: &str, task: &str) -> Option<(std::path::PathBuf, String)> {
         let t = self.tache(parent, task)?;
@@ -54,9 +126,13 @@ impl DaemonHost {
 
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
     pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles, wrote: &[String]) {
-        let Some(w) = t.workspace.as_ref().filter(|w| w.copie.is_none()) else { return };
+        let Some(w) = t.workspace.as_ref() else { return };
         if self.gate_level(&t.id, files).is_none() {
             return;
+        }
+        // **A folder without git** (c7, 23 Nov 2026): the task works in a copy; its work is copied back at each step.
+        if let Some(c) = &w.copie {
+            return self.land_the_copy(w, c, files, wrote);
         }
         let (dossier, arbre) = (&w.racine_principale, &w.racine);
         // **What the agent left uncommitted is committed by the host** (c7, 23 Nov 2026, 01:27: the real three.js
