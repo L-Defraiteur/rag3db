@@ -29,6 +29,20 @@ impl DaemonHost {
             return;
         }
         let (dossier, arbre) = (&w.racine_principale, &w.racine);
+        // **What the agent left uncommitted is committed by the host** (c7, 23 Nov 2026, 01:27: the real three.js
+        // request left every file untracked in the task's tree, and the user's folder empty). `add -A` keeps the
+        // tree's `.gitignore`; the message is the step's report, else the request.
+        if !git(arbre, &["status", "--porcelain"]).unwrap_or_default().is_empty() {
+            let boite = files.mailbox();
+            let dit = boite.iter().rev().find(|l| l["from"] == "teammate" && l["kind"] == "step_done").or_else(|| boite.iter().rev().find(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host"));
+            let premier = dit.and_then(|l| l["text"].as_str()).and_then(|t| t.lines().next()).unwrap_or("le travail du pas").chars().take(72).collect::<String>();
+            let message = format!("{premier}\n\nCommité par l'hôte à la fin d'un pas : l'agent avait laissé ces changements.");
+            if let Err(e) = git(arbre, &["add", "-A"]).and_then(|_| git(arbre, &["commit", "-q", "-m", &message])) {
+                let texte = format!("le travail du pas est resté dans l'arbre de la tâche, non commité : {e}");
+                let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "tree": arbre, "command": format!("git -C {} add -A && git -C {} commit", arbre.display(), arbre.display()) }));
+                return;
+            }
+        }
         let (Ok(tache), Ok(sien)) = (git(arbre, &["rev-parse", "HEAD"]), git(dossier, &["rev-parse", "HEAD"])) else { return };
         // Nothing new: the task's head is hers already, or behind it.
         if tache == sien || git(dossier, &["merge-base", "--is-ancestor", &tache, &sien]).is_ok() {
