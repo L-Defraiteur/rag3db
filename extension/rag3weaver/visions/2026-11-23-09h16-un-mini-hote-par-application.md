@@ -76,6 +76,33 @@ Et c'est ce qu'on sait faire que les autres bases ne font pas d'elles-mêmes : l
 relations sont de première classe, la recherche est là le jour où l'application en a besoin, et un agent sait déjà
 s'en servir.
 
+## Avec les swarms : mieux qu'un générateur d'applications en ligne, et sur son ordinateur
+
+*Lucie, le même matin : « voilà, les gens ont des swarms qui font mieux que du Lovable après ; j'imagine qu'il faut
+des fiches ou des choses comme ça spécifiques aux frontends aussi, pour donner des tips de composants, ou une
+biblio de composants React préexistante à cloner et éditer, ou une librairie toute faite pour ça ; et direct dans
+leur ordi. »*
+
+Mis bout à bout, ça donne un produit que les générateurs d'applications en ligne n'ont pas :
+
+- **un swarm, pas un seul agent** : un orchestrateur, un agent pour l'interface, un pour le serveur, un pour les
+  données, qui se parlent ;
+- **une base qui vient avec** : le mini-hôte, et sa sortie vers Supabase ;
+- **sur l'ordinateur de la personne** : son code, ses données, ses clés ; rien n'est retenu chez un hébergeur.
+
+Ce qu'il faut de plus pour que l'interface produite soit belle du premier coup, et pas seulement juste :
+
+- **des fiches de métier pour le frontend**, dans la mémoire livrée : quels composants pour quel besoin, les
+  pièges d'accessibilité et de mise en page, les habitudes d'un bon projet React ; rappelées par le sujet de la
+  demande, comme toute fiche ;
+- **une bibliothèque de composants à cloner et à éditer** : des composants React déjà faits, cohérents entre eux
+  (les nôtres : React, shadcn, lucide), que l'agent copie dans le projet et adapte au lieu de les réinventer ;
+- **des gabarits d'application** : la prise de rendez-vous, le tableau de bord, le petit commerce, comme points
+  de départ qu'un swarm ajuste.
+
+Ces trois choses sont des contenus, pas du code du moteur : elles se livrent et s'enrichissent par gabarits et par
+fiches, et chaque équipe peut y mettre les siennes.
+
 ## Ce qui existe déjà et ce qui manque
 
 Existent : l'hôte, les entités déclarées dans un manifeste, les gabarits, les outils de lecture et d'écriture
