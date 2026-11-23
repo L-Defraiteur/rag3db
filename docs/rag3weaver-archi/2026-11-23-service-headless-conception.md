@@ -4,6 +4,21 @@ Conception courte, avant tout code, à soumettre à Lucie (23 novembre 2026, « 
 lancer rag3weaver comme un service, depuis un programme Python ou TypeScript, pour démarrer, lister, arrêter des
 sessions d'agents, échanger leur flux, et déclarer les points d'accès des modèles (vLLM d'abord, chat et embeddings).
 
+## Les exigences du premier terrain
+
+1. **Un service à part, purement conteneurisable**, installé comme un outil et jamais mêlé aux dépôts qu'il sert : il
+   reçoit un répertoire de travail et une branche, et ses propres données vivent dans son volume.
+2. **Un plafond de sessions simultanées**, déclaré dans sa configuration (`max_active`). Une session inactive
+   s'arrête et **reprend son contexte** quand on la rappelle : l'API a `start`, `stop` et `resume`, et l'état d'une
+   session (sa conversation, ses plans, sa boîte) est durable hors du processus. C'est notre reprise au chargement,
+   rendue explicite.
+3. **Les garde-fous sont des permissions, pas des consignes.** Le service n'a besoin d'aucun secret au-delà du
+   jeton des points d'accès des modèles. L'accès git se limite à pousser une branche et à ouvrir une demande de
+   fusion, jamais à fusionner. En mode service, l'atterrissage pousse la branche de la session (`policy.landing:
+   push_branch`) et ne commite jamais sur la branche principale.
+4. **Le service dit où tourne chaque session** : `sessions.list()` rend, par session, l'hôte, le conteneur et le
+   répertoire.
+
 ## Ce qui existe déjà
 
 - **L'hôte** : `rag3weaver-backend daemon` (aujourd'hui sous systemd) et `rag3weaver-backend serve` ; un jeton local
@@ -29,7 +44,8 @@ tirés. Authentification : `Authorization: Bearer <jeton>`, le jeton lu d'un fic
 | SDK | route | |
 |---|---|---|
 | `sessions.start({dir \| repo, branch?, task, model?, policy?})` | `POST /v1/sessions` | rend `{id}` ; `policy` : `workspace` (`in_place` / `copy`), la porte, les bornes |
-| `sessions.list()` | `GET /v1/sessions` | id, dossier, état, modèle, début, fin |
+| `sessions.list()` | `GET /v1/sessions` | id, état (`active`, `idle`, `ended`), modèle, début, fin, et **où** : hôte, conteneur, répertoire, branche |
+| `sessions.resume(id)` | `POST /v1/sessions/{id}/resume` | reprend une session arrêtée avec son contexte, sous le plafond `max_active` |
 | `sessions.send(id, message)` | `POST /v1/sessions/{id}/messages` | une instruction de suite |
 | `sessions.stop(id)` | `POST /v1/sessions/{id}/stop` | l'arrêt d'aujourd'hui (coupe l'appel en vol, fait atterrir l'écrit) |
 | `sessions.stream(id)` | `GET /v1/sessions/{id}/events` | SSE, reprise par `Last-Event-ID` |
