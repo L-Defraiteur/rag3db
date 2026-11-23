@@ -85,7 +85,6 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
 fn background_commands_are_bounded_in_number_and_time() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
-    super::en_approbation(&manifeste);
     std::fs::write(depot.join("dort.sh"), "echo je-dors\nsleep 30\n").unwrap();
     for args in [&["add", "dort.sh"][..], &["commit", "-q", "-m", "dort"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
@@ -138,7 +137,9 @@ fn background_commands_are_bounded_in_number_and_time() {
     host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
-    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance dort.sh en fond, plusieurs fois.", &Value::Null).expect("la request");
+    // At `bac`, the four calls run in one step, in their order: the bound is met while the first one runs, whatever the
+    // machine's load (in approval, each waited for a yes, and a late yes found the first one over).
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance dort.sh en fond, plusieurs fois.", &json!({ "gate": "bac" })).expect("la request");
     let files = host.teammate_files(&h.id, "doc").unwrap();
     let end = Instant::now() + Duration::from_secs(90);
     let mut answered = std::collections::HashSet::new();
