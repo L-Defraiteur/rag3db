@@ -500,7 +500,11 @@ pub(crate) fn human_turn(lignes: &[Value]) -> bool {
 /// **The turn was opened by someone's request**, a human's or an agent's: its last request or instruction comes
 /// neither from the teammate nor from the host (a relaunch).
 pub(crate) fn asked_turn(lignes: &[Value]) -> bool {
-    lignes.iter().any(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
+    lignes
+        .iter()
+        .rev()
+        .find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")))
+        .is_some_and(|l| l["from"] != "teammate" && l["from"] != "host")
 }
 
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
