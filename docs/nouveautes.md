@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **L'agent écrit dans ton dossier, et t'explique la fin de son travail.** En place, il n'est plus
+  refusé sur les fichiers de ton dossier (il n'ouvre donc plus de branche à lui pour contourner le refus). Et un pas
+  où il a travaillé par ses outils finit par un texte écrit après le dernier : l'explication de fin de tour arrive
+  même après un long travail.
 - 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
   commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
   courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
