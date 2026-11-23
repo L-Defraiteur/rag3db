@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// The recall of the cards filters by its author, « me » being the agent that calls (23 Nov. 2026): in a file of its own.
+#[path = "e2e_archiviste/cards_author.rs"]
+mod cards_author;
+
 /// No secret enters the memory (lot 5 of the auto mode): the witnesses of the lot, in a file of their own.
 #[path = "e2e_archiviste/secrets.rs"]
 mod secrets;
