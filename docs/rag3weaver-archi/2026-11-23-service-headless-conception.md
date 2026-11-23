@@ -95,6 +95,20 @@ un service déjà lancé.
   - une roue par plateforme qui porte `bin/` + `lib/` et le client Python pur ;
   - un paquet npm `rag3weaver` (client et lanceur) avec des `optionalDependencies` par plateforme (`os`, `cpu`, `libc`).
 - **Linux d'abord** : macOS demande un bâti de la lib à part.
+- **Le premier pas, qui décide de tout le reste** (mesuré par G, `objdump -T`) : l'hôte d'aujourd'hui demande
+  `GLIBC_2.44`, et la lib `GLIBC_2.43` et `GLIBCXX_3.4.32` (libstdc++ de GCC 13), bâtis sur CachyOS. Ils ne
+  tournent ni dans une image Debian (12 : glibc 2.36, 13 : 2.41), ni dans une roue manylinux. La lib C++ et l'hôte
+  se bâtissent donc **dans l'image manylinux_2_28** (glibc 2.28), avec `-static-libstdc++`, ou avec libstdc++ copiée
+  dans `lib/` et trouvée par `$ORIGIN`. La lib rag3db n'a jamais été bâtie dans une telle image : c'est l'étape la plus
+  incertaine, estimée à une demi-journée à une journée d'agent, à prouver par un premier bâti.
+- **La chaîne de publication, reprise de lucivy** (`.github/workflows/{release,build,ci}.yml` de son dépôt) :
+  - un tag `v*` déclenche la release : la CI, les artefacts, la page de release, puis chaque registre dans son job ;
+  - les publications passent derrière un environnement `release` et un interrupteur ;
+  - chaque publication saute ce qui existe déjà, pour qu'un rejeu soit sans danger après une publication partielle ;
+  - la publication de confiance (OIDC) pour PyPI et npm, sauf la toute première, qui demande un jeton ;
+  - les runners se nomment `macos-latest`, jamais par un numéro que GitHub retire ;
+  - chaque artefact natif est essayé avant d'être publié ;
+  - pour un service, un simple binaire par plateforme sur la page de release vaut déjà paquet.
 
 ## 5. Le registre
 
@@ -131,7 +145,8 @@ Anthropic y restent des entrées de leur protocole.
 1. **archi** : le schéma `/v1` (OpenAPI) et le registre (le format ci-dessus, lu au démarrage et par
    `endpoints.set`) ; puis la façade `/v1/sessions` sur l'existant, avec un témoin par route et le flux typé.
 2. **tty**, en parallèle : les événements typés et leur ordre (le relais, le numéro d'émission), le code de fin.
-3. **G**, en parallèle : `bin/` + `lib/` à `$ORIGIN`, `serve` sans systemd avec l'arrêt propre et son témoin,
+3. **G**, en parallèle, **en commençant par le bâti dans manylinux_2_28** (il décide de tout le reste) : `bin/` +
+   `lib/` à `$ORIGIN`, `serve` sans systemd avec l'arrêt propre et son témoin,
    l'image Docker, les journaux sur la sortie d'erreur.
 4. **lucivy**, dès le schéma posé : les deux SDK tirés du schéma, et les paquets pip et npm par plateforme.
 5. **tty**, dès le schéma posé : le témoin de conformité, un faux hôte qui émet chaque type et un client minimal qui
