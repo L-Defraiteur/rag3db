@@ -53,7 +53,7 @@ impl DaemonHost {
     }
 
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
-    pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles) {
+    pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles, wrote: &[String]) {
         let Some(w) = t.workspace.as_ref().filter(|w| w.copie.is_none()) else { return };
         if self.gate_level(&t.id, files).is_none() {
             return;
@@ -73,7 +73,40 @@ impl DaemonHost {
             let ident = crate::backend_code::git_identity_or_default(identite.as_ref()).git_args();
             let mut commit: Vec<&str> = ident.iter().map(String::as_str).collect();
             commit.extend(["commit", "-q", "-m", &message]);
-            if let Err(e) = git(arbre, &["add", "-A"]).and_then(|_| git(arbre, &commit)) {
+            // **What the agent wrote, and the changes to tracked files** (c7, 23 Nov 2026, 04:14: 18 971 files of
+            // `node_modules` and `dist/` landed): what commands produced and nobody added stays out, and is said.
+            let _ = git(arbre, &["add", "-u"]);
+            for chemin in wrote {
+                let _ = git(arbre, &["add", "-A", "--", chemin]);
+            }
+            let laisses: Vec<String> = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
+            if !laisses.is_empty() {
+                let mut dossiers: Vec<(String, usize)> = Vec::new();
+                for f in &laisses {
+                    let parts: Vec<&str> = f.split('/').collect();
+                    let d = if parts.len() > 2 { format!("{}/{}", parts[0], parts[1]) } else { parts[0].to_string() };
+                    match dossiers.iter_mut().find(|(n, _)| *n == d) {
+                        Some((_, c)) => *c += 1,
+                        None => dossiers.push((d, 1)),
+                    }
+                }
+                dossiers.sort_by(|a, b| b.1.cmp(&a.1));
+                let noms: Vec<&str> = dossiers.iter().take(3).map(|(n, _)| n.as_str()).collect();
+                let texte = format!(
+                    "{} fichier(s) produits par des commandes ne sont pas commités ({}{}) : ajoute un .gitignore, ou `git add` ce que tu veux garder",
+                    laisses.len(),
+                    noms.join(", "),
+                    if dossiers.len() > 3 { "…" } else { "" }
+                );
+                // Said once for a given count: a step that changes nothing there does not repeat it.
+                if !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == laisses.len()) {
+                    let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": laisses.len(), "dirs": noms }));
+                }
+            }
+            let rien = git(arbre, &["diff", "--cached", "--quiet"]).is_ok();
+            if rien {
+                // Nothing of the agent's to commit: the turn lands what it committed itself, if anything.
+            } else if let Err(e) = git(arbre, &commit) {
                 let texte = format!("le travail du pas est resté dans l'arbre de la tâche, non commité : {e}");
                 let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "tree": arbre, "command": format!("git -C {} add -A && git -C {} commit", arbre.display(), arbre.display()) }));
                 return;

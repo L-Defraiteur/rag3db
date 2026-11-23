@@ -681,6 +681,11 @@ impl StepWork {
 }
 
 impl Step {
+    /// The paths the step's code tools wrote (23 Nov 2026: what the host's end-of-step commit takes).
+    pub(crate) fn wrote(&self) -> Vec<String> {
+        self.work.lock().map(|w| w.wrote.clone()).unwrap_or_default()
+    }
+
     pub fn new(files: TeammateFiles, task: &str, request: &str, bus: Option<crate::events::EventBus>, number: usize) -> Self {
         Self {
             files,
@@ -2286,7 +2291,7 @@ impl DaemonHost {
                     unavailable = 0;
                     // **The turn's commits land in the user's folder** (the terminal's night, 22 Nov 2026).
                     #[cfg(feature = "code")]
-                    self.land_the_turn(&t, &files);
+                    self.land_the_turn(&t, &files, &step.wrote());
                     // By the declared scripted node when there is one (its `nodes/` folder is the live backend's), else
                     // the Rust block; a failing script falls back to the Rust block, and the box says it once.
                     let dossier = policy
