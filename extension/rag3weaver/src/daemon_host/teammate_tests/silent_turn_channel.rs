@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 fn a_silent_turn_shows_its_done_in_her_folder_words_and_the_relaunch_names_the_channel() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     let seen = Arc::new(Mutex::new(Vec::<String>::new()));
     let model: ChatModel = {
         let seen = seen.clone();
