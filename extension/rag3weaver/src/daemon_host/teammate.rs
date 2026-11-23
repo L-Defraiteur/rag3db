@@ -2134,9 +2134,12 @@ impl DaemonHost {
         let depart = ouverte.then(|| {
             let court: String = t.depart.chars().take(9).collect();
             // Sans git (page 03 d'everything declarative, § 1) : la boîte le dit.
-            let note = match t.workspace.as_ref().filter(|w| w.copie.is_some()) {
-                Some(w) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
-                None => format!(
+            let en_place = t.workspace.as_ref().and_then(|w| w.code.as_ref()).filter(|c| c.en_place);
+            let note = match (t.workspace.as_ref().filter(|w| w.copie.is_some()), en_place) {
+                (Some(w), _) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
+                // **In the user's folder** (23 November 2026): no branch of the task, no commit to start from.
+                (None, Some(c)) => format!("tâche ouverte : l'agent travaille dans ton dossier {}, sur ta branche courante, depuis {court}", c.depot.display()),
+                (None, None) => format!(
                     "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas){}",
                     t.branche,
                     if t.git_init_fait { " ; la racine est devenue un dépôt à l'ouverture (git_init déclaré), premier commit par rag3weaver" } else { "" }
