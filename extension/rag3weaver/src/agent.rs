@@ -2351,6 +2351,10 @@ fn error_detail(content: &str) -> Option<&str> {
 mod llm_call_tests;
 
 #[cfg(test)]
+#[path = "agent_raw_call_tests.rs"]
+mod raw_call_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::llm::{CallbackLlm, CountingSink, MockLlm, StringSink};
