@@ -89,9 +89,8 @@ fn a_task_in_the_folder_shows_nothing_to_merge() {
     n.evaluer("document.querySelector('#message').value = 'Ajoute un fichier NOTES.md.'; document.querySelector('#send').click()");
     n.attendre(&format!("location.pathname.startsWith('/ide/code/{id}/taches/')"), "the page goes to the task");
     let task = n.evaluer("decodeURIComponent(location.pathname.split('/').pop())").as_str().unwrap_or_default().to_string();
-    let (status, body) = crate::daemon_host::tests::demander("GET", &format!("{base}/ide/teammate?backend={id}&task={task}"), Some("j"));
+    let (status, v) = crate::daemon_host::tests::demander("GET", &format!("{base}/ide/teammate?backend={id}&task={task}"), Some("j"));
     assert_eq!(status, 200);
-    let v: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
     assert_eq!(v["result"]["workspace"], json!("in_place"), "the host says the task's mode: {}", v["result"]["workspace"]);
     n.attendre("!!document.querySelector('.proposition h1')", "the task page");
     let merge = n.evaluer("!!document.querySelector('#fusionner') || !!document.querySelector('#rejeter')");
