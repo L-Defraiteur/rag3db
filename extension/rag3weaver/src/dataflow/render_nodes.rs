@@ -364,11 +364,9 @@ fn score_scale(scores: &[f64]) -> usize {
 
 /// Construit la vue : l'ordre de sortie, les groupes, les champs retenus.
 ///
-/// Le regroupement **ne réordonne pas** (mesure du 23 novembre 2026 : un
-/// résultat 30e par score s'affichait 106e, derrière les membres d'autres
-/// classes tirés vers leur meilleur) : il ne rassemble que des résultats qui se
-/// suivent dans l'ordre des scores. La numérotation reste globale, et un
-/// résultat seul dans son groupe n'a pas d'en-tête.
+/// Le regroupement **réordonne** — les groupes sortent dans l'ordre de leur
+/// meilleur score, la numérotation reste globale, et un résultat seul dans son
+/// groupe n'a pas d'en-tête.
 pub fn build_view(
     results: &[UnifiedResult],
     max_chars: usize,
@@ -394,8 +392,7 @@ pub fn build_view_with(
         let mut groups: Vec<(Option<(String, String)>, Vec<usize>)> = Vec::new();
         for (i, r) in results.iter().enumerate() {
             let key = group_key(r, lens);
-            // Only the group just before: a result of the same class further down keeps its place.
-            match key.as_ref().and_then(|k| groups.last_mut().filter(|(g, _)| g.as_ref() == Some(k))) {
+            match key.as_ref().and_then(|k| groups.iter_mut().find(|(g, _)| g.as_ref() == Some(k))) {
                 Some((_, members)) => members.push(i),
                 None => groups.push((key, vec![i])),
             }
@@ -1495,20 +1492,21 @@ mod tests {
     }
 
     #[test]
-    fn results_of_one_class_apart_keep_the_order_of_the_scores() {
+    fn results_of_one_class_are_grouped_once_and_numbered_globally() {
         let results = vec![
             scope("take", "PortValue", 120, 140, 0.81),
             scope("merge_port_values", "", 20, 50, 0.75),
             scope("downcast", "PortValue", 110, 118, 0.60),
         ];
         let md = render_results_with(&results, 300, true);
-        assert!(!md.contains("matches"), "{md}");
-        // L'ordre des scores reste : les deux de la classe ne se suivent pas, aucun en-tête de groupe.
+        assert_eq!(md.matches("**PortValue** · `port.rs` — 2 matches").count(), 1, "{md}");
+        // Regroupés, donc réordonnés : les deux de la classe d'abord (leur
+        // meilleur score), la numérotation reste globale et continue.
         let order: Vec<&str> = md.lines().filter(|l| l.starts_with("### ")).collect();
         assert_eq!(order.len(), 3, "{md}");
         assert!(order[0].starts_with("### 1. PortValue::take"), "{md}");
-        assert!(order[1].starts_with("### 2. merge_port_values"), "{md}");
-        assert!(order[2].starts_with("### 3. PortValue::downcast"), "{md}");
+        assert!(order[1].starts_with("### 2. PortValue::downcast"), "{md}");
+        assert!(order[2].starts_with("### 3. merge_port_values"), "{md}");
 
         // Sans regroupement : l'ordre des scores, et aucun en-tête.
         let flat = render_results_with(&results, 300, false);
