@@ -1059,6 +1059,7 @@ impl Atelier {
     #[cfg(test)]
     fn clone_pour_test(&self, nom: &str) -> Self {
         Self {
+            annulation: self.annulation.clone(),
             cwd: self.cwd.clone(),
             delai: self.delai,
             max_sortie: self.max_sortie,
