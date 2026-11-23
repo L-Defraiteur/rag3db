@@ -309,6 +309,22 @@ impl DaemonHost {
         files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "failures": echecs })).ok()
     }
 
+    /// **A new project gets its index without anyone asking** (Lucie, 23 Nov 2026): a folder the host created is
+    /// indexed at its first landing of code, in the background; the mark goes, said once. Both landings call it.
+    #[cfg(feature = "code")]
+    fn index_a_new_project(&self, dossier: &Path, files: &TeammateFiles) {
+        if let Ok(marque) = git(dossier, &["rev-parse", "--git-path", super::NEW_PROJECT_MARK]).map(|p| dossier.join(p)) {
+            if marque.is_file() {
+                let _ = std::fs::remove_file(&marque);
+                let texte = match self.index_folder(dossier) {
+                    Ok(_) => "index lancé : ton projet est neuf, la recherche par le sens, les usages et l'impact arrivent dans un instant".to_string(),
+                    Err(e) => format!("index non lancé pour ce projet neuf : {e}"),
+                };
+                let _ = files.append_with("host", "report", None, &texte, &json!({ "new_project_index": true }));
+            }
+        }
+    }
+
     /// **The end of a turn in the user's folder itself** (Lucie, 23 Nov 2026): a commit on her current branch, by
     /// rag3weaver, of only what the turn changed; what she had changed before and the turn left stays uncommitted, said;
     /// a file both changed goes in, named; never during a merge or a rebase, said.
@@ -381,6 +397,8 @@ impl DaemonHost {
         let branche = git(dossier, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
         let texte = format!("{} fichier(s) commités dans ton dossier {} (branche {branche})", du_tour.len(), dossier.display());
         let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": 1, "files": du_tour.len(), "paths": du_tour, "in_place": true }));
+        #[cfg(feature = "code")]
+        self.index_a_new_project(dossier, files);
         if !gardes.is_empty() || !les_deux.is_empty() {
             let mut texte = String::new();
             if !gardes.is_empty() {
@@ -495,6 +513,8 @@ impl DaemonHost {
             Ok(_) => {
                 let texte = format!("{fichiers} fichier(s) dans ton dossier {} ({commits} commit(s) de la branche {branche})", dossier.display());
                 let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": commits.parse::<u64>().unwrap_or(0), "files": fichiers, "paths": chemins }));
+                #[cfg(feature = "code")]
+                self.index_a_new_project(dossier, files);
             }
             Err(e) => retenu(format!("l'avance rapide a échoué : {e}")),
         }
