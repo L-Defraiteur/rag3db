@@ -458,6 +458,8 @@ pub mod chat;
 /// Tools of another backend, offered to a backend's agent (23 Nov 2026).
 mod imported_tools;
 mod prompts;
+/// The teammate's decisions as declared graphs: at each step_done, and after the step (23 Nov 2026).
+pub(crate) mod step_graphs;
 
 /// The roots granted to the agents (RootGrants), kept by the host.
 pub mod root_grants;
