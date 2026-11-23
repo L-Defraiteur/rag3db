@@ -493,6 +493,15 @@ pub const EXPECTS: [&str; 3] = ["report", "approval", "none"];
 /// `None` quand une ligne y est, ou quand la demande déclare `expects` (sa garde est la sienne,
 /// `none` compris). La boucle ne relance que si l'équipier n'a rien laissé d'autre non plus : ni
 /// fichier écrit, ni commande, ni plan clos (forme B de c7).
+/// **A path of the agent's tree, in what the user reads, becomes her folder's** (23 Nov 2026): she runs commands where
+/// she is, never in the task's tree.
+pub(crate) fn in_her_folder(folders: Option<&(String, String)>, text: &str) -> String {
+    match folders {
+        Some((tree, folder)) if !tree.is_empty() && tree != folder => text.replace(tree.as_str(), folder),
+        _ => text.to_string(),
+    }
+}
+
 /// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
 /// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
@@ -540,6 +549,9 @@ pub fn mailbox_topic(task: &str) -> String {
 /// **Ce qu'un pas sait de lui-même** : les outils de l'équipier s'en servent,
 /// la boucle le lit après le tour.
 pub struct Step {
+    /// **The agent's tree and the user's folder** (23 Nov 2026, `~/essai-2`: the agent told her to `cd` into its own
+    /// tree): a path of the tree in what she reads becomes her folder's.
+    pub folders: Option<(String, String)>,
     pub files: TeammateFiles,
     pub task: String,
     /// La demande d'origine (la première `request` de la boîte) : le nom de la
@@ -725,12 +737,18 @@ impl StepWork {
 impl Step {
     /// The paths the step's code tools wrote (23 Nov 2026: what the host's end-of-step commit takes).
     #[cfg(feature = "code")]
+    pub fn with_folders(mut self, folders: Option<(String, String)>) -> Self {
+        self.folders = folders;
+        self
+    }
+
     pub(crate) fn wrote(&self) -> Vec<String> {
         self.work.lock().map(|w| w.wrote.clone()).unwrap_or_default()
     }
 
     pub fn new(files: TeammateFiles, task: &str, request: &str, bus: Option<crate::events::EventBus>, number: usize) -> Self {
         Self {
+            folders: None,
             files,
             task: task.to_string(),
             request: request.to_string(),
@@ -928,7 +946,8 @@ impl Step {
 
     /// Écrit dans la boîte et le publie.
     fn post(&self, kind: &str, item: Option<&str>, text: &str) -> Result<Value, String> {
-        let line = self.files.append("teammate", kind, item, text)?;
+        let text = in_her_folder(self.folders.as_ref(), text);
+        let line = self.files.append("teammate", kind, item, &text)?;
         publish(self.bus.as_ref(), &self.task, &line);
         Ok(line)
     }
@@ -2399,6 +2418,15 @@ impl DaemonHost {
             attente_bornee = None;
             let faits: Vec<Value> = lines.iter().skip(premiere_ouverte.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
             let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits);
+            // **Its tree is not her folder** (23 Nov 2026, `~/essai-2`).
+            if let Some(w) = t.workspace.as_ref().filter(|w| w.racine != w.racine_principale) {
+                message.push_str(&format!(
+                    "\nYou work in your own tree ({}); the user is in her folder {}, where your work lands at the end of each step. Any command or path you give the user names {}, never your tree.\n",
+                    w.racine.display(),
+                    w.racine_principale.display(),
+                    w.racine_principale.display()
+                ));
+            }
             match expected_deliverable(&lines).map(|(_, e)| e) {
                 Some(e) if e == "report" => message.push_str("\nLa demande exige un report (outil report) avant la fin : sans lui, la tâche attend le superviseur.\n"),
                 Some(e) if e == "approval" => message.push_str("\nLa demande exige l'accord du superviseur avant la fin : propose (report, question), puis attends sa réponse.\n"),
@@ -2411,7 +2439,8 @@ impl DaemonHost {
             self.pair_statut(&format!("{parent}/{task}"), true);
             let cle = format!("{parent}/{task}");
             let tenue = self.pair.get().cloned().flatten().filter(|p| p.tient(&cle)).map(|p| (p, cle));
-            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_background(self.task_background(parent, task)).with_pair(tenue).with_browser(policy.browser.clone().map(|p| {
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number)
+                .with_folders(t.workspace.as_ref().map(|w| (w.racine.display().to_string(), w.racine_principale.display().to_string()))).with_policy(&policy).with_background(self.task_background(parent, task)).with_pair(tenue).with_browser(policy.browser.clone().map(|p| {
                 let tools = self.browser_listening().map(|ecoute| super::browser_tools::BrowserTools { policy: p.clone(), ecoute, session: format!("teammate:{parent}/{task}") });
                 (p, tools)
             }));
@@ -2552,7 +2581,7 @@ impl DaemonHost {
                 if !texte.is_empty() && !deja {
                     // Une copie faite par l'hôte du texte du modèle : `origin` le dit, le texte est la
                     // réponse seule (tty, 16 novembre 2026).
-                    let line = files.append_with("teammate", "report", None, texte, &json!({ "origin": "host_copy" }))?;
+                    let line = files.append_with("teammate", "report", None, &in_her_folder(step.folders.as_ref(), texte), &json!({ "origin": "host_copy" }))?;
                     publish(bus.as_ref(), task, &line);
                 }
             }
@@ -2583,7 +2612,7 @@ impl DaemonHost {
                 } else {
                     let deja = files.mailbox().iter().skip(avant).any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));
                     if !deja {
-                        let line = files.append_with("teammate", "report", None, texte, &json!({ "origin": "host_copy" }))?;
+                        let line = files.append_with("teammate", "report", None, &in_her_folder(step.folders.as_ref(), texte), &json!({ "origin": "host_copy" }))?;
                         publish(bus.as_ref(), task, &line);
                     }
                 }
@@ -2650,6 +2679,16 @@ impl DaemonHost {
             if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
                 // **Un `step_done` qui dit ce qui reste n'est pas une fin** (ticket du 9
                 // novembre 2026) : le pas suivant part ; MAX_STEPS et MAX_STALLED bornent.
+                // **Still silent after its relaunch: the user reads its done** (23 Nov 2026, `~/essai-2`: twice a
+                // step_done and nothing for her), in her folder's words, rather than nothing.
+                if let Some(demande) = silent_turn(&files.mailbox()).filter(|d| relancee == Some(*d)) {
+                    let _ = demande;
+                    if let Some(dit) = declared.as_ref().and_then(|d| d["done"].as_str()).map(str::trim).filter(|d| !d.is_empty()) {
+                        let texte = in_her_folder(step.folders.as_ref(), dit);
+                        let line = files.append_with("teammate", "report", None, &texte, &json!({ "origin": "step_done" }))?;
+                        publish(bus.as_ref(), task, &line);
+                    }
+                }
                 let reste = declared.as_ref().and_then(|d| d["remaining"].as_str()).map(str::trim).filter(|r| !r.is_empty()).map(str::to_string);
                 if let Some(r) = reste {
                     let line = files.append("host", "report", None, &format!("pas fini : reste « {r} » ; le pas suivant part"))?;
@@ -2671,7 +2710,7 @@ impl DaemonHost {
                     relancee = Some(demande);
                     let line = files.append("host", "report", None, "relance : l'agent n'a rien écrit à l'utilisatrice pendant ce tour ; le pas suivant lui écrit ce qu'il a fait")?;
                     publish(bus.as_ref(), task, &line);
-                    relance = Some("You wrote nothing to the user during this turn: step_done closes a step, it is not an answer. Write to the user now, in your answer, a few sentences on what you did and what is left, then call step_done.".to_string());
+                    relance = Some("You wrote nothing to the user during this turn. What the user reads is the text of your reply, written before any tool call; step_done's `done` is never shown to them. Write to the user now, in the text of your reply, a few sentences: what you did, how to use it (the commands to run in their folder), and what is left; then call step_done.".to_string());
                     encore = true;
                     continue;
                 } else if let Some(demande) = (!trace).then(|| request_without_a_line(&files.mailbox())).flatten() {
