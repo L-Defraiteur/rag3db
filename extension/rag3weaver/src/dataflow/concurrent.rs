@@ -252,6 +252,8 @@ enum Ended {
         unconnected: HashMap<String, PortValue>,
         dropped: HashMap<String, usize>,
         sent: HashMap<String, usize>,
+        /// How long the node took, in milliseconds.
+        ms: u64,
     },
     Skipped(String),
     Failed(String),
@@ -469,10 +471,12 @@ impl DataflowRuntime {
         let mut skipped = HashMap::new();
         let mut dropped_by = HashMap::new();
         let mut sent_by = HashMap::new();
+        let mut timings: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
         let mut failures = Vec::new();
         for ((name, worker_name), ended) in ends {
             match ended {
-                Ended::Completed { unconnected, dropped, sent } => {
+                Ended::Completed { unconnected, dropped, sent, ms } => {
+                    *timings.entry(name.clone()).or_insert(0) += ms;
                     for (port, n) in dropped {
                         dropped_by.insert((name.clone(), port), n);
                     }
@@ -509,7 +513,7 @@ impl DataflowRuntime {
             total_nodes: graph.nodes.len(),
             duration_ms: start.elapsed().as_millis() as u64,
         });
-        Ok(DataflowOutput::new(data, skipped, cause, dropped_by).with_sent(sent_by))
+        Ok(DataflowOutput::new(data, skipped, cause, dropped_by).with_sent(sent_by).with_timings(timings))
     }
 
     /// **Le pont vivant** : exécute un sous-graphe sur les canaux délégués de
@@ -602,7 +606,7 @@ impl DataflowRuntime {
             }
             binding.finish();
             self.emit(DataflowEvent::CheckpointResumed { node: plan.name.clone(), output_ports: outputs.keys().cloned().collect() });
-            return Ended::Completed { unconnected: HashMap::new(), dropped: HashMap::new(), sent: binding.sent.clone() };
+            return Ended::Completed { unconnected: HashMap::new(), dropped: HashMap::new(), sent: binding.sent.clone(), ms: 0 };
         }
 
         // ── Les entrées de départ ──────────────────────────────────────────
@@ -838,7 +842,7 @@ impl DataflowRuntime {
         }
         binding.finish();
         self.emit(DataflowEvent::NodeCompleted { node: plan.name.clone(), duration_ms, outputs: output_snapshots, metrics });
-        Ended::Completed { unconnected, dropped, sent: binding.sent.clone() }
+        Ended::Completed { unconnected, dropped, sent: binding.sent.clone(), ms: duration_ms }
     }
 }
 
