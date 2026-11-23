@@ -29,6 +29,10 @@ use crate::common;
 #[cfg(feature = "burn-embedder")]
 use common::burn::BGE_M3;
 
+/// An update undone after a restart gives the full text back (23 Nov. 2026): the witness, in a file of its own.
+#[path = "e2e_undo/after_restart.rs"]
+mod after_restart;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn load_extensions(conn: &dyn rag3weaver::connection::DbConnection) {
