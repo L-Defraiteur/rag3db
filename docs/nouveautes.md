@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Le terminal dit qui a écrit une consigne.** Un message posé par un autre agent, par exemple
+  pendant la nuit sans écran, s'affiche sous le nom de cet agent (ou « un agent ») et non plus sous « toi ».
 - 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
   de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
   cours, au lieu d'attendre le pas suivant.
