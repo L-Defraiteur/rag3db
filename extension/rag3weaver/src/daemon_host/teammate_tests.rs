@@ -46,6 +46,7 @@ mod posture_auto;
 mod prompt_roots;
 mod reopen;
 mod reply_channel;
+mod reply_first;
 mod run_du_pas;
 mod silent_turn;
 mod silent_turn_channel;
