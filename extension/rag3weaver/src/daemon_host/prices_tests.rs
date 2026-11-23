@@ -48,18 +48,37 @@ fn a_refusal_for_want_of_a_price_names_its_model() {
     assert_eq!(crate::usage_ledger::unpriced("spending cap reached for 2026-11"), None);
 }
 
-/// **The default prices are whole or absent, never empty**: many first calls at once, in a ledger without a
-/// `prices.json`; every reader finds the shipped prices (23 November 2026: a reader found the file created and not yet
+/// **The default prices are whole or absent, never empty**: first reservations and a price being written at once, in a
+/// ledger without a `prices.json`; every reader finds the shipped prices, and every price is written (23 November 2026: a reader found the file created and not yet
 /// written, and refused every model as if the prices could not be read).
 #[test]
 fn the_default_prices_are_written_whole_under_concurrent_first_calls() {
     for _ in 0..20 {
         let d = tempfile::tempdir().unwrap();
         let (usage, prices) = (d.path().join("usage"), d.path().join("prices.json"));
+        // Reservations and a price being written at once: the two paths that write the default file.
         let errors: Vec<String> = (0..8)
-            .map(|_| {
+            .map(|i| {
                 let l = crate::usage_ledger::Ledger::new(usage.clone(), prices.clone());
-                std::thread::spawn(move || l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false).err())
+                std::thread::spawn(move || {
+                    if i % 2 == 0 {
+                        let t = crate::usage_ledger::Tariff {
+                            from: "2026-01-01".into(),
+                            input: 1.0,
+                            cache_write: None,
+                            cache_read: None,
+                            output: 1.0,
+                            batch: None,
+                            currency: None,
+                            source: None,
+                            read_on: None,
+                            note: None,
+                        };
+                        l.add_tariff(&format!("given-{i}"), &t).err()
+                    } else {
+                        l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false).err()
+                    }
+                })
             })
             .collect::<Vec<_>>()
             .into_iter()
