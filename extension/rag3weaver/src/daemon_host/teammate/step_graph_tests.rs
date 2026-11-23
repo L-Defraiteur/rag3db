@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::Ordering;
 
 const SILENT_REFUSED: &str = "%% tool: at_step_done_witness
+%% description: The witness's rule: a closing step_done with no text after the last tool is refused.
 %% param: step json! -- the facts of the step
 %% result: chain.verdict
 graph LR
