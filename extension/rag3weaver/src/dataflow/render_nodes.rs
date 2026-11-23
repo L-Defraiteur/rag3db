@@ -1515,6 +1515,39 @@ mod tests {
         assert!(order[1].starts_with("### 2. merge_port_values"), "{flat}");
     }
 
+    /// **Inside a group, the order of the code** (Lucie, 23 November 2026: « si c'est dans l'ordre naturel du code,
+    /// ok »): the group keeps the rank of its best hit, its members follow by line, not by score.
+    #[test]
+    fn inside_a_group_the_scopes_follow_the_code() {
+        let results = vec![
+            scope("take", "PortValue", 120, 140, 0.81),
+            scope("merge_port_values", "", 20, 50, 0.75),
+            scope("downcast", "PortValue", 60, 70, 0.60),
+        ];
+        let md = render_results_with(&results, 300, true);
+        let order: Vec<&str> = md.lines().filter(|l| l.starts_with("### ")).collect();
+        assert_eq!(order.len(), 3, "{md}");
+        assert!(order[0].contains("PortValue::downcast"), "line 60 before line 120 in its group:\n{md}");
+        assert!(order[1].contains("PortValue::take"), "{md}");
+        assert!(order[2].contains("merge_port_values"), "the group keeps the rank of its best hit:\n{md}");
+    }
+
+    /// **Scopes that touch show one block of lines** (Lucie, 23 November 2026: « si scope 1 et scope 2 sont collés
+    /// dans le code, un seul wrapper de lignes »): one location for the run, the next scope without its own; two
+    /// scopes apart keep each theirs.
+    #[test]
+    fn scopes_that_touch_show_one_block_of_lines() {
+        let results = vec![
+            scope("take", "PortValue", 120, 140, 0.81),
+            scope("put", "PortValue", 141, 188, 0.70),
+            scope("downcast", "PortValue", 60, 70, 0.60),
+        ];
+        let md = render_results_with(&results, 300, true);
+        assert!(md.contains("📍 `port.rs:120-188`"), "one block for the two that touch:\n{md}");
+        assert!(!md.contains("port.rs:141-188"), "the second of the block has no location of its own:\n{md}");
+        assert!(md.contains("📍 `port.rs:60-70`"), "a scope apart keeps its own:\n{md}");
+    }
+
     #[test]
     fn a_neighbour_carries_its_link_too() {
         let mut r = scope("take", "PortValue", 120, 140, 0.8);
