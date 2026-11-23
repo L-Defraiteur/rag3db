@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
+  nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres
+  fichiers indexés dans le même paquet, et un fichier édité seul s'en inventait à chaque resynchronisation : l'index
+  dérivait au fil du travail. Un fichier décide maintenant seul, par sa langue et les dépendances que déclare son
+  dépôt. Sur l'index de rag3db, les rendez-vous sont identiques en paquets de 2 048 et de 128. Les règles de l'analyse
+  passent à 20.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
