@@ -54,6 +54,8 @@ struct Options {
     journal: Option<String>,
     /// `--continue` : la dernière conversation du dépôt.
     continuer: bool,
+    /// `--gate bac|judge|cards`: the gate a request asks for (23 Nov. 2026: the mode auto by default, the bac).
+    gate: String,
 }
 
 /// The repository of a folder: its git root, or the folder itself when it has none.
@@ -113,7 +115,7 @@ fn options() -> Result<Options, String> {
 
 fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let mut o = Options { depot: String::new(), task: String::new(), steps: false, still: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None, continuer: false };
+    let mut o = Options { depot: String::new(), task: String::new(), steps: false, still: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None, continuer: false, gate: "bac".into() };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -560,5 +562,21 @@ mod first_commit_tests {
         let r = serde_json::json!({ "ok": true, "first_commit": "premier commit par rag3weaver (dossier neuf)", "git": true });
         assert_eq!(opening_line(&r).as_deref(), Some("premier commit par rag3weaver (dossier neuf)"));
         assert_eq!(opening_line(&serde_json::json!({ "ok": true })), None);
+    }
+}
+
+#[cfg(test)]
+mod gate_option_tests {
+    use super::*;
+
+    /// **The gate is chosen at launch, the bac by default** (23 Nov. 2026: requests from the terminal carried no gate,
+    /// and a task kept the project's, a card for each command).
+    #[test]
+    fn the_gate_is_the_bac_unless_chosen_and_an_unknown_one_is_refused() {
+        let parse = |a: &[&str]| parse_options(a.iter().map(|s| s.to_string()), None);
+        assert_eq!(parse(&[]).unwrap().gate, "bac");
+        assert_eq!(parse(&["--gate", "judge"]).unwrap().gate, "judge");
+        assert_eq!(parse(&["--gate", "cards"]).unwrap().gate, "cards");
+        assert!(parse(&["--gate", "autre"]).is_err(), "an unknown gate is refused");
     }
 }
