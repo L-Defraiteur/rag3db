@@ -53,6 +53,48 @@ chain -->|end| done["emit(channel='ended')"]
   - il faut des canaux **durables** (journalisés) pour reprendre après un redémarrage, et un canal privé à une tâche ou
     à un run, pour qu'un tour ne réveille pas celui d'un voisin.
 
+## Les conditions
+
+Lucie, 23 h 40, précisé à 23 h 50 : « en plus, on a aussi des nœuds de condition IA ». Une condition est **un nœud
+comme un autre**, utilisable partout dans un workflow, pas d'abord pensé pour arrêter une boucle. Il en existe deux
+sortes, et elles ont la même sortie : un verdict borné.
+
+- **La condition déterministe** répond à une question sur des faits : « le pas a-t-il écrit après son dernier
+  outil ? », « le tour vient-il d'un humain ? ». Elle a une entrée de faits et rend `{holds, why}`. `All`, `Any` et
+  `Not` les combinent, `FirstMatch` les lit dans l'ordre déclaré. Les primitives sont écrites (branche
+  `ed-guard-chain`), et les conditions de fin de pas d'archi aussi (branche `step-conditions`).
+- **La condition par un modèle** répond à une question de jugement : « le tour est-il fini ? », « cette réponse
+  répond-elle à la question ? » (le juge du contenu), « cette commande est-elle dans l'esprit de la demande ? » (le juge
+  de la porte), « ce signal est-il le même qu'un autre ? ». C'est **`Decide`** : un contexte, une question, des
+  étiquettes déclarées, et un moteur déclaré (un petit modèle en sortie structurée, ou un classifieur quand il y en a
+  un). Elle rend **une étiquette de la liste et un score**, jamais du texte libre, et `Route` branche dessus.
+
+**Ce que `Decide` sait déjà** :
+- des étiquettes bornées (une liste, ou `labels_from` dans l'élément) ; une étiquette hors liste est refusée ;
+- le classifieur du crate (`Decider`) quand il est servi, qui rend une probabilité ; sinon le modèle de génération sous
+  une sortie structurée (un schéma à `enum`) ;
+- une consigne (`instruction`) et un gabarit qui rend les champs de l'élément ;
+- l'élément rendu porte son étiquette dans le champ `as` ; `Route` branche sur ce champ.
+
+**Ce qui lui manque, à ajouter avant de s'en servir comme condition** :
+- **une entrée `context` en tableau**, rendue dans l'invite, à côté de la question (aujourd'hui, un seul élément) ;
+- **un seuil et une sortie `unsure`** : sous le seuil, ou quand le modèle échoue ou répond hors liste, l'élément part
+  sur `unsure` au lieu d'une erreur. Jamais une étiquette inventée ;
+- le moteur nommé dans le nœud (`via`, un modèle de `models.llm`, un classifieur du registre), ce que `via` fait déjà en
+  partie.
+
+## La règle de validation des boucles
+
+Une boucle est une ré-entrée : un `emit` vers un canal que la tête du même graphe écoute.
+
+- **Si la décision de ré-entrer dépend d'un modèle** (un `Decide` en amont de l'`emit`), **le graphe déclare un
+  plafond** (`max_iterations` sur le `listen` de tête). Sans lui, **le graphe est refusé à la validation**, avec un
+  message qui nomme le `Decide` et le canal. Ce n'est ni un refus à l'exécution, ni un défaut silencieux.
+- **Si la décision est déterministe**, le plafond n'est pas exigé. Je recommande tout de même **un plafond par
+  défaut de 200 ré-entrées par clé et par run**, dit quand il tombe (une ligne `ended`, cause `max_iterations`).
+  Une garde déterministe peut avoir un défaut ; chaque tour peut appeler un modèle payant ; et la boucle de l'équipier
+  s'arrête aujourd'hui à 40 pas. Un graphe qui en veut plus le déclare.
+
 ## La recommandation : la forme B
 
 Elle tient la règle de Lucie mot pour mot : un événement est un nœud qui écoute un canal, et une boucle est un graphe qui
