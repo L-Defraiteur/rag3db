@@ -77,6 +77,10 @@ impl NodeFactory for RhaiNodeFactory {
                     }
                     Some(other) => return Err(format!("`inputs` is a comma-separated list or a JSON array, not {other}")),
                 };
+                // `caller` is the agent of the call, given by the host (23 November 2026): never by the graph.
+                if fields.contains_key(CALLER) {
+                    return Err(format!("`{CALLER}` is given by the host (the agent the call is made for), not by a key"));
+                }
                 let unknown: Vec<&String> = fields.keys().filter(|k| !declared.contains(*k)).collect();
                 if !unknown.is_empty() {
                     return Err(format!("the script does not read {unknown:?} — its inputs: {declared:?}"));
@@ -151,6 +155,18 @@ impl Node for RhaiNode {
             (None, Some(c), _) => c.clone(),
             (None, None, _) => return Err("RhaiNode requires JSON value".into()),
         };
+        // **The agent the call is made for**, to a script that declares `caller` in its inputs (23 November 2026): the
+        // key the host gave the call (`as_agent`, the same as `writes.author` signs), or null outside an agent.
+        let mut input = input;
+        if declares_caller(&self.config) {
+            let agent = ctx.service::<String>(crate::backend::AGENT_SERVICE).map(|a| Value::String(a.clone()));
+            match &mut input {
+                Value::Object(fields) => {
+                    fields.insert(CALLER.into(), agent.unwrap_or(Value::Null));
+                }
+                _ => return Err(format!("RhaiNode : `{CALLER}` is declared but the input is not an object")),
+            }
+        }
         let limits = ctx
             .service::<crate::harness::RhaiLimits>("rhai_limits")
             .cloned()
@@ -158,5 +174,17 @@ impl Node for RhaiNode {
         let value = crate::harness::evaluate(script, &input, &limits)?;
         ctx.set_output("result", PortValue::new(value));
         Ok(())
+    }
+}
+
+/// The input a script declares to receive the agent the call is made for.
+pub const CALLER: &str = "caller";
+
+/// Whether the node's `inputs` declare [`CALLER`].
+fn declares_caller(config: &Value) -> bool {
+    match config.get("inputs") {
+        Some(Value::String(list)) => list.split(',').any(|f| f.trim() == CALLER),
+        Some(Value::Array(list)) => list.iter().any(|f| f.as_str() == Some(CALLER)),
+        _ => false,
     }
 }

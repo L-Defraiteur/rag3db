@@ -7,6 +7,16 @@ fn conditions(i) {
         let v = i[k];
         if v != () && v != "" { must.push(#{ field: #{ key: k, value: v } }); }
     }
+    // The author (23 November 2026): « me » is the agent the call is made for (`caller`, given by the host).
+    let author = i["author"];
+    if author != () && author != "" && author != "*" {
+        if author == "me" {
+            let caller = i["caller"];
+            if caller == () || caller == "" { throw "search_turns: author « me » needs an agent behind the call; give an agent key, or « * »"; }
+            author = caller;
+        }
+        must.push(#{ field: #{ key: "author", value: author } });
+    }
     // `until` is a reserved word of Rhai: both bounds are read by index.
     let since = i["since"];
     let until_ = i["until"];

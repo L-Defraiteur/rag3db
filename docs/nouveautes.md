@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **« Mes tours » : une lecture filtre par son auteur.** `search_turns` prend `author` (« me »,
+  la clé d'un agent, ou « * ») et `swarm` (« mine », un nom, ou « * ») ; « me » est l'agent pour qui l'appel est fait,
+  donné par l'hôte et jamais par l'appelant. `swarm` est accepté avant que les swarms existent, et la réponse dit qu'il
+  n'a rien filtré. Un script de graphe qui déclare `caller` dans ses entrées reçoit la clé de cet agent.
+
 - 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
   puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
   fermer une étape n'est pas une réponse.
