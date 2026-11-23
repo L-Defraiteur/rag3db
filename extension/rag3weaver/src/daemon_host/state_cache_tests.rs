@@ -26,11 +26,15 @@ fn a_second_read_of_the_state_rereads_no_index_until_an_event_says_it_changed() 
     // state runs beside (the host publishes its state in the background at an index's end: a full lib pass on 23 Nov.
     // counted 5 reads for 4, the two reads both missing the cache before either kept it).
     a.host.ide_flux().publier("files", &manifeste, serde_json::json!({ "kind": "FileChanged", "path": "src/lib.rs" }));
+    let par_manifeste = || a.host.lectures_par_manifeste.lock().unwrap().clone();
+    let avant = par_manifeste();
     std::thread::scope(|s| {
         s.spawn(|| a.host.state());
         let _ = a.host.state();
     });
-    assert_eq!(a.host.lectures_d_index.load(Ordering::SeqCst), avant + 1, "the repository's index is read again, the others not");
+    let apres = par_manifeste();
+    let relus: Vec<&String> = apres.iter().filter(|(m, n)| avant.get(*m) != Some(*n)).map(|(m, _)| m).collect();
+    assert_eq!(relus, vec![&manifeste], "the repository's index is read again (once, or once by each read that missed it), the others not");
 }
 
 /// **Only a settled index part is kept** (a navigator witness on 23 November 2026: the bar never said « rag indexé »
