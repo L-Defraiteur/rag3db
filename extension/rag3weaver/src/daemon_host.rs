@@ -446,6 +446,8 @@ pub mod taches;
 
 /// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
 pub mod chat;
+/// Tools of another backend, offered to a backend's agent (23 Nov 2026).
+mod imported_tools;
 mod prompts;
 
 /// The roots granted to the agents (RootGrants), kept by the host.
