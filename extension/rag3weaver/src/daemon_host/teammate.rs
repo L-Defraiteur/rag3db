@@ -566,6 +566,8 @@ pub struct Step {
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
     fetch: crate::backend::FetchPolicy,
+    /// The protection bound on a tool's result in the context (`teammate.input_max_chars`).
+    input_max_chars: usize,
     /// The bounds of the task's background commands (`teammate.background`).
     background_policy: crate::backend::BackgroundPolicy,
     /// The teammate's search by Gemini's grounding (`teammate.web_search`).
@@ -749,6 +751,7 @@ impl Step {
             gate_level: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
+            input_max_chars: crate::backend::TeammatePolicy::default().input_max_chars,
             background_policy: crate::backend::BackgroundPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
         }
@@ -796,6 +799,7 @@ impl Step {
         self.fetch = policy.fetch.clone();
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
+        self.input_max_chars = policy.input_max_chars.max(1000);
         self
     }
 
@@ -1413,8 +1417,12 @@ fn open_root_request(content: &str) -> Option<Value> {
 
 impl StepTools<'_> {
     /// Le rendu d'un outil de travail, noté au pas (aboutis seulement).
-    fn noted(&self, call: &ToolCall, turn: Turn) -> Turn {
+    fn noted(&self, call: &ToolCall, mut turn: Turn) -> Turn {
         self.step.note_tool(call, &turn);
+        // **The protection bound** on what a tool returns into the context (23 Nov 2026).
+        if turn.content.chars().count() > self.step.input_max_chars {
+            turn.content = bounded(&turn.content, self.step.input_max_chars);
+        }
         // A command that failed is kept for the turn's facts (23 Nov 2026).
         #[cfg(feature = "code")]
         if call.name == "run_command" {
@@ -1481,37 +1489,70 @@ fn publish(bus: Option<&crate::events::EventBus>, task: &str, line: &Value) {
 /// pas). Un pas repart d'une session neuve : ce message porte la demande en cours (la
 /// dernière reçue), ce que les pas faits depuis elle ont déclaré (`step_done`), la boîte
 /// depuis le pas précédent et les plans.
-/// **The earlier turns of a conversation**, oldest first: the user's requests and the teammate's answers (its step
-/// reports, its reports, the host's end of each turn); the last eight in full (2 000 characters at most), the older
-/// ones cut at 200, forty at most. `None` before a first turn.
-fn conversation_before(lines: &[Value]) -> Option<String> {
+/// **The earlier turns of a conversation**, oldest first, as the policy says (23 Nov 2026): the kinds of lines it
+/// lets in; with its trim, the last `full` in full (`full_chars` at most), the older ones cut at `older_chars`, `max`
+/// at most; without, every line whole (the protection bound still holds). `None` before a first turn, or when
+/// earlier turns are off. It reads the mailbox and writes nothing: the mailbox keeps every turn whole.
+fn conversation_before(lines: &[Value], policy: &crate::backend::ConversationPolicy, borne: usize) -> Option<String> {
+    if !policy.earlier_turns {
+        return None;
+    }
+    let admis = |k: &str| policy.kinds.iter().any(|x| x == k);
     let mut tenus: Vec<String> = Vec::new();
     for l in lines {
         let (from, kind, text) = (l["from"].as_str().unwrap_or_default(), l["kind"].as_str().unwrap_or_default(), l["text"].as_str().unwrap_or_default());
         let qui = match (from, kind) {
-            ("teammate", "step_done" | "report" | "question") => "teammate",
-            ("host", "ended" | "turn_changes" | "merged") => "host",
-            (f, "request") if f != "teammate" && f != "host" => "user",
+            ("teammate", "step_done" | "report" | "question") if admis(kind) => "teammate",
+            ("host", "ended" | "turn_changes" | "merged") if admis(kind) => "host",
+            (f, "request") if f != "teammate" && f != "host" && admis(kind) => "user",
             _ => continue,
         };
         if !text.trim().is_empty() {
-            tenus.push(format!("{qui}: {}", text.trim()));
+            tenus.push(format!("{qui}: {}", bounded(text.trim(), borne)));
         }
     }
     if tenus.is_empty() {
         return None;
     }
-    let debut = tenus.len().saturating_sub(40);
-    let n = tenus.len();
-    let lignes: Vec<String> = tenus[debut..]
-        .iter()
-        .enumerate()
-        .map(|(i, t)| {
-            let max = if debut + i + 8 >= n { 2000 } else { 200 };
-            if t.chars().count() > max { format!("{}…", t.chars().take(max).collect::<String>()) } else { t.clone() }
-        })
-        .collect();
+    let t = &policy.trim;
+    let lignes: Vec<String> = if t.enabled {
+        let debut = tenus.len().saturating_sub(t.max);
+        let n = tenus.len();
+        tenus[debut..]
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                let max = if debut + i + t.full >= n { t.full_chars } else { t.older_chars };
+                if l.chars().count() > max { format!("{}…", l.chars().take(max).collect::<String>()) } else { l.clone() }
+            })
+            .collect()
+    } else {
+        tenus
+    };
+    if lignes.is_empty() {
+        return None;
+    }
     Some(format!("Earlier in this conversation (oldest first):\n- {}", lignes.join("\n- ")))
+}
+
+/// **A text cut at the protection bound**, and said cut (the whole text stays in the mailbox).
+fn bounded(text: &str, borne: usize) -> String {
+    if text.chars().count() <= borne {
+        return text.to_string();
+    }
+    format!("{}… [coupé à {borne} caractères : le texte entier est dans la boîte]", text.chars().take(borne).collect::<String>())
+}
+
+/// `over`'s fields over `base`'s, object by object.
+fn merge_json(base: &mut Value, over: &Value) {
+    match (base, over) {
+        (Value::Object(b), Value::Object(o)) => {
+            for (k, v) in o {
+                merge_json(b.entry(k.clone()).or_insert(Value::Null), v);
+            }
+        }
+        (b, o) => *b = o.clone(),
+    }
 }
 
 fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
@@ -2323,20 +2364,34 @@ impl DaemonHost {
             // later ones are its follow-ups (a « continue » no longer replaces it).
             let ouverture = lines.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
             let ouvertes: Vec<usize> = (ouverture..lines.len()).filter(|&n| lines[n]["kind"] == "request" && lines[n]["from"] != "teammate" && lines[n]["from"] != "host").collect();
+            // **The protection bound** (23 Nov 2026): a request longer than `input_max_chars` is cut here, in the
+            // context; the mailbox keeps it whole.
+            let borne = policy.input_max_chars.max(1000);
+            let texte_de = |n: usize| bounded(lines[n]["text"].as_str().unwrap_or_default(), borne);
             let consigne = match ouvertes.as_slice() {
                 [] => String::new(),
-                [seule] => lines[*seule]["text"].as_str().unwrap_or_default().to_string(),
+                [seule] => texte_de(*seule),
                 [premiere, suites @ ..] => {
-                    let mut c = format!("Request (opened at {}): {}", lines[*premiere]["at"].as_str().map(str::to_string).unwrap_or_else(|| lines[*premiere]["at"].to_string()), lines[*premiere]["text"].as_str().unwrap_or_default());
+                    let mut c = format!("Request (opened at {}): {}", lines[*premiere]["at"].as_str().map(str::to_string).unwrap_or_else(|| lines[*premiere]["at"].to_string()), texte_de(*premiere));
                     for n in suites {
-                        c.push_str(&format!("\nFollow-up: {}", lines[*n]["text"].as_str().unwrap_or_default()));
+                        c.push_str(&format!("\nFollow-up: {}", texte_de(*n)));
                     }
                     c
                 }
             };
             // **A turn receives the turns before it** (c7, 23 Nov 2026): the conversation's earlier requests and what the
             // teammate answered, the last ones in full, the older ones bounded, before this turn's request.
-            let consigne = match conversation_before(&lines[..ouverture]) {
+            // The conversation's policy, the launch's `conversation` over the declared one.
+            let conversation = ouvertes
+                .first()
+                .and_then(|n| lines[*n].get("conversation").filter(|c| c.is_object()))
+                .and_then(|c| {
+                    let mut v = serde_json::to_value(&policy.conversation).ok()?;
+                    merge_json(&mut v, c);
+                    serde_json::from_value::<crate::backend::ConversationPolicy>(v).ok()
+                })
+                .unwrap_or_else(|| policy.conversation.clone());
+            let consigne = match conversation_before(&lines[..ouverture], &conversation, borne) {
                 Some(avant) if !consigne.is_empty() => format!("{avant}\n\nThis turn's request:\n{consigne}"),
                 _ => consigne,
             };
