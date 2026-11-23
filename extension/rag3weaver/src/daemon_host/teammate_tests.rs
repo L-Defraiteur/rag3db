@@ -40,6 +40,7 @@ mod judge_all;
 mod land_each_turn;
 mod land_many_files;
 mod lands_what_commands_made;
+mod mid_turn_delivery;
 mod missing_command;
 mod mode_auto_v1;
 mod nom_d_enfant;
@@ -59,7 +60,6 @@ mod text_first;
 mod turn_changes;
 mod turn_failures;
 mod web;
-mod witness_host_data;
 
 /// **A witness of the approval card** declares the approval mode, committed (since 22 Nov 2026 a new project's
 /// template is in the auto mode, where every command the sandbox runs passes).
