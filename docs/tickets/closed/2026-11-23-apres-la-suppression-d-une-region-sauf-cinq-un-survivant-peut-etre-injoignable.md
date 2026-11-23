@@ -66,3 +66,20 @@ les arêtes basses menaient à des lignes retirées, rien n'était rattaché. Au
 
 **Le correctif** : dans ce cas, la recherche part du point d'entrée bas, et le nœud est rattaché dans les deux
 sens s'il n'est pas trouvé. Les quatre graines passent à 5/5 et 5/5, et les cinq cas de `RegionDelete` sont verts.
+
+## Rejouer le balayage à graines
+
+Pour un défaut de ce genre, rouge une fois sur cent dans un cas de l'index vectoriel : chaque graine fixe le tirage
+de la couche haute, et une graine rouge rend le cas rejouable. Depuis le dossier du binaire
+(`build/release/test/transaction/concurrence`), sous `poste cpu` (300 tours, une heure environ à luciepc) :
+
+```bash
+CAS='Cases/RegionDelete.SurvivorsStayReachableAndTheNearestAreRight/SetNullFirstAllButFive'
+for s in $(seq 1 300); do
+  RAG3DB_HNSW_SEED=$s ./concurrence_test --gtest_filter="$CAS" > /tmp/graine.log 2>&1 \
+    || echo "graine $s : $(grep -h 'region delete' /tmp/graine.log)"
+done
+```
+
+Une graine rouge se rejoue ensuite dix fois de suite. Si elle rougit à chaque fois, l'ordre des fils ne joue pas, et
+la graine devient un cas du test (`RegionDeleteCase{true, true, <graine>}`).
