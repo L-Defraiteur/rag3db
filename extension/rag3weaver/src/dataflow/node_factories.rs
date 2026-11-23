@@ -2000,6 +2000,7 @@ mod tests {
                 "DefineRefNode" => serde_json::json!({ "genre": "incident_type", "valeur": "v-7k2q", "definition": "a disk failure", "refs_entity": "Ref", "types_entity": "RefType" }),
                 "CreateRefTypeNode" => serde_json::json!({ "name": "invoice", "description": "un numéro de facture", "types_entity": "RefType" }),
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
+                "CallersHopNode" => serde_json::json!({ "pivot": "Symbol", "key": "name" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),
                 "LinksNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),
                 "CohesionNode" => serde_json::json!({ "entity": "Scope", "relations": "CONSUMES" }),
