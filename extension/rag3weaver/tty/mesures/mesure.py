@@ -534,14 +534,14 @@ try:
         rouge("outils : la demande d'accord ne paraît pas en 40 s")
     time.sleep(0.5)
     tout = t.tout()
-    numeros = "» read_file src/demo.rs  ⟨1⟩".encode() in tout and "» edit_file src/demo.rs  ⟨2⟩".encode() in tout
+    numeros = "» read_file src/demo.rs".encode() in tout and "» edit_file src/demo.rs".encode() in tout and "⟨".encode() not in tout
     coupe = "extrait, 4 Ko sur 16 Ko".encode() in tout
     avant = ecran_tmux()
     t0 = t.ecrire(b"\x0f")
     entre = t.attendre(b"\x1b[?1049h", apres=t0, borne=5) is not None
-    deux = voir(t, "⟨2/2⟩", apres=t0, borne=5) is not None
+    deux = voir(t, "appel 2 sur 2", apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[D")
-    # ratatui ne réécrit que les cellules qui changent : « ⟨1/2⟩ » ne part pas entier ; une ligne que
+    # ratatui ne réécrit que les cellules qui changent : « appel 1 sur 2 » ne part pas entier ; une ligne que
     # seule la lecture porte, si.
     un = voir(t, "let x1 = 1;", apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[F")

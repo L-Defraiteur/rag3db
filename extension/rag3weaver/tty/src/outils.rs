@@ -51,11 +51,12 @@ impl Appel {
             .find_map(|k| self.arguments[k].as_str().map(|v| v.lines().next().unwrap_or_default().trim()).filter(|v| !v.is_empty()).map(str::to_string))
     }
 
-    /// La ligne d'historique de son début : `» read_file src/vue.rs  ⟨3⟩`.
+    /// La ligne d'historique de son début : `» read_file src/vue.rs`, sans numéro : un nombre nu à côté d'une
+    /// commande se lit comme un compte de répétitions (23 nov. 2026) ; Ctrl-O ouvre le dernier appel et ← → les parcourt.
     pub fn ligne(&self) -> String {
         match self.cible() {
-            Some(c) => format!("» {} {c}  ⟨{}⟩", self.outil, self.n),
-            None => format!("» {}  ⟨{}⟩", self.outil, self.n),
+            Some(c) => format!("» {} {c}", self.outil),
+            None => format!("» {}", self.outil),
         }
     }
 
@@ -138,7 +139,7 @@ impl Appel {
         let Some((mut v, reste, quoi)) = self.contenu(Some(max)) else { return Vec::new() };
         let mut dit = Vec::new();
         if reste > 0 {
-            dit.push(format!("{reste} lignes de plus : Ctrl-O ⟨{}⟩", self.n));
+            dit.push(format!("{reste} lignes de plus : Ctrl-O pour tout voir"));
         }
         if let Some(c) = self.coupe() {
             dit.push(c);
@@ -282,14 +283,14 @@ mod tests {
     fn a_call_is_numbered_and_says_what_it_targets() {
         let a = Appel::debut(3, "read_file", r#"{"path":"src/vue.rs","offset":1,"limit":50}"#);
         assert_eq!(a.cible().as_deref(), Some("src/vue.rs"));
-        assert_eq!(a.ligne(), "» read_file src/vue.rs  ⟨3⟩");
+        assert_eq!(a.ligne(), "» read_file src/vue.rs");
         let g = Appel::debut(4, "grep_files", r#"{"pattern":"fn main"}"#);
-        assert_eq!(g.ligne(), "» grep_files fn main  ⟨4⟩");
+        assert_eq!(g.ligne(), "» grep_files fn main");
         // Lucie, 15 nov. : « run command faut que je voie quelle commande ».
-        assert_eq!(Appel::debut(7, "run_command", r#"{"command":"git status","timeout_s":60}"#).ligne(), "» run_command git status  ⟨7⟩");
-        assert_eq!(Appel::debut(8, "usages", r#"{"name":"Vue::trame"}"#).ligne(), "» usages Vue::trame  ⟨8⟩");
-        assert_eq!(Appel::debut(5, "step_done", "{}").ligne(), "» step_done  ⟨5⟩");
-        assert_eq!(Appel::debut(6, "x", "pas du json").ligne(), "» x  ⟨6⟩", "des arguments illisibles ne cassent rien");
+        assert_eq!(Appel::debut(7, "run_command", r#"{"command":"git status","timeout_s":60}"#).ligne(), "» run_command git status");
+        assert_eq!(Appel::debut(8, "usages", r#"{"name":"Vue::trame"}"#).ligne(), "» usages Vue::trame");
+        assert_eq!(Appel::debut(5, "step_done", "{}").ligne(), "» step_done");
+        assert_eq!(Appel::debut(6, "x", "pas du json").ligne(), "» x", "des arguments illisibles ne cassent rien");
     }
 
     /// Un `read_file` se relit : son chemin, sa plage, ses lignes sans leur numéro.
@@ -310,7 +311,7 @@ mod tests {
         assert_eq!((v[0].genre, v[0].langue.as_str()), (Genre::Code, "rs"));
         assert_eq!(v[0].texte.lines().count(), 12);
         assert_eq!(v[1].genre, Genre::Note);
-        assert_eq!(v[1].texte, "  src/b.rs · lignes 1-30 sur 30 · 18 lignes de plus : Ctrl-O ⟨2⟩");
+        assert_eq!(v[1].texte, "  src/b.rs · lignes 1-30 sur 30 · 18 lignes de plus : Ctrl-O pour tout voir");
     }
 
     /// Un `.md` lu se rend comme de la prose, ses blocs de code dans leur langue.
