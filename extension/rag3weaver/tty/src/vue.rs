@@ -1288,6 +1288,9 @@ mod card_tests;
 /// Ctrl-C stops the turn, not the session (23 November 2026), in a file of its own.
 #[cfg(test)]
 mod ctrl_c_tests;
+/// What changed is read in the view as in `--plain` (23 November 2026).
+#[cfg(test)]
+mod host_lines_tests;
 
 #[cfg(test)]
 mod tests {

@@ -187,6 +187,13 @@ mod tests {
         assert_eq!(entete(&etat(), "/c/code-coeur/backend.json", "doc"), "rag3db · master · tâche doc");
         assert_eq!(entete(&etat(), "/inconnu", "x"), "tâche x");
     }
+
+    /// **A conversation, not a task** (c7, 23 Nov.: the header said « tâche 23-11-06h38 » to a person who opened a
+    /// conversation).
+    #[test]
+    fn the_header_says_conversation() {
+        assert_eq!(entete(&etat(), "/inconnu", "23-11-06h38"), "conversation 23-11-06h38");
+    }
 }
 
 /// Un span de coloration : octets `[debut, fin)` du texte, et sa sorte.
