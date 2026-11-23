@@ -1148,18 +1148,18 @@ impl DaemonHost {
             }
             self.journal.ajouter(backend_id, run_id, ajouts);
         }
-        let reponse = |text: &str| {
-            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
+        let reponse = |text: &str, vide: Option<String>| {
+            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers, "empty_reply": vide })
         };
         match fait {
             Ok(run) => {
                 if let Some(e) = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get_mut(backend_id) {
                     e.last_call = run.last_call;
                 }
-                Ok(reponse(&run.text))
+                Ok(reponse(&run.text, run.empty_reply.clone()))
             }
             // Un tour arrêté n'est pas une panne : il dit qui l'a arrêté.
-            Err(_) if arrete.is_some() => Ok(reponse("")),
+            Err(_) if arrete.is_some() => Ok(reponse("", None)),
             Err(e) => Err(e),
         }
     }
