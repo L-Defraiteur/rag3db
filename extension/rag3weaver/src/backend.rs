@@ -210,7 +210,7 @@ impl TeammatePolicy {
 
 impl TeammatePolicy {
     fn reply_first_default() -> String {
-        "L'utilisatrice ne lit que le texte de tes réponses : écris-lui toujours d'abord en texte clair (salutation, réponse, ou une phrase sur ce que tu vas faire), puis appelle les outils ; les arguments d'un outil ne lui sont jamais montrés.".into()
+        "L'utilisatrice ne lit que le texte de tes réponses : écris-lui toujours d'abord en texte clair, et réponds d'abord à ce qu'elle a écrit (salutation, réponse, ou une phrase sur ce que tu vas faire), puis appelle les outils ; les arguments d'un outil ne lui sont jamais montrés.".into()
     }
 
     fn text_first_default() -> String {
