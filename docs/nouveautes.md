@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Le terminal reçoit de nouveau les messages qui suivent la demande.** La porte choisie au lancement
+  part avec la demande qui ouvre la tâche, et plus avec les consignes suivantes, que l'hôte refusait.
 - 23 novembre 2026 — **Un chemin que tu écris se lit sans carte, pendant dix minutes.** Quand ta demande cite un fichier
   ou un dossier hors du projet, l'agent peut le lire tout de suite : l'hôte lui en ouvre le dossier en lecture seule,
   pour dix minutes, et le dit en une ligne. Seuls tes mots comptent, jamais un chemin venu d'un agent ou d'un fichier
