@@ -701,6 +701,13 @@ const WRITING_TOOLS: [&str; 5] = ["write", "replace_text", "replace_lines", "ins
 
 impl StepWork {
     fn note(&mut self, tool: &str, args: &Value, result: &str) {
+        // Every result, bounded, for the declared `Previous step` to choose its facts from (24 Nov 2026).
+        const RESULTS_KEPT: usize = 30;
+        const RESULT_CHARS: usize = 4_000;
+        self.results.push((tool.to_string(), result.chars().take(RESULT_CHARS).collect()));
+        if self.results.len() > RESULTS_KEPT {
+            self.results.remove(0);
+        }
         let path = args["path"].as_str().unwrap_or_default();
         if tool == "read_file" && !path.is_empty() {
             // The range the tool says it rendered (« — lines 1-3 of 3 »), else the one asked.

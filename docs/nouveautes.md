@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Ce que l'index a trouvé passe au pas suivant.** Quand un pas de l'agent a cherché par
+  l'index (`search_code`, `usages`, `callees`, `impact`, `outline`), le bloc « Previous step » du pas d'après garde les
+  lignes « nom — chemin:ligne » qu'il a rendues, avant toute prose, avec la consigne de les citer telles quelles :
+  l'agent qui écrit son rapport dans un pas neuf ne les invente plus de mémoire. La liste des outils et le nombre de
+  lignes se règlent dans le nœud `previous_step` (`fact_tools`, `max_facts`).
 - 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
   de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
   cours, au lieu d'attendre le pas suivant.
