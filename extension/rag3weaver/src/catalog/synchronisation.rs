@@ -133,7 +133,7 @@ fn orpheline(open: &SnapshotSession) -> bool {
 }
 
 /// Une durée lisible : c'est sur elle qu'un appelant décide d'un `takeover`.
-fn elapsed_since(opened_at: i64) -> String {
+pub(crate) fn elapsed_since(opened_at: i64) -> String {
     let secs = ((now_ms() - opened_at).max(0) / 1000) as u64;
     match secs {
         0..=59 => format!("{secs} s"),
@@ -391,6 +391,22 @@ impl Catalog {
         self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
         self.oublier_les_sessions(entity_name);
         Ok(())
+    }
+
+    /// **The synchronisations of an entity that stopped before their end** (23 Nov 2026): their sessions suspended, or
+    /// orphans (their process gone, or no owner said). What a read says as « index incomplet ».
+    pub fn interrupted_sessions(&mut self, entity_name: &str) -> Result<Vec<(String, SnapshotSession)>, CatalogError> {
+        let mut v = Vec::new();
+        for (json, _) in self.sessions_ouvertes_de(entity_name)? {
+            let Ok(scope) = serde_json::from_str::<BTreeMap<String, CypherValue>>(&json) else { continue };
+            if let Some(open) = self.open_snapshot_session(entity_name, &scope)? {
+                if open.suspended_at.is_some() || orpheline(&open) {
+                    v.push((json, open));
+                }
+            }
+        }
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(v)
     }
 
     /// **Abandonner une session** : elle se ferme, rien n'est retiré.

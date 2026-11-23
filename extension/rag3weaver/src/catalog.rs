@@ -37,6 +37,7 @@ mod shared_text_read_tests;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
+pub(crate) use synchronisation::elapsed_since;
 use crate::hash::content_hash;
 use crate::node_id_cache::NodeIdCache;
 use crate::records::{DrainStats, EntityRecord, FlushResult, PendingWork, RefOrUuid, RelationRecord};
