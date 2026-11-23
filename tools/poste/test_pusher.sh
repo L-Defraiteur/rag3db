@@ -983,4 +983,22 @@ PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
   && ok "un lot de docs déposé pendant un train rust : poussé avant la fin de la passe, le train poussé ensuite sans seconde passe" \
   || ko "docs pendant un train rust : vu pendant la passe ? $([ -s "$D/dl-vu" ] && echo oui || echo NON) ; docs $(on_master dl-d && echo poussé || echo 'pas poussé'), rust $(on_master dl-r && echo poussé || echo 'pas poussé'), passes $(( $(calls "$D/pass_calls") - calls0 ))"
 rm -f "$D/pass-hook" "$D/dl-vu"; P dequeue dl-d > /dev/null 2>&1
+# 52 (suite). With a train B in the second slot, the docs lane stays closed (23 Nov., c7): a docs lot landing would
+# make the guard repose A, and B, speculative on A's head, would be thrown away (a replay of 20 to 60 min). The docs
+# lot waits for the next step; A and B land.
+h1=$(lot dm-a extension/rag3weaver/src/dma.rs 'fn dma() {}'); h2=$(lot dm-b extension/rag3weaver/src/dmb.rs 'fn dmb() {}')
+P enqueue dm-a dm-a "$h1" rust some_witness e2e_code - - author-l > /dev/null; P enqueue dm-b dm-b "$h2" rust some_witness e2e_code - - author-l > /dev/null
+echo VERT > "$D/outcomes.d/dm-a"; echo VERT > "$D/outcomes.d/dm-b"
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B dm-d origin/master
+mkdir -p "$D/author/docs/essai"; echo "une autre page" > "$D/author/docs/essai/dm-d.md"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm dm-d && git -C "$D/author" push -q origin HEAD:dm-d; hd=$(git -C "$D/author" rev-parse HEAD)
+cat > "$D/pass-hook" <<HOOK
+bash $(printf %q "$PUSHER") enqueue dm-d dm-d $hd docs - - - - author-l > /dev/null 2>&1
+for i in \$(seq 1 8); do grep -qP '\tdm-d\tpoussé' "$D/pusher/log.tsv" && { echo vu > "$D/dm-vu"; break; }; sleep 1; done
+HOOK
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+[ ! -s "$D/dm-vu" ] && on_master dm-a && on_master dm-b && grep -q "^dm-d	" "$D/pusher/queue.tsv" \
+  && ok "un train B au créneau 2 : la voie des docs fermée, le lot de docs attend le pas suivant, A et B poussés" \
+  || ko "docs avec un train B : poussé pendant la passe ? $([ -s "$D/dm-vu" ] && echo OUI || echo non) ; A $(on_master dm-a && echo poussé || echo non), B $(on_master dm-b && echo poussé || echo non)"
+rm -f "$D/pass-hook" "$D/dm-vu"; P dequeue dm-d > /dev/null 2>&1
 exit $red
