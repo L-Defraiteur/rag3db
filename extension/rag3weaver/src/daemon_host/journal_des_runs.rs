@@ -732,6 +732,19 @@ mod tests {
         assert_eq!(appels[0]["raw"]["text"], "Je regarde.");
         assert_eq!(appels[0]["raw"]["tool_calls"][0]["name"], "look");
         assert_eq!(appels[1]["run"], "agent-2");
+    /// **A host whose data went away never recreates them** (23 Nov 2026: a reindex run of a witness's folder was
+    /// written after the witness, and recreated its deleted temporary folder): a run is not written when the folder
+    /// that holds the runs' root is gone.
+    #[test]
+    fn a_run_is_not_written_when_the_hosts_data_went_away() {
+        let d = tempfile::tempdir().unwrap();
+        let donnees = d.path().join("donnees");
+        std::fs::create_dir_all(&donnees).unwrap();
+        let racine = donnees.join("runs");
+        let journal = JournalDesRuns::new(racine.clone());
+        std::fs::remove_dir_all(&donnees).unwrap();
+        let _ = journal.deposer("b1", "graph-1", serde_json::json!({ "evenements": [] }));
+        assert!(!donnees.exists(), "the host's vanished data folder is not recreated");
     }
     use crate::events::Event;
 
