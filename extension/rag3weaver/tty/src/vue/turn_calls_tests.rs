@@ -62,3 +62,16 @@ fn the_journal_keeps_a_trace_of_each_call_that_the_screen_does_not_show() {
     let cap = crate::anim::Capacites { couleurs: crate::anim::Niveau::Vraie, glyphes: crate::anim::Glyphes::Surs };
     assert!(crate::code::lignes(trace[0], &theme, cap, 160, None).is_empty(), "the screen shows no trace");
 }
+
+/// The host's mailbox line for an empty answer (`report` with `cut: true`) is not said a second time, even with the
+/// steps shown: the run's event already said it.
+#[test]
+fn the_hosts_cut_report_is_not_said_twice() {
+    let mut v = Vue::new(160, true);
+    v.montrer_etapes = true;
+    v.ligne_de_boite(&json!({ "id": "b/t:1", "from": "supervisor", "kind": "request", "text": "x" }));
+    v.trame(&ev(json!({ "kind": "LlmCall", "completion_tokens": 0, "finish": "MaxTokens" })));
+    v.ligne_de_boite(&json!({ "id": "b/t:2", "from": "host", "kind": "report", "text": "réponse vide du modèle au pas 1 : le budget de sortie est épuisé (MaxTokens) ; le pas suivant reprend", "cut": true, "why": "le budget de sortie est épuisé (MaxTokens)" }));
+    let t: Vec<String> = v.prendre_lignes().iter().filter(|l| l.genre != Genre::Trace).map(|l| l.texte.clone()).collect();
+    assert_eq!(t.iter().filter(|l| l.contains("réponse vide du modèle")).count(), 1, "{t:#?}");
+}
