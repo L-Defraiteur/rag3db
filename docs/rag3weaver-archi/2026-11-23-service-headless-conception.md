@@ -35,27 +35,66 @@ tirés. Authentification : `Authorization: Bearer <jeton>`, le jeton lu d'un fic
 | `sessions.stream(id)` | `GET /v1/sessions/{id}/events` | SSE, reprise par `Last-Event-ID` |
 | `endpoints.set(registre)` / `endpoints.list()` | `PUT` / `GET /v1/endpoints` | le registre (§ 5) |
 
-**Les événements du flux**, typés, numérotés (le numéro d'émission commun du ticket du même jour) : `text` (morceaux
-de la réponse), `thinking`, `tool_call`, `tool_result`, `facts` (fichiers changés, commits), `needs` (une décision
-humaine attendue), `ended {code, landed}` avec **un code par issue** : `done`, `failed`, `blocked`, `stopped`.
+**Le transport : HTTP et SSE**, pas de WebSocket : un flux d'un seul sens suffit (les commandes passent par les
+routes), la reprise est native (`Last-Event-ID`), et un SSE traverse les mandataires sans réglage.
+
+**Les événements du flux** (la forme proposée par tty, tirée de ce que fait le terminal aujourd'hui). **Un flux par
+conversation, filtré et ordonné par l'hôte**, chaque événement portant `{seq, at_ms, conversation, turn, type, …}`,
+`seq` étant le numéro d'émission commun posé par le bus (le ticket du même jour) :
+
+- `turn.started {request_id, text, by}` · `turn.ended {code: done | failed | blocked | stopped | empty, by, landed, text}`
+- `model.text {delta}` · `model.thinking {iteration, delta, summary}` · `model.thinking.end {iteration, chars}`
+- `model.call {iteration, model, finish, prompt_tokens, cached_tokens, completion_tokens, context_window, since_reduction, empty}`
+- `tool.started {call_id, tool, args, rank}` · `tool.finished {call_id, ok, ms, bytes, excerpt, error}`
+- `card.opened {card_id, tool, class, command, scope}` · `card.closed {card_id, decision, by}`
+- `facts.landed {files, into, commits, git}` · `facts.held {why, command}` · `facts.changed {files}` · `facts.uncommitted {paths}`
+- `context.reduced {window, window_tokens, before, after, reduction, text}`
+- `background.ended {handle, code, duration_ms, tail}` · `message {from, to, text}`
+- `stream.gap {missed}`, quand le tampon de reprise ne couvre plus le curseur.
+
+**Ce que l'hôte fait pour le client** (que le terminal fait seul aujourd'hui) : il filtre par conversation dès son
+premier run, il fond le flux et la boîte en une seule source ordonnée, il n'envoie jamais les copies de fin de pas
+(`origin: host_copy`), il donne le rang de chaque outil, et il sert les tours d'une conversation rouverte
+(`GET /v1/sessions/{id}/turns`, texte, appels et `at_ms` de chaque tour). S'y ajoute la réponse à une carte :
+`POST /v1/sessions/{id}/cards/{card_id}` (`card.answer`).
 
 ## 2. Le service
 
-`rag3weaver serve --config registre.toml --data <dir> --listen 127.0.0.1:7970 --token-file <f>` : sans systemd ni
-écran, tout par chemins. Les journaux en JSON par ligne sur la sortie d'erreur, plus le journal des runs. Sans
-humain, une carte d'accord n'attend pas : la politique déclarée tranche (le juge, ou le refus), sinon la session
-finit en `blocked`.
+**Le nom** : la commande livrée s'appelle `rag3weaver`, et `rag3weaver serve` est un alias de `daemon`.
+
+`rag3weaver serve --config <registre> --data <dossier> [--address 127.0.0.1:7970] [--token-file <f>]` : sans
+systemd ni écran. `--data` pose les dossiers (`RAG3WEAVER_DATA_DIR`, `_CONFIG_DIR`, `_STATE_DIR`, `_CACHE_DIR`). Le
+service n'a pas d'arrêt par inactivité, puisque personne ne le relancerait, et **il ferme proprement ses bases sur
+SIGTERM et SIGINT** : un arrêt brutal casse le WAL, et un témoin le prouve. Les journaux vont en JSON par ligne sur la
+sortie d'erreur, à côté du journal des runs. Sans humain, une carte d'accord n'attend pas : la politique déclarée
+tranche (le juge, ou le refus), sinon la session finit en `blocked`.
+
+**L'authentification** : `Authorization: Bearer <jeton>`, le jeton lu d'un fichier, sur toutes les routes de `/v1`.
+Le jeton d'utilisatrice marque une décision humaine (une carte). **Une adresse autre que la boucle locale est
+refusée sans `--token-file`** ; le chiffrement est l'affaire d'un mandataire devant le service (documenté), pas du
+service.
 
 ## 3. Les SDK
 
-Deux clients minces, **Python** (pip) et **TypeScript** (npm), tirés du même schéma. Ils lancent le binaire
-(`Service.start()`) ou se branchent sur un service déjà lancé ; le binaire est embarqué par plateforme ou téléchargé
-au premier usage, sur le modèle de lucivy.
+Deux clients minces, **Python** (pip) et **TypeScript** (npm), tirés du même schéma, sans aucune FFI vers la lib :
+ils parlent HTTP au service. `rag3weaver.serve()` lance le binaire livré en sous-processus, ou le client se branche sur
+un service déjà lancé.
 
-## 4. Le paquet
+## 4. Le paquet (la part de G)
 
-Une image Docker d'abord, puis des roues pip et des paquets npm par plateforme ; la lib rag3db embarquée et trouvée
-par `$ORIGIN` ; aucun modèle d'embarquement embarqué : l'embarquement passe par un point d'accès déclaré.
+- **Le cœur livré : `bin/` + `lib/`**, le binaire lié avec `-Wl,-rpath,$ORIGIN/../lib`, et la lib rag3db épinglée
+  copiée à côté. C'est la seule lib à nous ; lucivy et codeparsers sont liés dedans. Il n'y a qu'une chose à bâtir,
+  pour toutes les formes.
+- **L'image Docker d'abord** :
+  - Debian slim, git, ca-certificates et tini ;
+  - deux volumes : `/data` (local, pas de NFS) et `/config` ;
+  - `ENTRYPOINT tini -- rag3weaver serve …`, avec un délai d'arrêt large ;
+  - bâtie sans `burn-embedder` ni `burn-ocr`, inutiles devant un vLLM.
+- **pip et npm par plateforme, sur le modèle de ruff et uv**, et non de lucivy, puisque nous livrons un serveur et
+  non un addon :
+  - une roue par plateforme qui porte `bin/` + `lib/` et le client Python pur ;
+  - un paquet npm `rag3weaver` (client et lanceur) avec des `optionalDependencies` par plateforme (`os`, `cpu`, `libc`).
+- **Linux d'abord** : macOS demande un bâti de la lib à part.
 
 ## 5. Le registre
 
@@ -92,9 +131,11 @@ Anthropic y restent des entrées de leur protocole.
 1. **archi** : le schéma `/v1` (OpenAPI) et le registre (le format ci-dessus, lu au démarrage et par
    `endpoints.set`) ; puis la façade `/v1/sessions` sur l'existant, avec un témoin par route et le flux typé.
 2. **tty**, en parallèle : les événements typés et leur ordre (le relais, le numéro d'émission), le code de fin.
-3. **G**, en parallèle : `serve` sans systemd, l'image Docker, les journaux sur la sortie d'erreur.
-4. **lucivy**, dès le schéma posé : les deux SDK tirés du schéma, et la façon d'embarquer ou de télécharger le
-   binaire.
+3. **G**, en parallèle : `bin/` + `lib/` à `$ORIGIN`, `serve` sans systemd avec l'arrêt propre et son témoin,
+   l'image Docker, les journaux sur la sortie d'erreur.
+4. **lucivy**, dès le schéma posé : les deux SDK tirés du schéma, et les paquets pip et npm par plateforme.
+5. **tty**, dès le schéma posé : le témoin de conformité, un faux hôte qui émet chaque type et un client minimal qui
+   les lit tous.
 
 ## Les questions pour Lucie
 
