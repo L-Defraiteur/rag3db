@@ -37,6 +37,7 @@ mod conversation_memory;
 mod turns_policy;
 mod fallow_windows;
 mod model_call_record;
+mod tools_only;
 mod copy_lands;
 mod turn_failures;
 mod bac_outside_root;
