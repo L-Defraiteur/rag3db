@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
+  puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
+  fermer une étape n'est pas une réponse.
 - 23 novembre 2026 — **Une réponse vide du modèle dit pourquoi, et le travail reprend.** Quand le modèle rend un
   appel sans texte ni outil, la boîte de l'agent le dit avec sa raison (« coupée à la limite de sortie », la fin
   donnée par le fournisseur, les jetons de réflexion) et le pas suivant reprend, au lieu d'un pas fini en silence. Une
