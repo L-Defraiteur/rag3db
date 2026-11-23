@@ -7,11 +7,13 @@
 %% param: exclude json = [] -- Écarter les résultats dont le texte contient l'un de ces mots (liste, ["test"]) ; sans tenir compte de la casse, sauf exact. Avant la limite, pour chaque signal.
 %% param: must json = [] -- Ne garder que les résultats dont le texte contient chacun de ces mots (liste) ; sans tenir compte de la casse, sauf exact.
 %% param: phrase json = [] -- Ne garder que les résultats dont le texte contient chacune de ces phrases, telles quelles (liste) ; sans tenir compte de la casse, sauf exact.
+%% param: author string = "" -- Only what this author wrote: « me » (the agent this call is made for, given by the host, never by the caller), an agent key, or « * » / empty for every author. Added to the filter of the options, never in its place.
+%% param: swarm string = "" -- Only this swarm: « mine », a name, or « * » / empty. Accepted before the swarms exist: it filters nothing yet.
 %% param: exact bool = false -- true : exclude, must et phrase tiennent compte de la casse.
 %% result: render.results
 
 graph LR
-    source["SearchSourceNode(target_name=$target, query=$query, options=$options, default_filter=$default_filter, exclude=$exclude, must=$must, phrase=$phrase, exact=$exact)"]
+    source["SearchSourceNode(target_name=$target, query=$query, options=$options, author=$author, swarm=$swarm, default_filter=$default_filter, exclude=$exclude, must=$must, phrase=$phrase, exact=$exact)"]
     bm25["BM25SearchNode"]
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
