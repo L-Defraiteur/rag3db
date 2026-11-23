@@ -191,6 +191,10 @@ pub struct Vue {
     attente_depuis: Instant,
     /// The first Ctrl-C at rest: a second within two seconds quits.
     ctrl_c_at: Option<Instant>,
+    /// The teammate wrote prose in this turn (a report, an answer…).
+    spoke: bool,
+    /// The turn's last done step and its header: the answer of a turn without prose (23 Nov. 2026).
+    done_step: Option<(String, String)>,
     /// Le modèle du dernier appel, tel que l'hôte le nomme.
     modele: Option<String>,
     /// What the host says the turn waits for (`Waiting`), until `Resumed` (tty-25, second half).
@@ -270,6 +274,8 @@ impl Vue {
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
             ctrl_c_at: None,
+            spoke: false,
+            done_step: None,
             modele: None,
             attente_dite: None,
             texte_coule: String::new(),
@@ -615,8 +621,15 @@ impl Vue {
             self.nom_agent = Some(n.to_string());
         }
         match (l["from"].as_str(), l["kind"].as_str()) {
-            (Some("supervisor"), Some("request" | "instruction")) => self.repondu = false,
-            (Some("teammate"), Some("report" | "answer" | "question" | "approval" | "proposal" | "message")) => self.repondu = true,
+            (Some("supervisor"), Some("request" | "instruction")) => {
+                self.repondu = false;
+                self.spoke = false;
+                self.done_step = None;
+            }
+            (Some("teammate"), Some("report" | "answer" | "question" | "approval" | "proposal" | "message")) => {
+                self.repondu = true;
+                self.spoke = true;
+            }
             _ => {}
         }
         let mut corps_seul: Option<String> = None;
@@ -625,7 +638,9 @@ impl Vue {
         if !self.montrer_etapes {
             let texte = l["text"].as_str().unwrap_or("");
             // L'hôte ne parle qu'au fil de la tâche (« tâche ouverte : … ») : en sourdine.
-            if l["from"] == "host" && l["kind"] != "ended" {
+            // What changed in the turn and what commands produced are read as in `--plain` (trial of the view, 23 Nov. 2026).
+            let changed = l["kind"] == "turn_changes" || (l["kind"] == "report" && l.get("uncommitted").is_some());
+            if l["from"] == "host" && l["kind"] != "ended" && !changed {
                 return;
             }
             if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("plan" | "edit_plan" | "started")) {
@@ -647,9 +662,18 @@ impl Vue {
                 }
             }
             if l["from"] == "teammate" && l["kind"] == "step_done" {
+                if !texte.trim().is_empty() {
+                    self.done_step = Some((crate::boite::en_tete(l), texte.to_string()));
+                }
                 return;
             }
             if l["from"] == "host" && l["kind"] == "ended" {
+                // A turn without prose answers with its done step (trial of the view, 23 Nov. 2026).
+                if let Some((tete, t)) = self.done_step.take().filter(|_| !self.spoke) {
+                    self.clore();
+                    self.valider_avec_tete(Genre::Boite, &tete, &t);
+                    self.repondu = true;
+                }
                 self.changer(Etat::Fini(texte.to_string()));
                 return;
             }
