@@ -157,8 +157,10 @@ telle condition", "sur tel nœud, overrider une autre sortie vers ça" ».
 
 **Les sélecteurs**, du plus étroit au plus large :
 - **par nom** : un nœud du graphe livré (`%% between: reply.text`), ce que la section précédente prévoit ;
-- **par genre de nœud** : `%% on: kind=Decide`, `kind=LlmNode` (« tout appel au modèle »), `kind=RunCommandNode`
-  (« toute commande »), `kind=ForEach` ;
+- **par genre de nœud** : `%% on: kind=<type>`, **n'importe quel type de nœud déclaré**, sans liste fermée de genres
+  admis. Lucie : « tout node type : plutôt qu'en prendre un de spécifique dans le DAG par nom, tu te branches sur tous
+  ceux qui sont de ce type ». `kind=LlmNode` (« tout appel au modèle »), `kind=RunCommandNode` (« toute commande »),
+  `kind=Decide` ou `kind=ForEach` ne sont que des exemples. **Les seules exceptions sont les gardes scellées**, plus bas ;
 - **par prédicat** sur les paramètres déclarés ou sur un port : `%% on: port=text`, `%% on: kind=LlmNode, via=vertex`.
   Ce n'est qu'une égalité sur ce que le nœud déclare, jamais du code ;
 - **l'override d'une sortie** d'un nœud nommé : `%% redirect: check.no -> again`, qui branche une sortie ailleurs que
@@ -200,6 +202,6 @@ Le vrai risque est la lisibilité, d'où les garde-fous.
 
 **Par où commencer** :
 1. **par nom**, avec `between` et `redirect` : c'est ce dont la relance après une réponse a besoin tout de suite ;
-2. **par genre**, d'abord sur des genres à faible fréquence (`Decide`, `RunCommandNode`, `ForEach`), avec le composé
-   affiché et le « n'a rien touché » ;
+2. **par genre**, sur tout type déclaré, gardes scellées exceptées, avec le composé affiché et le « n'a rien touché » ;
+   la mesure avant et après vaut pour un type de nœud fréquent ;
 3. **par prédicat** sur les paramètres, en dernier, quand les deux premiers ont servi.
