@@ -113,3 +113,9 @@ LockBench.AutoCheckpointIsNotPostponedForeverUnderWritersWithoutAGap
 # docs/coeur-cpp/tickets/2026-11-16-un-create-rel-table-retient-un-ecrivain-au-dela-de-sa-duree.md).
 # Il revient à la comparaison quand ce ticket est fermé.
 TwentyWriters.DdlEveryMinute
+#
+# Une suppression de toute une région sauf cinq lignes, par SET NULL puis DELETE, laisse parfois un
+# survivant injoignable (4 sur 5) et les plus proches du centre faux : rouge environ une fois sur cent,
+# avec ou sans le correctif des anciens voisins du 21 novembre (1 sur 121 avec, 1 sur 100 sans, hotfixs,
+# 23 novembre). Ticket docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-23-apres-la-suppression-d-une-region-sauf-cinq-un-survivant-peut-etre-injoignable.md.
+Cases/RegionDelete.SurvivorsStayReachableAndTheNearestAreRight/SetNullFirstAllButFive
