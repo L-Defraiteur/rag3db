@@ -171,4 +171,17 @@ mod tests {
         assert_eq!(ligne(1), texte[5], "le corps commence au défilement");
         assert!(ligne(11).contains("Échap"), "{:?}", ligne(11));
     }
+
+    /// **The viewer says the call's rank in words** (23 Nov. 2026: no bare number beside a command).
+    #[test]
+    fn the_viewer_says_the_rank_in_words() {
+        let appels = [lecture(1, 3), lecture(2, 40)];
+        let theme = Theme::daemon();
+        let l = lignes(&appels[1], &theme, cap(), 60, &|_, _| None);
+        let mut t = Terminal::new(TestBackend::new(60, 12)).unwrap();
+        t.draw(|f| dessiner(f, &Visionneuse { index: 1, defilement: 0 }, 2, &l, &theme, cap())).unwrap();
+        let buf = t.backend().buffer().clone();
+        let tete = (0..60).map(|x| buf[(x, 0)].symbol().to_string()).collect::<String>();
+        assert!(tete.starts_with("appel 2 sur 2 ·") && !tete.contains('⟨'), "{tete:?}");
+    }
 }
