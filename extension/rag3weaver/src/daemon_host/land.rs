@@ -159,10 +159,13 @@ impl DaemonHost {
     /// **A turn's start**, kept beside the mailbox (the task's head, or the copy's prints), and its failures emptied.
     pub(crate) fn mark_turn_start(&self, parent: &str, task: &str, files: &TeammateFiles) {
         let _ = take_turn_failures(files);
+        // The mailbox's length at the turn's start: the turn's facts are said once after it, whatever line opened
+        // the turn (a request, an instruction, an answer; 23 Nov 2026: an instruction's turn said nothing).
+        let from_line = files.mailbox().len();
         let depart = if let Some((arbre, head)) = self.task_tree_head(parent, task) {
-            json!({ "tree": arbre, "head": head })
+            json!({ "tree": arbre, "head": head, "from_line": from_line })
         } else if let Some((racine, exclus, avant)) = self.task_copy_snapshot(parent, task) {
-            json!({ "copy": racine, "exclude": exclus, "prints": avant })
+            json!({ "copy": racine, "exclude": exclus, "prints": avant, "from_line": from_line })
         } else {
             let _ = std::fs::remove_file(depart_du_tour(files));
             return;
@@ -173,12 +176,12 @@ impl DaemonHost {
     /// **The turn's facts, once** (at its end, or before it waits): from its kept start; nothing if they were said
     /// since the turn's last request.
     pub(crate) fn say_turn_facts(&self, files: &TeammateFiles) -> Option<serde_json::Value> {
+        let depart: serde_json::Value = serde_json::from_slice(&std::fs::read(depart_du_tour(files)).ok()?).ok()?;
         let boite = files.mailbox();
-        let demande = boite.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host").unwrap_or(0);
-        if boite[demande..].iter().any(|l| l["from"] == "host" && l["kind"] == "turn_changes") {
+        let debut = depart["from_line"].as_u64().map(|n| n as usize).unwrap_or(0).min(boite.len());
+        if boite[debut..].iter().any(|l| l["from"] == "host" && l["kind"] == "turn_changes") {
             return None;
         }
-        let depart: serde_json::Value = serde_json::from_slice(&std::fs::read(depart_du_tour(files)).ok()?).ok()?;
         if let (Some(arbre), Some(head)) = (depart["tree"].as_str(), depart["head"].as_str()) {
             return self.say_turn_changes(files, Path::new(arbre), head);
         }

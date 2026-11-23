@@ -829,6 +829,9 @@ impl fmt::Display for ReasoningEffort {
 /// `completion_tokens` le nombre de fragments émis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Usage {
+    /// **The provider's own finish reason** (`stop`, `length`, `tool_calls`, `content_filter`, `other`), kept beside
+    /// the normalized one (23 Nov 2026: an empty reply must say why, in the host).
+    pub provider_finish: Option<&'static str>,
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
     /// **Les jetons de raisonnement** que le fournisseur rapporte
@@ -1334,7 +1337,7 @@ impl Llm for MockLlm {
         sink.on_finish(&finish);
         Ok((
             finish,
-            Usage {
+            Usage { provider_finish: None,
                 prompt_tokens,
                 completion_tokens: emitted,
                 ms: started.elapsed().as_millis() as u64,
@@ -1580,7 +1583,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 }))
+            Ok((Finish::eos(), Usage { provider_finish: None, prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1844,7 +1847,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 };
+        let u = Usage { provider_finish: None, prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false, cache_write_tokens: 0 };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 

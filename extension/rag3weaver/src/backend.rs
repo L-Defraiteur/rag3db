@@ -192,7 +192,10 @@ impl TeammatePolicy {
         16_384
     }
     fn cut_relaunch_text_default() -> String {
-        "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
+        "Your reply was cut at the output limit before a complete tool call, and thinking counts in that limit. Think \
+         less; if you were writing a large file, write it in parts: a first part with write, then the rest with \
+         insert_lines, or several smaller files. Then call one tool now, or step_done."
+            .into()
     }
 }
 
