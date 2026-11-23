@@ -338,7 +338,6 @@ pub struct DaemonHost {
     soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
     /// A publication of the host's state runs in the background; one asked meanwhile is redone after it.
     publication_en_cours: std::sync::atomic::AtomicBool,
-    #[allow(dead_code)] // read by the background publication, the fix that follows this witness
     publication_a_refaire: std::sync::atomic::AtomicBool,
     /// The witnesses' count of the states published, and their slow state.
     #[cfg(test)]
@@ -752,6 +751,37 @@ impl DaemonHost {
     /// `GET /ide/etat`, publié quand un dépôt est attaché ou indexé, pour que la page ne
     /// relise pas tout l'hôte à chaque événement.
     pub fn publier_l_etat_de_l_hote(&self) {
+        use std::sync::atomic::Ordering::SeqCst;
+        // **In the background** (a measure on 23 November 2026: the whole state took 6.5 s with 84 backends, and opening a
+        // folder waited on it): a host that knows itself publishes in a thread of its own; a publication asked while
+        // one runs is redone once after it. A host that does not know itself (some witnesses) publishes at once.
+        let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else {
+            return self.publier_l_etat_maintenant();
+        };
+        self.publication_a_refaire.store(true, SeqCst);
+        if self.publication_en_cours.swap(true, SeqCst) {
+            return;
+        }
+        let lance = std::thread::Builder::new().name("etat-de-l-hote".into()).spawn(move || loop {
+            hote.publication_a_refaire.store(false, SeqCst);
+            hote.publier_l_etat_maintenant();
+            if hote.publication_a_refaire.load(SeqCst) {
+                continue;
+            }
+            hote.publication_en_cours.store(false, SeqCst);
+            // Asked between the check and the release: take it again, unless another thread did.
+            if !hote.publication_a_refaire.load(SeqCst) || hote.publication_en_cours.swap(true, SeqCst) {
+                break;
+            }
+        });
+        if lance.is_err() {
+            self.publication_en_cours.store(false, SeqCst);
+            self.publier_l_etat_maintenant();
+        }
+    }
+
+    /// The host's state published now, on the IDE's flux.
+    fn publier_l_etat_maintenant(&self) {
         let (statut, v) = self.handle("GET", "/etat", None, &[]);
         if statut == 200 {
             self.ide_flux().publier_etat("hote", "*", v);
