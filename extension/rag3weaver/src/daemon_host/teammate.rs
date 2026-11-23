@@ -497,6 +497,12 @@ pub(crate) fn human_turn(lignes: &[Value]) -> bool {
         .is_some_and(|l| l["by"]["kind"] == "human")
 }
 
+/// **The turn was opened by someone's request**, a human's or an agent's: its last request or instruction comes
+/// neither from the teammate nor from the host (a relaunch).
+pub(crate) fn asked_turn(lignes: &[Value]) -> bool {
+    lignes.iter().any(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
+}
+
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
     let n = lignes.iter().rposition(|l| {
         matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host" && l["by"]["kind"] == "human"
@@ -1131,7 +1137,8 @@ impl Step {
             let plans = self.files.read_plans();
             plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
         };
-        let apres_outil = self.used_tools.load(Ordering::SeqCst) && human_turn(&boite) && clot;
+        // Asked by a human or by an agent (the replay of 23 Nov 2026, 20 h 30: a supervisor's question went unanswered).
+        let apres_outil = self.used_tools.load(Ordering::SeqCst) && asked_turn(&boite) && clot;
         let depuis_l_outil = self.wrote_text.load(Ordering::SeqCst);
         let dans_le_pas = depuis_l_outil || self.wrote_any.load(Ordering::SeqCst);
         if (!dans_le_pas && silent_turn(&boite).is_some()) || (!depuis_l_outil && apres_outil) {
