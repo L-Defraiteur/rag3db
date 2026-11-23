@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **La recherche de code remonte l'appelant de ses premiers résultats.** Un symptôme nomme ce
+  que sa cause appelle : « save file fts flush sync » trouvait `flush_blob_store`, mais pas `commit_lot_after_native`,
+  qui l'appelle et n'en dit qu'un, par son appel. `search_code` suit maintenant un appel en arrière depuis ses trois
+  premiers résultats : les deux appelants qui recoupent le mieux la requête se rangent juste après leur source, marqués
+  « via call ». Le saut est déclaré dans le gabarit (`CallersHopNode`, `from=0` l'éteint).
 - 23 novembre 2026 — **La vue du terminal dit ce qui a changé, comme `--plain`.** Les fichiers modifiés dans le tour
   et ce que les commandes ont laissé hors du commit s'y lisent ; un tour où l'agent n'a pas écrit de texte répond par
   son étape faite ; le premier commit d'un dossier neuf se dit au départ, et l'en-tête dit « conversation ».

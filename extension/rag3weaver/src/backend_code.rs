@@ -477,6 +477,8 @@ const BASE_NODES: &[&str] = &[
     // Le filtre de résultats : un seuil, une exclusion — rien n'est relu.
     "FilterResultsNode",
     "RerankNode",
+    // Le saut d'appel : une lecture des usages et des lignes des appelants, rien n'est écrit.
+    "CallersHopNode",
     // Le surlignage à l'affichage : il lit la page, le service creux est hors de la base.
     "HighlightNode",
     "PaginateNode",

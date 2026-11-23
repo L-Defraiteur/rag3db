@@ -1012,6 +1012,47 @@ impl Node for UsagesNode {
     }
 }
 
+/// **La déclaration des usages lue dans la config d'un nœud** (`pivot`, `key`, `defined_by`, `used_by`, `direct`, …) :
+/// la même pour `UsagesNode` et pour tout nœud qui suit les usages (le saut d'appel de la recherche), validée de même
+/// (des identifiants seulement : ils entrent dans le texte des requêtes). `node` nomme le nœud dans les refus.
+pub fn usages_config_from(config: &serde_json::Value, node: &str) -> Result<UsagesConfig, String> {
+    let s = |k: &str| config.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    let requis = |k: &str| s(k).filter(|v| !v.is_empty()).ok_or_else(|| format!("{node}: « {k} » requis"));
+    let cfg = UsagesConfig {
+        pivot: requis("pivot")?,
+        key: requis("key")?,
+        defined_by: s("defined_by").filter(|v| !v.is_empty()),
+        used_by: s("used_by").filter(|v| !v.is_empty()),
+        direct: liste(config.get("direct")),
+        group_by: s("group_by").unwrap_or_else(|| "usage".into()),
+        usages_field: s("usages_field").unwrap_or_else(|| "usages".into()),
+        line: s("line").unwrap_or_else(|| "line".into()),
+        title: s("title").unwrap_or_else(|| "name".into()),
+        kind_field: s("kind_field").unwrap_or_else(|| "scope_type".into()),
+        path_fields: {
+            let p = liste(config.get("path_fields"));
+            if p.is_empty() { vec!["file_path".into()] } else { p }
+        },
+        line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
+        edge_mark: super::graph_walk::EdgeMark::from_config(config, node)?,
+        qualifier_field: s("qualifier_field").filter(|v| !v.is_empty()),
+    };
+    // Des identifiants seulement : ils entrent dans le texte des requêtes.
+    let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
+    let tous: Vec<&String> = [&cfg.pivot, &cfg.key, &cfg.group_by, &cfg.usages_field, &cfg.line, &cfg.title, &cfg.kind_field, &cfg.line_field]
+        .into_iter()
+        .chain(cfg.defined_by.iter())
+        .chain(cfg.used_by.iter())
+        .chain(cfg.qualifier_field.iter())
+        .chain(cfg.direct.iter())
+        .chain(cfg.path_fields.iter())
+        .collect();
+    if let Some(x) = tous.iter().find(|x| !ident(x)) {
+        return Err(format!("{node}: « {x} » n'est pas un identifiant"));
+    }
+    Ok(cfg)
+}
+
 pub struct UsagesNodeFactory;
 
 fn liste(v: Option<&serde_json::Value>) -> Vec<String> {
@@ -1026,38 +1067,8 @@ impl NodeFactory for UsagesNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let s = |k: &str| config.get(k).and_then(|v| v.as_str()).map(str::to_string);
         let requis = |k: &str| s(k).filter(|v| !v.is_empty()).ok_or_else(|| format!("UsagesNode: « {k} » requis"));
-        let cfg = UsagesConfig {
-            pivot: requis("pivot")?,
-            key: requis("key")?,
-            defined_by: s("defined_by").filter(|v| !v.is_empty()),
-            used_by: s("used_by").filter(|v| !v.is_empty()),
-            direct: liste(config.get("direct")),
-            group_by: s("group_by").unwrap_or_else(|| "usage".into()),
-            usages_field: s("usages_field").unwrap_or_else(|| "usages".into()),
-            line: s("line").unwrap_or_else(|| "line".into()),
-            title: s("title").unwrap_or_else(|| "name".into()),
-            kind_field: s("kind_field").unwrap_or_else(|| "scope_type".into()),
-            path_fields: {
-                let p = liste(config.get("path_fields"));
-                if p.is_empty() { vec!["file_path".into()] } else { p }
-            },
-            line_field: s("line_field").unwrap_or_else(|| "start_line".into()),
-            edge_mark: super::graph_walk::EdgeMark::from_config(config, "UsagesNode")?,
-            qualifier_field: s("qualifier_field").filter(|v| !v.is_empty()),
-        };
-        // Des identifiants seulement : ils entrent dans le texte des requêtes.
+        let cfg = usages_config_from(config, "UsagesNode")?;
         let ident = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_alphanumeric() || c == '_');
-        let tous: Vec<&String> = [&cfg.pivot, &cfg.key, &cfg.group_by, &cfg.usages_field, &cfg.line, &cfg.title, &cfg.kind_field, &cfg.line_field]
-            .into_iter()
-            .chain(cfg.defined_by.iter())
-            .chain(cfg.used_by.iter())
-            .chain(cfg.qualifier_field.iter())
-            .chain(cfg.direct.iter())
-            .chain(cfg.path_fields.iter())
-            .collect();
-        if let Some(x) = tous.iter().find(|x| !ident(x)) {
-            return Err(format!("UsagesNode: « {x} » n'est pas un identifiant"));
-        }
         let usage = s("usage").filter(|v| !v.is_empty()).unwrap_or_else(|| "all".into());
         if !["all", "call", "type", "import", "inheritance", "other"].contains(&usage.as_str()) {
             return Err(format!("UsagesNode: genre inconnu « {usage} »"));

@@ -82,11 +82,14 @@ pub struct Provenance {
     pub signal: Option<String>,
     pub signals: Vec<SignalScore>,
     pub best_signal: Option<SignalScore>,
+    /// La provenance par une relation (`via call` d'un appelant posé par le saut d'appel) : elle traverse
+    /// l'enrichissement comme le signal.
+    pub relation: Option<String>,
 }
 
 impl Provenance {
     pub fn of(u: &UnifiedResult) -> Self {
-        Self { signal: u.signal.clone(), signals: u.signals.clone(), best_signal: u.best_signal.clone() }
+        Self { signal: u.signal.clone(), signals: u.signals.clone(), best_signal: u.best_signal.clone(), relation: u.relation.clone() }
     }
 
     /// La ligne `r` rendue avec cette provenance.
@@ -95,6 +98,7 @@ impl Provenance {
         u.signal = self.signal;
         u.signals = self.signals;
         u.best_signal = self.best_signal;
+        u.relation = self.relation;
         u
     }
 }

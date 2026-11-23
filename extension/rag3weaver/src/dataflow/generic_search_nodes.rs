@@ -3311,7 +3311,7 @@ pub(crate) fn vue_de(ctx: &NodeContext) -> Option<Arc<crate::read_view::ReadView
     }
 }
 
-fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbConnection>) -> Arc<dyn crate::search_backend::SearchBackend> {
+pub(crate) fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbConnection>) -> Arc<dyn crate::search_backend::SearchBackend> {
     // Par la vue : son moteur extérieur s'il y en a un, sinon celui du
     // catalogue sur la connexion de l'appel (celle de lecture), sans le mutex.
     if let Some(v) = vue_de(ctx) {
