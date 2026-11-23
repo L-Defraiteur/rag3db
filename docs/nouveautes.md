@@ -18,6 +18,8 @@
 - 23 novembre 2026 — **Le terminal de l'agent démarre sans attendre l'état entier de l'hôte.** Il trouve ton dépôt et sa
   branche par une seule question à l'hôte, au lieu de relire tout son état (6,5 s avec 84 dépôts, deux fois au
   démarrage).
+- 23 novembre 2026 — **Ouvrir un dossier ne fait plus attendre l'état entier de l'hôte.** L'hôte publie son état sur le
+  flux en fond, après la réponse, au lieu de le recalculer pendant l'ouverture (7 s avec 84 dépôts).
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin
