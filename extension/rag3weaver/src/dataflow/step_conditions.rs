@@ -37,7 +37,8 @@ pub fn conditions() -> Vec<Condition> {
         Condition { node_type: "UsedTools", description: "The step called a tool of work (not step_done nor report).", params: no_params, question: used_tools },
         Condition { node_type: "TurnAskedBy", description: "The turn was opened by a request of `who` (human, agent or any).", params: who_param, question: turn_asked_by },
         Condition { node_type: "TurnHasTeammateLine", description: "The teammate wrote a line to the asker since the turn's request.", params: no_params, question: turn_has_teammate_line },
-        Condition { node_type: "ClosingStepDone", description: "The step_done closes the turn: succeeded, nothing left, nothing else to do in the active plan.", params: no_params, question: closing_step_done },
+        Condition { node_type: "ClosingStepDone", description: "The step_done closes the turn: nothing left, nothing else to do in the active plan, and succeeded unless `succeeded` is `any`.", params: succeeded_param, question: closing_step_done },
+        Condition { node_type: "RequestExpects", description: "The turn's request declares what it expects (`expects`).", params: no_params, question: request_expects },
         Condition { node_type: "OpenCard", description: "A card of the teammate's waits for an answer in the turn (`kind`: approval, question or any).", params: kind_param, question: open_card },
     ]
 }
@@ -60,6 +61,10 @@ fn choice(name: &'static str, default: &'static str, choices: &[&str], descripti
 
 fn who_param() -> Vec<ConfigParam> {
     choice("who", "any", &["human", "agent", "any"], "Whose request opened the turn.")
+}
+
+fn succeeded_param() -> Vec<ConfigParam> {
+    choice("succeeded", "required", &["required", "any"], "Whether the step_done must say it succeeded.")
 }
 
 fn kind_param() -> Vec<ConfigParam> {
@@ -112,12 +117,12 @@ fn turn_has_teammate_line(step: &Value, _config: &Value) -> Result<(bool, String
     Ok((holds, if holds { "the teammate wrote to the asker" } else { "no line of the teammate since the request" }.into()))
 }
 
-fn closing_step_done(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+fn closing_step_done(step: &Value, config: &Value) -> Result<(bool, String), String> {
     let d = &step["step_done"];
     if d.is_null() {
         return Ok((false, "no step_done".into()));
     }
-    if d["succeeded"] != true {
+    if d["succeeded"] != true && config["succeeded"].as_str() != Some("any") {
         return Ok((false, "the step_done did not succeed".into()));
     }
     if !d["remaining"].as_str().unwrap_or_default().trim().is_empty() {
@@ -126,6 +131,12 @@ fn closing_step_done(step: &Value, _config: &Value) -> Result<(bool, String), St
     let item = d["item"].as_str().unwrap_or_default();
     let reste = step["plan"]["items"].as_array().into_iter().flatten().any(|i| i["id"] != item && !matches!(i["status"].as_str(), Some("done" | "dropped")));
     Ok((!reste, if reste { "the active plan has items still to do" } else { "the step_done closes the turn" }.into()))
+}
+
+fn request_expects(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    let lines = turn(step);
+    let holds = request(lines).is_some_and(|n| !lines[n]["expects"].is_null());
+    Ok((holds, if holds { "the request declares what it expects" } else { "the request expects nothing declared" }.into()))
 }
 
 fn open_card(step: &Value, config: &Value) -> Result<(bool, String), String> {

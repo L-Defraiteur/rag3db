@@ -1,7 +1,50 @@
 %% tool: at_step_done
-%% description: When the teammate calls step_done: a rule that holds refuses the call, and the model writes, then calls again (the table at_step_done.json says what each rule does). The rules move here one by one from the host's code.
+%% description: When the teammate calls step_done: a rule that holds refuses the call, and the model writes, then calls again (the table at_step_done.json says what each rule does).
 %% param: step json! -- the facts of the step at the call: text_since_last_tool, text_in_step, used_tools, step_done, plan, turn
 %% result: chain.verdict
 graph LR
     facts["RhaiNode(script='input', value=$step)"]
-    chain["FirstMatch(rules='none_yet', otherwise='accept')"]
+    human["TurnAskedBy(who='human')"]
+    agent["TurnAskedBy(who='agent')"]
+    line["TurnHasTeammateLine()"]
+    wrote["WroteInStep()"]
+    after["TextAfterLastTool()"]
+    tools["UsedTools()"]
+    expects["RequestExpects()"]
+    closing["ClosingStepDone(succeeded='any')"]
+    noline["Not()"]
+    nowrote["Not()"]
+    noafter["Not()"]
+    silent["All(inputs='human|noline|nowrote')"]
+    spoke["Any(inputs='wrote|line|expects')"]
+    agent_spoke["All(inputs='agent|spoke')"]
+    asked["Any(inputs='human|agent_spoke')"]
+    reply["All(inputs='tools|closing|noafter|asked')"]
+    chain["FirstMatch(rules='silent_turn|reply_after_tools', otherwise='accept')"]
+    facts -->|result:step| human
+    facts -->|result:step| agent
+    facts -->|result:step| line
+    facts -->|result:step| wrote
+    facts -->|result:step| after
+    facts -->|result:step| tools
+    facts -->|result:step| expects
+    facts -->|result:step| closing
+    line -->|holds:holds| noline
+    wrote -->|holds:holds| nowrote
+    after -->|holds:holds| noafter
+    human -->|holds:human| silent
+    noline -->|holds:noline| silent
+    nowrote -->|holds:nowrote| silent
+    wrote -->|holds:wrote| spoke
+    line -->|holds:line| spoke
+    expects -->|holds:expects| spoke
+    agent -->|holds:agent| agent_spoke
+    spoke -->|holds:spoke| agent_spoke
+    human -->|holds:human| asked
+    agent_spoke -->|holds:agent_spoke| asked
+    tools -->|holds:tools| reply
+    closing -->|holds:closing| reply
+    noafter -->|holds:noafter| reply
+    asked -->|holds:asked| reply
+    silent -->|holds:silent_turn| chain
+    reply -->|holds:reply_after_tools| chain
