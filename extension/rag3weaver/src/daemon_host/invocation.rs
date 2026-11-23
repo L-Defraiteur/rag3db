@@ -832,6 +832,23 @@ mod tests {
         assert!(inconnu["ok"] == json!(false) && e.contains("rag3db-essai (code-rag3db-essai)"), "an unknown name does not list the attached ones in both forms: {inconnu}");
     }
 
+    /// **A repository is resolved with its branch, from the table of the hosted backends** (a measure on 23 November
+    /// 2026: with 84 backends, the resolution built the host's whole state, reading each backend's index, 6.5 s; the
+    /// terminal then read `/ide/etat` again only for the branch). The resolution gives the found repository's branch.
+    #[test]
+    fn a_repository_is_resolved_with_its_branch() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(d.path());
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let r = a.host.resoudre_un_depot("rag3db-essai");
+        assert_eq!(r["ok"], json!(true), "{r}");
+        let attendue = std::process::Command::new("git").arg("-C").arg(&depot).args(["rev-parse", "--abbrev-ref", "HEAD"]).output().unwrap();
+        let attendue = String::from_utf8_lossy(&attendue.stdout).trim().to_string();
+        assert_eq!(r["branch"], json!(attendue), "the resolution says the repository's branch: {r}");
+    }
+
     /// **The machine at a glance** (21 November 2026, recherche's scenario 1; keys in English, as recherche asked): after a
     /// view is opened, `GET /poste` says
     /// the session with its Claude name, the table of the folders with the worktree found under the session's, the view
