@@ -185,6 +185,10 @@ impl LlmProvider {
 #[derive(Default, Serialize, Deserialize)]
 pub struct ChatSession {
     pub turns: Vec<Turn>,
+    /// **The tokens counted over this conversation** (23 Nov 2026): kept with it, so a `--continue` or a restart of
+    /// the host goes on counting; a conversation saved before starts at 0.
+    #[serde(default)]
+    pub tokens: crate::events::ConversationTokens,
 }
 /// Ce qu'un tour publié prend en plus d'un tour d'atelier
 /// ([`ChatSession::run_with`]) ; tout absent : un bus privé, un id généré.
@@ -205,6 +209,7 @@ impl ChatSession {
     pub fn new(prompt: &str) -> Self {
         Self {
             turns: vec![Turn::system(prompt)],
+            tokens: Default::default(),
         }
     }
     pub fn run(
@@ -280,6 +285,7 @@ impl ChatSession {
             agent = agent.with_terminal_tools(options.terminal_tools);
         }
         agent
+            .with_conversation_tokens(self.tokens)
             .with_events(bus)
             .with_inbox()
             .with_completion_check(
@@ -303,6 +309,10 @@ impl ChatSession {
                     .with_retry_budget(retry_budget),
             )
             .run(&mut self.turns, &mut sink)
+            .map(|r| {
+                self.tokens = r.conversation_tokens;
+                r
+            })
             .map_err(|e| e.to_string())
     }
     pub fn save(&self, path: &Path) -> Result<(), String> {
