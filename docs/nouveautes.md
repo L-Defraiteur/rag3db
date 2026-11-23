@@ -97,6 +97,9 @@
   activité, l'étape de son plan, le dernier message de chaque contact et ses agents fermés ; un agent fermé se rouvre
   avec sa conversation, un agent se duplique sur une branche neuve, et un message entre agents est un événement du
   flux de l'IDE. L'affichage de la barre vient avec les lots de l'IDE.
+- 23 novembre 2026 — **Les tours se trouvent aussi par leur sens.** L'entité `Turn` de la mémoire déclare le signal
+  vectoriel par défaut : `search_turns` cherche par les mots et par le sens. `put_turn` garde l'id de la ligne de
+  boîte dont vient le message (`line_id`), rendu par `list_turns` et `search_turns`.
 
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
