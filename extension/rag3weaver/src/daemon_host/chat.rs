@@ -1357,6 +1357,14 @@ pub(crate) struct OutilsImportes<'a> {
     appeler: Box<dyn Fn(&crate::llm::ToolCall) -> Option<crate::llm::Turn> + Send + Sync + 'a>,
 }
 
+impl<'a> OutilsDuChat<'a> {
+    /// The tools imported from other backends.
+    pub(crate) fn avec_les_imports(mut self, importes: OutilsImportes<'a>) -> Self {
+        self.importes = Some(importes);
+        self
+    }
+}
+
 impl<'a> OutilsImportes<'a> {
     pub(crate) fn new(defs: Vec<crate::tools::ToolDef>, appeler: impl Fn(&crate::llm::ToolCall) -> Option<crate::llm::Turn> + Send + Sync + 'a) -> Self {
         Self { defs, appeler: Box::new(appeler) }
@@ -1612,11 +1620,6 @@ impl OutilsDuChat<'_> {
         self
     }
 
-    /// The tools imported from other backends.
-    pub(crate) fn avec_les_imports(mut self, importes: OutilsImportes<'a>) -> Self {
-        self.importes = Some(importes);
-        self
-    }
 
     /// A call to an imported tool, sent to its backend; `None` for the others.
     fn importe(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {

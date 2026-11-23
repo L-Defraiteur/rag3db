@@ -24,9 +24,11 @@ impl DaemonHost {
             let leurs = self.hosted(&chemin).and_then(|h| self.with_backend(&h, |o| crate::backend_tools::BackendTools { backend: o }.tool_defs()).map(|d| (h, d)));
             match leurs {
                 Ok((h, leurs)) => {
-                    for d in leurs.into_iter().filter(|d| import.tools.contains(&d.name) && !routes.contains_key(&d.name)) {
-                        routes.insert(d.name.clone(), h.clone());
-                        defs.push(d);
+                    for d in leurs {
+                        if import.tools.contains(&d.name) && !routes.contains_key(&d.name) {
+                            routes.insert(d.name.clone(), h.clone());
+                            defs.push(d);
+                        }
                     }
                 }
                 Err(e) => eprintln!("[démon] {} : les outils importés de {} ne sont pas offerts : {e}", p.directory.display(), chemin.display()),
