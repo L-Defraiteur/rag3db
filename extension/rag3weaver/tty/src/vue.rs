@@ -1645,6 +1645,9 @@ mod quiet_tests;
 /// The agent's text is not cut in two by its run's end (23 November 2026).
 #[cfg(test)]
 mod late_tokens_tests;
+/// Text and tool calls keep their order in the thread (23 November 2026).
+#[cfg(test)]
+mod interleave_tests;
 /// The agent's text is seen as it is written (23 November 2026).
 #[cfg(test)]
 mod streamed_text_tests;
