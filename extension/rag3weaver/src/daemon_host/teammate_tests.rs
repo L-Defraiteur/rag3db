@@ -32,6 +32,7 @@ mod posture_auto;
 mod land_each_turn;
 mod gate_level;
 mod commit_each_turn;
+mod commit_what_was_written;
 mod turn_changes;
 mod missing_command;
 mod background_lock;
