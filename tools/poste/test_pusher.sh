@@ -61,7 +61,7 @@ lot() {
 # The pusher's single worktree, its folder, and the doubles.
 mkdir -p "$D/ws" "$D/journals" "$D/pusher"
 git clone -q "$D/origin.git" "$D/ws/wt" 2>/dev/null && git -C "$D/ws/wt" config user.email luciedefraiteur@gmail.com && git -C "$D/ws/wt" config user.name t
-git -C "$D/ws/wt" worktree add -q --detach "$D/ws/wt2" 2>/dev/null; mkdir -p "$D/outcomes.d"
+git -C "$D/ws/wt" worktree add -q --detach "$D/ws/wt2" 2>/dev/null; git -C "$D/ws/wt" worktree add -q --detach "$D/ws/wt-docs" 2>/dev/null; mkdir -p "$D/outcomes.d"
 # The pass double: one outcome per call, read from $D/outcomes (VERT, ROUGE <step> or 124).
 cat > "$D/pass.sh" <<'P'
 #!/bin/bash
@@ -957,4 +957,22 @@ for m in "docs(rag3weaver-archi): the page of the night" "docs(orchestration): t
   [ $rc = 0 ] && ! echo "$out" | grep -q 'nom de session' && ok "message « $m » : déposé, rien de dit" || ko "message « $m » : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-160)"
   P dequeue cn-3 > /dev/null 2>&1
 done
+# 52. A docs lot passes while a Rust train replays (23 Nov. 2026, c7: docs lots of a few seconds waited an hour behind
+# Rust trains). Deposited during the Rust pass, it is reposed on master in the docs worktree and pushed before the pass
+# ends; the Rust train then lands on the master that moved by docs only, without a second replay.
+h=$(lot dl-r extension/rag3weaver/src/dlr.rs 'fn dlr() {}')
+P enqueue dl-r dl-r "$h" rust some_witness e2e_code - - author-l > /dev/null; echo VERT > "$D/outcomes.d/dl-r"
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B dl-d origin/master
+mkdir -p "$D/author/docs/essai"; echo "une page" > "$D/author/docs/essai/dl-d.md"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm "docs(essai): a page" && git -C "$D/author" push -q origin HEAD:dl-d; hd=$(git -C "$D/author" rev-parse HEAD)
+cat > "$D/pass-hook" <<HOOK
+bash $(printf %q "$PUSHER") enqueue dl-d dl-d $hd docs - - - - author-l > /dev/null 2>&1
+for i in \$(seq 1 40); do grep -qP '\tdl-d\tpoussé' "$D/pusher/log.tsv" && { echo vu > "$D/dl-vu"; break; }; sleep 1; done
+HOOK
+calls0=$(calls "$D/pass_calls")
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ -s "$D/dl-vu" ] && on_master dl-d && on_master dl-r && [ "$(calls "$D/pass_calls")" = $((calls0 + 1)) ] \
+  && ok "un lot de docs déposé pendant un train rust : poussé avant la fin de la passe, le train poussé ensuite sans seconde passe" \
+  || ko "docs pendant un train rust : vu pendant la passe ? $([ -s "$D/dl-vu" ] && echo oui || echo NON) ; docs $(on_master dl-d && echo poussé || echo 'pas poussé'), rust $(on_master dl-r && echo poussé || echo 'pas poussé'), passes $(( $(calls "$D/pass_calls") - calls0 ))"
+rm -f "$D/pass-hook" "$D/dl-vu"; P dequeue dl-d > /dev/null 2>&1
 exit $red
