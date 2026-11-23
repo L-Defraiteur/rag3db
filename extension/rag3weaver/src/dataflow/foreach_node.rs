@@ -98,6 +98,39 @@ pub fn resoudre_les_sous_graphes_avec(
     lire: &dyn Fn(&str) -> Result<String, String>,
     nodes: &NodeRegistry,
 ) -> Result<Vec<(String, Value)>, String> {
+    // A tool graph in the manifest's own `graphs/` folder: its template root is the manifest's folder.
+    resolve_cited_graphs_from(outil, "graphs/", lire, nodes)
+}
+
+/// **The template root of a graph** (22 November 2026): the folder above the one that holds it, as a prefix of the
+/// paths it cites — `graphs/archive.mmd` → `` (the manifest's folder), `builtin:backends/memory/graphs/x.mmd` →
+/// `builtin:backends/memory/`, `/abs/backends/memory/graphs/x.mmd` → `/abs/backends/memory/`.
+fn template_root_of(graph_path: &str) -> String {
+    let mut parts: Vec<&str> = graph_path.split('/').collect();
+    parts.pop();
+    parts.pop();
+    if parts.is_empty() { String::new() } else { format!("{}/", parts.join("/")) }
+}
+
+/// **Where a citation reads, from the graph that cites it** (22 November 2026, Lucie's long memory): `@builtin:…` and
+/// an absolute path read as they are; `@graphs/x` and its kind read next to the citing graph's own template — a
+/// shipped graph cites its shipped siblings, a local graph its local ones.
+fn cited_path(citing_graph: &str, cited: &str) -> String {
+    if cited.starts_with(crate::builtin_templates::PREFIX) || cited.starts_with('/') {
+        cited.to_string()
+    } else {
+        format!("{}{cited}", template_root_of(citing_graph))
+    }
+}
+
+/// [`resoudre_les_sous_graphes_avec`], knowing where the tool's own graph lives (`graph_path`, as the manifest names
+/// it): each cited graph reads its own citations next to its own template.
+pub fn resolve_cited_graphs_from(
+    outil: &mut GraphTool,
+    graph_path: &str,
+    lire: &dyn Fn(&str) -> Result<String, String>,
+    nodes: &NodeRegistry,
+) -> Result<Vec<(String, Value)>, String> {
     let mut types = Vec::new();
     let cites: Vec<(String, String, Value)> = outil
         .template()
@@ -108,14 +141,16 @@ pub fn resoudre_les_sous_graphes_avec(
         .collect();
     for (noeud, cite, config) in cites {
         let par_element = outil.template().nodes.iter().any(|n| n.name == noeud && n.node_type == FOREACH_NODE);
-        let arbre = lire_un_sous_graphe(&cite, &config, par_element, lire, nodes, &mut types, 1).map_err(|e| format!("le nœud « {noeud} » : {e}"))?;
+        let arbre = lire_un_sous_graphe(&cite, graph_path, &config, par_element, lire, nodes, &mut types, 1).map_err(|e| format!("le nœud « {noeud} » : {e}"))?;
         outil.remplacer_config(&noeud, "graph", arbre);
     }
     Ok(types)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn lire_un_sous_graphe(
     cite: &str,
+    citing_graph: &str,
     config: &Value,
     par_element: bool,
     lire: &dyn Fn(&str) -> Result<String, String>,
@@ -129,6 +164,8 @@ fn lire_un_sous_graphe(
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("`graph` se cite par @graphs/<fichier>.mmd ou @builtin:<chemin>, pas « {cite} »"));
     };
+    // Next to the citing graph's own template (22 November 2026), not next to the manifest.
+    let chemin = &cited_path(citing_graph, chemin);
     let texte = lire(chemin).map_err(|e| format!("{chemin} : {e}"))?;
     let outil = GraphTool::from_mermaid(&texte).and_then(|t| t.bind(nodes)).map_err(|e| format!("{chemin} : {e}"))?;
     let element = parametre_de_l_element(config);
@@ -150,7 +187,7 @@ fn lire_un_sous_graphe(
         types.push((n.node_type.clone(), n.config.clone()));
         if n.node_type == GRAPH_NODE || n.node_type == FOREACH_NODE {
             if let Some(c) = n.config.get("graph").and_then(Value::as_str) {
-                let arbre = lire_un_sous_graphe(c, &n.config, n.node_type == FOREACH_NODE, lire, nodes, types, profondeur + 1).map_err(|e| format!("{chemin}, le nœud « {} » : {e}", n.name))?;
+                let arbre = lire_un_sous_graphe(c, chemin, &n.config, n.node_type == FOREACH_NODE, lire, nodes, types, profondeur + 1).map_err(|e| format!("{chemin}, le nœud « {} » : {e}", n.name))?;
                 sous.insert(n.name.clone(), arbre);
             }
         }
