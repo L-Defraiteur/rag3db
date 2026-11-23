@@ -12,6 +12,11 @@ use super::taches::Tache;
 use super::teammate::TeammateFiles;
 use super::DaemonHost;
 
+/// Where a turn's start is kept, beside the mailbox: read by its facts at its end, or when it waits (23 Nov 2026).
+fn depart_du_tour(files: &TeammateFiles) -> std::path::PathBuf {
+    files.mailbox_path().with_file_name("turn-start.json")
+}
+
 /// The commands of the turn that failed, kept beside the mailbox until the turn's facts say them (23 Nov 2026).
 fn echecs_du_tour(files: &TeammateFiles) -> std::path::PathBuf {
     files.mailbox_path().with_file_name("turn-failures.txt")
@@ -149,6 +154,38 @@ impl DaemonHost {
         let echecs = take_turn_failures(files);
         let texte = faits_du_tour(&changes, &echecs);
         files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "failures": echecs, "copy": true })).ok()
+    }
+
+    /// **A turn's start**, kept beside the mailbox (the task's head, or the copy's prints), and its failures emptied.
+    pub(crate) fn mark_turn_start(&self, parent: &str, task: &str, files: &TeammateFiles) {
+        let _ = take_turn_failures(files);
+        let depart = if let Some((arbre, head)) = self.task_tree_head(parent, task) {
+            json!({ "tree": arbre, "head": head })
+        } else if let Some((racine, exclus, avant)) = self.task_copy_snapshot(parent, task) {
+            json!({ "copy": racine, "exclude": exclus, "prints": avant })
+        } else {
+            let _ = std::fs::remove_file(depart_du_tour(files));
+            return;
+        };
+        let _ = std::fs::write(depart_du_tour(files), depart.to_string());
+    }
+
+    /// **The turn's facts, once** (at its end, or before it waits): from its kept start; nothing if they were said
+    /// since the turn's last request.
+    pub(crate) fn say_turn_facts(&self, files: &TeammateFiles) -> Option<serde_json::Value> {
+        let boite = files.mailbox();
+        let demande = boite.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host").unwrap_or(0);
+        if boite[demande..].iter().any(|l| l["from"] == "host" && l["kind"] == "turn_changes") {
+            return None;
+        }
+        let depart: serde_json::Value = serde_json::from_slice(&std::fs::read(depart_du_tour(files)).ok()?).ok()?;
+        if let (Some(arbre), Some(head)) = (depart["tree"].as_str(), depart["head"].as_str()) {
+            return self.say_turn_changes(files, Path::new(arbre), head);
+        }
+        let racine = depart["copy"].as_str()?;
+        let exclus: Vec<String> = serde_json::from_value(depart["exclude"].clone()).unwrap_or_default();
+        let avant: std::collections::BTreeMap<String, String> = serde_json::from_value(depart["prints"].clone()).unwrap_or_default();
+        self.say_copy_turn_changes(files, Path::new(racine), &exclus, &avant)
     }
 
     /// The task's tree and its head, at a turn's start (for [`Self::say_turn_changes`]).
