@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Les tours se trouvent aussi par leur sens.** L'entité `Turn` de la mémoire déclare le signal
+  vectoriel par défaut : `search_turns` cherche par les mots et par le sens. `put_turn` garde l'id de la ligne de
+  boîte dont vient le message (`line_id`), rendu par `list_turns` et `search_turns`.
+
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
