@@ -8039,7 +8039,9 @@ mod tests {
             // Collect (lot B1, 19 nov. 2026) : rassembler dans un ordre déclaré, pur comme RhaiNode.
             // ExactNameNode (20 November 2026): the rows named by the whole query, read by the name under the
             // query's filter.
-            46 + usize::from(cfg!(feature = "code"))
+            // CallersHopNode (23 November 2026): one hop along the calls around the first ranks of the search, a
+            // read of the usages and of the callers' rows, nothing written.
+            47 + usize::from(cfg!(feature = "code"))
                 // SlowReadNode, in the test builds only (`backend::lecture_lente`): the slow read on the call's
                 // snapshot that the host-path witness of the interruption stops. Never in the product.
                 + usize::from(cfg!(test)),
