@@ -525,3 +525,15 @@ mod plain_suspension_tests {
         assert!(!plain_suspended_on_a_card(&answered, 0), "answered elsewhere: no stop");
     }
 }
+
+#[cfg(test)]
+mod help_tests {
+    use super::*;
+
+    /// **The help says what is optional** (23 Nov.: `--help` still showed `--repo` and `--task` as required).
+    #[test]
+    fn the_help_shows_repo_and_task_as_options_and_names_continue() {
+        assert!(AIDE.contains("[--repo <nom|chemin>]") && AIDE.contains("[--task <nom>]"), "{AIDE}");
+        assert!(AIDE.contains("--continue"), "{AIDE}");
+    }
+}
