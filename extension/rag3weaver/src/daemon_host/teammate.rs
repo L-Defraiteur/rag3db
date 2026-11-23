@@ -564,6 +564,11 @@ pub struct Step {
     wrote_text: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The step_dones refused for want of a word, and whether the step ended without one.
     text_refusals: AtomicUsize,
+    /// **Delivered up to this line of the mailbox** (Lucie's trial of 23 Nov 2026): what arrives during the step comes
+    /// at the head of its next tool result; the loop's next frontier starts after it.
+    delivered: AtomicUsize,
+    /// The loop's texts, for what is delivered during the step.
+    texts: Option<super::prompts::Texts>,
     /// The step called a tool of work (not step_done nor report): a text must follow its last one.
     used_tools: std::sync::atomic::AtomicBool,
     /// The step wrote text at some point (kept across its tool calls): the rule of the silent turn reads it.
@@ -765,6 +770,8 @@ impl Step {
             last_context: std::sync::Arc::new(AtomicUsize::new(0)),
             wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             text_refusals: AtomicUsize::new(0),
+            delivered: AtomicUsize::new(0),
+            texts: None,
             used_tools: std::sync::atomic::AtomicBool::new(false),
             wrote_any: std::sync::atomic::AtomicBool::new(false),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
@@ -845,6 +852,45 @@ impl Step {
     }
 
     /// The refusal of a silent step_done, from the user's own template file when she has one (read at each step).
+    /// **What the mailbox received before the step**: read by its frontier; what comes after is delivered during it.
+    pub fn with_delivery(mut self, read: usize, texts: super::prompts::Texts) -> Self {
+        self.delivered = AtomicUsize::new(read);
+        self.texts = Some(texts);
+        self
+    }
+
+    /// The mailbox line the step delivered up to.
+    pub fn delivered(&self) -> usize {
+        self.delivered.load(Ordering::SeqCst)
+    }
+
+    /// **The news of the mailbox, at the head of a tool result** (Lucie, 23 Nov 2026: « comme les sorties d'outils
+    /// asynchrones »): the lines addressed to the teammate since the last delivery, up to a stop (the loop's), said by
+    /// the loop's texts; a step_done or a report delivers nothing (the step ends there, the next frontier says them).
+    fn deliver(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+        let Some(t) = self.texts.as_ref().filter(|_| !matches!(call.name.as_str(), STEP_DONE | REPORT)) else { return turn };
+        let lignes = self.files.mailbox();
+        let depuis = self.delivered.load(Ordering::SeqCst);
+        if lignes.len() <= depuis {
+            return turn;
+        }
+        let fin = lignes[depuis..].iter().position(|l| l["kind"] == "stop" && l["from"] != "teammate" && l["from"] != "host").map_or(lignes.len(), |n| depuis + n);
+        let neuves: Vec<&Value> = lignes[depuis..fin].iter().filter(|l| l["from"] != "teammate" && l["from"] != "host" && addressed_to_teammate(l, &self.files.key)).collect();
+        self.delivered.store(fin, Ordering::SeqCst);
+        if neuves.is_empty() {
+            return turn;
+        }
+        let mut tete = format!("{}
+", t.get("mid_turn.head", &[]));
+        for l in neuves {
+            tete.push_str(&format!("{}
+", t.get("mid_turn.line", &[("kind", l["kind"].as_str().unwrap_or("?")), ("from", l["from"].as_str().unwrap_or("?")), ("text", l["text"].as_str().unwrap_or(""))])));
+        }
+        turn.content = format!("{tete}
+{}", turn.content);
+        turn
+    }
+
     pub fn with_text_first(mut self, text: Option<String>) -> Self {
         if let Some(t) = text {
             self.text_first = t.trim().to_string();
@@ -1535,19 +1581,22 @@ impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call(c));
         self.step.tool_of_work(&call.name);
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        let turn = self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)));
+        self.step.deliver(call, turn)
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call_in(c, run));
         self.step.tool_of_work(&call.name);
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        let turn = self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)));
+        self.step.deliver(call, turn)
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
         // A replay (the gate's yes, a granted root, the bac's shell line) goes the way of the call itself: with its
         // invocation, so a background command stays in the task's background scope (23 Nov 2026).
         let rejouer = |c: &ToolCall| self.in_task(c, Some(&inv.handle), |c| self.inner.call_with(c, run, inv));
         self.step.tool_of_work(&call.name);
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        let turn = self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)));
+        self.step.deliver(call, turn)
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
@@ -2536,7 +2585,7 @@ impl DaemonHost {
             }
             step.woke_by = woke_by.take();
             // The refusal of a silent step_done, from the user's own template file, read at each step.
-            step = step.with_text_first(self.user_prompt("text_first"));
+            step = step.with_text_first(self.user_prompt("text_first")).with_delivery(read, textes.clone());
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
             // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
@@ -2544,6 +2593,11 @@ impl DaemonHost {
                 Ok(r) => {
                     failed = 0;
                     unavailable = 0;
+                    // What the step delivered during it is read: the next frontier starts after it.
+                    if step.delivered() > read {
+                        read = step.delivered();
+                        files.write_cursor(read);
+                    }
                     // **The turn's commits land in the user's folder** (the terminal's night, 22 Nov 2026).
                     #[cfg(feature = "code")]
                     self.land_the_turn(&t, &files, &step.wrote(), !r["stopped_by"].is_null());

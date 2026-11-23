@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Ce que tu écris pendant que l'agent travaille lui arrive tout de suite.** Un message envoyé
+  pendant ses appels d'outils arrive en tête du résultat de l'outil suivant, dans le même pas, au lieu d'attendre le
+  pas d'après. Et l'agent se sert de l'index d'abord : une question sur le code commence par `search_code`, une
+  modification par `usages` et `impact`.
 - 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
   l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
   dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant

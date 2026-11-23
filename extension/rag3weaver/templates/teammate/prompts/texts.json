@@ -23,5 +23,7 @@
   "relaunch.silent": "You wrote nothing to the user during this turn. What the user reads is the text of your reply, written before any tool call; step_done's `done` is never shown to them. Write to the user now, in the text of your reply, a few sentences: what you did, how to use it (the commands to run in their folder), and what is left; then call step_done.",
   "relaunch.request_unanswered": "relance : ta demande attend une réponse dans la boîte ; ton step_done dit « {$done} », et rien n'y est arrivé ; écris le contenu demandé (report) ou dis pourquoi (question)",
   "relaunch.text_missing": "Your step ended without the text the request asks for: your reports describe the work, they are not the text. Write the text itself now, in your answer, then call step_done.",
-  "relaunch.verify_red": "Your step_done met the verification gate, and it is red: `{$command}` failed. Its output, the end of it:\n{$tail}\nFix the tree so that it passes, play it yourself, then call step_done. Never say done on a red tree."
+  "relaunch.verify_red": "Your step_done met the verification gate, and it is red: `{$command}` failed. Its output, the end of it:\n{$tail}\nFix the tree so that it passes, play it yourself, then call step_done. Never say done on a red tree.",
+  "mid_turn.head": "Pendant tes appels d'outils, la boîte a reçu (lis-le maintenant : cela peut changer ce que tu fais ensuite) :",
+  "mid_turn.line": "- {$kind} de {$from} : {$text}"
 }
