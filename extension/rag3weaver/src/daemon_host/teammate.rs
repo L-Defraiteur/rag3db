@@ -2036,7 +2036,7 @@ impl DaemonHost {
             let note = match (t.workspace.as_ref().filter(|w| w.copie.is_some()), en_place) {
                 (Some(w), _) => format!("tâche ouverte : {} (une copie de {})", super::taches::SANS_GIT, w.racine_principale.display()),
                 // **In the user's folder** (23 November 2026): no branch of the task, no commit to start from.
-                (None, Some(c)) => format!("tâche ouverte : l'agent travaille dans ton dossier {}, sur ta branche courante", c.depot.display()),
+                (None, Some(c)) => format!("tâche ouverte : l'agent travaille dans ton dossier {}, sur ta branche courante, depuis {court}", c.depot.display()),
                 (None, None) => format!(
                     "tâche ouverte : branche {} depuis {court} ; ses déclarations et son code sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas){}",
                     t.branche,
