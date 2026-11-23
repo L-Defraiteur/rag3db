@@ -829,6 +829,9 @@ impl fmt::Display for ReasoningEffort {
 /// `completion_tokens` le nombre de fragments émis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Usage {
+    /// **The provider's own finish reason** (`stop`, `length`, `tool_calls`, `content_filter`, `other`), kept beside
+    /// the normalized one (23 Nov 2026: an empty reply must say why, in the host).
+    pub provider_finish: Option<&'static str>,
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
     /// **Les jetons de raisonnement** que le fournisseur rapporte

@@ -710,6 +710,8 @@ pub struct AgentRun {
     /// prochain appel, que la jauge du chat montre. `None` sans appel.
     pub last_call: Option<LastCall>,
     pub stop: StopReason,
+    /// **Why the last model call answered nothing** (no text, no tool call), if it did not (23 Nov 2026).
+    pub empty_reply: Option<String>,
 }
 
 /// Le dernier appel au modèle d'un run ([`AgentRun::last_call`]).
@@ -1661,6 +1663,7 @@ impl<'a> Agent<'a> {
             usage: Usage::default(),
             last_call: None,
             stop: StopReason::MaxIterations,
+            empty_reply: None,
         };
         // La dernière erreur observée, `(outil, contenu)`. Remise à zéro par
         // le moindre succès : un résultat utile entre deux échecs, c'est un
@@ -1891,6 +1894,25 @@ impl<'a> Agent<'a> {
                 retry_log: retry_log.clone(),
                 finish: format!("{:?}", finish.reason),
                 tool_calls: finish.tool_calls.len(),
+                provider_finish: usage.provider_finish.map(str::to_string),
+                reasoning_tokens: usage.reasoning_tokens,
+                max_tokens: opts.max_tokens,
+                reasoning: opts.reasoning.map(|r| format!("{r:?}")),
+                empty: text.is_empty() && finish.tool_calls.is_empty(),
+            });
+            // **An empty reply says why** (23 Nov 2026): kept for the run's caller, which tells the user.
+            run.empty_reply = (text.is_empty() && finish.tool_calls.is_empty()).then(|| {
+                let pourquoi = match finish.reason {
+                    FinishReason::MaxTokens => "coupée à la limite de sortie".to_string(),
+                    r => format!("fin {r:?}"),
+                };
+                format!(
+                    "{pourquoi} (max_tokens={}, réflexion {:?}, fin du fournisseur « {} », {} jeton(s) de réflexion dits)",
+                    opts.max_tokens,
+                    opts.reasoning,
+                    usage.provider_finish.unwrap_or("non dite"),
+                    usage.reasoning_tokens
+                )
             });
             self.meter_call(run_id, run.iterations, &model, &usage);
 

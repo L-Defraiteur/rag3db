@@ -89,6 +89,10 @@ pub struct TeammatePolicy {
     /// once, their default time and the time they may not pass.
     #[serde(default)]
     pub background: BackgroundPolicy,
+    /// **A step's output limit** (23 Nov 2026: the chat's 4 096 cut a whole page written at once, thinking included on
+    /// Vertex; three empty replies and 75 s of silence). 16 384 by default.
+    #[serde(default = "TeammatePolicy::max_output_tokens_default")]
+    pub max_output_tokens: usize,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -184,7 +188,13 @@ impl TeammatePolicy {
         2
     }
     fn cut_relaunch_text_default() -> String {
-        "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
+        "Your reply was cut at the output limit before a complete tool call, and thinking counts in that limit. Think \
+         less; if you were writing a large file, write it in parts: a first part with write, then the rest with \
+         insert_lines, or several smaller files. Then call one tool now, or step_done."
+            .into()
+    }
+    fn max_output_tokens_default() -> usize {
+        16_384
     }
 }
 
@@ -213,6 +223,7 @@ impl Default for TeammatePolicy {
             web_search: WebSearchPolicy::default(),
             browser: None,
             background: BackgroundPolicy::default(),
+            max_output_tokens: Self::max_output_tokens_default(),
         }
     }
 }

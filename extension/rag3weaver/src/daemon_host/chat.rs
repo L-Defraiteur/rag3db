@@ -1033,6 +1033,8 @@ impl DaemonHost {
         // 2026: the default of 12 cut half of the D6 steps).
         if let Some(s) = step {
             config["max_iterations"] = json!(s.max_model_calls());
+            // A step's output limit is the teammate's (23 Nov 2026: the chat's 4 096 cut a whole page at once).
+            config["max_output_tokens"] = json!(s.max_output_tokens());
             if let Some(r) = s.cut_relaunch() {
                 config["cut_relaunch"] = json!(r);
             }
@@ -1134,18 +1136,18 @@ impl DaemonHost {
             }
             self.journal.ajouter(backend_id, run_id, ajouts);
         }
-        let reponse = |text: &str| {
-            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers })
+        let reponse = |text: &str, vide: Option<String>| {
+            json!({ "run": run_id, "text": text, "stopped_by": arrete, "consumed": consomme, "propositions": propositions, "tache": tache, "fichiers": fichiers, "empty_reply": vide })
         };
         match fait {
             Ok(run) => {
                 if let Some(e) = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get_mut(backend_id) {
                     e.last_call = run.last_call;
                 }
-                Ok(reponse(&run.text))
+                Ok(reponse(&run.text, run.empty_reply.clone()))
             }
             // Un tour arrêté n'est pas une panne : il dit qui l'a arrêté.
-            Err(_) if arrete.is_some() => Ok(reponse("")),
+            Err(_) if arrete.is_some() => Ok(reponse("", None)),
             Err(e) => Err(e),
         }
     }

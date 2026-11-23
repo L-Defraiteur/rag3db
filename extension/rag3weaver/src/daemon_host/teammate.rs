@@ -566,6 +566,8 @@ pub struct Step {
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
     fetch: crate::backend::FetchPolicy,
+    /// The output limit of the step's model calls.
+    max_output_tokens: usize,
     /// The bounds of the task's background commands (`teammate.background`).
     background_policy: crate::backend::BackgroundPolicy,
     /// The teammate's search by Gemini's grounding (`teammate.web_search`).
@@ -749,6 +751,7 @@ impl Step {
             gate_level: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
+            max_output_tokens: crate::backend::TeammatePolicy::default().max_output_tokens,
             background_policy: crate::backend::BackgroundPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
         }
@@ -796,7 +799,13 @@ impl Step {
         self.fetch = policy.fetch.clone();
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
+        self.max_output_tokens = policy.max_output_tokens.max(256);
         self
+    }
+
+    /// The output limit of the step's model calls (`teammate.max_output_tokens`).
+    pub fn max_output_tokens(&self) -> usize {
+        self.max_output_tokens
     }
 
     /// The `max_iterations` of the step's chat turn.
@@ -2516,7 +2525,18 @@ impl DaemonHost {
             if declared.is_none() && r["stopped_by"].is_null() {
                 let texte = r["text"].as_str().unwrap_or_default().trim();
                 if texte.is_empty() {
-                    let line = files.append("host", "report", None, &format!("step {number} ended without step_done and without an answer; the next step continues"))?;
+                    // **An empty reply says why, to the user and to the agent** (23 Nov 2026, Lucie: « il faut
+                    // absolument qu'on sache pourquoi un appel a foiré »).
+                    let line = match r["empty_reply"].as_str() {
+                        Some(pourquoi) => files.append_with(
+                            "host",
+                            "report",
+                            None,
+                            &format!("réponse vide du modèle au pas {number} : {pourquoi} ; le pas suivant reprend"),
+                            &json!({ "cut": true, "why": pourquoi }),
+                        )?,
+                        None => files.append("host", "report", None, &format!("step {number} ended without step_done and without an answer; the next step continues"))?,
+                    };
                     publish(bus.as_ref(), task, &line);
                 } else {
                     let deja = files.mailbox().iter().skip(avant).any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));
