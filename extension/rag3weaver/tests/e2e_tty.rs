@@ -390,7 +390,7 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
 
 /// **The teammate's words reach the terminal live, on its task's backend** (23 November 2026: « on ne le voit rien dire
 /// en streaming »). A real host, a teammate step that writes 300 words: every `Token` frame of the step carries the
-/// backend the terminal filters on (the task's, as `/ide/etat` gives it, the way `rag3weaver-tty` finds it), the first
+/// backend the terminal filters on (the task's, as `/ide/teammate` gives it, the way `rag3weaver-tty` finds it), the first
 /// word arrives before the step's run finishes, and `--plain` renders the words.
 #[test]
 #[ignore]
@@ -443,14 +443,11 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
     let lance = lance.expect("la demande est partie à l'ouverture").expect("la demande ouvre la tâche");
     assert_eq!(lance["started"], true, "{lance}");
 
-    // The task's backend, found the way the terminal finds it.
-    let etat = client::lire_brut(&agent, &ep, "/ide/etat").expect("l'état se lit");
-    let tache = etat["backends"]
-        .as_array()
-        .and_then(|b| b.iter().find(|b| b["tache"]["nom"] == "voix" && b["tache"]["parent"].as_str() == Some(parent.as_str())))
-        .and_then(|b| b["id"].as_str())
-        .unwrap_or_else(|| panic!("la tâche n'est pas dans l'état : {etat}"))
-        .to_string();
+    // The task's backend, found the way the terminal finds it (`connaitre`: the `backend` of `/ide/teammate`, the
+    // manifest of the task's worktree, which the flux carries on every frame).
+    let chemin = format!("/ide/teammate?backend={}&task=voix", client::encoder(&parent));
+    let vu = client::lire(&agent, &ep, &chemin).expect("la tâche se lit");
+    let tache = vu["backend"].as_str().unwrap_or_else(|| panic!("la tâche n'a pas de backend : {vu}")).to_string();
 
     let mots: Vec<&(u64, Value)> = trames.iter().filter(|(_, v)| v["evenement"]["kind"] == "Token").collect();
     assert!(mots.len() >= MOTS, "les {MOTS} mots du pas sont dans le flux : {}", mots.len());
