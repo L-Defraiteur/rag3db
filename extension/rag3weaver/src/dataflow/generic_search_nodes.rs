@@ -2535,7 +2535,7 @@ impl Node for FuseResultsNode {
                 fused.into_iter().enumerate().map(|(i, u)| (cle(&u), i, u)).collect();
             ranges.sort_by(|a, b| match (a.0, b.0) {
                 (Some(x), Some(y)) => x.cmp(&y).then(a.1.cmp(&b.1)),
-                (Some(_), None) => std::cmp::Ordering::Less,
+                (Some(_), None) => std::cmp::Ordering::Greater,
                 (None, Some(_)) => std::cmp::Ordering::Greater,
                 (None, None) => a.1.cmp(&b.1),
             });
