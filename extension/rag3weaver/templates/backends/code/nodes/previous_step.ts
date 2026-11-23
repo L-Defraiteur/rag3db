@@ -33,7 +33,7 @@ function facts(w: Work, tools: string[], max: number): string[] {
 function run({ inputs, config }: { inputs: { work: Work }; config: { style: string; fact_tools?: string[]; max_facts?: number } }) {
   const w = inputs.work;
   const last = w.last_text.trim();
-  const found = facts(w, config.fact_tools ?? ["search_code", "usages", "callees", "impact", "outline"], config.max_facts ?? 40);
+  const found = facts(w, config.fact_tools ?? ["search_code", "usages", "callees", "impact", "outline", "grep_files"], config.max_facts ?? 40);
   if (w.read.length === 0 && w.wrote.length === 0 && w.command === null && last === "" && found.length === 0) {
     return { block: "" };
   }

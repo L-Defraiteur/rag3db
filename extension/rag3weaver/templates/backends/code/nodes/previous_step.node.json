@@ -112,7 +112,8 @@
         "usages",
         "callees",
         "impact",
-        "outline"
+        "outline",
+        "grep_files"
       ],
       "description": "Les outils dont les résultats donnent des faits à garder : leurs lignes « chemin:ligne »."
     },
