@@ -1745,6 +1745,10 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(super::guard_nodes::JoinNodeFactory { all: true }));
     registry.register(Box::new(super::guard_nodes::JoinNodeFactory { all: false }));
     registry.register(Box::new(super::guard_nodes::FirstMatchNodeFactory));
+    // The end-of-step conditions, one question each.
+    for c in super::step_conditions::conditions() {
+        registry.register(Box::new(super::step_conditions::ConditionFactory(c)));
+    }
     // Les sections d'un Markdown, pour l'archiviste (M4).
     registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));

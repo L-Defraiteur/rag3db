@@ -15,6 +15,7 @@ pub mod checkpoint_store;
 pub mod background;
 pub mod spawn_nodes;
 pub mod guard_nodes;
+pub mod step_conditions;
 pub mod graph;
 pub mod node;
 pub mod observe;
