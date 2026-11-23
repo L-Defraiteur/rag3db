@@ -942,7 +942,8 @@ impl DaemonHost {
                     let outils = OutilsDuChat::de(b, &declares, dans_une_tache)
                         .avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root())
                         .avec_la_veille_de_l_index(move |index, vue| self.veiller_l_index(&veille, index, vue))
-                        .avec_les_vues(self.vues_de(&hosted.id));
+                        .avec_les_vues(self.vues_de(&hosted.id))
+                        .avec_les_imports(self.outils_importes(b, &hosted.id));
                     // Hors d'une tâche, une commande en attente se décide sur la carte
                     // d'accord (lot 7) ; dans une tâche, la boîte du superviseur la tient.
                     #[cfg(feature = "code")]
@@ -1345,6 +1346,21 @@ pub(crate) struct OutilsDuChat<'a> {
     pas_pret: Option<Box<dyn Fn(&Value, Option<Value>) + Send + Sync + 'a>>,
     /// A child's views and its active one (the sub-agent with views): read at its opening.
     vues: Option<(Vec<String>, String)>,
+    /// **The tools imported from other backends** (the manifest's `imports`).
+    importes: Option<OutilsImportes<'a>>,
+}
+
+/// **The tools a backend imports from others** ([`DaemonHost::outils_importes`]): their declarations, and the call that
+/// sends one of them to its backend (`None` for a name that is not imported).
+pub(crate) struct OutilsImportes<'a> {
+    defs: Vec<crate::tools::ToolDef>,
+    appeler: Box<dyn Fn(&crate::llm::ToolCall) -> Option<crate::llm::Turn> + Send + Sync + 'a>,
+}
+
+impl<'a> OutilsImportes<'a> {
+    pub(crate) fn new(defs: Vec<crate::tools::ToolDef>, appeler: impl Fn(&crate::llm::ToolCall) -> Option<crate::llm::Turn> + Send + Sync + 'a) -> Self {
+        Self { defs, appeler: Box::new(appeler) }
+    }
 }
 
 impl<'a> OutilsDuChat<'a> {
@@ -1380,7 +1396,7 @@ impl<'a> OutilsDuChat<'a> {
             }
         }
         Self {
-            inner, ecrivent, retires, empreinte: None, rattacher: None, pas_pret: None, vues: None, ouvrir_la_tache: None,
+            inner, ecrivent, retires, empreinte: None, rattacher: None, pas_pret: None, vues: None, importes: None, ouvrir_la_tache: None,
             #[cfg(feature = "code")]
             en_attente: None,
         }
@@ -1595,11 +1611,29 @@ impl OutilsDuChat<'_> {
         self.vues = vues;
         self
     }
+
+    /// The tools imported from other backends.
+    pub(crate) fn avec_les_imports(mut self, importes: OutilsImportes<'a>) -> Self {
+        self.importes = Some(importes);
+        self
+    }
+
+    /// A call to an imported tool, sent to its backend; `None` for the others.
+    fn importe(&self, call: &crate::llm::ToolCall) -> Option<crate::llm::Turn> {
+        let i = self.importes.as_ref()?;
+        if self.inner.tool_defs().iter().any(|d| d.name == call.name) {
+            return None;
+        }
+        (i.appeler)(call)
+    }
 }
 
 impl crate::agent::ToolBox for OutilsDuChat<'_> {
     fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
         if let Some(t) = self.ouvrir_une_tache(call) {
+            return t;
+        }
+        if let Some(t) = self.importe(call) {
             return t;
         }
         match self.avec_la_vue(call) {
@@ -1611,6 +1645,9 @@ impl crate::agent::ToolBox for OutilsDuChat<'_> {
         if let Some(t) = self.ouvrir_une_tache(call) {
             return t;
         }
+        if let Some(t) = self.importe(call) {
+            return t;
+        }
         match self.avec_la_vue(call) {
             Err(t) => t,
             Ok(c) => self.appeler(&c, || self.inner.call_in(&c, run)),
@@ -1620,6 +1657,9 @@ impl crate::agent::ToolBox for OutilsDuChat<'_> {
         if let Some(t) = self.ouvrir_une_tache(call) {
             return t;
         }
+        if let Some(t) = self.importe(call) {
+            return t;
+        }
         match self.avec_la_vue(call) {
             Err(t) => t,
             Ok(c) => self.appeler(&c, || self.inner.call_with(&c, run, inv)),
@@ -1627,6 +1667,10 @@ impl crate::agent::ToolBox for OutilsDuChat<'_> {
     }
     fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
         let mut defs: Vec<crate::tools::ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect();
+        if let Some(i) = &self.importes {
+            let leurs: Vec<crate::tools::ToolDef> = i.defs.iter().filter(|d| !defs.iter().any(|n| n.name == d.name)).cloned().collect();
+            defs.extend(leurs);
+        }
         if self.ouvrir_la_tache.is_some() {
             defs.push(crate::tools::ToolDef {
                 name: OPEN_CODE_TASK.into(),

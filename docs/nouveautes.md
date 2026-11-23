@@ -6,6 +6,10 @@
   d'annonce n'est plus prise pour la réponse : après son dernier outil, il écrit la réponse entière (les commandes
   exactes, l'explication) avant de clore. Et une question posée par un agent superviseur reçoit sa réponse comme
   celle d'une personne : un `step_done` muet juste après un outil y est refusé aussi.
+- 23 novembre 2026 — **L'agent d'un dépôt peut lire et écrire ta mémoire longue.** Le manifeste d'un backend importe
+  des outils d'un autre backend : `"imports": [{"backend": "<manifeste de la mémoire>", "tools": ["recall_fiches",
+  "get_fiche", "put_fiche"]}]`. L'agent les voit à côté des siens, et ses écritures sont signées de sa clé. Rien ne
+  s'importe sans cette ligne, et c'est toi qui choisis les outils.
 - 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
   l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
   dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
