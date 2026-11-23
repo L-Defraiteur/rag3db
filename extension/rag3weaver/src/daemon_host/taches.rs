@@ -139,7 +139,7 @@ pub const SANS_GIT: &str = "sans git : les changements se relisent par le diff d
 
 /// Les fichiers d'un dossier, chemin relatif (séparé par `/`) → empreinte blake3,
 /// et leur taille totale. Les liens symboliques ne sont pas suivis.
-fn empreintes_de(racine: &Path, exclus: &[String]) -> Result<(std::collections::BTreeMap<String, String>, u64), String> {
+pub(super) fn empreintes_de(racine: &Path, exclus: &[String]) -> Result<(std::collections::BTreeMap<String, String>, u64), String> {
     let mut out = std::collections::BTreeMap::new();
     let mut octets = 0u64;
     parcourir(racine, exclus, &mut |relatif, chemin| {
@@ -207,7 +207,7 @@ fn recopier_par_un_voisin(de: &Path, vers: &Path, copier: &dyn Fn(&Path, &Path) 
 
 /// L'empreinte d'un fichier, hachée en flux (un gros fichier ne monte pas en
 /// mémoire) ; `None` s'il n'existe pas ou ne se lit pas.
-fn empreinte(chemin: &Path) -> Option<String> {
+pub(super) fn empreinte(chemin: &Path) -> Option<String> {
     let f = std::fs::File::open(chemin).ok()?;
     let mut h = blake3::Hasher::new();
     h.update_reader(f).ok()?;

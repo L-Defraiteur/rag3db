@@ -2119,6 +2119,8 @@ impl DaemonHost {
         // The turn's start, for its facts at the end (23 Nov 2026).
         #[cfg(feature = "code")]
         let debut = self.task_tree_head(parent, task);
+        #[cfg(feature = "code")]
+        let debut_copie = self.task_copy_snapshot(parent, task);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
@@ -2130,7 +2132,10 @@ impl DaemonHost {
         }
         // **The facts of the turn, by the host**, before its end: what git sees changed, or that nothing did.
         #[cfg(feature = "code")]
-        let faits = debut.and_then(|(arbre, avant)| self.say_turn_changes(&files, &arbre, &avant));
+        let faits = match debut {
+            Some((arbre, avant)) => self.say_turn_changes(&files, &arbre, &avant),
+            None => debut_copie.and_then(|(racine, exclus, avant)| self.say_copy_turn_changes(&files, &racine, &exclus, &avant)),
+        };
         #[cfg(not(feature = "code"))]
         let faits: Option<Value> = None;
         let line = files.append("host", "ended", None, &outcome.ended)?;
