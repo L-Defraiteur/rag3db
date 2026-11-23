@@ -3024,6 +3024,9 @@ impl DaemonHost {
                     // mémoire déclarée, `code` pour un dépôt git, `project` pour un
                     // projet rag3weaver déclaratif sans dépôt (le deck builder).
                     "repo": repo,
+                    // **The place it holds** (its workspace root, else none): the page finds a folder it just opened by
+                    // this path, since `repo` names the git repository that holds the manifest, not the folder.
+                    "root": espace.as_deref().map(|r| r.to_string_lossy().into_owned()),
                     "branch": branche,
                     "kind": declare.map(crate::backend::BackendKind::as_str).unwrap_or(repli),
                     // D'où vient `kind` : le manifeste (son gabarit) ou le repli de
