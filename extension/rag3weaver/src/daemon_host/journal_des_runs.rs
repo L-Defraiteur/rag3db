@@ -203,6 +203,11 @@ fn reglage(nom: &str, defaut: u64) -> u64 {
 }
 
 impl JournalDesRuns {
+    /// The folder that holds the runs' root still exists (the host's data folder): else nothing is written.
+    fn donnees_presentes(&self) -> bool {
+        self.racine.exists() || self.racine.parent().is_none_or(|p| p.exists())
+    }
+
     /// Le journal sous `racine` ; ses bornes par `RAG3WEAVER_RUNS_MAX_OCTETS`
     /// (tout le journal, compressé, 5 Gio), `RAG3WEAVER_RUNS_MAX_JOURS` (90) et
     /// `RAG3WEAVER_RUN_MAX_OCTETS` (par run, 2 Mio).
@@ -502,6 +507,9 @@ impl JournalDesRuns {
         o.entry("evenements").or_insert(json!([]));
         let dossier = self.racine.join(backend);
         let fichier = dossier.join(format!("{run}.{EXTENSION}"));
+        if !self.donnees_presentes() {
+            return Err(format!("{} : les données de l'hôte ont disparu, le run n'est pas écrit", self.racine.display()));
+        }
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         let octets = ecrire_le_fichier(&fichier, &v).map_err(|e| format!("{} : {e}", fichier.display()))?;
         let mut garde = self.inventaire.lock().unwrap_or_else(|p| p.into_inner());
@@ -587,6 +595,11 @@ impl JournalDesRuns {
         }
         if let Value::Object(o) = &mut v {
             o.extend(r.ajouts);
+        }
+        // **A host whose data went away never recreates them** (23 Nov 2026): a late run (a reindex after a witness
+        // ended) is dropped, not written into a recreated folder.
+        if !self.donnees_presentes() {
+            return;
         }
         let ecrit = std::fs::create_dir_all(&dossier).and_then(|_| ecrire_le_fichier(&fichier, &v));
         match ecrit {
