@@ -1593,6 +1593,7 @@ impl<'a> Agent<'a> {
         self.emit(crate::events::CatalogEvent::Consumed {
             run: run_id.to_string(),
             agent: self.name.clone(),
+            ms: usage.ms,
             iteration,
             resource: c.resource.clone(),
             provider: c.provider.clone(),
