@@ -38,6 +38,11 @@ fonction composite**. Ce qui est composite se déclare en graphe à partir de pr
 | Signer, vérifier (HMAC, JWT) | rien | `Sign` et `VerifySignature`, scellés, qui prennent une `SecretRef` | un nœud scripté qui manipule la clé |
 | Échanger un jeton (OAuth, compte de service) | `gcp_auth::TokenSource`, en dur pour Vertex | `TokenExchange`, scellé, qui rend une `SecretRef` fraîche | garder le jeton dans l'état du graphe |
 
+**La forme de Lucie, pour plus tard** : « un nœud secret holder : tout ce qui passe par là pour le remplir a sa
+sérialisation désactivée (et l'écoute interdite), et de l'autre côté sort un handle de secret chiffré ». C'est la
+`SecretRef`, dite par son mécanisme : un nœud dont l'entrée n'est ni sérialisée ni écoutable, et dont la sortie est une
+poignée chiffrée.
+
 **Injecter un secret sans l'exposer à l'agent** (Lucie, 23 novembre : « l'agent ne voit pas que tu passes ce
 paramètre à la requête, et ce n'est tracé nulle part ») :
 1. **Un outil offert à l'agent est un graphe**, et le schéma de l'outil ne montre que ses `%% param`. **Un paramètre lié
@@ -166,6 +171,11 @@ Ce qui manque et que rien ne remplace aujourd'hui :
 Le reste existe déjà, ou se compose de ces primitives.
 
 ## L'ordre proposé
+
+**La priorité de Lucie** (23 novembre, au soir) : « je vois peut-être trop loin tout de suite ; la sécu nous ralentit
+pour pas grand-chose pour l'instant, notamment avec les portes du mode auto ». **D'abord** l'erreur typée, les canaux
+avec `emit` et `listen`, la chaîne de gardes et le témoin déclaratif. **Ensuite seulement**, quand un graphe réel les
+demande : les secrets, la signature, l'OAuth et le transport déclaré.
 
 1. **L'erreur comme sortie typée**, sur le moteur : elle touche tous les nœuds sans en ajouter un.
 2. **Les canaux durables, `emit` et `listen`** (déjà en tête de la phase 1).
