@@ -85,8 +85,12 @@ fn plain_cannot_answer(l: &Value) -> Option<String> {
 
 /// **Whether the plain mode stops**: only when the teammate is suspended on a card it cannot answer (a host line « en
 /// attente du superviseur » after an approval still unanswered); a card while the teammate works on is said, not a stop.
-fn plain_suspended_on_a_card(_lines: &[Value]) -> bool {
-    false
+fn plain_suspended_on_a_card(lines: &[Value]) -> bool {
+    let answered = |id: &Value| lines.iter().any(|r| r["reply_to"] == *id && r["kind"] == "answer");
+    let Some(n) = lines.iter().rposition(|l| l["from"] == "teammate" && l["kind"] == "approval" && !answered(&l["id"])) else {
+        return false;
+    };
+    lines[n + 1..].iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur")))
 }
 
 /// The last conversation of a repository in the host's list of teammates.
@@ -304,14 +308,18 @@ fn lancer(o: Options) -> Result<(), String> {
                         if !boite_au_flux.load(Ordering::SeqCst) {
                             ecrire(&plain::ligne_de_boite(l));
                         }
-                        // **A card the plain mode cannot answer** is said, and the session stops (c7, 22 nov.).
+                        // **A card the plain mode cannot answer** is said once (c7, 22 nov.)…
                         if let Some(dit) = plain_cannot_answer(l).filter(|_| !lignes.iter().any(|r| r["reply_to"] == l["id"])) {
                             eprintln!("[tty] {dit}");
-                            arret.store(true, Ordering::SeqCst);
                         }
                         end_seen = (l["kind"] == "ended").then(std::time::Instant::now);
                     }
                     lues.store(lignes.len(), Ordering::SeqCst);
+                    // … and the session stops only when the teammate is suspended on it (essai de la demande 4).
+                    if plain_suspended_on_a_card(&lignes) {
+                        eprintln!("[tty] l'équipier attend ton accord pour continuer : réponds dans la vue (rag3weaver-tty sans --plain) ou dans l'IDE");
+                        arret.store(true, Ordering::SeqCst);
+                    }
                 }
                 if let Some(t) = end_seen {
                     let state = client::lire(&agent, &ep, "/ide/teammate/list?supervisor=supervisor").ok().and_then(|v| {
