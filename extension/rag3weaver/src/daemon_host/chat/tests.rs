@@ -3192,5 +3192,8 @@ fn the_pages_of_a_repository_speak_git() {
 /// The witness of the lot `billing-views`, in a file of its own.
 mod human_turn_past_the_cap;
 
+/// A tool of another backend, imported by the manifest (23 November 2026), in a file of its own.
+mod imported_tools;
+
 /// The chat links only a path it resolved (22 November 2026), in a file of its own.
 mod resolved_links;
