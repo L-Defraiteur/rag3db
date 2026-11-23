@@ -146,13 +146,13 @@ pub fn resoudre(agent: &ureq::Agent, ep: &Endpoint, depot: &str) -> Result<Depot
     depot_resolu(&etat, &resolu)
 }
 
-/// **L'en-tête d'un worktree** : « dépôt · branche · tâche », d'après l'état de
+/// **L'en-tête d'un worktree** : « dépôt · branche · conversation », d'après l'état de
 /// l'hôte et le manifeste du worktree.
 pub fn entete(etat: &Value, manifest: &str, tache: &str) -> String {
     let b = etat["backends"].as_array().and_then(|v| v.iter().find(|b| b["manifest"] == manifest));
     let repo = b.and_then(|b| b["repo"].as_str()).unwrap_or("");
     let branche = b.and_then(|b| b["tache"]["branche"].as_str().or(b["branch"].as_str())).unwrap_or("");
-    [repo.to_string(), branche.to_string(), format!("tâche {tache}")].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
+    [repo.to_string(), branche.to_string(), format!("conversation {tache}")].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")
 }
 
 #[cfg(test)]
@@ -183,9 +183,9 @@ mod tests {
 
     #[test]
     fn the_header_names_the_repo_the_task_branch_and_the_task() {
-        assert_eq!(entete(&etat(), "/t/parle/backend.json", "parle"), "petit-depot · tache/parle · tâche parle");
-        assert_eq!(entete(&etat(), "/c/code-coeur/backend.json", "doc"), "rag3db · master · tâche doc");
-        assert_eq!(entete(&etat(), "/inconnu", "x"), "tâche x");
+        assert_eq!(entete(&etat(), "/t/parle/backend.json", "parle"), "petit-depot · tache/parle · conversation parle");
+        assert_eq!(entete(&etat(), "/c/code-coeur/backend.json", "doc"), "rag3db · master · conversation doc");
+        assert_eq!(entete(&etat(), "/inconnu", "x"), "conversation x");
     }
 
     /// **A conversation, not a task** (23 Nov.: the header said « tâche 23-11-06h38 » to a person who opened a
