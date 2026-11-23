@@ -1734,6 +1734,9 @@ mod context_tests;
 /// By default the view shows what speaks to the user (23 November 2026).
 #[cfg(test)]
 mod quiet_tests;
+/// The host's copy is never shown in a turn whose text was streamed (23 November 2026).
+#[cfg(test)]
+mod host_copy_tests;
 /// The agent's text is not cut in two by its run's end (23 November 2026).
 #[cfg(test)]
 mod late_tokens_tests;
