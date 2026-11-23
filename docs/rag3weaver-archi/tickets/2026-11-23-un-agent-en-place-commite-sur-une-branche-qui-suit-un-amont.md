@@ -23,6 +23,20 @@ fin de tour atterrit aussi dans son arbre.
 Un tour sans fichier changé ne commite rien et ne crée aucune branche dans son arbre ; mais une commande qui laisse un
 fichier non ignoré suffit à faire un commit.
 
+## Le chemin de l'ancien atelier : le même risque
+
+Quand le dépôt du backend est le dépôt de l'utilisatrice (le backend `rag3db.json` de son arbre principal, la forme de
+l'ancien atelier), le mode en place ne s'applique pas : il ne joue que pour un dépôt de code distinct de celui du
+backend. La tâche ouvre alors un worktree et une branche `agent/<nom>` **dans son dépôt** (`git worktree list` les
+montre), et la fin de tour commite le travail sur cette branche puis tente `merge --ff-only` dans son dossier, ce qui
+avance son `master`.
+
+Le soir du 23 novembre (tâche `12389e156742/23-11-20h48`, essai de Lucie depuis le terminal dans
+`~/git_workspaces/rag3db`), **seules deux gardes fortuites ont tenu** : son `master` avait avancé depuis le départ de la
+tâche (`git pull` entre-temps), et son dossier portait une modification suivie (le sous-module
+`extension/rag3weaver/codeparsers`). L'une ou l'autre retient la fusion (`merge_held`). Sans elles, le fichier écrit
+par l'agent serait arrivé sur son `master` par avance rapide.
+
 ## Ce qu'on attend
 
 Un garde qui lit l'effet, pas une liste de dépôts : une tâche en place sur une branche qui suit un amont, dans un dépôt
