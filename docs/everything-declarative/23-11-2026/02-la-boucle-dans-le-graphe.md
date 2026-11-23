@@ -108,3 +108,43 @@ s'écoute lui-même. Elle ne demande qu'une paire de primitives à usage unique,
    avec un vol unique par clé (la primitive 6 de la page 01 devient une option de `listen`) ;
 4. **la chaîne de gardes de fin de pas** (avec archi), qui décide de l'`emit` suivant ;
 5. **les boucles réécrites**, chacune dans son lot : le réveil de l'équipier, son pas, puis la boucle de l'agent.
+
+## Brancher ses nœuds sans recopier le graphe livré
+
+Lucie, 23 novembre : « je ne sais pas si c'est terrible de parler de hook, vu qu'en fait c'est juste des sorties de
+nœud, non ? ». Dans un graphe tout déclaré, il n'y a pas de mécanisme « hook » : une vérification après la réponse est
+un nœud de condition branché sur la sortie du nœud « réponse », et sa branche « pas bon » fait un `emit` vers le canal
+de tête. **Ce qui reste à concevoir**, c'est la manière dont l'utilisatrice branche ses nœuds sur le graphe livré
+**sans le recopier**. Une copie fige le graphe, et nos mises à jour ne lui arrivent plus.
+
+**Ce qui existe déjà** :
+- **le sous-graphe en nœud** (`GraphNode`) : un graphe entier devient un nœud, dont les ports libres sont les entrées et
+  les sorties ;
+- **le sous-graphe cité** (`CitedGraphNodeFactory`) : un nœud qui nomme un graphe d'un registre, au lieu de le recopier ;
+- **les gabarits livrés** par `builtin:<nom>`, avec la copie locale gardée à part quand l'utilisatrice en modifie un.
+  C'est le piège de la copie figée ;
+- les directives du mmd (`param`, `result`, `tool`, `description`, `on`, `policy`, `choices`, `async`). **Aucune
+  n'importe ni n'étend un autre graphe.**
+
+**Ce qui manque : la surcouche.**
+1. Dans un graphe livré, chaque nœud a **un nom stable**, son identifiant dans le mmd, que nos mises à jour s'engagent à
+   garder ; un renommage se dit dans la nouveauté du lot.
+2. **Une surcouche est un petit mmd** qui commence par `%% extends: builtin:<graphe>`. Ses arêtes citent les nœuds du
+   livré par leur nom :
+   ```
+   %% extends: builtin:agents/chat/turn.mmd
+   %% between: reply.text
+   reply -->|text| check["Decide(question='la réponse répond-elle à la demande ?', labels='yes|no', threshold=0.7)"]
+   check -->|no| again["emit(channel='turn')"]
+   ```
+   `%% between: <nœud>.<port>` interpose la surcouche entre cette sortie et son aval ; sans elle, les nœuds s'ajoutent à
+   côté de l'aval existant.
+3. **L'hôte compose à l'ouverture** le livré et la surcouche en un seul graphe, puis le valide entier, règle des boucles
+   comprise. **Une surcouche qui cite un nœud ou un port disparu est refusée**, en nommant le nœud et le graphe livré, et
+   le livré seul tourne. Ce n'est jamais un défaut silencieux.
+4. **Les mots** : dans les textes pour les utilisateurs, « hook » reste le mot. Dans le code et les gabarits, on dit
+   **sortie de nœud** et **surcouche** (`extends`).
+
+**Le témoin** : une surcouche qui s'interpose après `reply` relance le tour ; un livré dont le nœud est renommé fait
+refuser la surcouche, avec son nom. La surcouche vient en phase 1, après `emit`, `listen` et la chaîne de gardes,
+puisqu'elle les compose.
