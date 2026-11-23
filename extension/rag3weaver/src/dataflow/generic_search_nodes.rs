@@ -304,6 +304,8 @@ pub struct SearchSourceNode {
     query: String,
     options: SearchOptions,
     mode: SearchMode,
+    /// Only what this author wrote (23 November 2026): « me » is the agent the call is made for, given by the host.
+    author: Option<String>,
 }
 
 /// Comment la recherche choisit entre l'index et les fichiers.
@@ -408,8 +410,15 @@ impl SearchSourceNode {
             query: query.to_string(),
             options,
             mode: SearchMode::Auto,
+            author: None,
         }
     }
+    /// Only what `author` wrote: « me » (the agent the call is made for), an agent key; empty or « * »: every author.
+    pub fn with_author(mut self, author: &str) -> Self {
+        self.author = Some(author.to_string()).filter(|a| !a.is_empty() && a != "*");
+        self
+    }
+
     pub fn with_mode(mut self, mode: SearchMode) -> Self {
         self.mode = mode;
         self
@@ -448,6 +457,25 @@ impl Node for SearchSourceNode {
             self.target_name = qp.target_name;
             self.query = qp.query;
             self.options = qp.options;
+        }
+
+        // **The author filter** (23 November 2026): added to the caller's filter, never in its place. « me » is the
+        // agent the call is made for (the key the host gave, the same `writes.author` signs); without one, refused.
+        if let Some(author) = self.author.clone() {
+            let who = if author == "me" {
+                ctx.service::<String>(crate::backend::AGENT_SERVICE).cloned().ok_or(
+                    "SearchSourceNode: author « me » needs an agent behind the call; give an agent key, or « * »",
+                )?
+            } else {
+                author
+            };
+            let by_author: crate::filter::FilterCondition =
+                serde_json::from_value(serde_json::json!({"field": {"key": "author", "value": who}}))
+                    .map_err(|e| format!("SearchSourceNode: the author filter: {e}"))?;
+            self.options.filter_condition = Some(match self.options.filter_condition.take() {
+                Some(theirs) => crate::filter::FilterCondition::Must(vec![theirs, by_author]),
+                None => by_author,
+            });
         }
 
         let catalog = ctx

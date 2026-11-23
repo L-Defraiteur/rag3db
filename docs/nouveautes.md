@@ -28,6 +28,11 @@
   arguments, la raison de fin et l'heure du premier et du dernier morceau (borné, la coupe dite).
   `rag3weaver-backend trace <conversation>` l'imprime, une ligne JSON par appel, pour comparer ce que le modèle a dit
   à ce que la vue a montré.
+- 23 novembre 2026 — **« Mes fiches » : la recherche structurée filtre par son auteur.** Toute recherche bâtie sur
+  `search_structured` (dont `recall_fiches` et `recall_apports`) prend `author` (« me », la clé d'un agent, ou « * »)
+  et `swarm` (« mine », un nom, ou « * ») ; « me » est l'agent pour qui l'appel est fait, donné par l'hôte. Le filtre
+  d'auteur s'ajoute à celui de l'appelant, sans le remplacer ; `swarm` est accepté avant que les swarms existent.
+
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin
