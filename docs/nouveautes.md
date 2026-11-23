@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Chaque outil dit combien de temps ont pris ses nœuds.** La réponse de tout outil porte
+  `metadata.timings_ms` : la durée de chaque nœud de son graphe, en millisecondes, et le total du run. Un banc ou
+  l'IDE la lisent telle quelle, sans instrumenter l'outil ; elle n'entre pas dans le texte que lit le modèle.
+
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
