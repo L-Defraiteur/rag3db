@@ -25,6 +25,8 @@ pub use runs_in_flight::{RunsInFlight, RUNS_IN_FLIGHT_SERVICE};
 #[cfg(test)]
 mod flux_tests;
 #[cfg(test)]
+mod top_k_before_render_tests;
+#[cfg(test)]
 mod jetons_tests;
 #[cfg(test)]
 mod annulation_tests;
