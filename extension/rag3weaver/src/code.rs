@@ -1889,6 +1889,26 @@ pub fn analyze_in_project_avec(
         .filter(|l| matches!(l.provenance.as_deref(), Some("builtin" | "dependency")))
         .map(|l| l.name.clone())
         .collect();
+    // **The dependencies the repository declares, by language** (23 November 2026, ticket
+    // `2026-11-23-le-graphe-depend-de-la-taille-des-paquets`): `externes_sures` reads the libraries imported by the
+    // files of this batch, so a member of a declared dependency (`tempfile::tempdir()` in a file that does not
+    // `use tempfile`) was external when another file of the batch imported it, and a rendez-vous otherwise — a file
+    // edited alone, in a batch of one, invented them. The manifests are the repository's, whatever the batch.
+    let dependances_du_depot: HashMap<String, std::collections::HashSet<String>> = manifestes
+        .map(|m| {
+            m.dependances_par_langue
+                .iter()
+                .map(|(l, d)| (l.clone(), d.iter().map(|n| n.trim().to_lowercase().replace('-', "_")).collect()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let dependance_declaree = |fichier: &str, racine: &str| -> bool {
+        let langue = match language_of_path(fichier).as_str() {
+            "typescript" => "javascript".to_string(),
+            l => l.to_string(),
+        };
+        dependances_du_depot.get(&langue).is_some_and(|d| d.contains(&racine.trim().to_lowercase().replace('-', "_")))
+    };
     // **Ce qu'un `export * from './x'` réexporte** (20 novembre 2026) : les noms de premier niveau que `./x` définit
     // dans ce lot, et eux seuls — on ne devine pas un nom qui n'y est pas.
     let mut premier_niveau: HashMap<String, Vec<String>> = HashMap::new();
@@ -2052,6 +2072,7 @@ pub fn analyze_in_project_avec(
                 if let Some(path_root) = path_root {
                     if codeparsers::import_resolution::provenance::est_builtin(abs, path_root)
                         || externes_sures.contains(path_root)
+                        || dependance_declaree(abs, path_root)
                     {
                         continue;
                     }
