@@ -1376,6 +1376,11 @@ impl StepTools<'_> {
     /// Le rendu d'un outil de travail, noté au pas (aboutis seulement).
     fn noted(&self, call: &ToolCall, turn: Turn) -> Turn {
         self.step.note_tool(call, &turn);
+        // A command that failed is kept for the turn's facts (23 Nov 2026).
+        #[cfg(feature = "code")]
+        if call.name == "run_command" {
+            super::land::note_turn_failure(&self.step.files, &turn.content);
+        }
         turn
     }
 }
@@ -2121,6 +2126,9 @@ impl DaemonHost {
         let debut = self.task_tree_head(parent, task);
         #[cfg(feature = "code")]
         let debut_copie = self.task_copy_snapshot(parent, task);
+        // The failures of a turn before this one are not this turn's.
+        #[cfg(feature = "code")]
+        let _ = super::land::take_turn_failures(&files);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
