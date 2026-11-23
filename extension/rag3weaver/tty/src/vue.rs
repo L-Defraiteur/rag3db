@@ -1719,6 +1719,9 @@ mod interleave_tests;
 /// The thinking scrolls like a station board (23 November 2026).
 #[cfg(test)]
 mod ticker_tests;
+/// The view stays at work until the turn's ended (23 November 2026).
+#[cfg(test)]
+mod busy_tests;
 /// The agent's text is seen as it is written (23 November 2026).
 #[cfg(test)]
 mod streamed_text_tests;
