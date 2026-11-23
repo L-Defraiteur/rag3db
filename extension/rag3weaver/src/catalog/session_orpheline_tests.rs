@@ -13,7 +13,7 @@ use crate::embedder::MockEmbedder;
 use crate::search::SearchSignals;
 use crate::{CatalogConfig, EntityConfig, SimpleFieldDef};
 
-fn catalogue() -> Catalog {
+fn catalog_with_cards() -> Catalog {
     let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
     let config = CatalogConfig { name: Some("sessions".into()), entities: HashMap::new(), relations: HashMap::new(), embedding_dim: 4, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
@@ -29,16 +29,16 @@ fn catalogue() -> Catalog {
     catalog
 }
 
-fn perimetre() -> BTreeMap<String, CypherValue> {
+fn scope_a() -> BTreeMap<String, CypherValue> {
     BTreeMap::from([("classeur".to_string(), CypherValue::String("A".into()))])
 }
 
 /// The open session as stored, rewritten by `retouche` (what a process gone, or an older binary, left behind).
-fn laisser(catalog: &mut Catalog, retouche: impl Fn(&mut serde_json::Value)) -> String {
-    let s = catalog.begin_snapshot("Fiche", &perimetre(), false).unwrap().session;
-    let cle = catalog.session_key("Fiche", &perimetre());
+fn leave_open(catalog: &mut Catalog, edit: impl Fn(&mut serde_json::Value)) -> String {
+    let s = catalog.begin_snapshot("Fiche", &scope_a(), false).unwrap().session;
+    let cle = catalog.session_key("Fiche", &scope_a());
     let mut v: serde_json::Value = serde_json::from_str(&catalog.read_meta_key(&cle).unwrap().unwrap()).unwrap();
-    retouche(&mut v);
+    edit(&mut v);
     catalog.persist_meta_key(&cle, &v.to_string()).unwrap();
     catalog.oublier_les_sessions("Fiche");
     s
@@ -46,27 +46,27 @@ fn laisser(catalog: &mut Catalog, retouche: impl Fn(&mut serde_json::Value)) -> 
 
 #[test]
 fn a_session_whose_process_is_gone_is_taken_over() {
-    let mut catalog = catalogue();
+    let mut catalog = catalog_with_cards();
     // A pid that does not run (above the kernel's pid_max), with a start time.
-    let vieille = laisser(&mut catalog, |v| v["owner"] = serde_json::json!("4194399:12345"));
-    let reprise = catalog.begin_snapshot("Fiche", &perimetre(), false).expect("a session whose process is gone is taken over");
+    let vieille = leave_open(&mut catalog, |v| v["owner"] = serde_json::json!("4194399:12345"));
+    let reprise = catalog.begin_snapshot("Fiche", &scope_a(), false).expect("a session whose process is gone is taken over");
     assert_eq!(reprise.replaced.as_deref(), Some(vieille.as_str()));
 }
 
 #[test]
 fn a_session_that_names_no_owner_is_taken_over() {
-    let mut catalog = catalogue();
-    let vieille = laisser(&mut catalog, |v| {
+    let mut catalog = catalog_with_cards();
+    let vieille = leave_open(&mut catalog, |v| {
         v.as_object_mut().unwrap().remove("owner");
     });
-    let reprise = catalog.begin_snapshot("Fiche", &perimetre(), false).expect("a session left by an older binary is taken over");
+    let reprise = catalog.begin_snapshot("Fiche", &scope_a(), false).expect("a session left by an older binary is taken over");
     assert_eq!(reprise.replaced.as_deref(), Some(vieille.as_str()));
 }
 
 #[test]
 fn a_session_whose_owner_runs_is_refused() {
-    let mut catalog = catalogue();
-    let s = catalog.begin_snapshot("Fiche", &perimetre(), false).unwrap().session;
-    let err = catalog.begin_snapshot("Fiche", &perimetre(), false).unwrap_err().to_string();
+    let mut catalog = catalog_with_cards();
+    let s = catalog.begin_snapshot("Fiche", &scope_a(), false).unwrap().session;
+    let err = catalog.begin_snapshot("Fiche", &scope_a(), false).unwrap_err().to_string();
     assert!(err.contains(&s) && err.contains("takeover"), "{err}");
 }
