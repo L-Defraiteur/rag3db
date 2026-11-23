@@ -40,3 +40,53 @@ fn a_step_done_right_after_a_tool_is_refused_until_the_agent_explains() {
         "the explanation after the last tool reaches her: {b:#?}"
     );
 }
+
+/// **Only the step_done that closes the turn asks for the explanation** (Lucie, 23 Nov 2026: an explanation at the
+/// end of the turn, not a comment after each step): a plan of three items, no text asked at the first two step_dones,
+/// asked at the last.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn only_the_step_done_that_closes_the_plan_asks_for_the_explanation() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let refused = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let refused = refused.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let refused = refused.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 16384, move |turns, opts, sink| {
+                let step = step_of(turns);
+                let results = tool_results(turns);
+                let item = ["a", "b", "c"][(step.max(1) - 1).min(2)];
+                let done = json!({ "item": item, "succeeded": true, "done": format!("{item} fait"), "remaining": "" });
+                if results.iter().any(|r| r.contains("\"ok\":false")) {
+                    refused.lock().unwrap().push(item.to_string());
+                    return answer(turns, opts, sink, "Tout est fait : les trois éléments du plan sont posés.", calls(&[("step_done", done)]));
+                }
+                match (step, results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "Je pose un plan en trois éléments.", calls(&[("edit_plan", json!({ "plan": {
+                        "request": "Trois petites choses", "proposal": "Une par pas",
+                        "items": [
+                            { "id": "a", "text": "a", "status": "todo", "alone": true },
+                            { "id": "b", "text": "b", "status": "todo", "alone": true },
+                            { "id": "c", "text": "c", "status": "todo", "alone": true }
+                        ] } }))])),
+                    (1, 1) | (_, 0) => answer(turns, opts, sink, "", calls(&[("list_files", json!({}))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", done)])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_gate_dir(d.path().join("gate")));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the repository opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Fais les trois choses.", &json!({ "by": { "kind": "human", "client": "tty" }, "gate": "bac" })).unwrap();
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let fin = Instant::now() + Duration::from_secs(90);
+    while !ended(&files.mailbox()) && Instant::now() < fin {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let r = refused.lock().unwrap().clone();
+    assert_eq!(r, vec!["c".to_string()], "only the last step_done asks for the explanation: {:#?}", files.mailbox());
+}
