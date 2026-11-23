@@ -69,6 +69,16 @@ pub fn secret_from_env(var: &str) -> Result<String, LlmError> {
     }
 }
 
+/// **Whether the model's thinking is shown** ([`OpenAiLlm::with_thoughts`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Thoughts {
+    /// Asked for and shown, apart from the answer (the default).
+    #[default]
+    Summarized,
+    /// Not asked for: only its count is known.
+    Hidden,
+}
+
 /// Générateur distant. `base_url` est la racine **sans** `/chat/completions`.
 pub struct OpenAiLlm {
     base_url: String,
@@ -85,6 +95,10 @@ pub struct OpenAiLlm {
     google_extras: bool,
     /// `extra_body.google.stream_function_call_arguments` — voir `request_body`.
     stream_tool_arguments: bool,
+    /// **The model's thinking, shown or hidden** (Lucie, 23 Nov 2026: shown by default): toward Google, `Summarized`
+    /// asks for the thought summaries (`thinking_config.include_thoughts`, the effort as `thinking_level`, the same
+    /// knob as `reasoning_effort` for Gemini 3); `Hidden` sends `reasoning_effort` as before.
+    thoughts: Thoughts,
     /// `tool_choice: "validated"` — voir [`OpenAiLlm::with_validated_tool_choice`].
     google_validated_tool_choice: bool,
     /// Le budget de raisonnement déclaré (`models.llm.reasoning`), envoyé
@@ -120,6 +134,7 @@ impl OpenAiLlm {
             vertex_tokens: None,
             google_extras: false,
             stream_tool_arguments: false,
+            thoughts: Thoughts::Summarized,
             google_validated_tool_choice: false,
             reasoning_default: None,
             retry: RetryPolicy::default(),
@@ -355,6 +370,12 @@ impl OpenAiLlm {
         self
     }
 
+    /// Shows or hides the model's thinking ([`Thoughts`]).
+    pub fn with_thoughts(mut self, thoughts: Thoughts) -> Self {
+        self.thoughts = thoughts;
+        self
+    }
+
     pub fn with_google_extras(mut self) -> Self {
         self.google_extras = true;
         self
@@ -409,17 +430,29 @@ impl OpenAiLlm {
         // elle est avalée en silence, mesures à l'appui dans
         // `ReasoningEffort`. `reasoning_effort`, lui, est validé : une valeur
         // invalide répond 400 en nommant celles qu'il accepte.
-        if let Some(effort) = opts.reasoning.or(self.reasoning_default) {
+        let effort = opts.reasoning.or(self.reasoning_default).map(|effort| {
             // Google refuses `minimal` (Vertex, Gemini 3.8 Flash, 20 November 2026: « HTTP 400 : Thinking level is
             // unsupported: THINKING_LEVEL_MINIMAL »): it goes as `low`, as the Anthropic client does, said once.
-            let sent = if self.google_extras && effort == crate::llm::ReasoningEffort::Minimal {
+            if self.google_extras && effort == crate::llm::ReasoningEffort::Minimal {
                 static SAID: std::sync::Once = std::sync::Once::new();
                 SAID.call_once(|| eprintln!("[modèle {}] reasoning minimal is refused by Google: sent as low", self.model));
                 crate::llm::ReasoningEffort::Low
             } else {
                 effort
-            };
-            body.insert("reasoning_effort".into(), json!(sent.as_str()));
+            }
+        });
+        // `extra_body.google`, gathered here and written once at the end: Google's own knobs.
+        let mut google = Map::new();
+        if self.google_extras && self.thoughts == Thoughts::Summarized {
+            // Measured on Vertex (23 November 2026): the thought summaries come back in `content`, marked `thought`,
+            // and the level is held as `reasoning_effort` would hold it.
+            let mut config = json!({ "include_thoughts": true });
+            if let Some(e) = effort {
+                config["thinking_level"] = json!(e.as_str());
+            }
+            google.insert("thinking_config".into(), config);
+        } else if let Some(e) = effort {
+            body.insert("reasoning_effort".into(), json!(e.as_str()));
         }
         // Indépendant de `tools` : on peut vouloir une sortie structurée sans
         // aucun outil, et l'inverse. ⚠ Chez Google, **combiner les deux est en
@@ -481,11 +514,11 @@ impl OpenAiLlm {
             // et le flux se termine sur un `499 CANCELLED` au milieu de la
             // valeur (dump SSE, appel `edit`). Opt-in : `with_streamed_tool_arguments()`.
             if self.google_extras && self.stream_tool_arguments {
-                body.insert(
-                    "extra_body".into(),
-                    json!({ "google": { "stream_function_call_arguments": true } }),
-                );
+                google.insert("stream_function_call_arguments".into(), json!(true));
             }
+        }
+        if !google.is_empty() {
+            body.insert("extra_body".into(), json!({ "google": google }));
         }
         Value::Object(body)
     }
@@ -1634,7 +1667,14 @@ fn read_sse(
             }
         }
 
-        if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty()) {
+        // **A thought summary is reasoning, never the answer** (Vertex, 23 November 2026): Google marks each of its
+        // chunks `extra_content.google.thought`; mixed into the text, it would go back to the model as its answer.
+        let thought = delta["extra_content"]["google"]["thought"] == true;
+        if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty() && thought) {
+            if sink.on_reasoning(text) == Flow::Stop {
+                return Ok((Finish::cancelled().with_tool_calls(ToolAcc::collect(&tools)), usage));
+            }
+        } else if let Some(text) = delta["content"].as_str().filter(|t| !t.is_empty()) {
             if opts.stop.is_empty() {
                 // Rien à surveiller : chemin direct, aucune rétention.
                 if emit(sink, &mut emitted, text).is_err() {
@@ -2258,7 +2298,7 @@ mod tests {
             OpenAiLlm::vertex("jeton", "projet", "global", "google/gemini-2.5-flash"),
         ] {
             let body = llm.request_body(&hello(), &opts);
-            assert!(body["extra_body"].is_null(), "off by default: {}", body["extra_body"]);
+            assert!(body["extra_body"]["google"]["stream_function_call_arguments"].is_null(), "off by default: {}", body["extra_body"]);
             let body = llm.with_streamed_tool_arguments().request_body(&hello(), &opts);
             assert_eq!(body["extra_body"]["google"]["stream_function_call_arguments"], true);
         }
@@ -2516,7 +2556,9 @@ mod tests {
     fn minimal_reasoning_goes_to_google_as_low() {
         let opts = GenOptions::default().with_reasoning(ReasoningEffort::Minimal);
         let google = OpenAiLlm::new("http://x/v1", "m").with_google_extras();
-        assert_eq!(google.request_body(&hello(), &opts)["reasoning_effort"], "low");
+        assert_eq!(google.request_body(&hello(), &opts)["extra_body"]["google"]["thinking_config"]["thinking_level"], "low");
+        let hidden = OpenAiLlm::new("http://x/v1", "m").with_google_extras().with_thoughts(Thoughts::Hidden);
+        assert_eq!(hidden.request_body(&hello(), &opts)["reasoning_effort"], "low");
         let other = OpenAiLlm::new("http://x/v1", "m");
         assert_eq!(other.request_body(&hello(), &opts)["reasoning_effort"], "minimal");
     }
@@ -2540,13 +2582,14 @@ mod tests {
     #[test]
     fn reasoning_effort_goes_to_every_provider_and_thinking_config_is_never_used() {
         // C'est un paramètre de premier plan, pas une extension Google : il
-        // part même vers un fournisseur générique. Et on n'émet JAMAIS
-        // `thinking_config`, qui serait avalé en silence.
+        // part même vers un fournisseur générique. Quand la réflexion est
+        // cachée, on n'émet pas `thinking_config` (le 23 novembre 2026, Vertex
+        // l'a honoré, mesuré : c'est la voie des résumés, `Thoughts::Summarized`).
         let opts = GenOptions::default().with_reasoning(ReasoningEffort::Low);
         for llm in [
             OpenAiLlm::new("http://x/v1", "m"),
-            OpenAiLlm::ai_studio("k", "gemini-3.5-flash"),
-            OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash"),
+            OpenAiLlm::ai_studio("k", "gemini-3.5-flash").with_thoughts(Thoughts::Hidden),
+            OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash").with_thoughts(Thoughts::Hidden),
         ] {
             let body = llm.request_body(&hello(), &opts);
             assert_eq!(body["reasoning_effort"], "low");
