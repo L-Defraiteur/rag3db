@@ -871,6 +871,11 @@ impl Vue {
     }
 
     /// Une touche : rend l'action qu'elle demande.
+    /// A key at `now` (the time a held Échap's repeats are judged by).
+    pub fn touche_a(&mut self, t: Touche, _now: Instant) -> Option<Action> {
+        self.touche(t)
+    }
+
     pub fn touche(&mut self, t: Touche) -> Option<Action> {
         // Les candidats d'une complétion se disent jusqu'à la touche suivante.
         if t != Touche::Tab {
