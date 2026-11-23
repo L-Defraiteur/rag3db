@@ -40,4 +40,6 @@ fn the_teammate_prompt_begins_by_saying_to_write_to_the_user_first() {
     let teammate = s.find("You are a teammate").unwrap_or(usize::MAX);
     assert!(s.find(phrase).is_some_and(|i| i < teammate), "the sentence heads the teammate's prompt: {s}");
     assert!(s.contains("answering first what they wrote") && s.contains("at the end of the turn, to explain what you did"), "the answer to what she wrote first, and a word at the end of the turn: {s}");
+    // Measured on 23 Nov 2026: without it, a text before the first tool 6 times in 16; with it, 16 in 16.
+    assert!(s.contains("Before your first tool call of a turn, write one short sentence"), "a word before the first tool: {s}");
 }
