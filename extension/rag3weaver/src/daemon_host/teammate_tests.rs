@@ -35,6 +35,7 @@ mod commit_each_turn;
 mod commit_what_was_written;
 mod conversation_memory;
 mod output_limit;
+mod instruction_turn_facts;
 mod copy_lands;
 mod turn_failures;
 mod bac_outside_root;
