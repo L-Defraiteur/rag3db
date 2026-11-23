@@ -1141,9 +1141,16 @@ impl DaemonHost {
         let events: EventHandler = {
             let (bus, run, rang) = (bus.clone(), run_id.to_string(), Arc::new(AtomicU64::new(0)));
             let meter = step.map(|s| s.context_meter());
+            let ecrit = step.map(|s| s.text_flag());
             Arc::new(move |ev: Value| {
                 if let Some(m) = &meter {
                     super::teammate::record_context(m, &ev);
+                }
+                // A token of the reply's text: the step wrote to the user.
+                if let Some(e) = &ecrit {
+                    if ev["event"] == "token" && ev["text"].as_str().is_some_and(|t| !t.trim().is_empty()) {
+                        e.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
                 }
                 let Some(bus) = &bus else { return };
                 if ev["event"] == "token" {

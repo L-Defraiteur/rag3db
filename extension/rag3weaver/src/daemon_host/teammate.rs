@@ -567,6 +567,12 @@ pub struct Step {
     /// The tokens of the last model call of the step (prompt and completion), from
     /// `generation_end`.
     last_context: std::sync::Arc<AtomicUsize>,
+    /// **The step wrote text to the user** (its reply's tokens, seen as they stream).
+    wrote_text: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The step_dones refused for want of a word, and whether the step ended without one.
+    text_refusals: AtomicUsize,
+    answered_nothing: std::sync::atomic::AtomicBool,
+    text_first: String,
     /// Ce que `step_done` a déclaré.
     done: Mutex<Option<Value>>,
     /// The pair entry of the task, and its key (mode pair, lot 3).
@@ -759,6 +765,10 @@ impl Step {
             context_tokens: crate::backend::TeammatePolicy::default().step_context_tokens,
             max_model_calls: crate::backend::TeammatePolicy::default().max_model_calls_per_step,
             last_context: std::sync::Arc::new(AtomicUsize::new(0)),
+            wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            text_refusals: AtomicUsize::new(0),
+            answered_nothing: std::sync::atomic::AtomicBool::new(false),
+            text_first: crate::backend::TeammatePolicy::default().text_first,
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
@@ -828,7 +838,18 @@ impl Step {
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
         self.max_output_tokens = policy.max_output_tokens.max(256);
+        self.text_first = policy.text_first.clone();
         self
+    }
+
+    /// Set when the step's reply streams a token of text ([`Self::wrote_text`]).
+    pub fn text_flag(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        self.wrote_text.clone()
+    }
+
+    /// The step ended on a step_done accepted after two refusals, without a word to the user.
+    pub fn answered_nothing(&self) -> bool {
+        self.answered_nothing.load(Ordering::SeqCst)
     }
 
     /// The output limit of the step's model calls (`teammate.max_output_tokens`).
@@ -1073,6 +1094,14 @@ impl Step {
     }
 
     fn step_done(&self, args: &Value) -> Result<Value, String> {
+        // **A word to the user first** (23 Nov 2026, `~/essai-3`): in a turn a human opened that has no line of the
+        // agent yet, a step without text is refused twice, then accepted and said by the host.
+        if !self.wrote_text.load(Ordering::SeqCst) && silent_turn(&self.files.mailbox()).is_some() {
+            if self.text_refusals.fetch_add(1, Ordering::SeqCst) < 2 {
+                return Err(self.text_first.clone());
+            }
+            self.answered_nothing.store(true, Ordering::SeqCst);
+        }
         let item = args["item"].as_str().unwrap_or_default();
         let succeeded = args["succeeded"].as_bool().ok_or("succeeded manque (true ou false)")?;
         let done = args["done"].as_str().unwrap_or_default();
@@ -2681,7 +2710,17 @@ impl DaemonHost {
                 // novembre 2026) : le pas suivant part ; MAX_STEPS et MAX_STALLED bornent.
                 // **Still silent after its relaunch: the user reads its done** (23 Nov 2026, `~/essai-2`: twice a
                 // step_done and nothing for her), in her folder's words, rather than nothing.
-                if let Some(demande) = silent_turn(&files.mailbox()).filter(|d| relancee == Some(*d)) {
+                if step.answered_nothing() {
+                    // Twice refused, it still wrote nothing: a human line, never its done; no relaunch.
+                    let line = files.append_with("host", "report", None, "l'agent n'a pas répondu ; reformule ou réessaie", &json!({ "answered_nothing": true }))?;
+                    publish(bus.as_ref(), task, &line);
+                    #[cfg(feature = "code")]
+                    if let Some(l) = self.say_turn_facts(&files) {
+                        publish(bus.as_ref(), task, &l);
+                    }
+                    outcome.ended = "l'agent n'a pas répondu".into();
+                    return Ok(outcome);
+                } else if let Some(demande) = silent_turn(&files.mailbox()).filter(|d| relancee == Some(*d)) {
                     let _ = demande;
                     if let Some(dit) = declared.as_ref().and_then(|d| d["done"].as_str()).map(str::trim).filter(|d| !d.is_empty()) {
                         let texte = in_her_folder(step.folders.as_ref(), dit);
