@@ -311,6 +311,19 @@ impl DaemonHost {
             Ok(_) => {
                 let texte = format!("{fichiers} fichier(s) dans ton dossier {} ({commits} commit(s) de la branche {branche})", dossier.display());
                 let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": commits.parse::<u64>().unwrap_or(0), "files": fichiers, "paths": chemins }));
+                // **A new project gets its index without anyone asking** (Lucie, 23 Nov 2026): a folder the host created
+                // is indexed at its first landing, in the background; the mark goes, said once.
+                #[cfg(feature = "code")]
+                if let Ok(marque) = git(dossier, &["rev-parse", "--git-path", super::NEW_PROJECT_MARK]).map(|p| dossier.join(p)) {
+                    if marque.is_file() {
+                        let _ = std::fs::remove_file(&marque);
+                        let texte = match self.index_folder(dossier) {
+                            Ok(_) => "index lancé : ton projet est neuf, la recherche par le sens, les usages et l'impact arrivent dans un instant".to_string(),
+                            Err(e) => format!("index non lancé pour ce projet neuf : {e}"),
+                        };
+                        let _ = files.append_with("host", "report", None, &texte, &json!({ "new_project_index": true }));
+                    }
+                }
             }
             Err(e) => retenu(format!("l'avance rapide a échoué : {e}")),
         }

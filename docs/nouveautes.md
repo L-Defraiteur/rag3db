@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
+  l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
+  dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
+  sans index, l'agent sait qu'il doit estimer puis indexer avant de chercher dans un code qu'il ne connaît pas ;
+  l'index y reste une proposition, que tu peux refuser.
 - 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
   puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
   fermer une étape n'est pas une réponse.
