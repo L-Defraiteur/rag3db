@@ -566,6 +566,8 @@ pub struct Step {
     text_refusals: AtomicUsize,
     /// The step called a tool of work (not step_done nor report): a text must follow its last one.
     used_tools: std::sync::atomic::AtomicBool,
+    /// The step wrote text at some point (kept across its tool calls): the rule of the silent turn reads it.
+    wrote_any: std::sync::atomic::AtomicBool,
     answered_nothing: std::sync::atomic::AtomicBool,
     text_first: String,
     reply_first: String,
@@ -764,6 +766,7 @@ impl Step {
             wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             text_refusals: AtomicUsize::new(0),
             used_tools: std::sync::atomic::AtomicBool::new(false),
+            wrote_any: std::sync::atomic::AtomicBool::new(false),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
             text_first: crate::backend::TeammatePolicy::default().text_first,
             reply_first: crate::backend::TeammatePolicy::default().reply_first,
@@ -858,7 +861,9 @@ impl Step {
     pub fn tool_of_work(&self, name: &str) {
         if !matches!(name, STEP_DONE | REPORT) {
             self.used_tools.store(true, Ordering::SeqCst);
-            self.wrote_text.store(false, Ordering::SeqCst);
+            if self.wrote_text.swap(false, Ordering::SeqCst) {
+                self.wrote_any.store(true, Ordering::SeqCst);
+            }
         }
     }
 
@@ -1127,7 +1132,9 @@ impl Step {
             plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
         };
         let apres_outil = self.used_tools.load(Ordering::SeqCst) && human_turn(&boite) && clot;
-        if !self.wrote_text.load(Ordering::SeqCst) && (silent_turn(&boite).is_some() || apres_outil) {
+        let depuis_l_outil = self.wrote_text.load(Ordering::SeqCst);
+        let dans_le_pas = depuis_l_outil || self.wrote_any.load(Ordering::SeqCst);
+        if (!dans_le_pas && silent_turn(&boite).is_some()) || (!depuis_l_outil && apres_outil) {
             // Numbered: two refusals in the same words would stop the run as a repeated error.
             let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
             if n < 2 {
