@@ -347,6 +347,9 @@ pub struct DaemonHost {
     /// The witnesses' count of the index parts the state read.
     #[cfg(test)]
     lectures_d_index: std::sync::atomic::AtomicU64,
+    /// **The index part of each open backend's state**, by manifest, with the instance it was read on (23 November
+    /// 2026: reading 84 indexes took 6.5 s at each `/ide/etat`); forgotten when an event is published for that backend.
+    etats_d_index: Arc<Mutex<HashMap<String, (usize, Value, Value)>>>,
     /// **The background commands of each task** (`parent/task`; Lucie, 21 November 2026): their scope outlives the
     /// teammate's steps, and their ends come back to the task's mailbox.
     task_backgrounds: Mutex<std::collections::HashMap<String, Arc<teammate::TaskBackground>>>,
@@ -625,6 +628,17 @@ impl DaemonHost {
     /// Un hôte qui ouvre ses backends par `opener` (les témoins y posent leur
     /// crochet de point de reprise échoué).
     pub fn with_opener(opener: Opener) -> Self {
+        // The index part of the state is forgotten when an event is published for its backend (23 November 2026).
+        let etats_d_index: Arc<Mutex<HashMap<String, (usize, Value, Value)>>> = Arc::new(Mutex::new(HashMap::new()));
+        let ide = crate::ide::Flux::new();
+        {
+            let etats = etats_d_index.clone();
+            ide.ecouter(move |sujet, backend| {
+                if !matches!(sujet, "agent" | "tokens" | "etat" | "repos") {
+                    etats.lock().unwrap_or_else(|p| p.into_inner()).remove(backend);
+                }
+            });
+        }
         Self {
             soi: std::sync::OnceLock::new(),
             publication_en_cours: std::sync::atomic::AtomicBool::new(false),
@@ -635,6 +649,7 @@ impl DaemonHost {
             etat_lent_ms: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             lectures_d_index: std::sync::atomic::AtomicU64::new(0),
+            etats_d_index,
             task_backgrounds: Default::default(),
             racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
@@ -653,7 +668,7 @@ impl DaemonHost {
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
-            ide: crate::ide::Flux::new(),
+            ide,
             ide_session: std::sync::OnceLock::new(),
             taches: Mutex::new(std::collections::BTreeMap::new()),
             racine_des_taches: taches::racine_par_defaut(),
@@ -2009,6 +2024,7 @@ impl DaemonHost {
             }
             *hosted.refused.lock().unwrap_or_else(|p| p.into_inner()) = None;
             *slot = Some((self.opener)(prepared)?);
+            self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).remove(&hosted.manifest.display().to_string());
             // L'hôte des worktrees de l'atelier, s'il se connaît.
             #[cfg(feature = "code")]
             if let Some(soi) = self.soi.get() {
@@ -3024,9 +3040,21 @@ impl DaemonHost {
                 let (ouvert, index, derive) = match h.backend.try_read() {
                     Ok(slot) => match slot.as_ref() {
                         Some(b) => {
-                            #[cfg(test)]
-                            self.lectures_d_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                            (json!(true), b.index_states().unwrap_or_else(|e| json!({ "error": e })), json!(b.prepared().template_drift()))
+                            // Kept until an event for this backend, or another instance of it (23 November 2026).
+                            let cle = h.manifest.display().to_string();
+                            let instance = b as *const _ as *const () as usize;
+                            let garde = self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).get(&cle).filter(|(i, _, _)| *i == instance).map(|(_, x, d)| (x.clone(), d.clone()));
+                            let (index, derive) = match garde {
+                                Some(t) => t,
+                                None => {
+                                    #[cfg(test)]
+                                    self.lectures_d_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                    let t = (b.index_states().unwrap_or_else(|e| json!({ "error": e })), json!(b.prepared().template_drift()));
+                                    self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).insert(cle, (instance, t.0.clone(), t.1.clone()));
+                                    t
+                                }
+                            };
+                            (json!(true), index, derive)
                         }
                         None => (json!(false), Value::Null, Value::Null),
                     },
