@@ -2638,11 +2638,20 @@ fn a_slice_is_filed_in_the_background_and_the_mark_moves_after_the_commit() {
     let run = format!("chat:{id}");
     assert!(turns.iter().any(|t| t["run"] == run.as_str() && t["turn"] == 1 && t["seq"] == 0 && t["role"] == "user" && t["text"] == "first question"), "put_turn of the user message: {turns:#?}");
     assert!(turns.iter().any(|t| t["turn"] == 1 && t["role"] == "assistant"), "put_turn of the answer: {turns:#?}");
-    let slices = faux.slices.lock().unwrap().clone();
+    // The archivist is called in the background: wait for its call, not for a clock (23 Nov 2026: under load the
+    // slice was read before the background thread had called `archive_slice`).
+    let fin = Instant::now() + Duration::from_secs(60);
+    let slices = loop {
+        let slices = faux.slices.lock().unwrap().clone();
+        if !slices.is_empty() || Instant::now() > fin {
+            break slices;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
     assert_eq!(slices.first().map(|s| (s["run"].clone(), s["from_turn"].clone(), s["to_turn"].clone())), Some((json!(run), json!(1), json!(1))), "{slices:#?}");
     assert!(marque(d.path(), &id)["archived_through_turn"].is_null(), "no mark before the commit");
     release.send(json!({ "report": { "ok": true, "errors": [] }, "archived_through_turn": 1 })).unwrap();
-    let fin = Instant::now() + Duration::from_secs(10);
+    let fin = Instant::now() + Duration::from_secs(60);
     while marque(d.path(), &id)["archived_through_turn"] != json!(1) {
         assert!(Instant::now() < fin, "the mark moves to 1: {}", marque(d.path(), &id));
         std::thread::sleep(Duration::from_millis(50));
