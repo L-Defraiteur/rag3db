@@ -92,3 +92,13 @@ fn an_excluded_caller_does_not_come_back_by_the_hop() {
     assert!(kept.iter().any(|n| n == "flush_blob_store"), "the callee does not carry the excluded word: {kept:?}");
     assert!(!kept.iter().any(|n| n == "commit_lot_after_native"), "the excluded caller came back by the hop: {kept:?}");
 }
+
+/// **The shipped search graph does not hop** (the bench's v3 set, 23 November 2026, master 204e89dfe1: with the hop,
+/// recall@10 29 against 30 without, six questions down, none up; the callers it inserts are those that share the
+/// query's words, never the cause of a symptom). The node stays, declared and neutral: `from=0`.
+#[test]
+fn the_shipped_search_graph_does_not_hop() {
+    let graph = include_str!("../../../templates/tools/search_workspace.mmd");
+    let hop = graph.lines().find(|l| l.contains("CallersHopNode(")).expect("the node is declared");
+    assert!(hop.contains("CallersHopNode(from=0,"), "the hop is on in the shipped graph: {hop}");
+}
