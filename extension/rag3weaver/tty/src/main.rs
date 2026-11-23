@@ -85,12 +85,13 @@ fn plain_cannot_answer(l: &Value) -> Option<String> {
 
 /// **Whether the plain mode stops**: only when the teammate is suspended on a card it cannot answer (a host line « en
 /// attente du superviseur » after an approval still unanswered); a card while the teammate works on is said, not a stop.
-fn plain_suspended_on_a_card(lines: &[Value], _since: usize) -> bool {
+fn plain_suspended_on_a_card(lines: &[Value], since: usize) -> bool {
     let answered = |id: &Value| lines.iter().any(|r| r["reply_to"] == *id && r["kind"] == "answer");
     let Some(n) = lines.iter().rposition(|l| l["from"] == "teammate" && l["kind"] == "approval" && !answered(&l["id"])) else {
         return false;
     };
-    lines[n + 1..].iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur")))
+    // The suspension is this session's: a host line « en attente du superviseur » after the card and after `since`.
+    lines.iter().enumerate().skip((n + 1).max(since)).any(|(_, l)| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("en attente du superviseur")))
 }
 
 /// The last conversation of a repository in the host's list of teammates.
