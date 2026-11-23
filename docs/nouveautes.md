@@ -7,6 +7,11 @@
   travaille, Ctrl-C l'arrête comme Échap ; au repos, un premier Ctrl-C dit « Ctrl-C encore pour quitter » et un second,
   dans les deux secondes, quitte. Un tour dont le travail a atterri dans le dossier n'est plus dit « fini sans
   répondre », et l'aide montre `--repo`, `--task` et `--continue` comme options.
+- 23 novembre 2026 — **Un prix manquant se donne d'un oui.** Un modèle sans prix n'est plus seulement refusé : le
+  refus nomme le modèle (`missing_price`), et un prix s'écrit dans `prices.json` par `POST /ide/prices`, à partir du
+  jour, avec sa source, sur la seule signature de l'utilisatrice ; un agent, le jeton de l'hôte ou un corps qui se dit
+  humain n'écrivent rien. Au premier appel, le fichier de prix par défaut se pose entier : un appel au même instant le
+  trouvait vide et refusait tous les modèles.
 - 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
   nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres
   fichiers indexés dans le même paquet, et un fichier édité seul s'en inventait à chaque resynchronisation : l'index
