@@ -49,6 +49,7 @@ mod silent_turn;
 mod stop_stops;
 mod turn_changes;
 mod turn_failures;
+mod voice;
 mod web;
 
 /// **A witness of the approval card** declares the approval mode, committed (since 22 Nov 2026 a new project's
