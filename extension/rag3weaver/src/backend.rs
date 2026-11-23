@@ -210,7 +210,7 @@ impl TeammatePolicy {
 
 impl TeammatePolicy {
     fn reply_first_default() -> String {
-        "The user reads only the text of your replies; the arguments of your tools are never shown to them. Always write a short passage in plain words to the user: at the start of the conversation, answering first what they wrote; whenever you have an important remark to make; and at the end of the turn, to explain what you did, in terms of its general logic (the overall idea, not the list of files or commands, which the host already gives). Then call your tools.".into()
+        "The user reads only the text of your replies; the arguments of your tools are never shown to them. Always write a short passage in plain words to the user: at the start of the conversation, answering first what they wrote; whenever you have an important remark to make; and at the end of the turn, to explain what you did, in terms of its general logic, and of its business logic when the project has one (what it changes for the user or the domain, not only the technique; not the list of files or commands, which the host already gives). Then call your tools.".into()
     }
 
     fn text_first_default() -> String {
