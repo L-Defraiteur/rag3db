@@ -1477,6 +1477,44 @@ mod tests {
 
     /// **Le bus d'un backend est relayé** : un `FileChanged` émis sur le bus
     /// arrive à la fenêtre, avec son sujet et son backend.
+    /// **A run's words are relayed between its start and its end** (an end-to-end witness on 23 November 2026: 132 to
+    /// 162 of 300 words of a teammate step reached the terminal after the `RunFinished` of their run, `agent` and
+    /// `tokens` being relayed by two threads; the ticket of 7 November had seen a `Token` pass its `RunStarted`). A
+    /// window sees the `RunStarted` of a run before its first `Token`, and its `RunFinished` after its last.
+    #[test]
+    fn a_runs_words_are_relayed_between_its_start_and_its_end() {
+        use crate::events::Event;
+        for essai in 0..5 {
+            let flux = Flux::new();
+            let bus = EventBus::new(4096);
+            flux.relayer("/x/backend.json", &bus);
+            let fenetre = Capture::default();
+            flux.abonner(Box::new(fenetre.clone()), None, None);
+            let run = format!("agent-{essai}");
+            bus.emit(Event::RunStarted { run: run.clone(), parent: None, kind: "agent".into(), name: "chat".into(), domain: String::new(), scope: None, target: None, role: None, step: None });
+            for i in 0..300u64 {
+                bus.emit(Event::Token { run: run.clone(), node: "chat".into(), seq: i, text: format!("mot{i} "), count: 1 });
+            }
+            bus.emit(Event::RunFinished { run: run.clone(), kind: "agent".into(), ms: 1, ok: true, cause: None, cancelled_by: None });
+            fenetre.ids_attendus(302);
+            let t = fenetre.texte();
+            let genres: Vec<String> = t
+                .lines()
+                .filter_map(|l| l.strip_prefix("data: "))
+                .filter_map(|d| serde_json::from_str::<Value>(d).ok())
+                .filter(|v| v["evenement"]["run"] == run.as_str())
+                .map(|v| v["evenement"]["kind"].as_str().unwrap_or_default().to_string())
+                .collect();
+            let debut = genres.iter().position(|k| k == "RunStarted");
+            let fin = genres.iter().position(|k| k == "RunFinished");
+            let premier = genres.iter().position(|k| k == "Token");
+            let dernier = genres.iter().rposition(|k| k == "Token");
+            assert_eq!(genres.iter().filter(|k| *k == "Token").count(), 300, "essai {essai} : tous les mots");
+            assert!(debut < premier, "essai {essai} : RunStarted ({debut:?}) avant le premier mot ({premier:?})");
+            assert!(dernier < fin, "essai {essai} : RunFinished ({fin:?}) après le dernier mot ({dernier:?})");
+        }
+    }
+
     #[test]
     fn a_backend_bus_is_relayed_to_the_windows() {
         let flux = Flux::new();
