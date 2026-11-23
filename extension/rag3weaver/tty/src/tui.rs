@@ -272,6 +272,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     vue.theme = theme;
     vue.maj_entree = maj_entree;
     vue.montrer_etapes = std::env::var("RAG3WEAVER_TTY_ETAPES").is_ok_and(|v| !v.is_empty() && v != "0");
+    vue.still = std::env::var("RAG3WEAVER_TTY_STILL").is_ok_and(|v| !v.is_empty() && v != "0");
     // L'historique des envois d'une séance à l'autre (tty-13).
     if let Some(h) = crate::historique::chemin() {
         vue.reprendre_historique(crate::historique::charger(&h));

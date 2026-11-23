@@ -38,6 +38,8 @@ struct Options {
     depot: String,
     task: String,
     steps: bool,
+    /// `--still`: the thinking does not scroll beside the animation (23 Nov. 2026).
+    still: bool,
     demande: Option<String>,
     daemon_json: Option<String>,
     daemon_cmd: Option<String>,
@@ -111,7 +113,7 @@ fn options() -> Result<Options, String> {
 
 fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None, continuer: false };
+    let mut o = Options { depot: String::new(), task: String::new(), steps: false, still: false, demande: None, daemon_json: None, daemon_cmd: None, user_token_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None, continuer: false };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -123,6 +125,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
             "--log" | "--journal" => o.journal = Some(valeur()?),
             // Les étapes de l'équipier dans l'historique (sinon, elles défilent dans la zone vivante).
             "--steps" | "--etapes" => o.steps = true,
+            "--still" => o.still = true,
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
             "--user-token-cmd" => o.user_token_cmd = Some(valeur()?),
@@ -138,7 +141,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps] [--still]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
 
 fn main() {
     let o = match options() {
@@ -159,6 +162,7 @@ fn main() {
 
 fn lancer(o: Options) -> Result<(), String> {
     if o.steps { std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"); }
+    if o.still { std::env::set_var("RAG3WEAVER_TTY_STILL", "1"); }
     let ep = match (&o.daemon_json, &o.daemon_cmd) {
         (Some(p), _) => Endpoint::depuis_fichier(std::path::Path::new(p))?,
         (None, Some(c)) => Endpoint::depuis_commande(c)?,

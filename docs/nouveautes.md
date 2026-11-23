@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **La réflexion de l'agent défile comme l'affichage d'une gare.** À côté de l'animation, elle glisse
+  de droite à gauche, un mot à la fois, à vitesse de lecture, la suite entrant à droite ; sa fin se lit toujours.
+  `--still` (ou `--steps`) garde la phrase fixe.
 - 23 novembre 2026 — **La ligne d'état du terminal dit où en est le tour.** Pendant qu'un outil tourne, elle dit
   l'outil, sa cible et « appel 2 du tour » ; texte et outils gardent leur ordre dans le fil, avec ou sans `--steps`.
 - 23 novembre 2026 — **Le texte de l'agent ne se coupe plus en deux dans le terminal.** À la fin d'un tour, la vue garde
