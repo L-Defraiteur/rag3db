@@ -9233,7 +9233,7 @@ fn read_threads() -> u64 {
             if let Some(t) = tampon {
                 self.appliquer_le_tampon(t.prendre())?;
             }
-            Ok(self.flush_blob_store("lot").unwrap_or_default())
+            Ok::<(), CatalogError>(self.flush_blob_store("lot").unwrap_or_default())
         })();
         if let Err(error) = materialized {
             self.jeter_les_evenements_retenus();
