@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// A row updated after a restart is reindexed in full text (23 Nov. 2026): the witness, in a file of its own.
+#[path = "e2e_archiviste/fts_after_restart.rs"]
+mod fts_after_restart;
+
 /// No secret enters the memory (lot 5 of the auto mode): the witnesses of the lot, in a file of their own.
 #[path = "e2e_archiviste/secrets.rs"]
 mod secrets;
