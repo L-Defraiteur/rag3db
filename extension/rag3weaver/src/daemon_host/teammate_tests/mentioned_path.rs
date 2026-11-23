@@ -5,6 +5,7 @@
 
 use super::mode_auto_v1::{ended, v1_with};
 use crate::daemon_host::DaemonHost;
+use serde_json::json;
 
 fn ailleurs(d: &std::path::Path) -> std::path::PathBuf {
     let a = d.join("ailleurs");
@@ -44,4 +45,22 @@ fn an_expired_grant_no_longer_covers_its_root() {
     let passe = crate::catalog::retard::now_ms() - 60_000;
     host.grant_root_until("agent:k", &root, preuve, "user", "read", Some(passe)).unwrap();
     assert!(host.root_grant_for("agent:k", &root.join("notes.txt")).is_none(), "a grant whose time is over covers nothing");
+}
+
+/// **Only her own words count**: a path from an agent's request, from a tool's result, or from a turn already ended is
+/// not a mention; hers is, with its quotes and its final dot.
+#[test]
+fn only_a_humans_line_of_the_turn_mentions_a_path() {
+    use crate::daemon_host::gate::cited_by_a_human;
+    let refuse = std::path::Path::new("/srv/donnees/notes.txt");
+    let humaine = |texte: &str| json!({ "kind": "request", "from": "lucie", "by": { "kind": "human" }, "text": texte });
+    assert!(cited_by_a_human(&[humaine("Lis « /srv/donnees/notes.txt ».")], refuse).is_some(), "her path, quoted, with its dot");
+    assert!(cited_by_a_human(&[humaine("Regarde dans /srv/donnees, stp")], refuse).is_some(), "the folder that holds it");
+    let agent = json!({ "kind": "request", "from": "superviseur", "by": { "kind": "agent" }, "text": "Lis /srv/donnees/notes.txt" });
+    assert!(cited_by_a_human(&[agent], refuse).is_none(), "an agent's path is not her mention");
+    let outil = json!({ "kind": "report", "from": "teammate", "text": "/srv/donnees/notes.txt" });
+    assert!(cited_by_a_human(&[humaine("Lis le rapport."), outil], refuse).is_none(), "a path from the agent's own lines is not hers");
+    let fini = json!({ "kind": "ended", "from": "host", "text": "fait" });
+    assert!(cited_by_a_human(&[humaine("Lis /srv/donnees/notes.txt"), fini, humaine("autre chose")], refuse).is_none(), "a turn already ended does not count");
+    assert!(cited_by_a_human(&[humaine("Lis /srv")], refuse).is_none(), "a root too broad is no mention");
 }
