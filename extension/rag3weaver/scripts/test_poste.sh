@@ -29,6 +29,9 @@ mkdir -p "$POSTE_LOCK_DIR" "$POSTE_PUSH_DIR"
 export POSTE_PORTE_MAX=1
 # Le refus d'une mesure derrière un lourd long (cas 43) est coupé pour les autres cas, dont les lourds n'ont pas de timeout.
 export POSTE_MESURE_ATTENTE_MAX=0
+# Le budget mémoire (cas 61) : un faux meminfo large et pas de recul entre deux entrées, pour les autres cas.
+printf 'MemTotal:       100000000 kB\nMemAvailable:    90000000 kB\n' > "$ICI/meminfo"
+export POSTE_MEMINFO="$ICI/meminfo" POSTE_MEM_RECUL=0
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 J="$ICI/journal"
@@ -563,4 +566,29 @@ RAG3DB_LIB=$(lib 0123456789abcdef0123456789abcdef01234567) POSTE_DEPOT="$L" "$PO
 RAG3DB_LIB=bati POSTE_DEPOT="$L" "$POSTE" cpu -- true > /dev/null 2>&1; rc=$?
 [ "$rc" = 0 ]; cas $? "RAG3DB_LIB=bati (un bâti à soi) : jamais refusé (rc $rc)"
 rm -f "$POSTE_LOCK_DIR/lib-des-passes"
+
+# 61. Le budget mémoire (24 nov. 2026, c7 : le 23 à 18 h 47, quatre passes jusqu'à 17,7 Gio chacune ont rempli le swap
+# de luciepc, et systemd-oomd a tué la session graphique ; poste comptait les cœurs, jamais la mémoire). Un lourd
+# n'entre que si MemAvailable couvre son pic attendu plus la réserve de l'écran, et pas moins de POSTE_MEM_RECUL
+# secondes après le lourd d'avant, dont la croissance ne se voit pas encore.
+echo 4 > "$POSTE_LOCK_DIR/lourds-max"; : > "$J"
+dispo() { printf 'MemTotal:       100000000 kB\nMemAvailable:   %s kB\n' $(( $1 * 1048576 )) > "$ICI/meminfo"; }
+dispo 20
+POSTE_PIC_ATTENDU=14G POSTE_RESERVE_ECRAN=12G "$POSTE" cpu -- bash -c 'note M début' > "$ICI/sortie-mem" 2>&1 &
+p=$!; sleep 2; [ -z "$(instant M début)" ]; a=$?
+dispo 40; wait $p
+[ "$a" = 0 ] && [ -n "$(instant M début)" ] && grep -q 'mémoire' "$ICI/sortie-mem"
+cas $? "20 Gio disponibles pour 14 + 12 : le lourd attend en disant la mémoire, puis part à 40"
+dispo 20; : > "$J"
+POSTE_PIC_ATTENDU=4G POSTE_RESERVE_ECRAN=12G "$POSTE" cpu -- bash -c 'note P début' > /dev/null 2>&1
+[ -n "$(instant P début)" ]; cas $? "un petit pic déclaré (4 + 12 sous 20 Gio) entre sans attendre"
+dispo 90; : > "$J"
+POSTE_MEM_RECUL=3 travail lourd R1 1 &
+sleep 0.3
+POSTE_MEM_RECUL=3 travail lourd R2 1 &
+wait
+d1=$(instant R1 début); d2=$(instant R2 début)
+[ -n "$d1" ] && [ -n "$d2" ] && [ $((d2 - d1)) -ge 2500 ]
+cas $? "deux lourds arrivés ensemble : le second entre au moins POSTE_MEM_RECUL après le premier ($((d2 - d1)) ms)"
+rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/derniere-entree"
 exit $echec
