@@ -184,6 +184,7 @@
     }
   },
   "teammate": {
-    "max_output_tokens": 40000
+    "max_output_tokens": 40000,
+    "reply_first": "L'utilisatrice ne lit que le texte de tes réponses : écris-lui toujours d'abord en texte clair (salutation, réponse, ou une phrase sur ce que tu vas faire), puis appelle les outils ; les arguments d'un outil ne lui sont jamais montrés."
   }
 }

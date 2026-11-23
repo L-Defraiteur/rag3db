@@ -99,6 +99,10 @@ pub struct TeammatePolicy {
     /// line. Declared in the template, said to the model as it is.
     #[serde(default = "TeammatePolicy::text_first_default")]
     pub text_first: String,
+    /// **The head of the teammate's prompt** (the isolated calls of 23 Nov 2026: without it, tool calls only; with
+    /// it, a text first 3 times in 3): the user reads only the text of the replies, so it comes first.
+    #[serde(default = "TeammatePolicy::reply_first_default")]
+    pub reply_first: String,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -205,6 +209,10 @@ impl TeammatePolicy {
 }
 
 impl TeammatePolicy {
+    fn reply_first_default() -> String {
+        "L'utilisatrice ne lit que le texte de tes réponses : écris-lui toujours d'abord en texte clair (salutation, réponse, ou une phrase sur ce que tu vas faire), puis appelle les outils ; les arguments d'un outil ne lui sont jamais montrés.".into()
+    }
+
     fn text_first_default() -> String {
         "step_done refused: you have not written a word to the user in this turn. Write your answer first, in the text of your reply (it is what the user reads; step_done's done is never shown), then call step_done.".into()
     }
@@ -237,6 +245,7 @@ impl Default for TeammatePolicy {
             background: BackgroundPolicy::default(),
             max_output_tokens: Self::max_output_tokens_default(),
             text_first: Self::text_first_default(),
+            reply_first: Self::reply_first_default(),
         }
     }
 }
