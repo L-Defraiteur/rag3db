@@ -20,7 +20,7 @@ fn listening(heard: Arc<Mutex<Vec<String>>>) -> ChatModel {
 }
 
 /// Three turns of one thread, the third with `conversation` (none: the declared policy); what the third turn heard.
-fn thread(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<Value>) {
+fn thread(teammate: Value, third: Value, texts: [&str; 3]) -> (String, Vec<Value>) {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     if !teammate.is_null() {
@@ -37,11 +37,11 @@ fn thread(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<
     host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("the repository opens");
-    let mut avant = 0;
-    for (i, texte) in textes.iter().enumerate() {
+    let mut before = 0;
+    for (i, texte) in texts.iter().enumerate() {
         let mut extra = json!({ "by": { "kind": "human", "client": "tty" }, "gate": "bac" });
-        if i == 2 && !troisieme.is_null() {
-            extra["conversation"] = troisieme.clone();
+        if i == 2 && !third.is_null() {
+            extra["conversation"] = third.clone();
         }
         host.post_to_teammate(&h.id, "doc", "lucie", "request", None, texte, &extra).unwrap();
         let files = host.teammate_files(&h.id, "doc").unwrap();
@@ -51,18 +51,18 @@ fn thread(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<
             std::thread::sleep(Duration::from_millis(100));
         }
         if i == 1 {
-            avant = heard.lock().unwrap().len();
+            before = heard.lock().unwrap().len();
         }
     }
-    let boite = host.teammate_files(&h.id, "doc").unwrap().mailbox();
+    let mailbox = host.teammate_files(&h.id, "doc").unwrap().mailbox();
     let h = heard.lock().unwrap();
-    (h[avant..].join("\n"), boite)
+    (h[before..].join("\n"), mailbox)
 }
 
 /// **Only the context is shaped** (Lucie, 23 Nov 2026: « ça n'arrive qu'à l'agent, le trim, pas dans les données »):
 /// the mailbox gives the first request back whole, byte for byte.
-fn first_turn_whole(boite: &[Value], first: &str) {
-    let l = boite.iter().find(|l| l["kind"] == "request" && l["from"] == "lucie").expect("the first request");
+fn first_turn_whole(mailbox: &[Value], first: &str) {
+    let l = mailbox.iter().find(|l| l["kind"] == "request" && l["from"] == "lucie").expect("the first request");
     assert_eq!(l["text"].as_str(), Some(first), "the mailbox keeps the first turn whole");
 }
 
@@ -73,33 +73,33 @@ const THREE: &str = "Troisième tour : et donc ?";
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn the_declared_default_keeps_the_earlier_turns() {
-    let (entendu, _) = thread(Value::Null, Value::Null, [ONE, TWO, THREE]);
-    assert!(entendu.contains("alpha-un") && entendu.contains("beta-deux"), "{entendu}");
+    let (heard_text, _) = thread(Value::Null, Value::Null, [ONE, TWO, THREE]);
+    assert!(heard_text.contains("alpha-un") && heard_text.contains("beta-deux"), "{heard_text}");
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn a_trim_keeps_only_the_last_lines_of_the_kinds_let_in() {
     // The user's requests only, and the last one of them: the second turn's, not the first's.
-    let (entendu, boite) = thread(json!({ "conversation": { "kinds": ["request"], "trim": { "max": 1 } } }), Value::Null, [ONE, TWO, THREE]);
-    assert!(entendu.contains("beta-deux") && !entendu.contains("alpha-un"), "the last request only: {entendu}");
-    first_turn_whole(&boite, ONE);
+    let (heard_text, mailbox) = thread(json!({ "conversation": { "kinds": ["request"], "trim": { "max": 1 } } }), Value::Null, [ONE, TWO, THREE]);
+    assert!(heard_text.contains("beta-deux") && !heard_text.contains("alpha-un"), "the last request only: {heard_text}");
+    first_turn_whole(&mailbox, ONE);
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn a_launch_can_turn_the_earlier_turns_off() {
-    let (entendu, boite) = thread(Value::Null, json!({ "earlier_turns": false }), [ONE, TWO, THREE]);
-    assert!(!entendu.contains("alpha-un") && !entendu.contains("beta-deux"), "no earlier turn: {entendu}");
-    first_turn_whole(&boite, ONE);
+    let (heard_text, mailbox) = thread(Value::Null, json!({ "earlier_turns": false }), [ONE, TWO, THREE]);
+    assert!(!heard_text.contains("alpha-un") && !heard_text.contains("beta-deux"), "no earlier turn: {heard_text}");
+    first_turn_whole(&mailbox, ONE);
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn without_trim_an_old_turn_stays_whole() {
     let long = format!("Premier tour : {}fin-du-premier.", "x".repeat(3000));
-    let (entendu, _) = thread(json!({ "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
-    assert!(entendu.contains("fin-du-premier"), "a turn of 3 000 characters stays whole without trim");
+    let (heard_text, _) = thread(json!({ "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
+    assert!(heard_text.contains("fin-du-premier"), "a turn of 3 000 characters stays whole without trim");
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
@@ -107,7 +107,7 @@ fn without_trim_an_old_turn_stays_whole() {
 fn the_protection_bound_cuts_a_request_too_long() {
     let long = format!("Premier tour : {}fin-cachee.", "y".repeat(5000));
     // Without the trim, which would cut the old turn first: the bound alone.
-    let (entendu, boite) = thread(json!({ "input_max_chars": 1000, "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
-    assert!(!entendu.contains("fin-cachee") && entendu.contains("coupé"), "cut at the bound, and said: {} characters", entendu.len());
-    first_turn_whole(&boite, &long);
+    let (heard_text, mailbox) = thread(json!({ "input_max_chars": 1000, "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
+    assert!(!heard_text.contains("fin-cachee") && heard_text.contains("coupé"), "cut at the bound, and said: {} characters", heard_text.len());
+    first_turn_whole(&mailbox, &long);
 }
