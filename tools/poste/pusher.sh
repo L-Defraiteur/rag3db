@@ -133,6 +133,34 @@ french_identifiers() { # <id> <head> <parent> <author>
   printf '%s\n' "$out" | head -20 | sed 's/^/  /'
 }
 
+# Commit messages say the fact, never a session nor an AI tool (23 Nov. 2026, Lucie's rule through c7: 204 messages of
+# 1 272 since the 20th named sessions, two named an AI tool). The messages of the lot (from its base on master, or from
+# its parent's head) are read at the deposit: a warning until PUSHER_COMMIT_NAMES_REFUSE_FROM (a date, the 24th by
+# default), a refusal from then on. Said on the output, to the log and to the inbox.
+COMMIT_NAMES='claude|co-authored|generated|\bc7\b|\barchi\b|recherche for|orchestr|\(G\)|guet de G'
+commit_message_names() { # <id> <head> <parent> <author> → 0, or 1 when refused
+  local base ph hits n from
+  base=$(g merge-base origin/master "$2" 2>/dev/null) || return 0
+  if [ "$3" != - ]; then
+    ph=$(origin_head "$3")
+    [ -n "$ph" ] && g merge-base --is-ancestor "$ph" "$2" 2>/dev/null && base=$ph
+  fi
+  hits=$(g log --format='%h %s%n%b' "$base..$2" 2>/dev/null | grep -iE "$COMMIT_NAMES" | grep -v '^$' | head -10)
+  [ -n "$hits" ] || return 0
+  n=$(printf '%s\n' "$hits" | grep -c .)
+  from=${PUSHER_COMMIT_NAMES_REFUSE_FROM:-2026-11-24}
+  if [ "$(date +%s)" -ge "$(date -d "$from" +%s 2>/dev/null || echo 0)" ]; then
+    log "$1" "refusé" "nom de session ou d'outil d'IA dans un message de commit : $(printf '%s\n' "$hits" | head -3 | paste -sd';' | cut -c1-200)"
+    echo "refusé : $n ligne(s) de message de commit nomment une session ou un outil d'IA (nom de session ; règle de Lucie : un message dit le fait) :"
+    printf '%s\n' "$hits" | sed 's/^/  /'
+    return 1
+  fi
+  log "$1" "nom de session" "$n : $(printf '%s\n' "$hits" | head -3 | paste -sd';' | cut -c1-200)"
+  printf 'avertissement\t%s\tnom de session ou d outil d IA dans un message de commit (%s ; refus à partir du %s) : %s\n' "$1" "$n" "$from" "$(printf '%s\n' "$hits" | head -5 | paste -sd';' | cut -c1-300)" >> "$D/inbox/$4.txt"
+  echo "avertissement : $n ligne(s) de message de commit nomment une session ou un outil d'IA (nom de session ; refus à partir du $from ; le lot passe aujourd'hui) :"
+  printf '%s\n' "$hits" | sed 's/^/  /'
+}
+
 enqueue() {
   [ $# = 9 ] || { echo "enqueue : neuf champs attendus (id branch head kind witness witness_suite extra_suites parent author)" >&2; return 2; }
   local id=$1 branch=$2 head=$3 kind=$4 parent=$8 remote full computed
@@ -191,6 +219,8 @@ enqueue() {
   # (20 Nov., c7: a red of the guard mended in ten minutes must not fall back).
   rang=$(awk -F'\t' -v id="$id" -v now="$(date +%s)" '$2 == id && now - $1 <= 3600 {r = $3} END {print r}' "$D/rendus.tsv" 2>/dev/null)
   [ -n "$rang" ] && again=" (redéposé dans l'heure : rang $rang, celui du rendu)"
+  # Before the queue is written: a refusal leaves nothing in the queue.
+  commit_message_names "$id" "$full" "$parent" "$9" || return 1
   ( flock 9
     # The id checked again under the queue's lock, with the write (22 Nov. 2026, 01:32: two deposits of user-token-2
     # twelve seconds apart both passed the check above, made without the lock, and the queue held the lot twice).
