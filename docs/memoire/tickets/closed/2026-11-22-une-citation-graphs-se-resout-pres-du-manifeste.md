@@ -29,15 +29,16 @@ Le dossier entier a été gardé dans `~/.config/rag3weaver/memoire-longue.avant
 
 Une citation `@graphs/…` se résout près de la racine du gabarit du graphe qui cite (`resolve_cited_graphs_from`,
 `cited_path`) : un graphe livré lit ses voisins livrés, un graphe local les siens. Le chargeur passe le chemin du
-graphe de l'outil. `@builtin:…` et un chemin absolu se lisent tels quels.
+graphe de l'outil. `@builtin:…` et un chemin absolu se lisent tels quels. Les Plans cités par le graphe d'un
+outil (`@plans/…`) suivent la même règle : un graphe livré lit son Plan livré.
 
 ## Les témoins (vus rouges d'abord)
 
 - `a_shipped_graph_cites_its_siblings_in_the_shipped_template` et `a_local_graph_cites_its_siblings_next_to_the_manifest`
   (`dataflow/foreach_node/tests/cited_from_their_template.rs`).
 - `a_memory_whose_graphs_are_all_shipped_loads_and_answers` (`tests/e2e_archiviste/follows_the_binary.rs`) : un
-  manifeste dont tous les graphes sont livrés, sans `graphs/` local, se charge, et `put_fiche`, `get_fiche` et
-  `recall_fiches` répondent. Avant le correctif, il rougissait sur la même erreur que la mémoire de Lucie.
+  manifeste dont tous les graphes (outils et réactions) sont livrés, sans `graphs/` ni `plans/` local, se charge, et `put_fiche`, `get_fiche` et
+  `recall_fiches` répondent. Avant le correctif, il rougissait sur la même erreur que la mémoire de Lucie, puis sur le Plan de `cited_by`.
 
 ## Ce qui reste
 
