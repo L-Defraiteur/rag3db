@@ -232,6 +232,30 @@ impl Node for CallersHopNode {
             v
         };
 
+        // **Les contraintes de la question** : un appelant passe par le même prédicat que les candidats des signaux
+        // (le filtre de l'appelant, la portée, `exclude`/`must`/`phrase`, la cellule), borné à ces uuids.
+        let tous: Vec<String> = par_source.iter().flat_map(|(_, u)| u.iter().cloned()).collect::<HashSet<_>>().into_iter().collect();
+        let admis = if tous.is_empty() {
+            None
+        } else {
+            let public = match &target.occurrence_projection {
+                Some(p) => {
+                    let mut t = target.clone();
+                    t.parent_table = p.entity.clone();
+                    t.filter_indirection = None;
+                    t.occurrence_projection = None;
+                    t
+                }
+                None => target.clone(),
+            };
+            super::generic_search_nodes::admitted_parent_uuids_among(ctx, &public, &qp.options, &conn, Some(&tous))
+                .map_err(|e| format!("CallersHopNode: {e}"))?
+        };
+        let par_source: Vec<(usize, Vec<String>)> = match &admis {
+            Some(admis) => par_source.into_iter().map(|(i, u)| (i, u.into_iter().filter(|x| admis.contains(x)).collect())).collect(),
+            None => par_source,
+        };
+
         // Leurs lignes, du même grain que les résultats, puis les meilleures par recoupement.
         let mut callers: HashMap<usize, Vec<UnifiedResult>> = HashMap::new();
         let mut trouves = 0usize;
