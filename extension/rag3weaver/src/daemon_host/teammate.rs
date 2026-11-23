@@ -639,6 +639,9 @@ struct StepWork {
     read: Vec<String>,
     wrote: Vec<String>,
     command: Option<(String, String)>,
+    /// **What the step's tools returned** (24 Nov 2026: a new step wrote names the step before had found otherwise):
+    /// the tool's name and its result, bounded, for the declared `Previous step` to keep the facts it chooses.
+    results: Vec<(String, String)>,
 }
 
 impl StepWork {
@@ -650,6 +653,7 @@ impl StepWork {
             "read": self.read,
             "wrote": self.wrote,
             "command": self.command.as_ref().map(|(c, o)| serde_json::json!({ "command": c, "output": o })),
+            "results": self.results.iter().map(|(t, r)| serde_json::json!({ "tool": t, "result": r })).collect::<Vec<_>>(),
             "last_text": last_text,
             "budget": budget,
         })
@@ -3379,6 +3383,7 @@ mod carry_over_tests {
             read: read.iter().map(|s| s.to_string()).collect(),
             wrote: wrote.iter().map(|s| s.to_string()).collect(),
             command: command.map(|(c, o)| (c.to_string(), o.to_string())),
+            results: Vec::new(),
         };
         let long: String = "é😀".repeat(5_000);
         vec![
@@ -3434,6 +3439,7 @@ mod carry_over_tests {
             read: (0..200).map(|i| format!("src/module_{i}/fichier_é.rs (lines {i}-{})", i + 40)).collect(),
             wrote: (0..50).map(|i| format!("src/écrit_{i}.rs")).collect(),
             command: Some(("cargo test --lib".into(), "test ok 😀\n".repeat(150))),
+            results: Vec::new(),
         };
         let texte = "Je relis le module, puis j'édite la fonction. ".repeat(65);
         let n = 200;
@@ -3490,6 +3496,30 @@ mod carry_over_tests {
     /// The witness of the lot `wasm-node-trial`, in a file of its own.
     #[cfg(feature = "wasm-nodes")]
     mod wasm_previous_step;
+
+    /// **The facts the code index gave stay for the next step** (the night of 24 Nov 2026: the step that searched found
+    /// `teammate_loop` at `teammate.rs:2415`; the next one, which wrote the report, had only prose, and invented 13
+    /// names). The shipped node keeps the `name — path:line` lines of the index tools' results, and over the budget it
+    /// cuts the prose before them.
+    #[test]
+    fn the_index_facts_survive_into_the_next_step() {
+        let (_d, dir) = nodes();
+        let w = StepWork {
+            read: vec!["src/daemon_host/teammate.rs (lines 2400-2460)".into()],
+            wrote: Vec::new(),
+            command: None,
+            results: vec![
+                ("usages".into(), "**1 usage** of `teammate_loop`\n- method teammate_loop — src/daemon_host/teammate.rs:2415, called by run_teammate (src/daemon_host/teammate.rs:2363)\n".into()),
+                ("read_file".into(), "fn quelque_chose() — src/ailleurs.rs:12\n".into()),
+            ],
+        };
+        let prose = "Je cherche la boucle de l'équipier. ".repeat(40);
+        for budget in [8_000, 400] {
+            let block = carry_over_by_node(&dir, "PreviousStep", &json!({}), w.to_json(3, &prose, budget)).unwrap();
+            assert!(block.contains("teammate_loop — src/daemon_host/teammate.rs:2415"), "the index's fact is kept (budget {budget}): {block}");
+            assert!(!block.contains("src/ailleurs.rs:12"), "a file's content is no fact of the index: {block}");
+        }
+    }
 }
 
 /// The witness of the lot `step-hooks`, in a file of its own.
