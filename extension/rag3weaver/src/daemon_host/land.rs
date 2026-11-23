@@ -210,7 +210,7 @@ impl DaemonHost {
     }
 
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
-    pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles, wrote: &[String]) {
+    pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles, wrote: &[String], interrupted: bool) {
         let Some(w) = t.workspace.as_ref() else { return };
         if self.gate_level(&t.id, files).is_none() {
             return;
@@ -227,6 +227,8 @@ impl DaemonHost {
             let boite = files.mailbox();
             let dit = boite.iter().rev().find(|l| l["from"] == "teammate" && l["kind"] == "step_done").or_else(|| boite.iter().rev().find(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host"));
             let premier = dit.and_then(|l| l["text"].as_str()).and_then(|t| t.lines().next()).unwrap_or("le travail du pas").chars().take(72).collect::<String>();
+            // A turn stopped by its user says so in its commit (23 Nov 2026): the work already written lands.
+            let premier = if interrupted { format!("Tour interrompu par l'utilisatrice : {premier}") } else { premier };
             let message = format!("{premier}\n\nCommité par l'hôte à la fin d'un pas : l'agent avait laissé ces changements.");
             // **Under rag3weaver's identity** (the task's declared one, else `rag3weaver <rag3weaver@localhost>`), by
             // `-c`: never the machine's git config, which may carry an address that must not enter these repositories.
@@ -295,7 +297,8 @@ impl DaemonHost {
             return retenu("ton dossier a des modifications non commitées".into());
         }
         let commits = git(dossier, &["rev-list", "--count", &format!("{sien}..{tache}")]).unwrap_or_default();
-        let fichiers = git(dossier, &["diff", "--name-only", &sien, &tache]).map(|s| s.lines().count()).unwrap_or(0);
+        let chemins: Vec<String> = git(dossier, &["diff", "--name-only", &sien, &tache]).map(|s| s.lines().map(str::to_string).collect()).unwrap_or_default();
+        let fichiers = chemins.len();
         // **Hundreds of files at once are said, not landed in silence** (c7, 23 Nov 2026): an install committed with
         // its dependencies, most often.
         if fichiers > TOO_MANY_FILES {
@@ -304,7 +307,7 @@ impl DaemonHost {
         match git(dossier, &["merge", "--ff-only", "-q", &tache]) {
             Ok(_) => {
                 let texte = format!("{fichiers} fichier(s) dans ton dossier {} ({commits} commit(s) de la branche {branche})", dossier.display());
-                let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": commits.parse::<u64>().unwrap_or(0), "files": fichiers }));
+                let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": commits.parse::<u64>().unwrap_or(0), "files": fichiers, "paths": chemins }));
             }
             Err(e) => retenu(format!("l'avance rapide a échoué : {e}")),
         }
