@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
+  de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
+  cours, au lieu d'attendre le pas suivant.
 - 23 novembre 2026 — **L'avancement et la fin d'un index se voient de nouveau à chaque relecture de l'état.** L'hôte
   ne garde entre deux lectures que l'état d'un index posé ; un index en cours se relit à chaque fois.
 - 23 novembre 2026 — **L'agent répond toujours à la fin de son tour, à une personne comme à un agent.** Sa phrase
