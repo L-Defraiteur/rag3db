@@ -33,7 +33,7 @@ fn a_fiche_updated_after_a_restart_is_found_by_its_new_words_only() {
         assert!(bm25_names(&b, "quokkaword").iter().any(|n| n == "restart-witness"), "found before the restart");
     }
     let b = ouvrir(dir.path(), |_| {});
-    appel(&b, "put_fiche", json!({"record": {"name": "restart-witness", "about": "the zebracornword after the restart", "state": "current", "revision": 1}}));
+    appel(&b, "put_fiche", json!({"record": {"name": "restart-witness", "about": "the zebracornword after the restart", "state": "current"}, "expected_revision": 1}));
     assert!(bm25_names(&b, "zebracornword").iter().any(|n| n == "restart-witness"), "the new word finds the updated fiche");
     assert!(!bm25_names(&b, "quokkaword").iter().any(|n| n == "restart-witness"), "the old word no longer returns it");
 }
