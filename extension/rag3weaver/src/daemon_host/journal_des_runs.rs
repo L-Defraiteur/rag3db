@@ -121,6 +121,29 @@ pub fn lire_le_fichier(p: &Path) -> Result<Value, String> {
     serde_json::from_slice(&json).map_err(|e| format!("{} : {e}", p.display()))
 }
 
+/// **The model calls of a conversation, as the provider returned them** (23 Nov 2026: « son texte est quelque part ;
+/// on doit en garder trace à la source »): every `LlmCall` of every run of `backend` under `racine`, in the runs'
+/// order, one JSON value each — the run, the iteration, the model, the duration, the finish, the tokens, and `raw`
+/// (the text, the thinking, the tool calls with their arguments, the first and last chunk's times). What
+/// `rag3weaver-backend trace <conversation>` prints, one line each, to set beside what the view showed.
+pub fn model_calls(racine: &Path, backend: &str) -> Vec<Value> {
+    let dossier = racine.join(backend);
+    let mut fichiers: Vec<PathBuf> = std::fs::read_dir(&dossier).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| est_un_journal(p)).collect();
+    fichiers.sort();
+    let mut out = Vec::new();
+    for f in fichiers {
+        let Ok(j) = lire_le_fichier(&f) else { continue };
+        for e in j["evenements"].as_array().into_iter().flatten().filter(|e| e["kind"] == "LlmCall") {
+            let mut v = serde_json::Map::new();
+            for k in ["run", "iteration", "model", "ms", "finish", "provider_finish", "prompt_tokens", "completion_tokens", "reasoning_tokens", "tool_calls", "retry_log", "empty", "raw"] {
+                v.insert(k.to_string(), e[k].clone());
+            }
+            out.push(Value::Object(v));
+        }
+    }
+    out
+}
+
 /// Écrit un journal compressé ; rend son poids sur le disque.
 /// **D'un coup** (16 nov. 2026, la CI `rag3weaver` rouge sur « le run se relit ») : le journal s'écrit dans un
 /// temporaire du même dossier, puis prend son nom par un `rename`. Un lecteur qui le liste (`runs_de`) le
@@ -689,6 +712,27 @@ fn borner(evenements: Vec<Value>, max_octets: usize) -> (Vec<Value>, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The model calls of a conversation, read back in order** (`rag3weaver-backend trace`): each LlmCall of each run,
+    /// with what the provider returned.
+    #[test]
+    fn the_model_calls_of_a_conversation_are_read_back_with_what_the_provider_returned() {
+        let d = tempfile::tempdir().unwrap();
+        let dossier = d.path().join("conv");
+        std::fs::create_dir_all(&dossier).unwrap();
+        for (run, texte) in [("agent-1", "Je regarde."), ("agent-2", "C'est fait.")] {
+            let v = serde_json::json!({ "evenements": [
+                { "kind": "RunStarted", "run": run },
+                { "kind": "LlmCall", "run": run, "iteration": 1, "model": "m", "ms": 12, "finish": "ToolCall", "raw": { "text": texte, "tool_calls": [{ "name": "look", "arguments": "{}" }] } },
+            ] });
+            ecrire_le_fichier(&dossier.join(format!("{run}.json.zst")), &v).unwrap();
+        }
+        let appels = model_calls(d.path(), "conv");
+        assert_eq!(appels.len(), 2, "{appels:#?}");
+        assert_eq!(appels[0]["raw"]["text"], "Je regarde.");
+        assert_eq!(appels[0]["raw"]["tool_calls"][0]["name"], "look");
+        assert_eq!(appels[1]["run"], "agent-2");
+    }
     use crate::events::Event;
 
     fn attendre_le_fichier(j: &JournalDesRuns, backend: &str, run: &str) -> Value {

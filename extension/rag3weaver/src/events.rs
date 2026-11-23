@@ -242,6 +242,10 @@ pub enum Event {
         since_reduction: ConversationTokens,
         /// The windows the fallow summarised in the context of this call.
         folded_windows: usize,
+        /// **What the provider returned, as it came** (23 Nov 2026): the text, the thinking, the tool calls with their
+        /// arguments, the provider's finish, the first and last chunk's times; bounded (16 KiB of text, 8 KiB of
+        /// arguments a call), each cut said.
+        raw: serde_json::Value,
     },
     /// Un appel d'outil, avant exécution — les arguments **exacts**.
     ToolCallStarted {
@@ -784,9 +788,9 @@ impl Event {
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
                 "kept": kept, "dropped": dropped,
             }),
-            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, cache_reported, completion_tokens, ms, retries, retry_log, finish, tool_calls, provider_finish, reasoning_tokens, max_tokens, reasoning, empty, context_window, conversation_tokens, since_reduction, folded_windows } => json!({
+            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, cache_reported, completion_tokens, ms, retries, retry_log, finish, tool_calls, provider_finish, reasoning_tokens, max_tokens, reasoning, empty, context_window, conversation_tokens, since_reduction, folded_windows, raw } => json!({
                 "provider_finish": provider_finish, "reasoning_tokens": reasoning_tokens, "max_tokens": max_tokens, "reasoning": reasoning, "empty": empty,
-                "context_window": context_window, "conversation_tokens": conversation_tokens, "since_reduction": since_reduction, "folded_windows": folded_windows,
+                "context_window": context_window, "conversation_tokens": conversation_tokens, "since_reduction": since_reduction, "folded_windows": folded_windows, "raw": raw,
                 "kind": "LlmCall", "run": run, "agent": agent, "model": model, "iteration": iteration,
                 "prompt_tokens": prompt_tokens, "cached_prompt_tokens": cached_prompt_tokens, "cache_reported": cache_reported,
                 "completion_tokens": completion_tokens,
@@ -1247,7 +1251,7 @@ mod tests {
         let bus = EventBus::new(2);
         let cursor = bus.cursor(topic::AGENT, "trace");
         for i in 0..5 {
-            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0 });
+            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0, raw: serde_json::Value::Null });
         }
         // Le même curseur, retrouvé par son nom — pas un nouveau récepteur.
         let same = bus.cursor(topic::AGENT, "trace");
@@ -1295,7 +1299,7 @@ mod tests {
         let mut own = a.subscribe(&run_topic("r1"));
 
         b.emit(Event::EntitiesStored { count: 7 });
-        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0 });
+        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0, raw: serde_json::Value::Null });
         b.send_message("r1", "spy", "r1", "coucou");
 
         for rx in &mut heard_by_a {

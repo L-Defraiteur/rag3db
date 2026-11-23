@@ -796,15 +796,36 @@ impl AgentRun {
 struct TeeSink<'a> {
     inner: &'a mut dyn TokenSink,
     text: String,
+    /// The thinking as it came, and the times of the first and last chunk (23 Nov 2026: what the provider
+    /// returned, kept as it came, in the run).
+    reasoning: String,
+    first_ms: Option<u64>,
+    last_ms: Option<u64>,
     /// Each scheduled retry of this call, for the `LlmCall` event.
     retries: Vec<crate::events::RetryRecord>,
 }
 
+impl TeeSink<'_> {
+    fn chunk(&mut self) {
+        let now = crate::events::maintenant_ms();
+        self.first_ms.get_or_insert(now);
+        self.last_ms = Some(now);
+    }
+}
+
+/// A text kept in the run, bounded: its first `max` characters, and whether it was cut.
+fn borne(text: &str, max: usize) -> (String, bool) {
+    if text.chars().count() <= max { (text.to_string(), false) } else { (text.chars().take(max).collect(), true) }
+}
+
 impl TokenSink for TeeSink<'_> {
     fn on_reasoning(&mut self, delta: &str) -> Flow {
+        self.chunk();
+        self.reasoning.push_str(delta);
         self.inner.on_reasoning(delta)
     }
     fn on_token(&mut self, delta: &str) -> Flow {
+        self.chunk();
         self.text.push_str(delta);
         self.inner.on_token(delta)
     }
@@ -1790,9 +1811,13 @@ impl<'a> Agent<'a> {
             // réécrivent, et elles le font ici, à un seul endroit.
             self.absorb_history(turns);
             self.refresh_waiting_block(turns);
-            let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new() };
+            let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new(), reasoning: String::new(), first_ms: None, last_ms: None };
             let mut generated = self.llm.generate(turns, &opts, &mut tee);
             let mut text = std::mem::take(&mut tee.text);
+            // **What the provider returned, as it came** (23 Nov 2026), before any cleaning of the text.
+            let brut_texte = text.clone();
+            let brut_reflexion = std::mem::take(&mut tee.reasoning);
+            let (premier_ms, dernier_ms) = (tee.first_ms, tee.last_ms);
             let mut retry_log = std::mem::take(&mut tee.retries);
 
             // **Une fenêtre refusée n'est pas une fin de course.** Si une
@@ -1829,7 +1854,7 @@ impl<'a> Agent<'a> {
                         kept: c.kept,
                         dropped: c.dropped,
                     });
-                    let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new() };
+                    let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new(), reasoning: String::new(), first_ms: None, last_ms: None };
                     generated = self.llm.generate(turns, &opts, &mut tee);
                     text = std::mem::take(&mut tee.text);
                     retry_log.append(&mut tee.retries);
@@ -1930,6 +1955,23 @@ impl<'a> Agent<'a> {
                 // No reduction of the context exists yet: the fallow's lot moves this base.
                 since_reduction: run.conversation_tokens,
                 folded_windows: 0,
+                raw: {
+                    let (texte, t_coupe) = borne(&brut_texte, 16_384);
+                    let (reflexion, r_coupe) = borne(&brut_reflexion, 16_384);
+                    let appels: Vec<serde_json::Value> = finish
+                        .tool_calls
+                        .iter()
+                        .map(|c| {
+                            let (args, a_coupe) = borne(&c.arguments, 8_192);
+                            serde_json::json!({ "id": c.id, "name": c.name, "arguments": args, "arguments_cut": a_coupe })
+                        })
+                        .collect();
+                    serde_json::json!({
+                        "text": texte, "text_cut": t_coupe, "reasoning": reflexion, "reasoning_cut": r_coupe,
+                        "tool_calls": appels, "provider_finish": usage.provider_finish,
+                        "first_chunk_ms": premier_ms, "last_chunk_ms": dernier_ms,
+                    })
+                },
             });
             run.empty_reply = empty_reason.map(|r| {
                 format!(
@@ -2349,6 +2391,10 @@ fn error_detail(content: &str) -> Option<&str> {
 #[cfg(test)]
 #[path = "agent_llm_call_tests.rs"]
 mod llm_call_tests;
+
+#[cfg(test)]
+#[path = "agent_raw_call_tests.rs"]
+mod raw_call_tests;
 
 #[cfg(test)]
 mod tests {
