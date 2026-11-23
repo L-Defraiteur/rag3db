@@ -400,6 +400,16 @@ impl Default for SessionArchive {
     }
 }
 
+/// **Tools of another backend, offered to this one's agent** (23 Nov 2026: the agent of a code backend reaches the
+/// long-term memory it declares, its views to come): the other backend's manifest, relative to this one, and the names of
+/// its tools offered here. The list is the manifest's, chosen by its user; nothing in the code names a tool.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ToolImport {
+    pub backend: PathBuf,
+    pub tools: Vec<String>,
+}
+
 /// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -598,6 +608,9 @@ pub struct BackendManifest {
     /// runs de ce backend ne sont pas jugés.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bilans: Option<BilansDeclares>,
+    /// **Tools imported from other backends** ([`ToolImport`]), offered to this backend's agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<ToolImport>,
     /// **La politique de l'équipier** d'une tâche ouverte sur ce backend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub teammate: Option<TeammatePolicy>,
