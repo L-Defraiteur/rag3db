@@ -105,6 +105,33 @@ de nœuds exige qu'ils soient ceux du crate.
 |---|---|---|
 | Un témoin déclaratif | les témoins sont en Rust | **un fichier de cas à côté du mmd** (`<graphe>.cases.json`) : des entrées, les réponses simulées des nœuds de bord (modèle, HTTP, commande, horloge), les sorties attendues. Un lanceur générique les joue en bac. Un graphe se prouve alors sans Rust, et le pousseur peut le rejouer comme une suite |
 
+### 11. Le transport déclaré
+
+Lucie : « du transport déclaratif aussi ». Une route n'est pas du code par route.
+
+| Besoin | Existe déjà | Manque | À ne pas faire |
+|---|---|---|---|
+| Une route HTTP | chaque route de l'hôte est un bras de `match` en Rust (`ide.rs`, `daemon_host.rs`) | **une route déclarée dans un gabarit** : méthode, chemin, authentification (le jeton de l'hôte, le titre de l'utilisatrice, une signature vérifiée, ou rien), schéma d'entrée, graphe à lancer, forme de la réponse | une route en Rust par besoin |
+| Un flux (SSE, WebSocket) | `/ide/flux`, en dur | **un canal exposé** : la déclaration nomme le canal (page 02) et le filtre ; la connexion s'y abonne | un flux par fonctionnalité |
+| Servir les routes | le serveur de l'hôte | **une seule primitive générique** : elle écoute, vérifie l'authentification, valide l'entrée, appelle le graphe et répond selon la forme déclarée | une primitive par route, ou un graphe qui ouvre lui-même un port réseau |
+
+**Ce qui reste la primitive** : le serveur lui-même (l'écoute, le TLS, les limites de taille), la vérification du jeton
+de l'hôte et du titre de l'utilisatrice, et le refus d'une route qui citerait un graphe hors de la politique de types.
+**Ce qui devient une déclaration** : les routes de l'hôte (`/v1`, `/ide`), une à une, chacune avec son témoin, et les
+routes que l'utilisatrice déclare pour son application ; c'est aussi le mini-hôte par application. Archi avait gardé le
+transport en code dans la conception de `/v1` ; le partage se fait avec lui, au premier lot.
+
+### 12. L'OAuth polyvalent
+
+Lucie : « de l'OAuth polyvalent selon les plus connus, genre Google, Microsoft, etc. ».
+
+| Besoin | Existe déjà | Manque | À ne pas faire |
+|---|---|---|---|
+| Se connecter à un service tiers au nom de l'utilisatrice | `gcp_auth::TokenSource`, en dur, pour Vertex seulement | **une primitive `OAuth` générique**, scellée : le code d'autorisation avec PKCE, les identifiants de client, l'appareil (device code), le rafraîchissement | une primitive par fournisseur |
+| Connaître un fournisseur | rien | **des profils livrés en fichiers** : Google, Microsoft, GitHub, et un profil OIDC générique par découverte (`.well-known/openid-configuration`), avec les adresses d'autorisation et de jeton, les portées et les particularités | **un nom de fournisseur dans le code** (règle de Lucie) |
+| Garder les jetons | rien | les jetons d'accès et de rafraîchissement vivent en **`SecretRef`** (famille 3), rafraîchis par la primitive | un jeton dans un graphe, une trace, un port lisible ou un fichier hors du plancher protégé |
+| Le consentement | les cartes d'accord | le consentement est une **décision humaine** (`AskHuman`), signée par l'hôte, avant la première autorisation et à chaque élargissement des portées | consentir au nom de l'utilisatrice |
+
 ## Les vrais trous
 
 Ce qui manque et que rien ne remplace aujourd'hui :
@@ -116,7 +143,10 @@ Ce qui manque et que rien ne remplace aujourd'hui :
    eux, aucun webhook ni aucune API distante ne se déclare sans fuite ;
 4. **`HttpRequest`** ;
 5. **l'état durable en primitives** (`KvGet`, `KvPut`, `Once`, `Lock`, `RateLimit`) ;
-6. **le témoin déclaratif d'un graphe** : sans lui, chaque graphe nouveau demande encore un témoin en Rust.
+6. **le témoin déclaratif d'un graphe** : sans lui, chaque graphe nouveau demande encore un témoin en Rust ;
+7. **la primitive générique de route** (famille 11) : sans elle, chaque route reste un bras de `match` en Rust ;
+8. **la primitive `OAuth` et ses profils de fournisseurs** (famille 12) : sans elle, aucune API d'un tiers au nom de
+   l'utilisatrice ne se déclare.
 
 Le reste existe déjà, ou se compose de ces primitives.
 
@@ -127,6 +157,11 @@ Le reste existe déjà, ou se compose de ces primitives.
 3. **Le témoin déclaratif d'un graphe**, pour que tout ce qui suit se prouve sans Rust.
 4. **`SecretRef`, puis `HttpRequest`**, puis `Sign`, `VerifySignature` et `TokenExchange` : l'API distante, puis le
    webhook entrant (une route déclarée vers un canal, puis `VerifySignature`, puis `Once`).
-5. **L'état durable** : `KvGet` et `KvPut`, `Once`, `Lock`, `RateLimit`.
-6. **`AskHuman`, `Join`, `StartAgent`, `ValidateSchema`, `RenderTemplate`, `Diff` et `Patch`**, dans l'ordre où un graphe
+5. **Le transport déclaré** : la primitive générique de route, d'abord pour les routes neuves et celles de
+   l'utilisatrice, puis les routes de l'hôte une à une. Elle vient après `SecretRef` et `VerifySignature`, qui font son
+   authentification.
+6. **L'OAuth polyvalent** : la primitive `OAuth`, puis les profils livrés. Il vient après `SecretRef`, `HttpRequest`
+   et `TokenExchange`, qu'il compose ; **`AskHuman` passe devant lui**, pour le consentement.
+7. **L'état durable** : `KvGet` et `KvPut`, `Once`, `Lock`, `RateLimit`.
+8. **`AskHuman`, `Join`, `StartAgent`, `ValidateSchema`, `RenderTemplate`, `Diff` et `Patch`**, dans l'ordre où un graphe
    réel les demande.
