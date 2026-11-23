@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un modèle sans prix n'arrête plus le travail.** L'hôte cherche son prix lui-même sur la page
+  du fournisseur et le pose en provisoire, avec sa source ; s'il ne le trouve pas, il prend le prix le plus cher de la
+  famille du modèle, et le dit. Le tour part ; le fil demande une confirmation qui n'arrête rien (confirmer ·
+  corriger), et « À intervenir » liste les prix provisoires. Seul le plafond du mois arrête encore un appel.
 - 23 novembre 2026 — **Un modèle sans prix devient une carte dans le fil, et le plafond approché se dit.** Au lieu
   d'une erreur : « ce modèle n'a pas de prix : je le cherche sur la page du fournisseur, ou tu le donnes ? ». Cherché,
   le prix arrive avec sa source, à accepter d'un clic ; donné, il tient en trois champs ; écrit, le message refusé
