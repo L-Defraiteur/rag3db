@@ -71,6 +71,10 @@ pub const SLOT_READ_WAIT: std::time::Duration = std::time::Duration::from_secs(5
 /// Le refus d'un appel arrivé pendant l'ouverture de son backend.
 pub const OPENING: &str = "s'ouvre depuis";
 
+/// The end of a refusal that did nothing because a close, a reopening or an opening held the backend: the call may be
+/// made again, so the answer says it is transient.
+pub const SLOT_BUSY: &str = "cet appel n'a rien fait, recommencez dans un moment";
+
 /// Ouvre un backend depuis son manifeste chargé.
 pub type Opener = Box<dyn Fn(PreparedBackend) -> Result<Backend, String> + Send + Sync>;
 
@@ -5377,3 +5381,7 @@ mod tests {
         hote.shutdown();
     }
 }
+
+#[cfg(test)]
+#[path = "daemon_host/busy_slot_tests.rs"]
+mod busy_slot_tests;
