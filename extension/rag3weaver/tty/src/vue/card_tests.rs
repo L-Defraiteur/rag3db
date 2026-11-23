@@ -198,7 +198,13 @@ fn the_work_landing_in_the_folder_is_said() {
     v.ligne_de_boite(&line(1, "host", "merged", json!({ "into": "/home/lucied/essai", "branch": "agent/fizz", "commits": 1, "files": 2, "text": "2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)" })));
     let w = written(&mut v);
     assert_eq!(w.len(), 1, "{w:?}");
-    assert!(w[0].ends_with("2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)"), "{w:?}");
+    // By default one short line (a trial on 23 Nov.: too much noise); the path and the commit stay with --steps.
+    assert!(w[0].ends_with("✓ 2 fichier(s) dans ton dossier"), "{w:?}");
+    let mut s = Vue::new(240, true);
+    s.montrer_etapes = true;
+    s.ligne_de_boite(&line(1, "host", "merged", json!({ "into": "/home/lucied/essai", "branch": "agent/fizz", "commits": 1, "files": 2, "text": "2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)" })));
+    let ws = written(&mut s);
+    assert!(ws[0].ends_with("2 fichier(s) dans ton dossier /home/lucied/essai (1 commit(s) de la branche agent/fizz)"), "{ws:?}");
     let mut h = Vue::new(240, true);
     h.ligne_de_boite(&line(1, "host", "merge_held", json!({ "why": "ton arbre a des modifications", "branch": "agent/fizz", "command": "git -C /home/lucied/essai merge --ff-only agent/fizz", "text": "gardé sur la branche agent/fizz : ton arbre a des modifications ; pour la prendre : git -C /home/lucied/essai merge --ff-only agent/fizz" })));
     let w = written(&mut h);

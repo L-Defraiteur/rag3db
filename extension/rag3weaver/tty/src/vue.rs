@@ -346,6 +346,8 @@ impl Vue {
     fn changer(&mut self, e: Etat) {
         if matches!(e, Etat::Fini(_)) {
             self.turn_in_flight = false;
+            // No tool line left on screen once the turn ended (23 Nov. 2026).
+            self.discret = None;
         }
         let avant = self.quelle();
         self.etat = e;
@@ -734,9 +736,16 @@ impl Vue {
         if l["from"] == "host" && matches!(l["kind"].as_str(), Some("merged" | "merge_held")) {
             // Work landed in the folder is an answer: the turn is not « fini sans répondre » (23 Nov. 2026).
             self.repondu = true;
-            if let Some(t) = l["text"].as_str().filter(|t| !t.trim().is_empty()) {
+            // By default, one short human line; the path and the commits stay with --steps (23 Nov. 2026).
+            let n = l["files"].as_u64().or_else(|| l["files"].as_array().map(|a| a.len() as u64));
+            let court = match n {
+                Some(n) if !self.montrer_etapes && l["kind"] == "merged" => Some(format!("✓ {n} fichier(s) dans ton dossier")),
+                _ => l["text"].as_str().filter(|t| !t.trim().is_empty()).map(str::to_string),
+            };
+            if let Some(t) = court {
                 self.clore();
-                self.valider_avec_tete(Genre::Boite, "› ", t);
+                let tete = if t.starts_with('✓') { "" } else { "› " };
+                self.valider_avec_tete(Genre::Boite, tete, &t);
             }
             return;
         }
@@ -794,9 +803,19 @@ impl Vue {
         if !self.montrer_etapes {
             let texte = l["text"].as_str().unwrap_or("");
             // L'hôte ne parle qu'au fil de la tâche (« tâche ouverte : … ») : en sourdine.
-            // What changed in the turn and what commands produced are read as in `--plain` (trial of the view, 23 Nov. 2026).
-            let changed = l["kind"] == "turn_changes" || (l["kind"] == "report" && l.get("uncommitted").is_some());
-            if l["from"] == "host" && l["kind"] != "ended" && !changed {
+            // What changed in the turn and what commands left out of the commit: under Ctrl-O, not in the thread
+            // (a trial on 23 Nov. 2026: too much noise); the short line of what landed says enough.
+            if l["from"] == "host" && l["kind"] == "turn_changes" {
+                let fichiers: Vec<Validee> = l["files"].as_array().into_iter().flatten().filter_map(Value::as_str).map(|f| Validee { genre: Genre::Note, texte: f.to_string(), langue: String::new(), tete: 0 }).collect();
+                let lignes = if fichiers.is_empty() { crate::outils::blocs(texte, Genre::Note) } else { fichiers };
+                self.open_document("fichiers du tour", lignes);
+                return;
+            }
+            if l["from"] == "host" && l["kind"] == "report" && l.get("uncommitted").is_some() {
+                self.open_document("hors du commit", crate::outils::blocs(texte, Genre::Note));
+                return;
+            }
+            if l["from"] == "host" && l["kind"] != "ended" {
                 return;
             }
             if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("plan" | "edit_plan" | "started")) {
@@ -819,7 +838,9 @@ impl Vue {
             }
             if l["from"] == "teammate" && l["kind"] == "step_done" {
                 if !texte.trim().is_empty() {
-                    self.done_step = Some((crate::boite::en_tete(l), texte.to_string()));
+                    // Said as the agent's answer: no prefix, no « fait : » (23 Nov. 2026).
+                    let t = texte.strip_prefix("fait : ").unwrap_or(texte);
+                    self.done_step = Some((String::new(), t.to_string()));
                 }
                 return;
             }
@@ -858,7 +879,8 @@ impl Vue {
             }
         }
         self.clore();
-        let tete = crate::boite::en_tete(l);
+        // By default the agent's text has no prefix: it is the answer (23 Nov. 2026).
+        let tete = if !self.montrer_etapes && l["from"] == "teammate" { String::new() } else { crate::boite::en_tete(l) };
         let texte = corps_seul.as_deref().unwrap_or_else(|| l["text"].as_str().unwrap_or(""));
         // La sortie d'une commande ! revient par la boîte : elle est déjà à l'écran,
         // on n'en dit que la première ligne (tty-13).
@@ -873,7 +895,10 @@ impl Vue {
         for b in crate::outils::blocs(texte, Genre::Boite) {
             match (b.genre, premiere) {
                 (Genre::Code, true) => {
-                    self.valider_avec_tete(Genre::Boite, &tete, "");
+                    // A header alone on its line, before the code; none when there is no header (23 Nov. 2026).
+                    if !tete.is_empty() {
+                        self.valider_avec_tete(Genre::Boite, &tete, "");
+                    }
                     self.validees.push(b);
                 }
                 (Genre::Code, false) => self.validees.push(b),
@@ -1789,7 +1814,7 @@ mod tests {
         v.ligne_de_boite(&json!({ "from": "teammate", "kind": "inédit", "text": "x" }));
         let l = v.prendre_lignes();
         let vus: Vec<(&str, &str)> = l.iter().map(|l| (&l.texte[..l.tete], &l.texte[l.tete..])).collect();
-        assert_eq!(vus, vec![("[équipier · réponse] ", "le plan tient"), ("", "  et la suite"), ("[toi · consigne] ", "vas-y"), ("[équipier · inédit] ", "x")]);
+        assert_eq!(vus, vec![("", "le plan tient"), ("", "  et la suite"), ("[toi · consigne] ", "vas-y"), ("", "x")]);
     }
 
     /// **tty-9, vu à l'essai de Lucie** : une ligne de la boîte reçue deux fois
@@ -1802,7 +1827,7 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "MailboxLine", "line": l } }));
         v.ligne_de_boite(&json!({ "id": "d/t:6", "from": "teammate", "kind": "report", "text": "voilà" }));
         let textes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(textes, vec!["[toi · demande] présente-toi", "[équipier · compte rendu] voilà"]);
+        assert_eq!(textes, vec!["[toi · demande] présente-toi", "voilà"]);
     }
 
     /// **tty-9** : la fin d'un run précédent, rejouée à l'ouverture, ne dit plus
@@ -1920,10 +1945,9 @@ mod tests {
         let l = v.prendre_lignes();
         let vus: Vec<(Genre, &str, &str)> = l.iter().map(|l| (l.genre, l.langue.as_str(), l.texte.as_str())).collect();
         assert_eq!(vus, vec![
-            (Genre::Boite, "", "[équipier · compte rendu] Voici :"),
+            (Genre::Boite, "", "Voici :"),
             (Genre::Code, "typescript", "class SomeClass {}"),
             (Genre::Boite, "", "  fin"),
-            (Genre::Boite, "", "[équipier · compte rendu] "),
             (Genre::Code, "rust", "fn a() {}"),
         ]);
     }
@@ -2004,11 +2028,12 @@ mod tests {
         let mut v = Vue::new(100, true);
         fil(&mut v);
         let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(l, vec!["[toi · demande] lis a.rs", "[équipier · compte rendu] Voici la réponse."], "la demande et la réponse seules (Lucie)");
+        assert_eq!(l, vec!["[toi · demande] lis a.rs", "Voici la réponse."], "la demande et la réponse seules (Lucie)");
         assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu : aucun verdict de l'hôte, l'invite respire");
-        assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs"), "le dernier travail, sans verdict ; la plomberie ne défile pas");
+        // Since a trial on 23 Nov. (« trop de bruit »), no tool line is left once the turn ended.
+        assert_eq!(v.discret, None, "la ligne d'outil s'efface à la fin du tour");
         assert_eq!(v.appels.len(), 3, "les appels restent à Ctrl-O");
-        assert_eq!(dessin(&v, 100, 3).0[0], "» read_file src/a.rs", "en sourdine, sur la ligne du haut");
+        assert!(!dessin(&v, 100, 3).0[0].contains("read_file"), "rien en sourdine sur la ligne du haut");
 
         let mut e = Vue::new(100, true);
         e.montrer_etapes = true;
@@ -2286,7 +2311,7 @@ mod tests {
         assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu");
         // Une réponse que le texte n'a pas dite s'écrit, sans le mot de l'hôte.
         v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "teammate", "kind": "report", "text": "le pas 3 s'est terminé sans step_done ; sa réponse : Autre chose." }));
-        assert_eq!(ecrites(&mut v), vec!["[équipier · compte rendu] Autre chose.".to_string()]);
+        assert_eq!(ecrites(&mut v), vec!["Autre chose.".to_string()]);
         v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "teammate", "kind": "report", "text": "le pas 4 s'est terminé sans step_done ni réponse" }));
         assert_eq!(ecrites(&mut v), Vec::<String>::new(), "un mot d'hôte seul ne s'écrit pas");
     }
@@ -2341,7 +2366,7 @@ mod tests {
         // A terminal opened after the run: nothing streamed, the copy is the answer.
         let mut late = Vue::new(120, true);
         late.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Voici la réponse." }));
-        assert_eq!(written(&mut late), vec!["[équipier · compte rendu] Voici la réponse.".to_string()]);
+        assert_eq!(written(&mut late), vec!["Voici la réponse.".to_string()]);
     }
 
     fn session_line(id: &str, direction: &str, peer: &str, text: &str, extra: Value) -> Value {
