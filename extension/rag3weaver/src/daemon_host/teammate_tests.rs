@@ -41,6 +41,7 @@ mod judge_all;
 mod land_each_turn;
 mod land_many_files;
 mod lands_what_commands_made;
+mod mentioned_path;
 mod mid_turn_delivery;
 mod missing_command;
 mod mode_auto_v1;
