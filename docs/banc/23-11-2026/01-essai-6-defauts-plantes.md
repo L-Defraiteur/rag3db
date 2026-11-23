@@ -64,7 +64,7 @@ et rejoué sur une copie neuve.
 | **total** | 3 exacts, 2 voisins | 3 exacts, 1 voisin, 1 raté | 4 exacts, 1 raté |
 
 Correctifs atterris : identiques à master au bit près pour a et c ; d place `taches` après `worktree_du_backend`
-(sans effet sur le sens attendu ; son test couvrant, joué sur son fichier à luciepc, attend une place de calcul au dépôt de cette page).
+(sans effet sur le sens : son fichier joué à luciepc, `suivies::tests` 15 sur 15 verts, le test couvrant compris).
 
 ### Les outils, avec index, sans historique
 
