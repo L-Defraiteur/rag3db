@@ -228,7 +228,7 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     assert!(seen.refusals[0].contains("step_done"));
     assert!(seen.frontiers[3].contains("Oui, vas-y pour le CONTRIBUTING") && seen.frontiers[3].contains("(élément contrib)"), "{}", seen.frontiers[3]);
     // Le dernier pas sait qu'il ne reste rien.
-    assert!(seen.frontiers[5].contains("rends compte"), "{}", seen.frontiers[5]);
+    assert!(seen.frontiers[5].contains("dis dans le texte de ta réponse ce qui est fait"), "{}", seen.frontiers[5]);
 
     // Deux runs journalisés au moins, chacun avec son step_done et la demande.
     let runs: Vec<String> = outcome.steps.iter().filter_map(|s| s["run"].as_str().map(str::to_string)).collect();
