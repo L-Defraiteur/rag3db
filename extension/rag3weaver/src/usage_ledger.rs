@@ -704,6 +704,9 @@ impl Ledger {
     }
 
     /// Writes the default `prices.json` when there is none (never over a file, even an unreadable one), and says so.
+    /// **Whole or not at all**: written beside it, then put in place by a hard link, which refuses an existing file; a
+    /// reader at the same instant sees no file or the whole one, never an empty one (two writers at the first call
+    /// made a reader find the file created and not yet written, 23 November 2026).
     fn write_default_prices(&self) {
         if self.prices_path.exists() {
             return;
@@ -711,16 +714,15 @@ impl Ledger {
         if let Some(parent) = self.prices_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let text = DEFAULT_PRICES.trim_end();
-        // `create_new`: two processes at once, one writes.
-        let written = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&self.prices_path)
-            .and_then(|mut f| f.write_all(format!("{text}\n").as_bytes()));
-        if written.is_ok() {
+        let tmp = self.prices_path.with_extension(format!("json.{}.{}", std::process::id(), new_id()));
+        if std::fs::write(&tmp, format!("{}\n", DEFAULT_PRICES.trim_end())).is_err() {
+            return;
+        }
+        let placed = std::fs::hard_link(&tmp, &self.prices_path).is_ok();
+        let _ = std::fs::remove_file(&tmp);
+        if placed {
             eprintln!(
-                "[usage] {} written: a cap of {DEFAULT_MONTHLY_CAP} {DEFAULT_CURRENCY} a month, private addresses free, no price: a paid model is refused until its price is written there",
+                "[usage] {} written: a cap of {DEFAULT_MONTHLY_CAP} {DEFAULT_CURRENCY} a month, private addresses free, the prices read on the providers' pages: a model it does not price is refused until its price is written there",
                 self.prices_path.display()
             );
         }

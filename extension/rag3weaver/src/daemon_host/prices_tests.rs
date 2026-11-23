@@ -47,3 +47,24 @@ fn a_refusal_for_want_of_a_price_names_its_model() {
     assert_eq!(crate::usage_ledger::unpriced(&e), Some(s));
     assert_eq!(crate::usage_ledger::unpriced("spending cap reached for 2026-11"), None);
 }
+
+/// **The default prices are whole or absent, never empty**: many first calls at once, in a ledger without a
+/// `prices.json`; every reader finds the shipped prices (23 November 2026: a reader found the file created and not yet
+/// written, and refused every model as if the prices could not be read).
+#[test]
+fn the_default_prices_are_written_whole_under_concurrent_first_calls() {
+    for _ in 0..20 {
+        let d = tempfile::tempdir().unwrap();
+        let (usage, prices) = (d.path().join("usage"), d.path().join("prices.json"));
+        let errors: Vec<String> = (0..8)
+            .map(|_| {
+                let l = crate::usage_ledger::Ledger::new(usage.clone(), prices.clone());
+                std::thread::spawn(move || l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false).err())
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|h| h.join().unwrap())
+            .collect();
+        assert!(errors.is_empty(), "a first call found no whole prices: {errors:?}");
+    }
+}
