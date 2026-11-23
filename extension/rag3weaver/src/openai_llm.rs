@@ -420,8 +420,12 @@ impl OpenAiLlm {
         // donc une faute de frappe ici échoue sans un mot.
         body.insert("stream_options".into(), json!({ "include_usage": true }));
         body.insert("max_tokens".into(), json!(opts.max_tokens));
-        body.insert("temperature".into(), json!(opts.temperature));
-        body.insert("top_p".into(), json!(opts.top_p));
+        // **Gemini 3 keeps its own sampling** (Google's guide « Get started with Gemini 3 »: keep the temperature at its
+        // default, 1.0; below it, looping or degraded performance): no temperature nor top_p toward it.
+        if !(self.google_extras && self.model.contains("gemini-3")) {
+            body.insert("temperature".into(), json!(opts.temperature));
+            body.insert("top_p".into(), json!(opts.top_p));
+        }
         // Paramètre de premier plan, pas une extension : il part vers TOUS les
         // fournisseurs, y compris OpenAI. Absent par défaut, donc rien ne
         // change pour qui ne le connaît pas. On n'utilise **pas**
