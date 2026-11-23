@@ -486,23 +486,14 @@ pub(crate) fn in_her_folder(folders: Option<&(String, String)>, text: &str) -> S
     }
 }
 
-/// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
-/// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
-/// **The turn was opened by a human**: its last request or instruction comes from a human.
-pub(crate) fn human_turn(lignes: &[Value]) -> bool {
-    lignes
-        .iter()
-        .rev()
-        .find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
-        .is_some_and(|l| l["by"]["kind"] == "human")
-}
-
-/// **The turn was opened by someone's request**, a human's or an agent's: [`human_turn`] without its human (a request
-/// or instruction neither the teammate nor the host wrote).
+/// **The turn was opened by someone's request**, a human's or an agent's: a request or instruction neither the teammate
+/// nor the host wrote.
 pub(crate) fn asked_turn(lignes: &[Value]) -> bool {
     lignes.iter().any(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
 }
 
+/// **The turn's opening line of a human, when the agent wrote nothing after it**: no report, question, approval,
+/// message nor answer of the agent (its step text is copied as a report, so a step that wrote prose counts).
 pub(crate) fn silent_turn(lignes: &[Value]) -> Option<usize> {
     let n = lignes.iter().rposition(|l| {
         matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host" && l["by"]["kind"] == "human"
