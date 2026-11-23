@@ -400,7 +400,7 @@ impl Catalog {
         for (json, _) in self.sessions_ouvertes_de(entity_name)? {
             let Ok(scope) = serde_json::from_str::<BTreeMap<String, CypherValue>>(&json) else { continue };
             if let Some(open) = self.open_snapshot_session(entity_name, &scope)? {
-                if open.suspended_at.is_some() || orpheline(&open) {
+                if open.suspended_at.is_some() || is_orphan(&open) {
                     v.push((json, open));
                 }
             }
