@@ -215,6 +215,16 @@ impl Boite {
     }
 }
 
+/// **The body of a message the terminal writes** (`POST /ide/teammate/mailbox`): a request or an instruction. Only a
+/// request — the one that opens the task — asks for the gate chosen at launch; the host refuses a gate on an instruction.
+pub fn message(backend: &str, task: &str, kind: &str, texte: &str) -> Value {
+    let mut body = serde_json::json!({ "backend": backend, "task": task, "kind": kind, "text": texte });
+    if kind == "request" {
+        body["gate"] = serde_json::json!(crate::client::gate());
+    }
+    body
+}
+
 /// **Le corps de la réponse** (`POST /ide/teammate/mailbox`) à `a`, de la part
 /// du superviseur ; `accord` pour une approbation (`approved`).
 pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Option<bool>) -> Value {

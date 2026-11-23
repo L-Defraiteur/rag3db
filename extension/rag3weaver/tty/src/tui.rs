@@ -49,14 +49,7 @@ pub(crate) struct Sending {
 
 pub(crate) fn sending_of(action: &Action, tache: &Tache) -> Option<Sending> {
     match action {
-        Action::Envoyer(texte, kind) => {
-            let mut body = json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte });
-            // The gate is set when the task opens: only a request asks for it, the host refuses it on an instruction.
-            if *kind == "request" {
-                body["gate"] = json!(client::gate());
-            }
-            Some(Sending { body, typed: true })
-        }
+        Action::Envoyer(texte, kind) => Some(Sending { body: crate::boite::message(&tache.depot.id, &tache.task, kind, texte), typed: true }),
         Action::Repondre { attente, texte, accord } => Some(Sending { body: crate::boite::reponse(&tache.depot.id, &tache.task, attente, texte, *accord), typed: true }),
         Action::Arreter => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" }), typed: true }),
         _ => None,
@@ -117,7 +110,7 @@ pub(crate) fn task_not_open_yet(task: &str) -> Option<String> {
 
 /// The request given on the command line (`--request`): never typed, so never with the user's token.
 pub(crate) fn request_sending(tache: &Tache, texte: &str) -> Sending {
-    Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "request", "text": texte, "gate": client::gate() }), typed: false }
+    Sending { body: crate::boite::message(&tache.depot.id, &tache.task, "request", texte), typed: false }
 }
 
 /// **Ce qu'on apprend d'une tâche** : le manifeste de son worktree (le filtre du
