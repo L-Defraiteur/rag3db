@@ -462,3 +462,56 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
     let rendu: String = trames.iter().filter(|(_, v)| v["backend"].as_str() == Some(tache.as_str())).filter_map(|(_, v)| plain::trame(v)).collect();
     assert!(rendu.contains("mot0") && rendu.contains(&format!("mot{}", MOTS - 1)), "--plain renders the words of the task: {}", &rendu[..rendu.len().min(200)]);
 }
+
+/// **Two turns in a row, as the view sends them, are both taken and answered** (23 November 2026: after a pose, a human
+/// trial saw every message after the first refused by the host — « gate se déclare sur une request, pas sur un
+/// instruction » — the terminal sending the gate with each instruction). A real host: the request that opens the task,
+/// then an instruction once it ended, both built by `boite::message` and sent with the user's token, as typed at the
+/// keyboard; both accepted, and each answered by a turn that ends.
+#[test]
+#[ignore]
+fn two_turns_in_a_row_from_the_view_are_both_taken_and_answered() {
+    let d = tempfile::tempdir().unwrap();
+    let manifeste = depot_inscrit(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
+            .with_racine_des_taches(d.path().join("taches"))
+            .with_chats_root(d.path().join("chats"))
+            .with_runs_root(d.path().join("runs"))
+            .with_chat_model(faux_equipier())
+            .with_user_token("titre-du-temoin".to_string()),
+    );
+    let parent = heberger(&host, &manifeste);
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    {
+        let host = host.clone();
+        std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
+    }
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: Some("titre-du-temoin".into()) };
+    let agent = client::agent();
+    let chemin = format!("/ide/teammate?backend={}&task=deux", client::encoder(&parent));
+    let boite_lue = || client::lire(&agent, &ep, &chemin).expect("la boîte se lit")["mailbox"].as_array().cloned().unwrap_or_default();
+    let attendre_fins = |n: usize| {
+        let borne = Instant::now() + Duration::from_secs(120);
+        loop {
+            let lignes = boite_lue();
+            if lignes.iter().filter(|l| l["kind"] == "ended").count() >= n {
+                return lignes;
+            }
+            assert!(Instant::now() < borne, "en 120 s, pas {n} fin(s) de tour : {lignes:#?}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+    for (n, (kind, texte)) in [("request", "bonjour"), ("instruction", "ajoute aussi un README")].into_iter().enumerate() {
+        let corps = boite::message(&parent, "deux", kind, texte);
+        let r = client::post_typed(&agent, &ep, "/ide/teammate/mailbox", &corps);
+        assert!(r.is_ok(), "the {kind} is taken by the host: {r:?} (body {corps})");
+        let lignes = attendre_fins(n + 1);
+        let posee = lignes.iter().position(|l| l["from"] == "supervisor" && l["text"] == texte).expect("the message is in the mailbox");
+        assert!(lignes[posee..].iter().any(|l| l["kind"] == "ended"), "the {kind} is answered by a turn that ends: {lignes:#?}");
+    }
+    host.journal_des_runs().vider();
+}
