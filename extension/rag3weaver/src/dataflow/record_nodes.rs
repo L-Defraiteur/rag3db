@@ -4974,12 +4974,54 @@ fn reindex_fts_rows(
         )
         .map_err(|e| e.to_string())?;
 
+    // **Outside a lot, a row absent from the session's cache** (after a restart: a migration rollback replays this
+    // `undo()` with an empty cache) has its offset read from the base, as `DeleteRecordNode` does — never skipped
+    // without a word (23 November 2026).
+    let lus_en_base: HashMap<String, u64> = if tampon.is_none() {
+        let inconnues: Vec<CypherValue> = rows
+            .rows
+            .iter()
+            .filter_map(|r| r.first().and_then(|v| v.as_str()))
+            .filter(|u| node_id_cache.read().ok().and_then(|c| c.get(u)).is_none())
+            .map(|u| CypherValue::String(u.to_string()))
+            .collect();
+        if inconnues.is_empty() {
+            HashMap::new()
+        } else {
+            let lues = conn
+                .execute_with_params(
+                    &dialect.select_node_ids(entity_name),
+                    &[QueryParam { name: "uuids".into(), value: CypherValue::List(inconnues) }],
+                )
+                .map_err(|e| format!("offsets des lignes à ré-indexer de {entity_name} : {e}"))?;
+            lues.rows
+                .iter()
+                .filter_map(|row| {
+                    let o = row.get(1).and_then(|id| {
+                        id.as_i64()
+                            .and_then(|n| u64::try_from(n).ok())
+                            .or_else(|| id.as_str().and_then(crate::node_id_cache::InternalNodeId::parse).map(|id| id.offset))
+                    })?;
+                    Some((row.first()?.as_str()?.to_string(), o))
+                })
+                .collect()
+        }
+    } else {
+        HashMap::new()
+    };
+    let mut sautees = 0usize;
     for row in &rows.rows {
         let Some(uuid) = row.first().and_then(|v| v.as_str()) else {
             continue;
         };
-        let offset = node_id_cache.read().ok().and_then(|c| c.get(uuid)).map(|id| id.offset);
+        let offset = node_id_cache
+            .read()
+            .ok()
+            .and_then(|c| c.get(uuid))
+            .map(|id| id.offset)
+            .or_else(|| lus_en_base.get(uuid).copied());
         if offset.is_none() && tampon.is_none() {
+            sautees += 1;
             continue;
         }
         let values: Vec<(String, String)> = schema_fields
@@ -5016,6 +5058,9 @@ fn reindex_fts_rows(
         let Some(offset) = offset else { continue };
         crate::fts_handle::reindex_document(handle, &values, offset)
             .map_err(|e| format!("ré-indexation FTS de {entity_name}: {e}"))?;
+    }
+    if sautees > 0 {
+        eprintln!("[fts] {entity_name} : {sautees} ligne(s) sans identifiant ni en cache ni en base, non ré-indexée(s)");
     }
     Ok(())
 }

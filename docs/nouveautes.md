@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Une mise à jour défaite après un redémarrage rend son plein texte.** Le retour arrière d'une
+  migration, rejoué après un redémarrage de l'hôte, ré-indexe le texte rétabli : une ligne inconnue du cache de la
+  session a son identifiant lu en base. Avant, elle était sautée sans un mot, et la recherche par mots rendait le
+  texte défait.
+
 - 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
   nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres
   fichiers indexés dans le même paquet, et un fichier édité seul s'en inventait à chaque resynchronisation : l'index
