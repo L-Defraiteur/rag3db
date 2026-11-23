@@ -19,20 +19,32 @@ fn echecs_du_tour(files: &TeammateFiles) -> std::path::PathBuf {
 
 /// A command of the turn that failed: not found, or ended in error (read from its result).
 pub(crate) fn note_turn_failure(files: &TeammateFiles, resultat: &str) {
-    let entree = if let Some(r) = resultat.split("commande introuvable : ").nth(1) {
-        format!("commande introuvable : {}", r.split([' ', '\n']).next().unwrap_or_default())
+    let mut entrees = Vec::new();
+    if let Some(r) = resultat.split("commande introuvable : ").nth(1) {
+        entrees.push(format!("commande introuvable : {}", r.split([' ', '\n']).next().unwrap_or_default()));
     } else {
-        let mut lignes = resultat.lines();
-        let Some(tete) = lignes.find(|l| l.starts_with("### `")) else { return };
-        let Some(code) = lignes.next().and_then(|l| l.strip_prefix("code ")).and_then(|l| l.split(' ').next()) else { return };
-        if code == "0" {
-            return;
+        // Each part of the report: `### `<cmd>``, a blank line, `code <n> · <time>`.
+        let mut tete: Option<&str> = None;
+        for l in resultat.lines() {
+            if l.starts_with("### `") {
+                tete = Some(l.trim_start_matches("### ").trim());
+            } else if let (Some(t), Some(reste)) = (tete, l.strip_prefix("code ")) {
+                let code = reste.split(' ').next().unwrap_or_default();
+                if code != "0" {
+                    entrees.push(format!("{t} (code {code})"));
+                }
+                tete = None;
+            }
         }
-        format!("{} (code {code})", tete.trim_start_matches("### ").trim())
-    };
+    }
     use std::io::Write as _;
+    if entrees.is_empty() {
+        return;
+    }
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(echecs_du_tour(files)) {
-        let _ = writeln!(f, "{entree}");
+        for e in entrees {
+            let _ = writeln!(f, "{e}");
+        }
     }
 }
 
