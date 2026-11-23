@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
+  de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
+  cours, au lieu d'attendre le pas suivant.
 - 23 novembre 2026 — **Un chemin que tu écris se lit sans carte, pendant dix minutes.** Quand ta demande cite un fichier
   ou un dossier hors du projet, l'agent peut le lire tout de suite : l'hôte lui en ouvre le dossier en lecture seule,
   pour dix minutes, et le dit en une ligne. Seuls tes mots comptent, jamais un chemin venu d'un agent ou d'un fichier
