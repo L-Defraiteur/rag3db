@@ -100,15 +100,28 @@ fn the_input_takes_the_focus_when_the_chat_is_ready_before_it_is_mounted() {
         "Page.addScriptToEvaluateOnNewDocument",
         json!({ "source": "(() => { const f = window.fetch; let k = 0; window.fetch = async (...a) => { \
             const u = String(a[0] && a[0].url ? a[0].url : a[0]); \
+            if (u.includes('/ide/chat?')) { const r = await f(...a); const j = await r.clone().json(); \
+              if (j && j.result && j.result.on && window.__chat_on_at === undefined) window.__chat_on_at = performance.now(); return r; } \
             if (!u.includes('/ide/etat')) return f(...a); \
             k += 1; \
             if (k === 1) { const r = await f(...a); const j = await r.json(); j.backends = []; window.__sans_depot = true; \
               return new Response(JSON.stringify(j), { status: 200, headers: { 'Content-Type': 'application/json' } }); } \
             if (k === 2) await new Promise((ok) => setTimeout(ok, 1000)); \
-            return f(...a); }; })();" }),
+            return f(...a); }; \
+          new MutationObserver(() => { const m = document.getElementById('message'); \
+            if (m && window.__input_at === undefined) { window.__input_at = performance.now(); window.__input_disabled_at_mount = m.disabled; } \
+          }).observe(document, { childList: true, subtree: true }); })();" }),
     );
     n.aller(&format!("{base}{chat}"), "window.__sans_depot === true");
     n.attendre("!!document.querySelector('#message') && !document.querySelector('#message').disabled", "the input mounted, the chat ready");
+    // The order is proved, not supposed: the chat said `on` before the input was inserted in the page.
+    let order = n.evaluer("JSON.stringify({ chat_on_at: window.__chat_on_at, input_at: window.__input_at, disabled_at_mount: window.__input_disabled_at_mount })");
+    let order: serde_json::Value = serde_json::from_str(order.as_str().unwrap_or("{}")).unwrap_or_default();
+    let (chat_on_at, input_at) = (order["chat_on_at"].as_f64(), order["input_at"].as_f64());
+    assert!(
+        matches!((chat_on_at, input_at), (Some(c), Some(i)) if c < i),
+        "the forced order did not happen (the chat ready before the input mounted): {order}"
+    );
     let focused = n.evaluer("document.activeElement?.id ?? document.activeElement?.tagName ?? ''");
     if focused != json!("message") {
         let why = focus_diagnosis(&mut n);
