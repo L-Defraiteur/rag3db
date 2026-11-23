@@ -1902,7 +1902,7 @@ impl<'a> Agent<'a> {
             });
             // **An empty reply says why** (23 Nov 2026): kept for the run's caller, which tells the user.
             run.empty_reply = (text.is_empty() && finish.tool_calls.is_empty()).then(|| {
-                let pourquoi = match finish.reason {
+                let pourquoi = match &finish.reason {
                     FinishReason::MaxTokens => "coupée à la limite de sortie".to_string(),
                     r => format!("fin {r:?}"),
                 };
