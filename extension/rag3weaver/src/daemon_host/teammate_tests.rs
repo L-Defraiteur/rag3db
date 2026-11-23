@@ -58,6 +58,7 @@ mod reply_first;
 mod run_du_pas;
 mod silent_turn;
 mod silent_turn_channel;
+mod step_rules_declared;
 mod stop_stops;
 mod text_first;
 mod turn_changes;
