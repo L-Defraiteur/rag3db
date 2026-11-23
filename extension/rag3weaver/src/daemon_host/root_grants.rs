@@ -35,6 +35,10 @@ pub struct Grant {
     /// "read" read only (c7's word, 21 November 2026: a « yes » to look at a folder does not open its deletion).
     #[serde(default = "mode_read")]
     pub mode: String,
+    /// **When the grant ends**, in milliseconds since the epoch (Lucie, 23 November 2026, ~21 h: a path she wrote is
+    /// read for ten minutes); `None` lasts until withdrawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<u64>,
 }
 
 fn mode_read() -> String {
@@ -170,6 +174,11 @@ impl DaemonHost {
     /// **Grant a root** (the Card's « yes » on an `open_root` card): kept in the register, canonical; a grant already
     /// there for the same agent and root is replaced by the new proof.
     pub fn grant_root(&self, agent: &str, root: &Path, proof: Proof, by: &str, mode: &str) -> Result<Grant, String> {
+        self.grant_root_until(agent, root, proof, by, mode, None)
+    }
+
+    /// [`Self::grant_root`] that ends at `expires_at` (milliseconds since the epoch), `None` for a durable one.
+    pub fn grant_root_until(&self, agent: &str, root: &Path, proof: Proof, by: &str, mode: &str, expires_at: Option<u64>) -> Result<Grant, String> {
         if !matches!(mode, "read" | "write") {
             return Err(format!("accorder une racine : le mode « {mode} » n'est ni read ni write"));
         }
@@ -197,6 +206,7 @@ impl DaemonHost {
             turn: proof.turn,
             granted_by: by.to_string(),
             mode: mode.to_string(),
+            expires_at,
         };
         let mut accords = self.read_grants();
         accords.retain(|a| !(a.agent == accord.agent && a.root == accord.root));
@@ -405,6 +415,7 @@ impl DaemonHost {
             turn: proof.turn,
             granted_by: by.to_string(),
             mode: mode.to_string(),
+            expires_at: None,
         };
         self.grants_once.lock().unwrap_or_else(|e| e.into_inner()).push(accord);
         Ok(())
