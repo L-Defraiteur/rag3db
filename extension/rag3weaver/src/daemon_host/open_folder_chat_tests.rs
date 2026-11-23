@@ -6,6 +6,20 @@ use serde_json::json;
 
 use crate::daemon_host::atelier_fichiers::tests::atelier;
 
+/// **What the page did, when the focus is not where it should be** (a single red under load, 23 November 2026, left
+/// only `BODY`): the requests with their instants, the focused element with its path, and the state of the input.
+fn focus_diagnosis(n: &mut crate::daemon_host::navigateur::Navigateur) -> String {
+    n.evaluer(
+        "(() => { const path = (e) => { const p = []; for (; e && e.tagName; e = e.parentElement) p.unshift(e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\\s+/).join('.') : '')); return p.join(' > '); }; \
+          const m = document.querySelector('#message'); \
+          return JSON.stringify({ focused: path(document.activeElement), input: m ? { disabled: m.disabled, connected: m.isConnected } : null, \
+            requests: performance.getEntriesByType('resource').map((r) => [new URL(r.name).pathname, Math.round(r.startTime), Math.round(r.responseEnd)]) }); })()",
+    )
+    .as_str()
+    .unwrap_or_default()
+    .to_string()
+}
+
 #[test]
 #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 fn opening_a_folder_lands_on_its_chat_with_a_welcome() {
@@ -37,13 +51,17 @@ fn opening_a_folder_lands_on_its_chat_with_a_welcome() {
     assert!(welcome.contains("essai-auto") && welcome.contains("créé"), "the welcome says what was opened: {welcome}");
     assert!(welcome.contains("chercher") && welcome.contains("modifier"), "the welcome says what the agent can do here: {welcome}");
     let focused = n.evaluer("document.activeElement?.tagName ?? ''");
-    assert_eq!(focused, json!("TEXTAREA"), "the agent is ready: the input has the focus");
+    if focused != json!("TEXTAREA") {
+        let why = focus_diagnosis(&mut n);
+        panic!("the agent is ready: the input has the focus; it is on {focused} — {why}");
+    }
     drop(n);
     let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
     assert_eq!(status, 200);
     thread.join().unwrap();
 }
 
+/// A guard, green from the start on master (the forced order is held by `autoFocus` and the effect on `chat.on`).
 /// **The input takes the focus whatever comes first** (Lucie, 23 November 2026: « s'il est déjà là, ça l'active au
 /// moment de l'enregistrement »): the chat ready before its input is mounted, the input still has the focus once it
 /// is. The order is forced: the first state of the host is read without the repository (the chat says it does not
@@ -92,7 +110,10 @@ fn the_input_takes_the_focus_when_the_chat_is_ready_before_it_is_mounted() {
     n.aller(&format!("{base}{chat}"), "window.__sans_depot === true");
     n.attendre("!!document.querySelector('#message') && !document.querySelector('#message').disabled", "the input mounted, the chat ready");
     let focused = n.evaluer("document.activeElement?.id ?? document.activeElement?.tagName ?? ''");
-    assert_eq!(focused, json!("message"), "the chat was ready before its input was mounted: the input has the focus all the same");
+    if focused != json!("message") {
+        let why = focus_diagnosis(&mut n);
+        panic!("the chat was ready before its input was mounted: the input has the focus all the same; it is on {focused} — {why}");
+    }
     drop(n);
     let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
     assert_eq!(status, 200);
