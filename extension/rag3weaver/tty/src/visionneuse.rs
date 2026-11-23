@@ -88,7 +88,7 @@ pub fn dessiner_entree(f: &mut Frame, v: &Visionneuse, n_appels: usize, label: &
     let sourdine = style(&theme.couleurs.sourdine);
     let corps = zone.height as usize - 2;
     let fin = (v.defilement + corps).min(lignes.len());
-    let tete = format!("⟨{}/{}⟩ {label} · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
+    let tete = format!("appel {} sur {} · {label} · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
     f.render_widget(Paragraph::new(Line::from(Span::styled(tete, accent))), Rect { height: 1, ..zone });
     let montrees: Vec<Line> = lignes.get(v.defilement..fin).unwrap_or(&[]).to_vec();
     f.render_widget(Paragraph::new(montrees), Rect { y: zone.y + 1, height: corps as u16, ..zone });
@@ -160,14 +160,14 @@ mod tests {
         let theme = Theme::daemon();
         let l = lignes(&appels[1], &theme, cap(), 60, &|_, _| None);
         let texte: Vec<String> = l.iter().map(|x| x.spans.iter().map(|s| s.content.to_string()).collect()).collect();
-        assert!(texte[0].starts_with("» read_file src/a.rs  ⟨2⟩"), "{:?}", texte[0]);
+        assert!(texte[0].starts_with("» read_file src/a.rs"), "{:?}", texte[0]);
         assert!(texte.iter().any(|t| t == "let x40 = 40;"), "la lecture en entier : {texte:?}");
         let mut t = Terminal::new(TestBackend::new(60, 12)).unwrap();
         let v = Visionneuse { index: 1, defilement: 5 };
         t.draw(|f| dessiner(f, &v, 2, &l, &theme, cap())).unwrap();
         let buf = t.backend().buffer().clone();
         let ligne = |y: u16| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string();
-        assert!(ligne(0).contains("⟨2/2⟩"), "{:?}", ligne(0));
+        assert!(ligne(0).contains("appel 2 sur 2"), "{:?}", ligne(0));
         assert_eq!(ligne(1), texte[5], "le corps commence au défilement");
         assert!(ligne(11).contains("Échap"), "{:?}", ligne(11));
     }

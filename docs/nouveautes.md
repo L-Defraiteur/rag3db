@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
+  dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
+  l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
 - 23 novembre 2026 — **La vue du terminal dit ce qui a changé, comme `--plain`.** Les fichiers modifiés dans le tour
   et ce que les commandes ont laissé hors du commit s'y lisent ; un tour où l'agent n'a pas écrit de texte répond par
   son étape faite ; le premier commit d'un dossier neuf se dit au départ, et l'en-tête dit « conversation ».

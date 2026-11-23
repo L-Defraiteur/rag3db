@@ -1395,7 +1395,7 @@ mod tests {
         v.ligne_de_boite(&json!({ "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.etat, Etat::Fini("fait sans plan".into()));
         let lignes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(lignes, vec!["salut", "» read_file  ⟨1⟩", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
+        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
     }
 
     #[test]
@@ -1628,7 +1628,7 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "call_id": "c1", "ok": true, "ms": 3, "bytes": 90, "result_excerpt": json!({ "result": result }).to_string() } }));
         let l = v.prendre_lignes();
         let vus: Vec<(Genre, &str, &str)> = l.iter().map(|l| (l.genre, l.langue.as_str(), l.texte.as_str())).collect();
-        assert_eq!(vus, vec![(Genre::Outil, "", "» read_file src/a.rs  ⟨1⟩"), (Genre::Outil, "", "  fait (3 ms)"), (Genre::Code, "rs", "fn main() {}")]);
+        assert_eq!(vus, vec![(Genre::Outil, "", "» read_file src/a.rs"), (Genre::Outil, "", "  fait (3 ms)"), (Genre::Code, "rs", "fn main() {}")]);
         assert_eq!((v.appels.len(), v.appels[0].ok, v.appels[0].octets), (1, Some(true), Some(90)));
         assert_eq!(v.touche(Touche::CtrlO), Some(Action::Ouvrir));
         assert_eq!(Vue::new(80, true).touche(Touche::CtrlO), None, "sans appel, rien à ouvrir");
@@ -1714,7 +1714,7 @@ mod tests {
             let result = "**src/a.rs** — lines 1-1 of 1\nScopes: x\n```\n00001| fn main() {}\n```";
             v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "call_id": "c0", "arguments": "{\"path\":\"src/a.rs\"}" } }));
             if !v.montrer_etapes {
-                assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs  ⟨1⟩"), "l'appel défile dans la zone vivante");
+                assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs"), "l'appel défile dans la zone vivante");
             }
             v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "call_id": "c0", "ok": true, "ms": 3, "bytes": 90, "result_excerpt": json!({ "result": result }).to_string() } }));
             v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "report", "call_id": "c1", "arguments": "{\"text\":\"x\"}" } }));
@@ -1730,9 +1730,9 @@ mod tests {
         let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
         assert_eq!(l, vec!["[toi · demande] lis a.rs", "[équipier · compte rendu] Voici la réponse."], "la demande et la réponse seules (Lucie)");
         assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu : aucun verdict de l'hôte, l'invite respire");
-        assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs  ⟨1⟩"), "le dernier travail, sans verdict ; la plomberie ne défile pas");
+        assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs"), "le dernier travail, sans verdict ; la plomberie ne défile pas");
         assert_eq!(v.appels.len(), 3, "les appels restent à Ctrl-O");
-        assert_eq!(dessin(&v, 100, 3).0[0], "» read_file src/a.rs  ⟨1⟩", "en sourdine, sur la ligne du haut");
+        assert_eq!(dessin(&v, 100, 3).0[0], "» read_file src/a.rs", "en sourdine, sur la ligne du haut");
 
         let mut e = Vue::new(100, true);
         e.montrer_etapes = true;
