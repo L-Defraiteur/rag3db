@@ -31,6 +31,11 @@
   ligne de l'animation montre les derniers mots de sa réflexion, estompés et en italique, jamais écrits dans
   l'historique ; sa réponse prend leur place, et Ctrl-O relit la réflexion entière. Sans réflexion rendue par le
   modèle, l'animation reste la même.
+- 23 novembre 2026 — **L'arrêt arrête vraiment.** Échap ou Ctrl-C pendant un tour coupe tout de suite l'appel en
+  cours : une commande au premier plan est tuée avec ses enfants, une attente rend la main, et le modèle n'est plus
+  appelé. Ce que le tour avait déjà écrit atterrit dans ton dossier, dans un commit dit « tour interrompu », et la fin
+  du tour dit qui l'a arrêté et quels fichiers ont atterri. L'arrêt ne vaut que pour le tour en cours : ton message
+  suivant passe normalement. Une commande lancée en fond continue de vivre avec sa tâche.
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
