@@ -100,8 +100,10 @@ fn qui_edite(vus: Arc<Mutex<Vec<Vec<String>>>>) -> ChatModel {
     })
 }
 
+/// The witnesses' host: every root under `d`, the code roots too (their data holds the root grants' register).
 pub(super) fn hote(d: &Path, model: ChatModel) -> DaemonHost {
     DaemonHost::new()
+        .with_racines_de_code(crate::code_tree::Roots { config: d.join("code-roots/config"), data: d.join("code-roots/data") })
         .with_background(Arc::new(crate::dataflow::background::Registry::new()))
         .with_racine_des_taches(d.join("taches"))
         .with_chats_root(d.join("chats"))
