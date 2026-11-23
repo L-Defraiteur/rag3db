@@ -1643,7 +1643,7 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
             // **A missing command is said as such** (23 Nov 2026), with what to do, not exec's raw error.
             if e.kind() == std::io::ErrorKind::NotFound {
                 ExecErreur::Lancement(format!(
-                    "commande introuvable : {} — rien de ce nom dans le PATH du bac. Si le projet en a besoin, installe-la dans son environnement à lui (jamais globalement), puis relance",
+                    "commande introuvable : {} — rien de ce nom dans le PATH du bac. Ne la cherche pas ailleurs sur la machine : si le projet en a besoin, installe-la dans son environnement à lui (jamais globalement), puis relance",
                     a.0.programme
                 ))
             } else {
