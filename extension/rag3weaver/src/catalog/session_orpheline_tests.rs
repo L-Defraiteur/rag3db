@@ -33,7 +33,7 @@ fn scope_a() -> BTreeMap<String, CypherValue> {
     BTreeMap::from([("classeur".to_string(), CypherValue::String("A".into()))])
 }
 
-/// The open session as stored, rewritten by `retouche` (what a process gone, or an older binary, left behind).
+/// The open session as stored, rewritten by `edit` (what a process gone, or an older binary, left behind).
 fn leave_open(catalog: &mut Catalog, edit: impl Fn(&mut serde_json::Value)) -> String {
     let s = catalog.begin_snapshot("Fiche", &scope_a(), false).unwrap().session;
     let cle = catalog.session_key("Fiche", &scope_a());
