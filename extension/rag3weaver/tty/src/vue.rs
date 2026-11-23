@@ -1284,7 +1284,7 @@ fn glimpse_of_thinking(t: &str, budget: usize) -> String {
     }
     let flat = t.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut phrase = flat.as_str();
-    for (i, _) in flat.match_indices(|c| matches!(c, '.' | '!' | '?' | ':')).collect::<Vec<_>>().into_iter().rev() {
+    for (i, _) in flat.match_indices(['.', '!', '?', ':']).collect::<Vec<_>>().into_iter().rev() {
         let reste = flat[i + 1..].trim();
         if reste.chars().count() >= 12 {
             phrase = reste;
