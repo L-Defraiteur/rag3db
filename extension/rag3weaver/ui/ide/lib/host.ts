@@ -18,6 +18,8 @@ export type Backend = {
   // `manifest` : la nature que le gabarit déclare ; `fallback` : l'hôte l'a devinée
   // (un espace de travail, un dépôt), le manifeste ne la dit pas.
   kind_source?: "manifest" | "fallback";
+  /** The folder the backend holds (its workspace root), when it declares one. */
+  root?: string | null;
 };
 
 /// Le nom qu'une personne donne à ce que tient un backend : la branche d'une tâche,
