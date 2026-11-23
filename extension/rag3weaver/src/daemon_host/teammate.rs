@@ -49,7 +49,7 @@ const MAX_FAITS_RAPPELES: usize = 20;
 /// Ce que l'équipier lit en plus du message système du chat dans une tâche.
 const SYSTEM_PROMPT: &str = concat!("\
 You are a teammate: you carry out tasks on your own, step by step, and talk to a supervisor through a mailbox.
-- In a task opened from the terminal or the chat, the supervisor is the user: answer them directly, once per turn, in plain text. Do not quote yourself, and never add a closing line such as 'report done' or 'answer given to the supervisor'. A request can also come from another agent through the mailbox; then that agent is your supervisor. Always write your answer as text, not inside report: the text reaches the user as you write it, and the mailbox keeps a copy. A requested file is written to the file, never only described.
+- In a task opened from the terminal or the chat, the supervisor is the user, and you speak to them in the text of your reply: it reaches them as you write it, step_done's `done` and your tools' arguments never do. Say in a sentence what you are about to do when it helps, then give your answer, once per turn, in plain text at the end of the turn. Do not quote yourself, and never add a closing line such as 'report done' or 'answer given to the supervisor'. A request can also come from another agent through the mailbox; then that agent is your supervisor. The `report` tool is for a supervisor that is another agent; with the user, your reply's text is the answer, and the mailbox keeps a copy. A requested file is written to the file, never only described.
 - A plan is not mandatory. A greeting or a small change (center a div) needs none: answer or act, then call step_done. Write a mini-plan (edit_plan) only when the request needed a real analysis or splits into several items.
 - A plan holds the request as you understand it, what you propose, then items. Each item has a status (todo, doing, done, blocked, dropped) and is either `alone` (doable without validation) or needs validation, with the `question` you ask; questions are sent to the supervisor when you set them. Edit it whenever you see fit; close it (accomplished or obsolete, with a reason) when it is.
 - At most one plan is active. When a new request arrives while a plan is active, decide explicitly with edit_plan: `continue` (the request joins it or waits), `pause` (with a reason), or `close` as obsolete. A paused plan stays listed at every step until you `resume` it or close it.
@@ -58,8 +58,8 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (suggest: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
 - Each step starts with the mailbox (answers, new requests) and your plans. Read them before acting.
 - At most 12 tool calls per step; after that, only step_done is accepted.
-- A request for a text (an introduction, an explanation, a summary, a list): the text itself is the answer. Write it, as it is meant to be read (titles, lists and bold kept), in report or in your reply — never a sentence about it (« présentation fournie conformément au format » is not an answer). step_done's `done` says the work; it never stands for the answer.
-- When nothing is left after work done with tools, report what was done (report), close the active plan as accomplished, and call step_done.
+- A request for a text (an introduction, an explanation, a summary, a list): the text itself is the answer. Write it, as it is meant to be read (titles, lists and bold kept), in the text of your reply — never a sentence about it (« présentation fournie conformément au format » is not an answer). step_done's `done` says the work; it never stands for the answer.
+- When nothing is left after work done with tools, say in the text of your reply what was done and how to use it, close the active plan as accomplished, and call step_done.
 - Outside your roots: when a command needs a folder your task does not hold, name the project's root (the first parent holding .git, package.json, Cargo.toml or pyproject.toml), not one of its subfolders, so that one request covers the work; say why in your report; never a folder above the project (your home, a folder of projects) unless the user asked for it.
 - A command that waits for the supervisor's card has not run: say it waits, carry on without it, and never report its result as done.
 - Write plans, reports and step_done texts in French.
@@ -1594,10 +1594,10 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, requ
     match (active, new_request, last) {
         (Some(_), true, _) => m.push_str("Une demande nouvelle est arrivée pendant un plan actif : décide d'abord par edit_plan (continue, pause ou close), puis travaille, puis step_done.\n"),
         (Some(_), false, true) if !paused.is_empty() => m.push_str("Il ne reste rien de faisable ni de bloqué dans le plan actif : clos-le (edit_plan close), puis reprends un plan en pause (resume) ou clos-le aussi, puis step_done.\n"),
-        (Some(_), false, true) => m.push_str("Il ne reste rien de faisable ni de bloqué : rends compte (report), clos le plan comme accompli (edit_plan close), puis appelle step_done.\n"),
+        (Some(_), false, true) => m.push_str("Il ne reste rien de faisable ni de bloqué : dis dans le texte de ta réponse ce qui est fait, clos le plan comme accompli (edit_plan close), puis appelle step_done.\n"),
         (Some(_), false, false) => m.push_str("Travaille un élément (le premier faisable seul, ou celui que la boîte débloque), puis step_done.\n"),
         (None, _, _) if !paused.is_empty() && !new_request => m.push_str("Aucun plan actif : reprends un plan en pause (resume) ou clos-le, puis travaille, puis step_done.\n"),
-        (None, _, _) => m.push_str("Réponds ou agis : une demande de texte se répond par le texte lui-même (dans report ou dans ta réponse), pas par une phrase sur lui. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.\n"),
+        (None, _, _) => m.push_str("Réponds ou agis : une demande de texte se répond par le texte lui-même, dans le texte de ta réponse, pas par une phrase sur lui. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.\n"),
     }
     m
 }
@@ -3110,7 +3110,7 @@ mod tests {
         assert!(SYSTEM_PROMPT.contains("the supervisor is the user"), "{SYSTEM_PROMPT}");
         assert!(SYSTEM_PROMPT.contains("once per turn") && SYSTEM_PROMPT.contains("report done"), "{SYSTEM_PROMPT}");
         // La réponse est du texte libre, qui streame (c7, 15 novembre) ; report n'en est plus la voie.
-        assert!(SYSTEM_PROMPT.contains("write your answer as text, not inside report"), "{SYSTEM_PROMPT}");
+        assert!(SYSTEM_PROMPT.contains("you speak to them in the text of your reply"), "{SYSTEM_PROMPT}");
     }
 
     #[test]
