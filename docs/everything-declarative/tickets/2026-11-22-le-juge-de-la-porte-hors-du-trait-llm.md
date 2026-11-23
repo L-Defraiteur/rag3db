@@ -36,3 +36,11 @@ En attendant, archi écrit les appels du juge au registre à la main (`usage_led
 - le juge de la porte, construit par `connect_llm`, rend ses logprobs, et son appel laisse une ligne `free` au
   registre ;
 - un fichier de `src/` qui poste vers `/chat/completions` sans passer par le registre fait rougir la garde.
+
+## La recherche de prix passe aussi par `web_search` (23 novembre 2026)
+
+La recherche du prix d'un modèle qui n'en a pas (`/ide/prices/lookup`, puis le prix provisoire que l'hôte pose seul,
+lots `ed-price-card` et `ed-provisional-price`) appelle `web_search`, donc Gemini sur Vertex. Tant que le lot
+`ed-llm-logprobs`, qui fait passer `web_search` par le registre, n'a pas atterri, **chaque recherche de prix est un
+appel payant non compté**. La réserve se ferme avec ce lot ; le prix par requête de Google Search reste au ticket
+`2026-11-22-la-recherche-web-compte-ses-jetons-pas-sa-requete`.
