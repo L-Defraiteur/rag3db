@@ -352,6 +352,14 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
   const [note, setNote] = useState("");
   const why = useRef<HTMLInputElement>(null);
   const message = useRef<HTMLInputElement>(null);
+  // **The task's mode** (23 November 2026): a task in the user's folder has nothing to merge.
+  const [workspace, setWorkspace] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    fetch(`/ide/teammate?${new URLSearchParams({ backend: id, task: name })}`)
+      .then((x) => x.json())
+      .then((x) => setWorkspace(x.ok ? x.result.workspace ?? null : null))
+      .catch(() => setWorkspace(null));
+  }, [id, name]);
   useEffect(() => {
     fetch(`/ide/taches?${new URLSearchParams({ backend: id, nom: name })}`)
       .then((x) => x.json())
@@ -381,6 +389,8 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
           <p className="note text-sm text-muted-foreground">
             {r.tache.branche}, partie de {r.tache.depart.slice(0, 9)}{r.base_a_bouge ? " — la base du dépôt a bougé depuis : la fusion rebasera" : ""}. <a href={`/ide/code/${r.tache.id}/arbre/`} className="underline">ses vues</a> · <a href={`/ide/code/${r.tache.id}/chat`} className="underline">son chat</a>
           </p>
+          {workspace === "in_place" ? <p className="note text-sm text-muted-foreground">L'agent travaille directement dans ton dossier : chaque tour y est commité sur ta branche courante.</p> : null}
+          {workspace !== undefined && workspace !== "in_place" ? <>
           <p id="temoins" className="text-sm">{r.temoins.chargement ? "Témoins : la branche se charge entière." : "Témoins : la branche ne se charge pas."}</p>
           {r.temoins.refus ? <pre className="refus text-destructive text-xs whitespace-pre-wrap">{r.temoins.refus}</pre> : null}
           <div className="actions flex flex-wrap items-center gap-2">
@@ -391,6 +401,7 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
             <span className="note text-xs text-muted-foreground" id="tache-note">{note}</span>
           </div>
           {r.fichiers.length ? null : <p className="note text-sm text-muted-foreground">La branche ne change encore rien.</p>}
+          </> : null}
           {r.graphes.map((g, k) => <GraphDiffSection key={k} g={g} />)}
           {r.fichiers.map((f) => (
             <section key={f.path} className="fichier-de-tache rounded-lg border overflow-hidden" data-genre={f.genre} data-path={f.path}>
