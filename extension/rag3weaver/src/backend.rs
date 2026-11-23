@@ -8827,6 +8827,8 @@ mod tests {
                 let mut r = backend.call(outil, a).unwrap_or_else(|e| panic!("{outil} {format:?} : {e}"));
                 // `run` est l'identité de l'appel, pas sa réponse : chaque appel a le sien.
                 assert!(r.as_object_mut().and_then(|o| o.remove("run")).is_some_and(|run| run.is_string()), "{outil} : la réponse porte son run");
+                // The durations of the nodes are a measure of the call, not its answer: each call has its own.
+                assert!(r.pointer_mut("/metadata").and_then(Value::as_object_mut).and_then(|m| m.remove("timings_ms")).is_some(), "{outil} : la réponse porte ses durées");
                 r
             };
             let nu = avec(None);
@@ -8921,6 +8923,8 @@ mod tests {
                 .map(|q| {
                     let mut r = backend.call("search_code", json!({"query": q, "options": {}})).unwrap_or_else(|e| panic!("{q}: {e}"));
                     r.as_object_mut().and_then(|o| o.remove("run"));
+                    // The durations of the nodes are a measure of the call, not its answer.
+                    r.pointer_mut("/metadata").and_then(Value::as_object_mut).and_then(|m| m.remove("timings_ms"));
                     // The two manifests differ by `fts_positions`: their template versions differ, and only that
                     // field. The hash is set aside; everything else, its reload number included, stays compared.
                     let hash = r.pointer_mut("/metadata/template").and_then(Value::as_object_mut).and_then(|t| t.remove("hash"));
@@ -9592,6 +9596,8 @@ mod tests {
                 .map(|(outil, args)| {
                     let mut r = backend.call(outil, args.clone()).unwrap_or_else(|e| panic!("{outil} : {e}"));
                     r.as_object_mut().map(|o| o.remove("run"));
+                    // The durations of the nodes are a measure of the call, not its answer.
+                    r.pointer_mut("/metadata").and_then(Value::as_object_mut).map(|m| m.remove("timings_ms"));
                     format!("{outil} {args} → {r}")
                 })
                 .collect()
