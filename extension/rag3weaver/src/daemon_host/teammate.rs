@@ -1267,13 +1267,13 @@ impl StepTools<'_> {
     }
 
     #[cfg(feature = "code")]
-    fn after(&self, call: &ToolCall, mut turn: Turn) -> Turn {
+    fn after(&self, call: &ToolCall, mut turn: Turn, rejouer: &dyn Fn(&ToolCall) -> Turn) -> Turn {
         // **judge_all** (page 07, « suite »): the sandbox stopped a path outside its roots; the judge's yes grants the
         // root and the command is replayed now, anything else is a card whose yes grants it.
         if let (Some(m), Some(gate)) = (open_root_request(&turn.content), &self.step.open_root) {
             {
                 match gate(&m) {
-                    super::gate::OpenRootOutcome::Granted => return self.inner.call(call),
+                    super::gate::OpenRootOutcome::Granted => return rejouer(call),
                     super::gate::OpenRootOutcome::Card { class, args } => {
                         let ouverte = super::card::open_card(&self.step.files, "run_command", &args, &class, "once")
                             .and_then(|id| self.step.files.mailbox().into_iter().find(|l| l["id"] == id.as_str()).ok_or_else(|| "the card's line".to_string()));
@@ -1298,7 +1298,7 @@ impl StepTools<'_> {
                 let mut class = None;
                 if let Some(gate) = &self.step.gate {
                     match gate(ligne) {
-                        super::gate::GateOutcome::Pass { .. } => return self.inner.call(call),
+                        super::gate::GateOutcome::Pass { .. } => return rejouer(call),
                         super::gate::GateOutcome::Card { class: c } => class = Some(c),
                     }
                 }
@@ -1319,7 +1319,7 @@ impl StepTools<'_> {
         turn
     }
     #[cfg(not(feature = "code"))]
-    fn after(&self, _call: &ToolCall, turn: Turn) -> Turn {
+    fn after(&self, _call: &ToolCall, turn: Turn, _rejouer: &dyn Fn(&ToolCall) -> Turn) -> Turn {
         turn
     }
 }
@@ -1344,13 +1344,18 @@ impl StepTools<'_> {
 
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, |c| self.inner.call(c)))))
+        let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call(c));
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, None, |c| self.inner.call_in(c, run)))))
+        let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call_in(c, run));
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.in_task(call, Some(&inv.handle), |c| self.inner.call_with(c, run, inv)))))
+        // A replay (the gate's yes, a granted root, the bac's shell line) goes the way of the call itself: with its
+        // invocation, so a background command stays in the task's background scope (23 Nov 2026).
+        let rejouer = |c: &ToolCall| self.in_task(c, Some(&inv.handle), |c| self.inner.call_with(c, run, inv));
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
