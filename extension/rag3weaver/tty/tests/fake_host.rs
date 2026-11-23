@@ -72,6 +72,7 @@ fn the_resolution_does_not_wait_for_the_hosts_state() {
     let r = rag3weaver_tty::client::resoudre(&rag3weaver_tty::client::agent(), &ep, "faux");
     let duree = t0.elapsed();
     let _ = h.kill();
+    let _ = h.wait();
     let depot = r.expect("the repository resolves");
     assert_eq!(depot.branch, "master", "the branch comes with the resolution");
     assert!(duree < Duration::from_secs(1), "the resolution waited for the host's state: {duree:?}");

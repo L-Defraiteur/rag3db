@@ -136,14 +136,15 @@ pub fn depot_resolu(etat: &Value, resolu: &Value) -> Result<Depot, String> {
         return Ok(depot_de(b));
     }
     let s = |k: &str| resolu[k].as_str().unwrap_or_default().to_string();
-    Ok(Depot { id: id.to_string(), manifest: s("manifest"), repo: s("repo"), branch: String::new() })
+    Ok(Depot { id: id.to_string(), manifest: s("manifest"), repo: s("repo"), branch: s("branch") })
 }
 
 /// **Le dépôt désigné** par son nom, résolu par l'hôte (`POST /depots/resoudre`), complété par son état.
 pub fn resoudre(agent: &ureq::Agent, ep: &Endpoint, depot: &str) -> Result<Depot, String> {
     let resolu = poster(agent, ep, "/depots/resoudre", &serde_json::json!({ "name": depot }))?;
-    let etat = lire_brut(agent, ep, "/ide/etat")?;
-    depot_resolu(&etat, &resolu)
+    // The resolution says the branch: the host's whole state is not read (23 Nov. 2026: 6.5 s with 84 backends,
+    // read after each resolution, a 19 s start). A host that does not say it leaves the branch empty.
+    depot_resolu(&Value::Null, &resolu)
 }
 
 /// **L'en-tête d'un worktree** : « dépôt · branche · conversation », d'après l'état de

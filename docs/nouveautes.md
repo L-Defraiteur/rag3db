@@ -4,6 +4,9 @@
   clore son étape sans t'avoir écrit un mot, l'hôte le lui refuse aussitôt et il écrit sa réponse dans le même appel :
   plus de pas relancé ni de juge d'une minute pour un « bonjour ». S'il s'obstine, le tour finit sur une ligne claire
   (« l'agent n'a pas répondu ; reformule ou réessaie »), jamais sur la description qu'il se faisait de son travail. Pour Gemini 3, l'hôte n'envoie plus de température (le guide de Google demande de garder la sienne, 1,0 ; en dessous, il peut boucler) ni de niveau de réflexion bas, qui l'éteignait : le modèle réfléchit de nouveau.
+- 23 novembre 2026 — **Le terminal de l'agent démarre sans attendre l'état entier de l'hôte.** Il trouve ton dépôt et sa
+  branche par une seule question à l'hôte, au lieu de relire tout son état (6,5 s avec 84 dépôts, deux fois au
+  démarrage).
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin
