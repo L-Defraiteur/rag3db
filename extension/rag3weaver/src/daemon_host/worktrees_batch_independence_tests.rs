@@ -17,7 +17,10 @@ fn depot(d: &Path) -> (PathBuf, PathBuf) {
     std::fs::create_dir_all(arbre.join("src")).unwrap();
     std::fs::create_dir_all(arbre.join("cpp")).unwrap();
     std::fs::write(arbre.join("Cargo.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\ntempfile = \"3\"\n").unwrap();
-    std::fs::write(arbre.join("src/lib.rs"), "use tempfile::NamedTempFile;\n\npub mod b;\n\npub fn keep() -> Option<NamedTempFile> {\n    None\n}\n").unwrap();
+    std::fs::write(arbre.join("src/lib.rs"), "use tempfile::NamedTempFile;\n\npub mod b;\npub mod c;\n\npub fn keep() -> Option<NamedTempFile> {\n    None\n}\n").unwrap();
+    // A Rust file that uses `std`: its library `std` decided, for the whole batch, that a C++ `std::to_string` was
+    // external (the table of libraries was keyed by name, across languages).
+    std::fs::write(arbre.join("src/c.rs"), "use std::fmt::Write;\n\npub fn label(n: u32) -> String {\n    let mut s = String::new();\n    let _ = write!(s, \"{n}\");\n    s\n}\n").unwrap();
     std::fs::write(arbre.join("src/b.rs"), "pub fn work() -> bool {\n    let d = tempfile::tempdir();\n    d.is_ok()\n}\n").unwrap();
     std::fs::write(arbre.join("cpp/a.cpp"), "#include <string>\n\nstd::string label(int n) {\n    return std::to_string(n);\n}\n").unwrap();
     std::fs::write(arbre.join("cpp/b.cpp"), "#include <string>\n\nstd::string other(int n) {\n    return std::to_string(n + 1);\n}\n").unwrap();
