@@ -136,7 +136,8 @@ fn the_agents_give_the_contract_of_the_left_bar() {
     assert_eq!(ta["state"], json!("waiting"), "an open task with no step running waits: {ta}");
     assert_eq!(ta["lifecycle"], json!("open"), "{ta}");
     assert_eq!(ta["last_activity"]["at"], reponse["at"], "{ta}");
-    assert_eq!(ta["contacts"], json!([{ "id": "agent:autre-123", "last_message_at": reponse["at"] }]), "{ta}");
+    assert_eq!((&ta["contacts"][0]["id"], &ta["contacts"][0]["last_message_at"]), (&json!("agent:autre-123"), &reponse["at"]), "{ta}");
+    assert_eq!(ta["contacts"].as_array().map(Vec::len), Some(1), "{ta}");
     assert_eq!(tb["state"], json!("paused"), "{tb}");
     assert_eq!(tb["pending"], json!(2), "a paused agent counts the lines after its reading cursor: {tb}");
     assert_eq!(ta["pending"], json!(0), "{ta}");
