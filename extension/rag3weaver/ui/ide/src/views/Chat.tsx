@@ -332,6 +332,63 @@ function texteDAttente(a: Attente, maintenant: number): string {
   return `${a.what} attend… (${Math.floor(ecoule / 1000)} s)`;
 }
 
+/** **Where the task is, read from its mailbox** (the trial of 23 November 2026: the chat stopped on « le travail s'y
+ * poursuit », the end lived only in the task). Running, waiting for an answer, or over with the agent's last report. */
+type TaskEnd = { state: "running" | "waiting" | "over" | "unknown"; report: string | null };
+function taskEnd(mailbox: { from?: string; kind?: string; text?: string }[], running: boolean, waiting: unknown): TaskEnd {
+  const ended = mailbox.some((l) => l.kind === "ended");
+  const reports = mailbox.filter((l) => l.from === "teammate" && l.kind === "report" && (l.text ?? "").trim() !== "");
+  const report = reports.length ? reports[reports.length - 1].text ?? null : null;
+  if (waiting) return { state: "waiting", report };
+  if (ended && !running) return { state: "over", report };
+  return { state: running || !ended ? "running" : "unknown", report };
+}
+
+/** The task's state under the line that sends the request there, followed until it is over. */
+function TaskProgress({ chatId, m }: { chatId: string; m: MovedToTask }) {
+  const [end, setEnd] = useState<TaskEnd | null>(null);
+  useEffect(() => {
+    let stop = false;
+    let timer: number | undefined;
+    const read = async () => {
+      try {
+        const r = await (await fetch(`/ide/teammate?${new URLSearchParams({ backend: chatId, task: m.task })}`)).json();
+        if (stop) return;
+        if (r.ok) {
+          const e = taskEnd(r.result.mailbox ?? [], !!r.result.running, r.result.waiting);
+          setEnd(e);
+          if (e.state === "over") return;
+        }
+      } catch {
+        /* the next read says it */
+      }
+      if (!stop) timer = window.setTimeout(read, 3000);
+    };
+    read();
+    return () => {
+      stop = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [chatId, m.task]);
+  if (!end) return null;
+  return (
+    <div className="task-report my-2 text-sm" data-state={end.state}>
+      {end.state === "running" ? (
+        <p className="text-muted-foreground">L'agent y travaille…</p>
+      ) : end.state === "waiting" ? (
+        <p>
+          L'agent attend ta réponse : <a href={m.link} className="underline">ouvrir la tâche</a>.
+        </p>
+      ) : end.state === "over" ? (
+        <>
+          <p className="font-medium">C'est fini.</p>
+          {end.report ? <div className="body markdown break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(end.report, chatId) }} /> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /** **A request for code moved to its task** (`open_code_task`, 22 November 2026): the tool's result, read. */
 type MovedToTask = { kind: "moved_to_task"; task: string; backend?: string; branch?: string; link: string; request?: string };
 function movedToTask(p: Part): MovedToTask | null {
@@ -999,10 +1056,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                       <div key={n} className="body whitespace-pre-wrap break-words">{withInlineCode(p.text, id)}</div>
                     )
                   ) : movedToTask(p) ? (
-                    <p key={p.id} className="moved-to-task my-3 text-sm">
+                    <div key={p.id} className="moved-to-task my-3 text-sm">
                       → Ta demande continue dans la tâche <a href={movedToTask(p)!.link} className="font-medium underline">{movedToTask(p)!.task}</a>
                       {movedToTask(p)!.branch ? <span className="text-muted-foreground"> (branche {movedToTask(p)!.branch})</span> : null}.
-                    </p>
+                      <TaskProgress chatId={id} m={movedToTask(p)!} />
+                    </div>
                   ) : (
                     <Fragment key={p.id}>
                     <details className="outil border rounded-lg px-3.5 py-2.5 my-3 text-[13px] text-muted-foreground" data-outil={p.name} data-appel={p.id} data-ok={p.ok === undefined ? undefined : String(p.ok)}>
