@@ -114,6 +114,8 @@ pub enum Genre {
     Outil,
     Boite,
     Note,
+    /// A line for the session journal only (a call's trace), never drawn on the screen.
+    Trace,
     /// Un bloc de code entier (entre deux clôtures ```), à colorer avant
     /// l'historique : `texte` est son code, `langue` celle de sa clôture.
     Code,
@@ -1456,6 +1458,9 @@ mod stopped_tests;
 /// Échap stops the turn, never the session (23 November 2026).
 #[cfg(test)]
 mod escape_tests;
+/// What a turn did, said truly (23 November 2026).
+#[cfg(test)]
+mod turn_calls_tests;
 
 #[cfg(test)]
 mod tests {
