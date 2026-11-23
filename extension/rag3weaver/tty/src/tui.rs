@@ -1263,6 +1263,34 @@ mod tests {
         compte.load(Ordering::SeqCst)
     }
 
+    /// **The ticker of the thinking stays within the circle's budget** (23 Nov. 2026): 100 frames of the model
+    /// thinking, its thinking scrolling beside the animation, cost no more than the circle alone may.
+    #[test]
+    fn the_thinking_ticker_stays_within_the_circles_budget() {
+        let long = "Je dois lire le dossier, comprendre la structure du projet, puis écrire un fichier index.html avec une scène three.js et des particules qui explosent au clic. ".repeat(4);
+        let compte = Arc::new(AtomicUsize::new(0));
+        let backend = Compte { inner: CrosstermBackend::new(Compteur(compte.clone())), taille: Size::new(80, 24) };
+        let mut t = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let mut vue = Vue::new(80, true);
+        vue.entete = "rag3db · tty-3 · tâche parle".into();
+        vue.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+        vue.trame(&json!({ "evenement": { "kind": "Thinking", "iteration": 1, "text": long } }));
+        dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
+        let debut = std::time::Instant::now();
+        compte.store(0, Ordering::SeqCst);
+        let ms = vue.quelle().unwrap().de(&vue.theme).ms;
+        let mut fenetres = std::collections::HashSet::new();
+        for n in 1..=100u64 {
+            let a = debut + std::time::Duration::from_millis(n * ms);
+            fenetres.insert(vue.ligne_vivante(80, a).spans.iter().map(|s| s.content.to_string()).collect::<String>());
+            t.draw(|f| vue.dessiner_a(f, f.area(), a)).unwrap();
+        }
+        let octets = compte.load(Ordering::SeqCst);
+        eprintln!("MESURE bandeau : {octets} o pour 100 images ({:.1} o/image), {} fenêtres distinctes", octets as f64 / 100.0, fenetres.len());
+        assert!(fenetres.len() > 10, "the ticker moves over 100 frames");
+        assert!(octets <= 10_500, "Cercle avec bandeau : {octets} o pour 100 images (budget du Cercle 10 500, mesuré 8 200 sans bandeau)");
+    }
+
     /// **La mesure du lot tty-3** : ce que coûte une image du Daemon Code
     /// Summoning, l'écran sans autre changement (seule la ligne d'état bouge).
     /// Mesuré le 7 nov. 2026, couleur vraie, 80 colonnes, l'en-tête affiché :
