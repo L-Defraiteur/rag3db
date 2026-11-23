@@ -318,8 +318,13 @@ impl DaemonHost {
             .any(|m| git(dossier, &["rev-parse", "--git-path", m]).map(|p| dossier.join(p).exists()).unwrap_or(false));
         let siens = dirty_at_start(files);
         let maintenant = changed_blobs(dossier);
+        // A folder that brings hundreds of files at once (dependencies, a build) stays out, said (as in a copy).
+        let nouveaux: Vec<String> = git(dossier, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
+        let masses = mass_dirs(&nouveaux, TOO_MANY_FILES);
+        let dans_une_masse = |p: &str| masses.iter().any(|m| p.starts_with(&format!("{m}/")));
+        let dehors = nouveaux.iter().filter(|p| dans_une_masse(p)).count();
         let (mut du_tour, mut gardes, mut les_deux) = (Vec::new(), Vec::new(), Vec::new());
-        for (p, h) in &maintenant {
+        for (p, h) in maintenant.iter().filter(|(p, _)| !dans_une_masse(p)) {
             match siens.get(p) {
                 Some(avant) if avant == h => gardes.push(p.clone()),
                 Some(_) => {
@@ -328,6 +333,13 @@ impl DaemonHost {
                 }
                 None => du_tour.push(p.clone()),
             }
+        }
+        if dehors > 0 && !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == dehors) {
+            let texte = format!(
+                "{dehors} fichier(s) de {} restent hors du commit : un dossier produit d'un coup (dépendances ou build), que le projet régénère",
+                masses.join(", ")
+            );
+            let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": dehors, "dirs": masses }));
         }
         if du_tour.is_empty() {
             return;

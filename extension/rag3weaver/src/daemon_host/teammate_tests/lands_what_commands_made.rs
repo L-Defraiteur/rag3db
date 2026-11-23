@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 fn a_generated_project_lands_whole_and_a_mass_of_dependencies_stays_out() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
             let n = tool_results(turns).len();
