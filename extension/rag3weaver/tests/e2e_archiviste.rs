@@ -45,6 +45,10 @@ mod tool_answers;
 #[path = "e2e_archiviste/author.rs"]
 mod author;
 
+/// A read filters by its author, « me » being the agent that calls (23 Nov. 2026): the witnesses, in a file of their own.
+#[path = "e2e_archiviste/author_filter.rs"]
+mod author_filter;
+
 /// B4, le Decide de l'archiviste en parts : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
 #[path = "e2e_archiviste/b4_decide.rs"]
 mod b4_decide;
