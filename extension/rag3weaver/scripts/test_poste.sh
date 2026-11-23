@@ -543,4 +543,24 @@ sleep 2; [ -z "$(instant Z début)" ]; a=$?; echo $((2 * 1073741824)) > "$G/sys/
 [ "$a" = 0 ] && [ -n "$(instant Z début)" ]; cas $? "card0 : 30 Gio utilisés, un besoin de 8 attend, puis part quand la VRAM se libère"
 rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib" "$POSTE_LOCK_DIR/lourds-max"; unset POSTE_GPU_NOW POSTE_GPU_MEMINFO POSTE_GPU_SYS
 
+# 60. Une lib plus vieille que la lib épinglée est refusée au départ (23 nov. 2026, c7 : trois sessions ont attendu une
+# heure une place à luciepc avec RAG3DB_LIB sur 2c4bddcd3c, épinglée sur 4669d5f723 depuis 21 h 32 ; la garde du moteur
+# l'a refusée après, et les e2e ont rendu 1 sans jouer un test). Avant tout billet : code 78, la lib à prendre dite.
+L="$ICI/depot-lib"; git init -q "$L"
+for m in a b c; do git -C "$L" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "$m"; done
+A=$(git -C "$L" rev-parse HEAD~2); B=$(git -C "$L" rev-parse HEAD~1); C=$(git -C "$L" rev-parse HEAD)
+lib() { echo "rag3db-build-$1-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF"; }
+lib "$B" > "$POSTE_LOCK_DIR/lib-des-passes"; : > "$J"
+RAG3DB_LIB=$(lib "$A") POSTE_DEPOT="$L" "$POSTE" cpu -- bash -c 'note V début' > "$ICI/sortie-lib" 2>&1; rc=$?
+[ "$rc" = 78 ] && [ -z "$(instant V début)" ] && grep -q "$(lib "$B")" "$ICI/sortie-lib" && ! ls "$POSTE_LOCK_DIR/file/" 2>/dev/null | grep -q . \
+  ; cas $? "lib plus vieille que l'épinglée : refusée au départ, sans billet, la lib à prendre dite (rc $rc)"
+for x in "$B" "$C"; do
+  RAG3DB_LIB=$(lib "$x") POSTE_DEPOT="$L" "$POSTE" cpu -- true > "$ICI/sortie-lib" 2>&1; rc=$?
+  [ "$rc" = 0 ]; cas $? "lib $( [ "$x" = "$B" ] && echo égale à || echo plus neuve que ) l'épinglée : acceptée (rc $rc)"
+done
+RAG3DB_LIB=$(lib 0123456789abcdef0123456789abcdef01234567) POSTE_DEPOT="$L" "$POSTE" cpu -- true > "$ICI/sortie-lib" 2>&1; rc=$?
+[ "$rc" = 0 ] && grep -q 'inconnu' "$ICI/sortie-lib"; cas $? "commit de lib inconnu du dépôt : accepté, dit (rc $rc)"
+RAG3DB_LIB=bati POSTE_DEPOT="$L" "$POSTE" cpu -- true > /dev/null 2>&1; rc=$?
+[ "$rc" = 0 ]; cas $? "RAG3DB_LIB=bati (un bâti à soi) : jamais refusé (rc $rc)"
+rm -f "$POSTE_LOCK_DIR/lib-des-passes"
 exit $echec
