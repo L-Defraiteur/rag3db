@@ -36,6 +36,8 @@ TARGET=${PUSHER_TARGET:-target-pusher}
 # The second slot (19 Nov., c7 and G): its worktree and target. PUSHER_SLOTS=2 opens it.
 SLOTS=${PUSHER_SLOTS:-1}
 WTN2=${PUSHER_WT2_NAME:-rag3db-pusher-2}
+# The docs lane (23 Nov. 2026): its own worktree; absent, the lane stays closed.
+WTN3=${PUSHER_WT_DOCS_NAME:-rag3db-pusher-docs}
 TARGET2=${PUSHER_TARGET2:-target-pusher-2}
 # Where the cache copies of the poste's scripts live, and the other postes that hold the same copies.
 CACHE_DIR=${PUSHER_CACHE:-$CACHE}
@@ -947,6 +949,49 @@ spec_settle() { # after A: push B, or leave its lots in the queue
   )
 }
 
+# ── The docs lane (23 Nov. 2026, c7: docs lots of a few seconds waited an hour behind Rust trains) ────────────────────
+# While a Rust train replays, a docs lot (its kind says so: nothing outside the docs) does not change what the train
+# tests: it is reposed on master in its own worktree and pushed, one at a time, the oldest first, never a lot of the
+# step nor a child of a queued lot. The Rust train then lands on the master that moved by docs only, as the guard does.
+docs_env() { WTN=$WTN3; WT=$WS/$WTN; SD=$D/docs; mkdir -p "$SD"; }
+docs_lane() { # <flag> — in the background, while the flag exists
+  local flag=$1 line seen=" "
+  docs_env
+  [ -d "$WT" ] || { log docs "voie des docs fermée" "pas de worktree $WT"; return 0; }
+  [ "$(g config user.email)" = "$EMAIL" ] || { log docs "voie des docs fermée" "identité git du worktree : $(g config user.email)"; return 0; }
+  while [ -e "$flag" ]; do
+    line=$(queue_lines | awk -F'\t' -v taken="$(cut -f1 "$D/taken.tsv" 2>/dev/null | paste -sd' ') $seen" '
+      BEGIN {n = split(taken, a, " "); for (i = 1; i <= n; i++) t[a[i]] = 1}
+      {q[$1] = 1} $4 == "docs" && !($1 in t) && ($8 == "-" || $8 == "" || !($8 in q)) {print; exit}')
+    if [ -n "$line" ]; then seen="$seen$(f_ "$line" 1) "; docs_one "$line"; else sleep "${PUSHER_DOCS_POLL:-5}"; fi
+  done
+}
+docs_one() { # <line>
+  local id branch author gate
+  id=$(f_ "$1" 1); branch=$(f_ "$1" 2); author=$(f_ "$1" 9)
+  TAKEN=(); TAKEN[$id]=$1
+  log "$id" pris "$branch docs, par la voie des docs pendant un train"
+  gfetch -q origin master "+refs/heads/$branch:refs/remotes/origin/$branch" || { log "$id" "voie des docs : fetch refusé, au pas suivant"; return 0; }
+  if [ "$(g rev-parse "origin/$branch")" != "$(f_ "$1" 3)" ]; then
+    red_family "$id" "$author" "tête bougée" "$branch est sur $(g rev-parse --short "origin/$branch"), déposé à $(g rev-parse --short "$(f_ "$1" 3)") : redéposer"; return 0
+  fi
+  BASE=$(g rev-parse origin/master); STAMP=$(date +%Y%m%d-%H%M%S-%3N)-docs; TRAIN_LABEL=$id; RB="pusher/$STAMP-$id"
+  if ! repose "$1" > /dev/null; then
+    red_family "$id" "$author" conflit "la repose sur master $(g rev-parse --short "$BASE") bute sur : $(cat "$SD/last-conflict.txt" 2>/dev/null)"; return 0
+  fi
+  [ "$(g rev-parse HEAD)" = "$BASE" ] && { log "$id" "déjà sur master"; pushed "$id" "$author" "$branch"; return 0; }
+  tickets_gate; gate=$?
+  [ $gate = 4 ] && { log "$id" "voie des docs : master rouge à check_tickets, au pas suivant"; return 0; }
+  [ $gate = 0 ] || { red_family "$id" "$author" tickets "$(cat "$SD/last-red.txt" 2>/dev/null)"; return 0; }
+  in_queue "$id" && own_entry "$id" || { log "$id" "retiré pendant la voie des docs, non poussé"; return 0; }
+  push_plain "$BASE"
+  case $? in
+    0) pushed "$id" "$author" "$branch" ;;
+    1) log "$id" "voie des docs : master a bougé avec du code, au pas suivant" ;;
+    *) red_family "$id" "$author" garde "$(cat "$SD/last-red.txt" 2>/dev/null)" ;;
+  esac
+}
+
 step() {
   [ -e "$D/paused" ] && { echo "file en pause : $(cat "$D/paused")"; return 0; }
   [ -e "$HELD" ] && { echo "master tenu : $(cat "$HELD")"; return 0; }
@@ -1041,7 +1086,11 @@ step() {
   # The second slot: B, reposed on A's head in its own worktree, replayed while A is (19 Nov.).
   [ ${#spec[@]} -gt 0 ] && { A_HEAD=$(g rev-parse HEAD); spec_run "$A_HEAD" "${spec[@]}" & spec_pid=$!; }
   A_FULL_PUSHED=0
+  # The docs lane while a Rust train replays.
+  local docs_pid=""
+  if [ $rank = 2 ]; then : > "$D/rust-running"; docs_lane "$D/rust-running" & docs_pid=$!; fi
   replay_and_push_a; rc=$?
+  [ -n "$docs_pid" ] && { rm -f -- "$D/rust-running"; wait "$docs_pid"; }
   if [ -n "$spec_pid" ]; then wait "$spec_pid"; spec_settle; [ $? = 3 ] && rc=3; fi
   return $rc
 }
