@@ -25,4 +25,5 @@ let rec = #{
 if i.tool_name != "" { rec.tool_name = i.tool_name; }
 if i.params != "" { rec.params = p.text; }
 if i.result != "" { rec.result = r.text; }
+if i.line_id != () && i.line_id != "" { rec.line_id = i.line_id; }
 rec
