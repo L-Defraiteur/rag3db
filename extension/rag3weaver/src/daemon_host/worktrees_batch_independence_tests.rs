@@ -32,7 +32,7 @@ fn depot(d: &Path) -> (PathBuf, PathBuf) {
 }
 
 /// The visible edges and symbols of the code graph, by their keys.
-fn graphe(host: &crate::daemon_host::DaemonHost, h: &str) -> BTreeSet<String> {
+fn graphe(host: &crate::daemon_host::DaemonHost, h: &crate::daemon_host::Hosted) -> BTreeSet<String> {
     host.with_backend(h, |b| {
         let cat = b.catalog.lock().unwrap();
         let visible = |n: &str| cat.condition_visible(n).map(|c| format!(" WHERE {c}")).unwrap_or_default();
@@ -52,7 +52,7 @@ fn graphe(host: &crate::daemon_host::DaemonHost, h: &str) -> BTreeSet<String> {
     .unwrap()
 }
 
-fn indexer(host: &crate::daemon_host::DaemonHost, h: &str) {
+fn indexer(host: &crate::daemon_host::DaemonHost, h: &crate::daemon_host::Hosted) {
     host.with_backend(h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
     let debut = std::time::Instant::now();
     while host.with_backend(h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
