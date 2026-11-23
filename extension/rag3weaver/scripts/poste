@@ -721,6 +721,25 @@ fin_prevue() {
   case "$_d" in *m) _n=$((_n * 60)) ;; *h) _n=$((_n * 3600)) ;; *d) _n=$((_n * 86400)) ;; esac
   echo $(( $(stat -c %Y "$_fp") + _n ))
 }
+# **Une lib plus vieille que l'épinglée est refusée au départ** (23 novembre 2026, c7 : trois sessions ont attendu une
+# heure une place à luciepc avec RAG3DB_LIB sur 2c4bddcd3c, alors que lib-des-passes disait 4669d5f723 depuis 21 h 32 ; la
+# garde du moteur l'a refusée ensuite, et les e2e ont rendu 1 sans jouer un test). Seule une lib du magasin
+# (rag3db-build-<commit>-…) se compare : si son commit est un ancêtre strict de celui de la lib épinglée, code 78 avant
+# tout billet, avec la lib à prendre. Un bâti à soi (bati), courant, ou un commit inconnu du dépôt (dit) passent.
+case "${RAG3DB_LIB:-}" in
+  rag3db-build-*)
+    _ep=$(head -1 "$V/lib-des-passes" 2>/dev/null); _dep=${POSTE_DEPOT:-$HOME/git_workspaces/rag3db}
+    _cl=$(printf '%s' "$RAG3DB_LIB" | sed -n 's/^rag3db-build-\([0-9a-f]\{40\}\)-.*/\1/p')
+    _ce=$(printf '%s' "$_ep" | sed -n 's/^rag3db-build-\([0-9a-f]\{40\}\)-.*/\1/p')
+    if [ -n "$_cl" ] && [ -n "$_ce" ] && [ "$_cl" != "$_ce" ]; then
+      if ! git -C "$_dep" cat-file -e "$_cl^{commit}" 2>/dev/null || ! git -C "$_dep" cat-file -e "$_ce^{commit}" 2>/dev/null; then
+        echo "poste: la lib $(printf '%.10s' "$_cl") ou l'épinglée $(printf '%.10s' "$_ce") est d'un commit inconnu de $_dep : fraîcheur non contrôlée" >&2
+      elif git -C "$_dep" merge-base --is-ancestor "$_cl" "$_ce" 2>/dev/null; then
+        echo "poste: RAG3DB_LIB=$RAG3DB_LIB est plus vieille que la lib épinglée : prendre RAG3DB_LIB=$_ep (lib-des-passes) ; rien n'est lancé, aucune place prise" >&2
+        exit 78
+      fi
+    fi ;;
+esac
 dire attend
 case "$mode" in
   mesure)
