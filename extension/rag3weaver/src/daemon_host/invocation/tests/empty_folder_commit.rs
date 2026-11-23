@@ -23,3 +23,24 @@ fn a_new_folder_opens_with_a_first_commit_and_takes_a_task() {
     let h = a.host.hosted(&manifeste).unwrap();
     a.host.ouvrir_une_tache(&h.id, "premiere").expect("a task does not open in the new folder");
 }
+
+/// **A repository without a commit gets its first commit too, and the answer says so** (c7, 23 November 2026, 01 h 24:
+/// « à POST /dossiers/ouvrir d'un dossier sans dépôt ou d'un dépôt sans commit »): an existing folder where `git init`
+/// was made and nothing committed opens with a first empty commit, and the answer's `first_commit` says it in one line.
+#[test]
+fn a_repository_without_a_commit_gets_its_first_commit_and_says_it() {
+    let d = tempfile::tempdir().unwrap();
+    let (a, _espace, s) = atelier_d_espace(d.path());
+    let depot = d.path().join("depot-sans-commit");
+    std::fs::create_dir_all(&depot).unwrap();
+    assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(["init", "-q"]).status().unwrap().success());
+    let r = a.host.ouvrir_un_dossier(Some(&s), &depot);
+    assert_eq!(r["ok"], json!(true), "{r}");
+    let tete = std::process::Command::new("git").arg("-C").arg(&depot).args(["rev-parse", "--verify", "-q", "HEAD"]).output().unwrap();
+    assert!(tete.status.success(), "a repository without a commit is left without one: {r}");
+    assert!(r["first_commit"].as_str().is_some_and(|l| l.contains("premier commit")), "the answer does not say the first commit: {r}");
+    let racines = a.host.racines_de_code().unwrap();
+    let nom = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+    let h = a.host.hosted(&racines.manifest(&nom).canonicalize().unwrap()).unwrap();
+    a.host.ouvrir_une_tache(&h.id, "premiere").expect("a task does not open in the repository");
+}
