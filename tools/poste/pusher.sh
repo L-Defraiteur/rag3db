@@ -1086,9 +1086,10 @@ step() {
   # The second slot: B, reposed on A's head in its own worktree, replayed while A is (19 Nov.).
   [ ${#spec[@]} -gt 0 ] && { A_HEAD=$(g rev-parse HEAD); spec_run "$A_HEAD" "${spec[@]}" & spec_pid=$!; }
   A_FULL_PUSHED=0
-  # The docs lane while a Rust train replays.
+  # The docs lane while a Rust train replays, and only with no train B in the second slot (23 Nov., c7): a docs lot
+  # landing makes the guard repose A, and B, speculative on A's head, would be thrown away (a replay of 20 to 60 min).
   local docs_pid=""
-  if [ $rank = 2 ]; then : > "$D/rust-running"; docs_lane "$D/rust-running" & docs_pid=$!; fi
+  if [ $rank = 2 ] && [ ${#spec[@]} = 0 ]; then : > "$D/rust-running"; docs_lane "$D/rust-running" & docs_pid=$!; fi
   replay_and_push_a; rc=$?
   [ -n "$docs_pid" ] && { rm -f -- "$D/rust-running"; wait "$docs_pid"; }
   if [ -n "$spec_pid" ]; then wait "$spec_pid"; spec_settle; [ $? = 3 ] && rc=3; fi
