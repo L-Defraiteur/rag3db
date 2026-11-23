@@ -3,6 +3,7 @@
 //! waited on it). A host that knows itself publishes its state in the background, and a publication asked while one
 //! runs is done after it, once.
 use super::*;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 #[test]
