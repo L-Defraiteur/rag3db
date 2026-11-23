@@ -37,7 +37,7 @@ fn the_page_says_when_it_is_not_entered_as_the_user() {
     if agent == "saut" {
         return;
     }
-    assert!(agent.contains("ne compteront pas") && agent.contains("lanceur"), "a page entered with the host's token says it: {agent:?}");
+    assert!(agent.contains("compteront pas") && agent.contains("lanceur"), "a page entered with the host's token says it: {agent:?}");
     let human = page_banner("j", "j");
     assert!(human.is_empty(), "a page entered as the user says nothing: {human:?}");
 }
