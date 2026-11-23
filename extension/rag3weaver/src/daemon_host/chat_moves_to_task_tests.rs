@@ -103,3 +103,48 @@ fn the_report_of_the_task_comes_back_in_the_chat() {
     assert_eq!(status, 200);
     thread.join().unwrap();
 }
+
+/// **A task in the user's folder has nothing to merge** (the trial of 23 November 2026: « Fusionner / Rejeter » and
+/// « ses déclarations et son code sont ceux de ce commit » shown before any work, on a task whose agent writes in the
+/// folder itself). The host says the task's mode (`workspace`: `in_place`, `copy`, or nothing for a task without a
+/// code repository); the page shows merging only for a copy, and the mailbox says where the agent works.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn a_task_in_the_folder_shows_nothing_to_merge() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("a_task_in_the_folder_shows_nothing_to_merge") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (_repository, manifest) = depot_inscrit(d.path(), true);
+    let host = Arc::new(hote(d.path(), opens_the_task()));
+    host.se_connaitre();
+    let h = host.hosted(&manifest).unwrap();
+    host.with_backend(&h, |_| ()).expect("the repository opens");
+    let id = h.id.clone();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(listener, None).unwrap();
+    let served = host.clone();
+    let thread = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(served, Some("j".to_string())));
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{base}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{base}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled");
+    n.evaluer("document.querySelector('#message').value = 'Ajoute un fichier NOTES.md.'; document.querySelector('#send').click()");
+    n.attendre(&format!("location.pathname.startsWith('/ide/code/{id}/taches/')"), "the page goes to the task");
+    let task = n.evaluer("decodeURIComponent(location.pathname.split('/').pop())").as_str().unwrap_or_default().to_string();
+    let (status, v) = crate::daemon_host::tests::demander("GET", &format!("{base}/ide/teammate?backend={id}&task={task}"), Some("j"));
+    assert_eq!(status, 200);
+    assert_eq!(v["result"]["workspace"], json!("in_place"), "the host says the task's mode: {}", v["result"]["workspace"]);
+    n.attendre("!!document.querySelector('.proposition h1')", "the task page");
+    let merge = n.evaluer("!!document.querySelector('#fusionner') || !!document.querySelector('#rejeter')");
+    assert_eq!(merge, json!(false), "a task in the folder has nothing to merge");
+    let opening = host.teammate_files(&id, &task).unwrap().mailbox().iter().filter(|l| l["from"] == "host" && l["kind"] == "report").map(|l| l["text"].as_str().unwrap_or("").to_string()).next().unwrap_or_default();
+    assert!(!opening.contains("ses déclarations et son code"), "the mailbox says where the agent works, not a commit to start from: {opening}");
+    assert!(opening.contains("dans ton dossier"), "the mailbox says the agent works in the folder: {opening}");
+    drop(n);
+    let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
+    assert_eq!(status, 200);
+    thread.join().unwrap();
+}
