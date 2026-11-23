@@ -2189,7 +2189,7 @@ pub fn within_edits(a: &str, b: &str, max: usize) -> bool {
         }
         before = std::mem::replace(&mut previous, current);
     }
-    previous[b.len()] <= max
+    previous[b.len()] < max
 }
 
 /// The witnesses of the whole query's distance (22 November 2026), in a file of their own.
