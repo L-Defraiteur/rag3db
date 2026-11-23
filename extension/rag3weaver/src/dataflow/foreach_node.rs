@@ -115,7 +115,7 @@ fn template_root_of(graph_path: &str) -> String {
 /// **Where a citation reads, from the graph that cites it** (22 November 2026, Lucie's long memory): `@builtin:…` and
 /// an absolute path read as they are; `@graphs/x` and its kind read next to the citing graph's own template — a
 /// shipped graph cites its shipped siblings, a local graph its local ones.
-fn cited_path(citing_graph: &str, cited: &str) -> String {
+pub(crate) fn cited_path(citing_graph: &str, cited: &str) -> String {
     if cited.starts_with(crate::builtin_templates::PREFIX) || cited.starts_with('/') {
         cited.to_string()
     } else {

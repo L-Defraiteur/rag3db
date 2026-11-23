@@ -2353,7 +2353,10 @@ impl PreparedBackend {
             // **Les Plans déclarés** (`PlanNode(plan=@plans/…)`) : lus et vérifiés
             // ici, contre leur forme et contre le schéma du manifeste ; un Plan
             // faux refuse le gabarit.
-            crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lecteur.lire_reference(&directory, chemin), &schema_des_plans)
+            // A Plan cited by the tool's graph is read next to that graph's template (23 November 2026): a shipped
+            // graph's `@plans/…` reads the shipped Plan, a local graph's the local one.
+            let graphe_de_l_outil = attachment.graph.to_string_lossy().to_string();
+            crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lecteur.lire_reference(&directory, &crate::dataflow::foreach_node::cited_path(&graphe_de_l_outil, chemin)), &schema_des_plans)
                 .map_err(|e| format!("{name}: {e}"))?;
             // Les sous-graphes cités : lus, liés et vérifiés comme les Plans ;
             // leurs types de nœuds passent sous la politique de l'outil.
