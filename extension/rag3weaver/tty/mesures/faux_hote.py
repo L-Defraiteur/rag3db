@@ -14,6 +14,7 @@ Le port 0 en prend un libre ; `daemon.json` n'est écrit qu'une fois le port à 
 d'affichage (le temps jusqu'à ce que le texte paraisse à l'écran).
 """
 import http.server
+import os
 import json
 import socketserver
 import sys
@@ -94,6 +95,8 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             return
         u = urllib.parse.urlparse(self.path)
         if u.path == "/ide/etat":
+            # A host whose whole state is slow to build (FAUX_ETAT_MS, 23 Nov. 2026: 6.5 s with 84 backends).
+            time.sleep(int(os.environ.get("FAUX_ETAT_MS", "0")) / 1000)
             self.json({"backends": [
                 {"id": "faux", "manifest": MANIFESTE, "repo": "faux-depot", "branch": "master", "tache": None},
                 {"id": "faux-mesure", "manifest": TACHE, "repo": "faux-depot", "branch": "tache/mesure", "tache": {"nom": "mesure", "parent": "faux", "branche": "tache/mesure"}},
@@ -182,7 +185,7 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             # The host's resolver (arbre's route): the id, the short name, the full name « code-<name> », or the manifest.
             nom = corps.get("name", "")
             if nom in ("faux", "faux-depot", "code-faux-depot", MANIFESTE):
-                self.json({"ok": True, "result": {"id": "faux", "repo": "faux-depot", "name": "code-faux-depot", "manifest": MANIFESTE}})
+                self.json({"ok": True, "result": {"id": "faux", "repo": "faux-depot", "name": "code-faux-depot", "manifest": MANIFESTE, "branch": "master"}})
             else:
                 self.json({"ok": False, "error": f"aucun dépôt attaché ne s'appelle « {nom} » ; attachés : faux-depot (code-faux-depot)"}, 422)
             return
