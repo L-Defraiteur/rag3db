@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
+  commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
+  courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
+  le dit (un fichier changé par toi et par le tour part dans le commit, nommé) ; rien pendant une fusion ou un rebase.
+  Fermer la tâche ne touche ni ton dossier, ni son `.git`, ni ta branche. La copie (`teammate.workspace: copy`) reste
+  pour plusieurs agents sur le même dépôt : une seconde tâche ouverte sur lui part en copie.
 - 23 novembre 2026 — **L'agent te parle, et dans les mots de ton dossier.** Relancé parce qu'il n'avait rien écrit,
   il sait maintenant que seul le texte de sa réponse t'est montré ; s'il reste muet malgré tout, tu lis au moins ce
   qu'il a dit avoir fait. Il sait aussi que son arbre de travail n'est pas ton dossier : une commande ou un chemin

@@ -124,6 +124,27 @@ pub(crate) fn mass_dirs(files: &[String], max: usize) -> Vec<String> {
     }
     masses.sort();
     masses
+
+/// **Each changed file of a tree and its blob** (tracked changes and untracked files, `.gitignore` kept): `"-"` for a
+/// file gone.
+fn changed_blobs(arbre: &Path) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let suivis = git(arbre, &["diff", "--name-only", "HEAD"]).unwrap_or_default();
+    let nouveaux = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default();
+    for p in suivis.lines().chain(nouveaux.lines()).filter(|p| !p.is_empty()) {
+        let h = if arbre.join(p).is_file() { git(arbre, &["hash-object", "--", p]).unwrap_or_default() } else { "-".to_string() };
+        out.insert(p.to_string(), h);
+    }
+    out
+}
+
+/// What the user had changed at the turn's start ([`changed_blobs`], kept in `turn-start.json`).
+fn dirty_at_start(files: &TeammateFiles) -> std::collections::BTreeMap<String, String> {
+    std::fs::read(depart_du_tour(files))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| serde_json::from_value(v["dirty"].clone()).ok())
+        .unwrap_or_default()
 }
 
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
@@ -229,7 +250,9 @@ impl DaemonHost {
         // the turn (a request, an instruction, an answer; 23 Nov 2026: an instruction's turn said nothing).
         let from_line = files.mailbox().len();
         let depart = if let Some((arbre, head)) = self.task_tree_head(parent, task) {
-            json!({ "tree": arbre, "head": head, "from_line": from_line })
+            // **What the user had changed at the turn's start** (23 Nov 2026, the agent in her folder): each changed
+            // file's blob, so that the turn's commit and facts leave what the turn did not touch.
+            json!({ "tree": arbre, "head": head, "from_line": from_line, "dirty": changed_blobs(&arbre) })
         } else if let Some((racine, exclus, avant)) = self.task_copy_snapshot(parent, task) {
             json!({ "copy": racine, "exclude": exclus, "prints": avant, "from_line": from_line })
         } else {
@@ -268,10 +291,15 @@ impl DaemonHost {
     /// start (committed or not, untracked included), or that nothing changed; written before the turn's end.
     pub(crate) fn say_turn_changes(&self, files: &TeammateFiles, arbre: &Path, avant: &str) -> Option<serde_json::Value> {
         let mut changes: Vec<String> = git(arbre, &["diff", "--name-only", avant]).ok()?.lines().map(str::to_string).collect();
+        // What the user had changed before the turn, and the turn left as it was, is not the turn's.
+        let siens = dirty_at_start(files);
+        let maintenant = changed_blobs(arbre);
+        let du_tour = |c: &String| siens.get(c).is_none_or(|h| maintenant.get(c) != Some(h));
+        changes.retain(|c| du_tour(c));
         // The untracked files the landing leaves are the masses it said (23 Nov 2026): not this turn's changes.
         let nouveaux: Vec<String> = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
         let masses = mass_dirs(&nouveaux, TOO_MANY_FILES);
-        for f in nouveaux.iter().filter(|f| !masses.iter().any(|m| f.starts_with(&format!("{m}/")))) {
+        for f in nouveaux.iter().filter(|f| !masses.iter().any(|m| f.starts_with(&format!("{m}/"))) && du_tour(f)) {
             if !changes.iter().any(|c| c == f) {
                 changes.push(f.to_string());
             }
@@ -279,6 +307,81 @@ impl DaemonHost {
         let echecs = take_turn_failures(files);
         let texte = faits_du_tour(&changes, &echecs);
         files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "failures": echecs })).ok()
+    }
+
+    /// **The end of a turn in the user's folder itself** (Lucie, 23 Nov 2026): a commit on her current branch, by
+    /// rag3weaver, of only what the turn changed; what she had changed before and the turn left stays uncommitted, said;
+    /// a file both changed goes in, named; never during a merge or a rebase, said.
+    fn land_in_place(&self, t: &Tache, files: &TeammateFiles, dossier: &Path, interrupted: bool) {
+        let en_cours = ["MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD"]
+            .iter()
+            .any(|m| git(dossier, &["rev-parse", "--git-path", m]).map(|p| dossier.join(p).exists()).unwrap_or(false));
+        let siens = dirty_at_start(files);
+        let maintenant = changed_blobs(dossier);
+        let (mut du_tour, mut gardes, mut les_deux) = (Vec::new(), Vec::new(), Vec::new());
+        for (p, h) in &maintenant {
+            match siens.get(p) {
+                Some(avant) if avant == h => gardes.push(p.clone()),
+                Some(_) => {
+                    les_deux.push(p.clone());
+                    du_tour.push(p.clone());
+                }
+                None => du_tour.push(p.clone()),
+            }
+        }
+        if du_tour.is_empty() {
+            return;
+        }
+        if en_cours {
+            if !files.mailbox().iter().any(|l| l["kind"] == "merge_held" && l["in_progress"] == true) {
+                let texte = "ton dépôt est en pleine fusion ou en plein rebase : le travail du tour reste dans ton dossier, non commité".to_string();
+                let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "in_progress": true }));
+            }
+            return;
+        }
+        if du_tour.len() > TOO_MANY_FILES {
+            let texte = format!("{} fichiers d'un coup (une installation sans .gitignore ?) : le tour reste dans ton dossier, non commité", du_tour.len());
+            let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "files": du_tour.len() }));
+            return;
+        }
+        for paquet in du_tour.chunks(200) {
+            let mut args: Vec<&str> = vec!["add", "-A", "--"];
+            args.extend(paquet.iter().map(String::as_str));
+            let _ = git(dossier, &args);
+        }
+        let boite = files.mailbox();
+        let dit = boite.iter().rev().find(|l| l["from"] == "teammate" && l["kind"] == "step_done").or_else(|| boite.iter().rev().find(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host"));
+        let premier = dit.and_then(|l| l["text"].as_str()).and_then(|t| t.lines().next()).unwrap_or("le travail du tour").chars().take(72).collect::<String>();
+        let premier = if interrupted { format!("Tour interrompu par l'utilisatrice : {premier}") } else { premier };
+        let message = format!("{premier}\n\nCommité par l'hôte à la fin d'un tour, dans ton dossier.");
+        let identite = self.with_backend_id(&t.id, |b| b.prepared().manifest.workspace.as_ref().and_then(|w| w.git_identity.clone())).ok().flatten();
+        let ident = crate::backend_code::git_identity_or_default(identite.as_ref()).git_args();
+        let mut commit: Vec<&str> = ident.iter().map(String::as_str).collect();
+        commit.extend(["commit", "-q", "-m", &message]);
+        if git(dossier, &["diff", "--cached", "--quiet"]).is_ok() {
+            return;
+        }
+        if let Err(e) = git(dossier, &commit) {
+            let texte = format!("le travail du tour est dans ton dossier, non commité : {e}");
+            let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte }));
+            return;
+        }
+        let branche = git(dossier, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+        let texte = format!("{} fichier(s) commités dans ton dossier {} (branche {branche})", du_tour.len(), dossier.display());
+        let _ = files.append_with("host", "merged", None, &texte, &json!({ "into": dossier, "branch": branche, "commits": 1, "files": du_tour.len(), "paths": du_tour, "in_place": true }));
+        if !gardes.is_empty() || !les_deux.is_empty() {
+            let mut texte = String::new();
+            if !gardes.is_empty() {
+                texte.push_str(&format!("tes modifications d'avant le tour restent non commitées : {}", gardes.join(", ")));
+            }
+            if !les_deux.is_empty() {
+                if !texte.is_empty() {
+                    texte.push_str(" ; ");
+                }
+                texte.push_str(&format!("modifiés par toi et par le tour, donc dans le commit : {}", les_deux.join(", ")));
+            }
+            let _ = files.append_with("host", "report", None, &texte, &json!({ "kept_uncommitted": gardes, "both": les_deux }));
+        }
     }
 
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
@@ -292,6 +395,9 @@ impl DaemonHost {
             return self.land_the_copy(w, c, files, wrote);
         }
         let (dossier, arbre) = (&w.racine_principale, &w.racine);
+        if w.code.as_ref().is_some_and(|c| c.en_place) {
+            return self.land_in_place(t, files, arbre, interrupted);
+        }
         // **What the agent left uncommitted is committed by the host** (c7, 23 Nov 2026, 01:27: the real three.js
         // request left every file untracked in the task's tree, and the user's folder empty). `add -A` keeps the
         // tree's `.gitignore`; the message is the step's report, else the request.
