@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
+  l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
+  dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
+  sans index, l'agent sait qu'il doit estimer puis indexer avant de chercher dans un code qu'il ne connaît pas ;
+  l'index y reste une proposition, que tu peux refuser.
 - 23 novembre 2026 — **L'agent écrit dans ton dossier, garde ta branche, et t'explique la fin de son travail.** En
   place, il n'est plus refusé sur les fichiers du dossier que tu as ouvert (refusé, il contournait : une branche à lui,
   un fichier encodé à la main, qui a corrompu une page). S'il change quand même ta branche, l'hôte le dit en une ligne,
