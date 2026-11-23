@@ -1515,6 +1515,28 @@ mod tests {
         assert!(order[1].starts_with("### 2. merge_port_values"), "{flat}");
     }
 
+    /// **The order shown is the order of the scores** (the measure of 23 November 2026: `typo_of`, 30th by score,
+    /// shown 106th, because members of earlier classes were pulled up behind their best): grouping gathers only
+    /// results that follow each other, and never moves a lower score ahead of a higher one.
+    #[test]
+    fn grouping_never_shows_a_lower_score_before_a_higher_one() {
+        let results = vec![
+            scope("take", "PortValue", 120, 140, 0.81),
+            scope("merge_port_values", "", 20, 50, 0.75),
+            scope("downcast", "PortValue", 110, 118, 0.60),
+            scope("put", "PortValue", 90, 100, 0.58),
+        ];
+        let md = render_results_with(&results, 300, true);
+        let order: Vec<&str> = md.lines().filter(|l| l.starts_with("### ")).collect();
+        assert_eq!(order.len(), 4, "{md}");
+        assert!(order[0].starts_with("### 1. PortValue::take"), "{md}");
+        assert!(order[1].starts_with("### 2. merge_port_values"), "the second best is shown second:\n{md}");
+        assert!(order[2].starts_with("### 3. PortValue::downcast"), "{md}");
+        assert!(order[3].starts_with("### 4. PortValue::put"), "{md}");
+        // The two that follow each other in one class are still gathered under one header.
+        assert_eq!(md.matches("**PortValue** · `port.rs` — 2 matches").count(), 1, "{md}");
+    }
+
     #[test]
     fn a_neighbour_carries_its_link_too() {
         let mut r = scope("take", "PortValue", 120, 140, 0.8);
