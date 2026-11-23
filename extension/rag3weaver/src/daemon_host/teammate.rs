@@ -2051,6 +2051,10 @@ impl DaemonHost {
         // superviseur.
         if let Some(o) = extra.as_object_mut() {
             o.remove("granted"); // l'hôte seul l'écrit
+            // « Plus besoin » closes a card without granting it (Lucie, 23 Nov 2026, ~23 h 15).
+            if o.get("dismissed") == Some(&Value::Bool(true)) {
+                o.insert("approved".into(), Value::Bool(false));
+            }
         }
         #[allow(unused_mut)]
         let mut accord: Option<String> = None;
@@ -2416,6 +2420,9 @@ impl DaemonHost {
         // Les refus du fournisseur d'affilée (429, panne) : ni pas raté ni pas compté.
         let mut unavailable = 0u32;
         let mut woke_by: Option<String> = None;
+        // **The turn waits on a card after its work was done** (Lucie, 23 Nov 2026, ~23 h 15): a « plus besoin » then
+        // ends it without another step.
+        let mut fini_en_attente = false;
         let mut outcome = Outcome::default();
         let mut read = files.read_cursor();
         let mut stalled = 0usize;
@@ -2464,6 +2471,11 @@ impl DaemonHost {
             let derniere_demande = news.iter().rposition(|l| l["kind"] != "stop");
             if dernier_stop.is_some_and(|s| derniere_demande.is_none_or(|d| s > d)) {
                 outcome.ended = "arrêté par la boîte".into();
+                return Ok(outcome);
+            }
+            // « Plus besoin » on the card of a finished work: the turn ends as its work did, without another step.
+            if std::mem::take(&mut fini_en_attente) && !news.is_empty() && news.iter().all(|l| l["kind"] == "answer" && l["dismissed"] == true) {
+                outcome.ended = self.prompt_texts().get("ended.card_dismissed", &[]);
                 return Ok(outcome);
             }
             let plans = files.read_plans();
@@ -2803,7 +2815,16 @@ impl DaemonHost {
                     if let Some(l) = self.say_turn_facts(&files) {
                         publish(bus.as_ref(), task, &l);
                     }
-                    let texte = format!("en attente du superviseur depuis {heure} : {} {}", q["kind"].as_str().unwrap_or("question"), q["id"].as_str().unwrap_or(""));
+                    // The work done, a command's card still open: said so, with « plus besoin » among the answers.
+                    let fini = q["kind"] == "approval"
+                        && declared.as_ref().is_some_and(|d| d["succeeded"] == true && d["remaining"].as_str().unwrap_or_default().trim().is_empty())
+                        && files.read_plans().active().is_none();
+                    fini_en_attente = fini;
+                    let texte = if fini {
+                        textes.get("wait.work_done_card", &[("time", &heure), ("id", q["id"].as_str().unwrap_or(""))])
+                    } else {
+                        format!("en attente du superviseur depuis {heure} : {} {}", q["kind"].as_str().unwrap_or("question"), q["id"].as_str().unwrap_or(""))
+                    };
                     if let Ok(line) = files.append_with("host", "report", None, &texte, &json!({ "awaiting": q["id"] })) {
                         publish(bus.as_ref(), task, &line);
                     }

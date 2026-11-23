@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **« Plus besoin » ferme une carte que le travail fini n'attend plus.** Quand l'agent a fini son
+  travail pendant qu'une de ses commandes attend ton accord, la ligne d'attente le dit, et tu peux répondre oui, non,
+  ou « plus besoin » : la carte se ferme sans rien relancer, et le tour se termine.
 - 23 novembre 2026 — **L'avancement et la fin d'un index se voient de nouveau à chaque relecture de l'état.** L'hôte
   ne garde entre deux lectures que l'état d'un index posé ; un index en cours se relit à chaque fois.
 - 23 novembre 2026 — **L'agent répond toujours à la fin de son tour, à une personne comme à un agent.** Sa phrase
