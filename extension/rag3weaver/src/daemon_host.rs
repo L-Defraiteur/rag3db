@@ -344,6 +344,9 @@ pub struct DaemonHost {
     publications_faites: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     etat_lent_ms: std::sync::atomic::AtomicU64,
+    /// The witnesses' count of the index parts the state read.
+    #[cfg(test)]
+    lectures_d_index: std::sync::atomic::AtomicU64,
     /// **The background commands of each task** (`parent/task`; Lucie, 21 November 2026): their scope outlives the
     /// teammate's steps, and their ends come back to the task's mailbox.
     task_backgrounds: Mutex<std::collections::HashMap<String, Arc<teammate::TaskBackground>>>,
@@ -486,6 +489,9 @@ mod ide_not_human_tests;
 /// The host publishes its state without holding its caller (23 November 2026).
 #[cfg(test)]
 mod state_publication_tests;
+/// The host's state does not reread every index at each read (23 November 2026).
+#[cfg(all(test, feature = "code"))]
+mod state_cache_tests;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
 #[cfg(feature = "code")]
 pub mod gate;
@@ -627,6 +633,8 @@ impl DaemonHost {
             publications_faites: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             etat_lent_ms: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            lectures_d_index: std::sync::atomic::AtomicU64::new(0),
             task_backgrounds: Default::default(),
             racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
@@ -3022,11 +3030,11 @@ impl DaemonHost {
                 // (`crate::builtin_templates::drift`), que la page montre.
                 let (ouvert, index, derive) = match h.backend.try_read() {
                     Ok(slot) => match slot.as_ref() {
-                        Some(b) => (
-                            json!(true),
-                            b.index_states().unwrap_or_else(|e| json!({ "error": e })),
-                            json!(b.prepared().template_drift()),
-                        ),
+                        Some(b) => {
+                            #[cfg(test)]
+                            self.lectures_d_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            (json!(true), b.index_states().unwrap_or_else(|e| json!({ "error": e })), json!(b.prepared().template_drift()))
+                        }
                         None => (json!(false), Value::Null, Value::Null),
                     },
                     Err(_) => (json!(true), json!({ "busy": true, "why": "une ouverture ou une fermeture tient ce backend" }), Value::Null),
