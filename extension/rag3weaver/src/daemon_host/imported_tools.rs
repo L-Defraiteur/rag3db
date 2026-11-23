@@ -8,19 +8,19 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use super::chat::OutilsImportes;
+use super::chat::ImportedTools;
 use super::{DaemonHost, Hosted};
 use crate::agent::ToolBox;
 
 impl DaemonHost {
     /// The tools that the backend `b` (hosted as `backend_id`) imports, ready for its chat's toolbox. An import whose
     /// backend does not open is said on the host's error output and left out; the others stay.
-    pub(super) fn outils_importes<'a>(&'a self, b: &crate::backend::Backend, backend_id: &str) -> OutilsImportes<'a> {
+    pub(super) fn imported_tools<'a>(&'a self, b: &crate::backend::Backend, backend_id: &str) -> ImportedTools<'a> {
         let p = b.prepared();
         let mut defs = Vec::new();
         // Nothing imported: nothing to read, no lock taken (most backends).
         if p.manifest.imports.is_empty() {
-            return OutilsImportes::new(defs, |_| None);
+            return ImportedTools::new(defs, |_| None);
         }
         let mut routes: HashMap<String, Arc<Hosted>> = HashMap::new();
         for import in &p.manifest.imports {
@@ -39,7 +39,7 @@ impl DaemonHost {
             }
         }
         let backend_id = backend_id.to_string();
-        OutilsImportes::new(defs, move |call| {
+        ImportedTools::new(defs, move |call| {
             let h = routes.get(&call.name)?;
             // The agent's key, read at the call: the task's registry is not locked while the toolbox is built.
             let agent = self.agent_key_of_backend(&backend_id);

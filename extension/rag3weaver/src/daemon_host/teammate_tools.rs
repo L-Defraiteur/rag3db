@@ -48,7 +48,7 @@ impl DaemonHost {
     ) -> Result<Value, String> {
         let ouvert = self.with_backend(hosted, |b| {
             let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
-            let outils = OutilsDuChat::de(b, &declares, true).avec_les_imports(self.outils_importes(b, &hosted.id));
+            let outils = OutilsDuChat::de(b, &declares, true).with_imports(self.imported_tools(b, &hosted.id));
             (b.prepared(), b.mode_declarations(), b.bus_de_publication(), outils.tool_defs(), outils.ecrivent.clone())
         });
         let racine = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(&hosted.manifest).and_then(|t| t.workspace.as_ref().map(|w| w.racine.clone()));
@@ -167,7 +167,7 @@ impl Etanche<'_> {
                 crate::backend::with_call_sandbox(self.host.call_sandbox_for(&self.hosted.id), || self.host.with_backend(&self.hosted, |b| {
                     let outils = crate::backend_tools::BackendTools { backend: b };
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
-                    let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root()).avec_les_vues(self.host.vues_de(&self.hosted.id)).avec_les_imports(self.host.outils_importes(b, &self.hosted.id));
+                    let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root()).avec_les_vues(self.host.vues_de(&self.hosted.id)).with_imports(self.host.imported_tools(b, &self.hosted.id));
                     f(&du_chat)
                 }))
             },
