@@ -1482,6 +1482,13 @@ impl DaemonHost {
             } else {
                 None
             };
+            // **A folder the host created is a new project** (23 Nov 2026): marked in its git folder, out of the tree,
+            // so that its first landing of code indexes it without anyone asking.
+            if cree {
+                if let Ok(p) = git(&lettre, &["rev-parse", "--git-path", NEW_PROJECT_MARK]) {
+                    let _ = std::fs::write(lettre.join(p), "");
+                }
+            }
             // The atelier: a hosted one, else the one the service poses.
             let atelier = self
                 .backends
@@ -4482,6 +4489,10 @@ fn query_params(chemin: &str) -> std::collections::HashMap<String, String> {
         })
         .collect()
 }
+
+/// **The mark of a folder the host created when it was opened** (23 Nov 2026), a file in its git folder: its first
+/// landing of code indexes it ([`DaemonHost::ouvrir_un_dossier`], `land_the_turn`).
+pub(crate) const NEW_PROJECT_MARK: &str = "rag3weaver-new-project";
 
 /// Witnesses: every data root follows the host's data folder (22 Nov 2026).
 #[cfg(test)]

@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
+  l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
+  dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
+  sans index, l'agent sait qu'il doit estimer puis indexer avant de chercher dans un code qu'il ne connaît pas ;
+  l'index y reste une proposition, que tu peux refuser.
 - 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
   commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
   courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
