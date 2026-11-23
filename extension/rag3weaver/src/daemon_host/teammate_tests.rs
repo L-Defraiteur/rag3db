@@ -32,6 +32,7 @@ mod posture_auto;
 mod land_each_turn;
 mod gate_level;
 mod commit_each_turn;
+mod turn_changes;
 mod judge_all;
 mod prompt_roots;
 mod attente_commande;
