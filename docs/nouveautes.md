@@ -20,7 +20,7 @@
   de l'équipier, la consigne de tête, le refus d'un `step_done` sans texte, la règle « ne signe rien ») sont des
   fichiers livrés sous `templates/teammate/prompts/` ; ton propre fichier, `~/.config/rag3weaver/templates/teammate/
   prompts/<nom>.md`, prend leur place, relu à chaque pas : tu changes une phrase, le tour suivant la prend. Les
-  variables s'écrivent `{$nom}`.
+  variables s'écrivent `{$nom}`. Le message de chaque pas et les relances de l'équipier sont dans `texts.json`, une clé par phrase : ton fichier n'a qu'à nommer celles que tu changes.
 - 23 novembre 2026 — **L'agent te répond avant de dire qu'il a fini.** Son invite commence désormais par ta consigne : un court passage en clair au début de la conversation (en répondant d'abord à ce que tu as écrit), à chaque remarque importante, et en fin de tour pour expliquer ce qu'il a fait en termes de logique générale, et de logique métier quand le projet en a (ce que ça change pour toi ou pour le domaine, pas la liste des fichiers, que l'hôte donne déjà) ; tu ne lis que ce texte, jamais les arguments de ses outils (sans elle, le modèle ne rendait que des appels d'outils). Dans un tour que tu as ouvert, s'il veut
   clore son étape sans t'avoir écrit un mot, l'hôte le lui refuse aussitôt et il écrit sa réponse dans le même appel :
   plus de pas relancé ni de juge d'une minute pour un « bonjour ». S'il s'obstine, le tour finit sur une ligne claire
