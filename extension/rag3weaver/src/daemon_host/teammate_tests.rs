@@ -34,6 +34,7 @@ mod gate_level;
 mod commit_each_turn;
 mod commit_what_was_written;
 mod conversation_memory;
+mod silent_turn;
 mod code_output_limit;
 mod output_limit;
 mod instruction_turn_facts;
