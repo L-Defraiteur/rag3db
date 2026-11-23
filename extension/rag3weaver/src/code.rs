@@ -734,7 +734,11 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // type d'un paramètre, d'un retour, d'une locale ou d'un cast est relevé sur son nœud ; en C#, une déclaration ne fait
 // plus de son type une locale, et un paramètre se lit par ses champs ; le trait d'un en-tête `impl` est placé sur son
 // nœud (codeparsers).
-pub const REGLES_DE_L_ANALYSE: u32 = 19;
+// 20 (23 novembre 2026) : le graphe ne dépend plus de la taille des paquets de fichiers — une bibliothèque dont la
+// provenance est sûre se décide par le fichier seul (la bibliothèque standard de sa langue, l'espace de noms `std` de
+// C++ dit par codeparsers, une dépendance que son dépôt déclare), jamais par les bibliothèques des autres fichiers du
+// paquet ; un fichier édité seul ne s'invente plus de rendez-vous vers des noms externes.
+pub const REGLES_DE_L_ANALYSE: u32 = 20;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
