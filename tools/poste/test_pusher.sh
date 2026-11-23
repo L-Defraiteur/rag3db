@@ -946,4 +946,15 @@ git -C "$D/author" push -q origin HEAD:cn-2; h=$(git -C "$D/author" rev-parse HE
 out=$(PUSHER_COMMIT_NAMES_REFUSE_FROM=2000-01-01 P enqueue cn-2 cn-2 "$h" scripts - - - - author-n 2>&1); rc=$?
 [ $rc = 0 ] && ! echo "$out" | grep -q 'nom de session' && ok "message de commit propre : rien de dit, déposé" || ko "message propre : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-160)"
 P dequeue cn-2 > /dev/null 2>&1
+# 51 (suite). The scope of a title is not read (docs(rag3weaver-archi), docs(orchestration) are folders, allowed); a bare
+# « generated » is an ordinary word; and a message that lends a gesture to Lucie is not detectable by a pattern (each
+# session quotes only her real words) : all three deposited, said nothing.
+for m in "docs(rag3weaver-archi): the page of the night" "docs(orchestration): the report of the 22nd" "fix(ir): the generated code keeps its order" "fix(poste): as Lucie asked, the lock is kept"; do
+  git -C "$D/author" checkout -q -B cn-3 origin/master
+  echo "$m" > "$D/author/tools/poste/cn3.txt"; git -C "$D/author" add -A && git -C "$D/author" commit -qm "$m"
+  git -C "$D/author" push -q -f origin HEAD:cn-3 2>/dev/null; h=$(git -C "$D/author" rev-parse HEAD)
+  out=$(PUSHER_COMMIT_NAMES_REFUSE_FROM=2000-01-01 P enqueue cn-3 cn-3 "$h" scripts - - - - author-n 2>&1); rc=$?
+  [ $rc = 0 ] && ! echo "$out" | grep -q 'nom de session' && ok "message « $m » : déposé, rien de dit" || ko "message « $m » : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-160)"
+  P dequeue cn-3 > /dev/null 2>&1
+done
 exit $red
