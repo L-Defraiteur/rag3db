@@ -437,6 +437,9 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
         }
     })
     .expect("le flux s'ouvre");
+    // Each subject is relayed by its own thread: the run's end may pass its last words. Read on until silence.
+    let dernier = trames.last().map(|(id, _)| *id);
+    trames.extend(lire_jusqu_au_silence(&ep, dernier, Duration::from_millis(2000)));
     let lance = lance.expect("la demande est partie à l'ouverture").expect("la demande ouvre la tâche");
     assert_eq!(lance["started"], true, "{lance}");
 
@@ -457,6 +460,8 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
     let run_des_mots = mots[0].1["evenement"]["run"].as_str().unwrap_or_default().to_string();
     let fin_du_run = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "RunFinished" && v["evenement"]["run"].as_str() == Some(run_des_mots.as_str())).expect("le run du pas finit");
     assert!(premier_mot < fin_du_run, "the first word arrives before the step's run finishes (live, not at the end)");
+    let apres = trames[fin_du_run..].iter().filter(|(_, v)| v["evenement"]["kind"] == "Token").count();
+    eprintln!("MESURE flux du pas : {} mots, dont {apres} arrivés après le RunFinished de leur run", mots.len());
     let rendu: String = trames.iter().filter(|(_, v)| v["backend"].as_str() == Some(tache.as_str())).filter_map(|(_, v)| plain::trame(v)).collect();
     assert!(rendu.contains("mot0") && rendu.contains(&format!("mot{}", MOTS - 1)), "--plain renders the words of the task: {}", &rendu[..rendu.len().min(200)]);
 }
