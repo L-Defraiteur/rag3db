@@ -4,8 +4,8 @@
 //! along the calls around its first ranks: the caller comes up in the first five.
 use super::*;
 
-/// `commit_lot_after_native` calls `flush_blob_store`; thirty functions speak of saving, files and syncing three times
-/// more than it does (it says « flush » once, by its call). The query of the symptom gives the callee first, and the caller among the first five.
+/// `commit_lot_after_native` calls `flush_blob_store`; thirty functions speak of saving, fts files, flushing and
+/// syncing; it says « flush » once, by its call. The query of the symptom gives the callee first, and the caller among the first five.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
 fn the_caller_of_the_first_result_comes_up_in_the_first_five() {
@@ -23,7 +23,7 @@ fn the_caller_of_the_first_result_comes_up_in_the_first_five() {
     let mut voisins = String::new();
     for i in 0..30 {
         voisins.push_str(&format!(
-            "/// Save the settings file {i}, then sync the file: save, file, sync.\npub fn save_settings_file_{i}(file: &str) -> bool {{\n    let saved_file_synced = file.len() > {i};\n    saved_file_synced\n}}\n\n"
+            "/// Save the fts settings file {i}, then flush and sync the file.\npub fn save_fts_settings_file_{i}(file: &str) -> bool {{\n    let flushed_file_synced = file.len() > {i};\n    flushed_file_synced\n}}\n\n"
         ));
     }
     let fichiers = vec![("store.rs".to_string(), store.to_string()), ("settings.rs".to_string(), voisins)];
