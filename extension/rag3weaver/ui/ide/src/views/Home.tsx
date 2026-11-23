@@ -123,7 +123,9 @@ function OpenFolder() {
         const kind = o.created ? "cree" : o.git === false ? "dossier" : "git";
         for (let k = 0; k < 20; k++) {
           const s = await fetchState().catch(() => null);
-          const b = s?.backends.find((x) => !x.tache && x.repo && (x.repo === o.path || x.repo.replace(/\/+$/, "") === String(o.path).replace(/\/+$/, "")));
+          // The host says a repository by its name (`repo`: the folder of its git top level), not by its path.
+          const name = String(o.path).replace(/\/+$/, "").split("/").pop();
+          const b = s?.backends.find((x) => !x.tache && x.repo === name);
           if (b) {
             location.assign(`/ide/code/${b.id}/chat?ouvert=${kind}`);
             return;
