@@ -20,7 +20,7 @@ fn listening(heard: Arc<Mutex<Vec<String>>>) -> ChatModel {
 }
 
 /// Three turns of one thread, the third with `conversation` (none: the declared policy); what the third turn heard.
-fn fil(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<Value>) {
+fn thread(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<Value>) {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     if !teammate.is_null() {
@@ -61,19 +61,19 @@ fn fil(teammate: Value, troisieme: Value, textes: [&str; 3]) -> (String, Vec<Val
 
 /// **Only the context is shaped** (Lucie, 23 Nov 2026: « ça n'arrive qu'à l'agent, le trim, pas dans les données »):
 /// the mailbox gives the first request back whole, byte for byte.
-fn premier_entier(boite: &[Value], premier: &str) {
+fn first_turn_whole(boite: &[Value], first: &str) {
     let l = boite.iter().find(|l| l["kind"] == "request" && l["from"] == "lucie").expect("the first request");
-    assert_eq!(l["text"].as_str(), Some(premier), "the mailbox keeps the first turn whole");
+    assert_eq!(l["text"].as_str(), Some(first), "the mailbox keeps the first turn whole");
 }
 
-const UN: &str = "Premier tour : alpha-un.";
-const DEUX: &str = "Second tour : beta-deux.";
-const TROIS: &str = "Troisième tour : et donc ?";
+const ONE: &str = "Premier tour : alpha-un.";
+const TWO: &str = "Second tour : beta-deux.";
+const THREE: &str = "Troisième tour : et donc ?";
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn the_declared_default_keeps_the_earlier_turns() {
-    let (entendu, _) = fil(Value::Null, Value::Null, [UN, DEUX, TROIS]);
+    let (entendu, _) = thread(Value::Null, Value::Null, [ONE, TWO, THREE]);
     assert!(entendu.contains("alpha-un") && entendu.contains("beta-deux"), "{entendu}");
 }
 
@@ -81,24 +81,24 @@ fn the_declared_default_keeps_the_earlier_turns() {
 #[test]
 fn a_trim_keeps_only_the_last_lines_of_the_kinds_let_in() {
     // The user's requests only, and the last one of them: the second turn's, not the first's.
-    let (entendu, boite) = fil(json!({ "conversation": { "kinds": ["request"], "trim": { "max": 1 } } }), Value::Null, [UN, DEUX, TROIS]);
+    let (entendu, boite) = thread(json!({ "conversation": { "kinds": ["request"], "trim": { "max": 1 } } }), Value::Null, [ONE, TWO, THREE]);
     assert!(entendu.contains("beta-deux") && !entendu.contains("alpha-un"), "the last request only: {entendu}");
-    premier_entier(&boite, UN);
+    first_turn_whole(&boite, ONE);
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn a_launch_can_turn_the_earlier_turns_off() {
-    let (entendu, boite) = fil(Value::Null, json!({ "earlier_turns": false }), [UN, DEUX, TROIS]);
+    let (entendu, boite) = thread(Value::Null, json!({ "earlier_turns": false }), [ONE, TWO, THREE]);
     assert!(!entendu.contains("alpha-un") && !entendu.contains("beta-deux"), "no earlier turn: {entendu}");
-    premier_entier(&boite, UN);
+    first_turn_whole(&boite, ONE);
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
 fn without_trim_an_old_turn_stays_whole() {
     let long = format!("Premier tour : {}fin-du-premier.", "x".repeat(3000));
-    let (entendu, _) = fil(json!({ "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, DEUX, TROIS]);
+    let (entendu, _) = thread(json!({ "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
     assert!(entendu.contains("fin-du-premier"), "a turn of 3 000 characters stays whole without trim");
 }
 
@@ -107,7 +107,7 @@ fn without_trim_an_old_turn_stays_whole() {
 fn the_protection_bound_cuts_a_request_too_long() {
     let long = format!("Premier tour : {}fin-cachee.", "y".repeat(5000));
     // Without the trim, which would cut the old turn first: the bound alone.
-    let (entendu, boite) = fil(json!({ "input_max_chars": 1000, "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, DEUX, TROIS]);
+    let (entendu, boite) = thread(json!({ "input_max_chars": 1000, "conversation": { "trim": { "enabled": false } } }), Value::Null, [&long, TWO, THREE]);
     assert!(!entendu.contains("fin-cachee") && entendu.contains("coupé"), "cut at the bound, and said: {} characters", entendu.len());
-    premier_entier(&boite, &long);
+    first_turn_whole(&boite, &long);
 }
