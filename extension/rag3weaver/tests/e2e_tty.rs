@@ -387,3 +387,73 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
     // le vide avant que le dossier du témoin parte, sinon le dernier pas le recrée.
     host.journal_des_runs().vider();
 }
+
+/// **The teammate's words reach the terminal live, on its task's backend** (23 November 2026: « on ne le voit rien dire
+/// en streaming »). A real host, a teammate step that writes 300 words: every `Token` frame of the step carries the
+/// backend the terminal filters on (the task's, as `/ide/etat` gives it, the way `rag3weaver-tty` finds it), the first
+/// word arrives before the step's run finishes, and `--plain` renders the words.
+#[test]
+#[ignore]
+fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
+    let d = tempfile::tempdir().unwrap();
+    let manifeste = depot_inscrit(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
+            .with_racine_des_taches(d.path().join("taches"))
+            .with_chats_root(d.path().join("chats"))
+            .with_runs_root(d.path().join("runs"))
+            .with_chat_model(faux_equipier()),
+    );
+    let parent = heberger(&host, &manifeste);
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    {
+        let host = host.clone();
+        std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
+    }
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
+    let agent = client::agent();
+
+    // Subscribed first; the request leaves once the subscription is taken; read until the step's run finished.
+    let mut trames: Vec<(u64, Value)> = Vec::new();
+    let mut lance = None;
+    let mut ouvert = || {
+        lance = Some(client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "voix", "kind": "request", "text": "Parle, puis déclare le pas." })));
+    };
+    let fin_au_plus_tard = Instant::now() + Duration::from_secs(300);
+    flux::suivre(&ep, &["agent", "tokens", "mailbox"], None, &AtomicBool::new(false), &mut ouvert, |t| {
+        if let (Some(id), Ok(v)) = (t.id, serde_json::from_str::<Value>(&t.data)) {
+            trames.push((id, v));
+        }
+        let fini = trames.iter().any(|(_, v)| v["evenement"]["kind"] == "RunFinished") && !tokens(&trames).is_empty();
+        if fini || Instant::now() > fin_au_plus_tard {
+            flux::Suite::Couper
+        } else {
+            flux::Suite::Continuer
+        }
+    })
+    .expect("le flux s'ouvre");
+    let lance = lance.expect("la demande est partie à l'ouverture").expect("la demande ouvre la tâche");
+    assert_eq!(lance["started"], true, "{lance}");
+
+    // The task's backend, found the way the terminal finds it.
+    let etat = client::lire_brut(&agent, &ep, "/ide/etat").expect("l'état se lit");
+    let tache = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["tache"]["nom"] == "voix" && b["tache"]["parent"].as_str() == Some(parent.as_str())))
+        .and_then(|b| b["id"].as_str())
+        .unwrap_or_else(|| panic!("la tâche n'est pas dans l'état : {etat}"))
+        .to_string();
+
+    let mots: Vec<&(u64, Value)> = trames.iter().filter(|(_, v)| v["evenement"]["kind"] == "Token").collect();
+    assert!(mots.len() >= MOTS, "les {MOTS} mots du pas sont dans le flux : {}", mots.len());
+    let ailleurs: Vec<&Value> = mots.iter().map(|(_, v)| v).filter(|v| v["backend"].as_str() != Some(tache.as_str())).collect();
+    assert!(ailleurs.is_empty(), "every word carries the task's backend {tache}, which the terminal filters on: {} elsewhere, first {:?}", ailleurs.len(), ailleurs.first());
+    let premier_mot = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "Token").unwrap();
+    let fin_du_run = trames.iter().position(|(_, v)| v["evenement"]["kind"] == "RunFinished").expect("le run du pas finit");
+    assert!(premier_mot < fin_du_run, "the first word arrives before the step's run finishes (live, not at the end)");
+    let rendu: String = trames.iter().filter(|(_, v)| v["backend"].as_str() == Some(tache.as_str())).filter_map(|(_, v)| plain::trame(v)).collect();
+    assert!(rendu.contains("mot0") && rendu.contains(&format!("mot{}", MOTS - 1)), "--plain renders the words of the task: {}", &rendu[..rendu.len().min(200)]);
+}
