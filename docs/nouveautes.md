@@ -11,6 +11,10 @@
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
+- 23 novembre 2026 — **Le terminal de l'agent laisse entrevoir la réflexion du modèle.** Pendant qu'il réfléchit, la
+  ligne de l'animation montre les derniers mots de sa réflexion, estompés et en italique, jamais écrits dans
+  l'historique ; sa réponse prend leur place, et Ctrl-O relit la réflexion entière. Sans réflexion rendue par le
+  modèle, l'animation reste la même.
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».

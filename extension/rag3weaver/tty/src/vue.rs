@@ -191,6 +191,13 @@ pub struct Vue {
     attente_depuis: Instant,
     /// The first Ctrl-C at rest: a second within two seconds quits.
     ctrl_c_at: Option<Instant>,
+    /// The model's thinking for the current call (`Thinking` events): glimpsed in the living line while it lasts,
+    /// read whole by Ctrl-O (the document `thinking_doc`).
+    thinking: String,
+    thinking_iteration: Option<u64>,
+    thinking_doc: Option<usize>,
+    /// The thinking is still the last thing the model gave (no answer token, no tool call since).
+    thinking_live: bool,
     /// The teammate wrote prose in this turn (a report, an answer…).
     spoke: bool,
     /// The turn's last done step and its header: the answer of a turn without prose (23 Nov. 2026).
@@ -274,6 +281,10 @@ impl Vue {
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
             ctrl_c_at: None,
+            thinking: String::new(),
+            thinking_iteration: None,
+            thinking_doc: None,
+            thinking_live: false,
             spoke: false,
             done_step: None,
             modele: None,
@@ -478,6 +489,7 @@ impl Vue {
             "RunStarted" | "LlmCall" => {
                 // Un appel au modèle part : au départ du run, ou au retour du précédent.
                 self.attente_depuis = Instant::now();
+                self.thinking_live = false;
                 if e["kind"] == "RunStarted" {
                     self.texte_coule.clear();
                 }
@@ -486,7 +498,26 @@ impl Vue {
                 }
                 self.changer(Etat::Reflechit);
             }
+            // **The model's thinking** (23 November 2026): glimpsed in the animation, never written; Ctrl-O reads it.
+            "Thinking" => {
+                let iteration = e["iteration"].as_u64();
+                if self.thinking_doc.is_none() || iteration != self.thinking_iteration {
+                    self.thinking.clear();
+                    self.thinking_iteration = iteration;
+                    self.open_document("réflexion", Vec::new());
+                    self.thinking_doc = Some(self.documents.len() - 1);
+                }
+                if let Some(t) = e["text"].as_str() {
+                    self.thinking.push_str(t);
+                }
+                if let Some(j) = self.thinking_doc {
+                    self.documents[j].1 = crate::outils::blocs(&self.thinking, Genre::Note);
+                }
+                self.thinking_live = true;
+            }
+            "ThinkingEnd" => self.thinking_live = false,
             "Token" => {
+                self.thinking_live = false;
                 self.changer(Etat::Ecrit);
                 if let Some(t) = e["text"].as_str() {
                     self.texte_coule.push_str(t);
@@ -494,6 +525,7 @@ impl Vue {
                 }
             }
             "ToolCallStarted" => {
+                self.thinking_live = false;
                 self.clore();
                 self.attente_depuis = Instant::now();
                 let outil = e["tool"].as_str().unwrap_or("?").to_string();
@@ -1081,7 +1113,21 @@ impl Vue {
                     (_, Some(a)) => format!("{} attend… ({} s)", a.what, maintenant.saturating_duration_since(a.depuis).as_secs()),
                     _ => self.suite_du_travail(n),
                 };
-                anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite)
+                let mut l = anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite);
+                // The thinking glimpsed beside the animation: its last words, muted and in italics (23 Nov. 2026).
+                if self.thinking_live && self.etat == Etat::Reflechit && self.attente_dite.is_none() && !self.thinking.trim().is_empty() {
+                    let occupe: usize = l.spans.iter().map(|s| colonnes(&s.content)).sum();
+                    let libre = largeur.saturating_sub(occupe + 1);
+                    let entete = colonnes(&self.entete);
+                    let budget = if !self.entete.is_empty() && libre >= entete + 2 + 24 { libre - entete - 2 } else { libre };
+                    let vu = glimpse_of_thinking(&self.thinking, budget);
+                    if !vu.is_empty() {
+                        let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+                        l.spans.push(Span::raw(" "));
+                        l.spans.push(Span::styled(vu, sourdine.add_modifier(Modifier::ITALIC)));
+                    }
+                }
+                l
             }
             None => {
                 let rouge = anim::couleur(&self.theme.couleurs.texte, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
@@ -1212,6 +1258,36 @@ impl Vue {
 pub struct SessionMessage {
     pub header: String,
     pub text: String,
+}
+
+/// **The glimpse of a thinking**: its last sentence on one line, its end kept when it is wider than `budget`.
+fn glimpse_of_thinking(t: &str, budget: usize) -> String {
+    if budget < 8 {
+        return String::new();
+    }
+    let flat = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut phrase = flat.as_str();
+    for (i, _) in flat.match_indices(|c| matches!(c, '.' | '!' | '?' | ':')).collect::<Vec<_>>().into_iter().rev() {
+        let reste = flat[i + 1..].trim();
+        if reste.chars().count() >= 12 {
+            phrase = reste;
+            break;
+        }
+    }
+    if colonnes(phrase) <= budget {
+        return phrase.to_string();
+    }
+    let mut fin: Vec<char> = Vec::new();
+    let mut largeur = 1;
+    for c in phrase.chars().rev() {
+        let w = colonnes(&c.to_string());
+        if largeur + w > budget {
+            break;
+        }
+        largeur += w;
+        fin.push(c);
+    }
+    format!("…{}", fin.into_iter().rev().collect::<String>())
 }
 
 /// What Ctrl-O can open: the index of a tool call, or of a session message.
