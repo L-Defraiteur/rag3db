@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un tour arrêté se dit dans le terminal de l'agent.** Après Échap ou Ctrl-C, la vue dit « tour
+  arrêté : 2 fichier(s) déjà dans ton dossier » (ou « rien n'a encore changé »), d'après ce que l'hôte a fait atterrir,
+  et plus « il a fini sans répondre ».
 - 23 novembre 2026 — **Le terminal de l'agent laisse entrevoir la réflexion du modèle.** Pendant qu'il réfléchit, la
   ligne de l'animation montre les derniers mots de sa réflexion, estompés et en italique, jamais écrits dans
   l'historique ; sa réponse prend leur place, et Ctrl-O relit la réflexion entière. Sans réflexion rendue par le
