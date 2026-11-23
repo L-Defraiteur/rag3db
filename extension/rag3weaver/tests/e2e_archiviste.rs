@@ -61,6 +61,10 @@ mod check_proposal;
 #[path = "e2e_archiviste/graphs_on_disk.rs"]
 mod graphs_on_disk;
 
+/// The automatic recall of a turn (23 Nov. 2026): the witnesses, in a file of their own.
+#[path = "e2e_archiviste/recall_for_request.rs"]
+mod recall_for_request;
+
 fn crate_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
