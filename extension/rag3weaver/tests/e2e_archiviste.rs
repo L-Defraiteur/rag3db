@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// A read filters by its author, « me » being the agent that calls (23 Nov. 2026): the witnesses, in a file of their own.
+#[path = "e2e_archiviste/author_filter.rs"]
+mod author_filter;
+
 /// No secret enters the memory (lot 5 of the auto mode): the witnesses of the lot, in a file of their own.
 #[path = "e2e_archiviste/secrets.rs"]
 mod secrets;
