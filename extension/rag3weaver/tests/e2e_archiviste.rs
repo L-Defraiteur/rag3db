@@ -57,6 +57,10 @@ mod check_proposal;
 #[path = "e2e_archiviste/graphs_on_disk.rs"]
 mod graphs_on_disk;
 
+/// The answer of any tool says how long each of its nodes took (23 Nov. 2026): the witness, in a file of its own.
+#[path = "e2e_archiviste/node_timings.rs"]
+mod node_timings;
+
 fn crate_dir() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
