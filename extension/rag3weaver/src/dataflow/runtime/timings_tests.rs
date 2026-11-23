@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::dataflow::checkpoint_store::MockCheckpointStore;
+use crate::dataflow::port::PortDef;
 
 struct Sleepy {
     name: String,
