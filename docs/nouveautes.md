@@ -20,6 +20,8 @@
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
+- 23 novembre 2026 — **Le texte de l'agent ne se coupe plus en deux dans le terminal.** À la fin d'un tour, la vue garde
+  son texte ouvert jusqu'à un court silence : un dernier mot arrivé après la fin du run continue le même paragraphe.
 - 23 novembre 2026 — **Le terminal de l'agent ne montre plus que ce qui te parle.** Par défaut, le texte de l'agent
   vient sans préfixe, ce qui a atterri tient en une ligne (« ✓ 17 fichier(s) dans ton dossier »), la liste des
   fichiers et ce que les commandes ont laissé hors du commit passent sous Ctrl-O, aucune ligne de l'hôte n'encombre

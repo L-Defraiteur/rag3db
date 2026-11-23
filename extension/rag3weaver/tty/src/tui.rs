@@ -349,6 +349,10 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             sale = false;
             derniere = Instant::now();
         }
+        // A text left open at its run's end closes after a silence (23 Nov. 2026).
+        if vue.tick(Instant::now()) {
+            sale = true;
+        }
         let mut attente = if sale { IMAGE.saturating_sub(derniere.elapsed()) } else { IMAGE };
         if let Some(p) = vue.prochaine_image(Instant::now()) {
             attente = attente.min(p);

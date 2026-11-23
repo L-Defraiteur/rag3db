@@ -20,6 +20,8 @@ fn a_teammate_runs_tokens_grow_live_and_are_written_once() {
     v.trame(&frame(2, "lancer le serveur avec npm run dev."));
     assert!(v.en_cours.contains("Je vais lancer le serveur"), "{:?}", v.en_cours);
     v.trame(&json!({ "evenement": { "kind": "RunFinished", "run": "agent-1", "ok": true } }));
+    // The text closes after a silence once its run ended (its last words may come after the end).
+    v.tick(Instant::now() + Duration::from_secs(5));
     v.ligne_de_boite(&json!({ "id": "b/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Je vais lancer le serveur avec npm run dev." }));
     v.ligne_de_boite(&json!({ "id": "b/t:3", "from": "host", "kind": "ended", "text": "fait" }));
     let h: Vec<String> = v.prendre_lignes().iter().map(|l| l.texte.clone()).collect();

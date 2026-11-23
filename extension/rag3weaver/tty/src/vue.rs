@@ -211,6 +211,9 @@ pub struct Vue {
     context_said: Option<String>,
     /// What the calls this session saw sent and received, and read from cache: the total when the host gives none.
     session_tokens: (u64, u64),
+    /// The run ended with its text open: its last words may still come (each subject has its own relay); the text
+    /// closes after [`LATE_WORDS_SILENCE`] without a word (23 Nov. 2026).
+    close_pending: Option<Instant>,
     /// The last Échap received, acted on or not: a held key's repeats fall within [`ESCAPE_REPEAT`] of it.
     escape_at: Option<Instant>,
     /// The teammate wrote prose in this turn (a report, an answer…).
@@ -307,6 +310,7 @@ impl Vue {
             traces: Vec::new(),
             context_said: None,
             session_tokens: (0, 0),
+            close_pending: None,
             escape_at: None,
             spoke: false,
             done_step: None,
@@ -410,8 +414,17 @@ impl Vue {
         std::mem::take(&mut self.traces)
     }
 
-    /// The view at `now`, between events.
-    pub fn tick(&mut self, _now: Instant) {}
+    /// The view at `now`, between events: a text left open at its run's end closes after a silence. Says whether
+    /// something was written.
+    pub fn tick(&mut self, now: Instant) -> bool {
+        match self.close_pending {
+            Some(t) if now.saturating_duration_since(t) >= LATE_WORDS_SILENCE => {
+                self.clore();
+                true
+            }
+            _ => false,
+        }
+    }
 
     pub fn prendre_lignes(&mut self) -> Vec<Validee> {
         std::mem::take(&mut self.validees)
@@ -451,6 +464,7 @@ impl Vue {
     /// Clôt la ligne en cours, si elle a quelque chose ; un bloc resté ouvert
     /// se valide aussi (un outil, la fin du run le coupent).
     fn clore(&mut self) {
+        self.close_pending = None;
         if !self.en_cours.is_empty() {
             let t = std::mem::take(&mut self.en_cours);
             self.valider_texte(t);
@@ -621,6 +635,9 @@ impl Vue {
                 self.valider(Genre::Note, format!("  {dit}"));
             }
             "Token" => {
+                if self.close_pending.is_some() {
+                    self.close_pending = Some(Instant::now());
+                }
                 self.empty_in_a_row = 0;
                 self.thinking_live = false;
                 self.changer(Etat::Ecrit);
@@ -689,7 +706,12 @@ impl Vue {
                 self.changer(Etat::Reflechit);
             }
             "RunFinished" => {
-                self.clore();
+                // Its last words may come after it: the text stays open until a silence (23 Nov. 2026).
+                if self.en_cours.is_empty() && self.bloc.is_none() {
+                    self.clore();
+                } else {
+                    self.close_pending = Some(Instant::now());
+                }
                 if !matches!(self.etat, Etat::Fini(_)) {
                     self.changer(Etat::Attend);
                 }
@@ -1463,6 +1485,10 @@ fn tokens_said(n: u64) -> String {
     }
 }
 
+/// **How long a text stays open after its run's end** without a new word: the relay of the run's end may pass its
+/// last words (23 Nov. 2026).
+const LATE_WORDS_SILENCE: Duration = Duration::from_millis(1500);
+
 /// **A held Échap's repeats**: longer than a keyboard's first repeat delay (up to ~660 ms), shorter than two
 /// deliberate presses.
 const ESCAPE_REPEAT: Duration = Duration::from_millis(700);
@@ -1683,6 +1709,8 @@ mod tests {
         v.trame(&tok("\n```py\nx = 1"));
         assert!(v.prendre_lignes().iter().all(|l| l.genre != Genre::Code), "ouvert : rien ne part encore");
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         let fin = v.prendre_lignes();
         assert!(fin.iter().any(|l| l.genre == Genre::Code && l.langue == "py" && l.texte == "x = 1"), "{fin:#?}");
     }
@@ -2160,6 +2188,8 @@ mod tests {
         assert!(vivante(&v, 0).contains("read_file README.md travaille…"), "Resumed gives back the work : {}", vivante(&v, 0));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "call_id": "c1", "ok": true, "ms": 26000 } }));
         v.trame(&json!({ "evenement": { "kind": "RunFinished", "run": "agent-1", "ok": false } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         v.trame(&json!({ "evenement": { "kind": "Waiting", "run": "agent-1", "cause": "model", "what": "gemini-3.8-flash", "since_ms": 0, "wait_ms": 4000 } }));
         let dit = vivante(&v, 1);
         assert!(v.quelle().is_some() && !dit.contains("à toi"), "the animation stays while the provider holds the model back : {dit}");
@@ -2247,6 +2277,8 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "step_done" } }));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "step_done", "ok": true } }));
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         assert_eq!(v.quelle(), Some(Quelle::Repos), "le run fini, l'invite au repos : {}", v.ligne_d_etat());
     }
 
@@ -2267,6 +2299,8 @@ mod tests {
         assert_eq!(v.quelle(), Some(Quelle::Reflechit), "le modèle qui écrit s'anime aussi : {}", vivante(&v));
         v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "Voici." }));
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu : le tour est à elle, l'invite respire : {}", vivante(&v));
         assert!(!nu(&vivante(&v)), "{}", vivante(&v));
@@ -2274,6 +2308,8 @@ mod tests {
         v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "supervisor", "kind": "instruction", "text": "encore" }));
         v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.quelle(), None);
         assert_eq!(vivante(&v), "⛧ il a fini sans répondre : redemande-lui, ou Ctrl-O pour voir ce qu'il a fait");
@@ -2313,6 +2349,8 @@ mod tests {
             v.trame(&json!({ "evenement": { "kind": "Token", "text": t } }));
         }
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         ecrites(&mut v);
         v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "Bilan du test des outils :\ntout passe." }));
         v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "teammate", "kind": "report", "text": "le pas 2 s'est terminé sans step_done ; sa réponse : Bilan du test des outils :\ntout passe." }));
@@ -2369,6 +2407,8 @@ mod tests {
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "ok": true, "ms": 3 } }));
         v.trame(&json!({ "evenement": { "kind": "Token", "text": "Voici la réponse.\n" } }));
         v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        // The text closes after a silence once its run ended (23 Nov. 2026).
+        v.tick(Instant::now() + Duration::from_secs(5));
         written(&mut v);
         v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Voici la réponse." }));
         assert_eq!(written(&mut v), Vec::<String>::new(), "the copy of the last answer, already streamed");
