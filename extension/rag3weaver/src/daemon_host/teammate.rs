@@ -2535,7 +2535,7 @@ impl DaemonHost {
                             &format!("réponse vide du modèle au pas {number} : {pourquoi} ; le pas suivant reprend"),
                             &json!({ "cut": true, "why": pourquoi }),
                         )?,
-                        None => files.append("host", "report", None, &format!("step {number} ended without step_done and without an answer; the next step continues"))?,
+                        None => files.append("host", "report", None, &format!("le pas {number} a fini sans step_done ni réponse ; le pas suivant reprend"))?,
                     };
                     publish(bus.as_ref(), task, &line);
                 } else {
