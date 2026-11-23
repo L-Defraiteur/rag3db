@@ -5002,6 +5002,33 @@ impl Backend {
     /// copié dans `vers` par reflink, sinon en copie pleine, et la porte
     /// rendue. Refusée pendant une indexation. Rend la base copiée, si le
     /// reflink a pris, la taille et la durée de la porte.
+    /// **The base copied under another base's name** (23 Nov 2026: a worktree of an indexed repository starts from the
+    /// repository's index): each of its files (`database_files`) to the same file of `cible`, by reflink when the disk
+    /// knows it, after a CHECKPOINT and never during an indexing. Says whether every file went by reflink.
+    pub fn copy_database_to(&self, cible: &Path) -> Result<bool, String> {
+        #[cfg(feature = "code")]
+        {
+            let n = crate::dataflow::index_nodes::indexings_running(&self.catalog);
+            if n > 0 {
+                return Err(format!("{n} indexation(s) en cours : la base ne se copie pas pendant une indexation"));
+            }
+        }
+        let prepared = self.prepared();
+        let base = prepared.path(&prepared.manifest.database);
+        if let Some(dossier) = cible.parent() {
+            std::fs::create_dir_all(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        }
+        let cat = self.catalog.lock().unwrap_or_else(|e| e.into_inner());
+        cat.conn().execute("CHECKPOINT").map_err(|e| format!("CHECKPOINT avant la copie : {e}"))?;
+        let mut reflink = true;
+        for (de, vers) in crate::code_tree::database_files(&base).into_iter().zip(crate::code_tree::database_files(cible)) {
+            if de.exists() {
+                reflink &= crate::code_tree::copy(&de, &vers, true)?;
+            }
+        }
+        Ok(reflink)
+    }
+
     pub fn copier_la_base_sous_la_porte(&self, vers: &Path) -> Result<CopieDeBase, String> {
         #[cfg(feature = "code")]
         {
