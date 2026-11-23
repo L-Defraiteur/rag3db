@@ -36,8 +36,8 @@ fn the_teammate_prompt_begins_by_saying_to_write_to_the_user_first() {
         std::thread::sleep(Duration::from_millis(100));
     }
     let s = system.lock().unwrap().clone();
-    let phrase = "écris-lui toujours d'abord en texte clair";
+    let phrase = "Always write a short passage in plain words to the user";
     let teammate = s.find("You are a teammate").unwrap_or(usize::MAX);
     assert!(s.find(phrase).is_some_and(|i| i < teammate), "the sentence heads the teammate's prompt: {s}");
-    assert!(s.contains("réponds d'abord à ce qu'elle a écrit"), "the answer to what she wrote comes first, before any status line: {s}");
+    assert!(s.contains("answering first what they wrote") && s.contains("at the end of the turn, to explain what you did"), "the answer to what she wrote first, and a word at the end of the turn: {s}");
 }
