@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un chemin que tu écris se lit sans carte, pendant dix minutes.** Quand ta demande cite un fichier
+  ou un dossier hors du projet, l'agent peut le lire tout de suite : l'hôte lui en ouvre le dossier en lecture seule,
+  pour dix minutes, et le dit en une ligne. Seuls tes mots comptent, jamais un chemin venu d'un agent ou d'un fichier
+  lu ; les dossiers protégés restent fermés. `teammate.mentioned_path_grant_min` règle la durée (0 l'éteint).
 - 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
   l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
   dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
