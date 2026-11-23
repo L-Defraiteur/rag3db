@@ -1,7 +1,7 @@
 # Une montre écrit après la fin d'un témoin d'e2e_tty
 
 - **État** : ouvert le 23 novembre 2026, vu une fois sur deux passes de `host-state-cache` (le même code), à luciepc.
-- **Famille** : témoin
+- **Famille** : produit
 - **Gravité** : une passe d'`e2e_tty` peut sortir en rouge alors que ses 5 tests passent. `run_e2e.sh` trouve un résidu dans le `TMPDIR` de la suite, et le dépôt est retardé d'un rejeu.
 - **Atteignable en service** : non, ce sont les témoins ; mais la cause (une montre qui écrit dans une base fermée) mérite d'être regardée.
 - **Touche rag3weaver** : oui (la montre des fichiers, `ReindexFileNode`, et l'arrêt des backends des témoins d'`e2e_tty`).
