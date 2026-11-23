@@ -100,6 +100,11 @@
 - 23 novembre 2026 — **Les tours se trouvent aussi par leur sens.** L'entité `Turn` de la mémoire déclare le signal
   vectoriel par défaut : `search_turns` cherche par les mots et par le sens. `put_turn` garde l'id de la ligne de
   boîte dont vient le message (`line_id`), rendu par `list_turns` et `search_turns`.
+- 23 novembre 2026 — **Le rappel automatique d'un tour.** `recall_for_request` cherche, pour la demande du tour, les
+  tours des fenêtres déjà résumées (jamais un passage encore en clair), puis les apports L1, puis les fiches ; il les
+  fusionne par rang pondéré et rend les meilleurs passages en entier, dans un bloc étiqueté « Rappel automatique » que
+  l'hôte pose en dernier dans le contexte, ou rien sous son seuil. Mode `direct` : la demande telle quelle, sans appel de
+  modèle. Il filtre par `author` (« me ») et accepte `swarm`.
 
 - 23 novembre 2026 — **« Mes tours » : une lecture filtre par son auteur.** `search_turns` prend `author` (« me »,
   la clé d'un agent, ou « * ») et `swarm` (« mine », un nom, ou « * ») ; « me » est l'agent pour qui l'appel est fait,
