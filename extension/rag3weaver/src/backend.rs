@@ -12193,6 +12193,9 @@ mod tests {
     /// The witness of the lot `name-within-a-typo` (22 November 2026), in a file of its own.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     mod a_name_with_a_typo;
+    /// The witness of the lot `index-incomplete` (23 November 2026), in a file of its own.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    mod index_incomplete;
 
     /// The witness of the lot `token-count-only-for-chunking` without the feature, in a file of its own.
     #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
