@@ -367,4 +367,17 @@ mod tests {
         let vus: Vec<(Genre, &str, &str)> = v.iter().map(|l| (l.genre, l.langue.as_str(), l.texte.as_str())).collect();
         assert_eq!(vus, vec![(Genre::Boite, "", "Voici :"), (Genre::Code, "rust", "fn a() {}"), (Genre::Boite, "", "fin"), (Genre::Boite, "", "```"), (Genre::Boite, "", "ouvert")]);
     }
+
+    /// **No bare number beside a command** (23 Nov. 2026: « » run_command ls -la  ⟨3⟩ » was read as « it ran ls -la
+    /// three times »). The call's line says the tool and its argument; the preview names Ctrl-O by what it does.
+    #[test]
+    fn a_tool_line_and_its_preview_carry_no_bare_number() {
+        assert_eq!(Appel::debut(3, "run_command", r#"{"command":"ls -la"}"#).ligne(), "» run_command ls -la");
+        assert_eq!(Appel::debut(5, "step_done", "{}").ligne(), "» step_done");
+        let lignes: Vec<String> = (1..=30).map(|i| format!("let x{i} = {i};")).collect();
+        let refs: Vec<&str> = lignes.iter().map(String::as_str).collect();
+        let a = fini(Appel::debut(2, "read_file", r#"{"path":"src/b.rs"}"#), lu("src/b.rs", &refs, 30), 900);
+        let v = a.apercu(12);
+        assert_eq!(v[1].texte, "  src/b.rs · lignes 1-30 sur 30 · 18 lignes de plus : Ctrl-O pour tout voir");
+    }
 }
