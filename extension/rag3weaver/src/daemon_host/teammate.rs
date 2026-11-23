@@ -568,6 +568,8 @@ pub struct Step {
     fetch: crate::backend::FetchPolicy,
     /// The protection bound on a tool's result in the context (`teammate.input_max_chars`).
     input_max_chars: usize,
+    /// Only these tools of the backend (`teammate.tools_only`, or the launch's), the step's own staying.
+    tools_only: Option<Vec<String>>,
     /// The bounds of the task's background commands (`teammate.background`).
     background_policy: crate::backend::BackgroundPolicy,
     /// The teammate's search by Gemini's grounding (`teammate.web_search`).
@@ -752,6 +754,7 @@ impl Step {
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
             input_max_chars: crate::backend::TeammatePolicy::default().input_max_chars,
+            tools_only: None,
             background_policy: crate::backend::BackgroundPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
         }
@@ -800,6 +803,7 @@ impl Step {
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
         self.input_max_chars = policy.input_max_chars.max(1000);
+        self.tools_only = policy.tools_only.clone();
         self
     }
 
@@ -1061,6 +1065,16 @@ impl Step {
         publish(self.bus.as_ref(), &self.task, &line);
         *self.done.lock().unwrap_or_else(|p| p.into_inner()) = Some(json!({ "item": item, "succeeded": succeeded, "done": done, "remaining": remaining }));
         Ok(json!({ "ok": true, "step": self.number, "item": item, "succeeded": succeeded }))
+    }
+
+    /// **A tool outside `tools_only` is refused**, saying why (23 Nov 2026); the step's own tools never are.
+    fn unlisted(&self, call: &ToolCall) -> Option<Turn> {
+        let list = self.tools_only.as_ref()?;
+        if list.iter().any(|t| *t == call.name) {
+            return None;
+        }
+        let texte = format!("{} n'est pas permis à cet équipier : tools_only ne garde que {}", call.name, list.join(", "));
+        Some(Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": texte }).to_string()))
     }
 
     fn ours(&self, call: &ToolCall) -> Option<Turn> {
@@ -1435,17 +1449,17 @@ impl StepTools<'_> {
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call(c));
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        self.step.ours(call).or_else(|| self.step.unlisted(call)).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
         let rejouer = |c: &ToolCall| self.in_task(c, None, |c| self.inner.call_in(c, run));
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        self.step.ours(call).or_else(|| self.step.unlisted(call)).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
         // A replay (the gate's yes, a granted root, the bac's shell line) goes the way of the call itself: with its
         // invocation, so a background command stays in the task's background scope (23 Nov 2026).
         let rejouer = |c: &ToolCall| self.in_task(c, Some(&inv.handle), |c| self.inner.call_with(c, run, inv));
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
+        self.step.ours(call).or_else(|| self.step.unlisted(call)).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, rejouer(call), &rejouer)))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
@@ -1459,6 +1473,11 @@ impl crate::agent::ToolBox for StepTools<'_> {
         }
         let mut defs: Vec<ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !ours.iter().any(|o| o.name == d.name)).collect();
         defs.extend(ours);
+        // **Only the listed tools**, beside the step's own (report, step_done…), when `tools_only` says so.
+        if let Some(list) = &self.step.tools_only {
+            let propres: Vec<String> = Step::tool_defs().into_iter().map(|d| d.name).collect();
+            defs.retain(|d| propres.contains(&d.name) || list.contains(&d.name));
+        }
         defs
     }
     fn is_async(&self, tool: &str) -> bool {
@@ -2445,6 +2464,10 @@ impl DaemonHost {
                 let tools = self.browser_listening().map(|ecoute| super::browser_tools::BrowserTools { policy: p.clone(), ecoute, session: format!("teammate:{parent}/{task}") });
                 (p, tools)
             }));
+            // The launch's `tools_only` over the declared one (23 Nov 2026).
+            if let Some(liste) = ouvertes.first().and_then(|n| lines[*n]["tools_only"].as_array()) {
+                step.tools_only = Some(liste.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
+            }
             #[cfg(feature = "code")]
             {
                 if let Some(t) = self.tache(parent, task) {

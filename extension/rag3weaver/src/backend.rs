@@ -39,6 +39,11 @@ fn default_vector_extension() -> PathBuf {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TeammatePolicy {
+    /// **Only these tools of the backend** (23 Nov 2026: a witness agent with grep and reading only): the backend's
+    /// tools offered to the model are these and no other; the step's own tools stay. `None`: all of them. A launch
+    /// overrides it (the request's `tools_only`).
+    #[serde(default)]
+    pub tools_only: Option<Vec<String>>,
     /// **The memory of the conversation** (23 Nov 2026): what a turn receives of the turns before it.
     #[serde(default)]
     pub conversation: ConversationPolicy,
@@ -325,6 +330,7 @@ impl Default for TeammatePolicy {
             web_search: WebSearchPolicy::default(),
             browser: None,
             background: BackgroundPolicy::default(),
+            tools_only: None,
             conversation: ConversationPolicy::default(),
             input_max_chars: Self::input_max_chars_default(),
         }
