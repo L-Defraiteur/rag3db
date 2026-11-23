@@ -155,12 +155,14 @@ pub struct Flux {
     prochain: AtomicU64,
     tampon: Mutex<VecDeque<Arc<Entree>>>,
     abonnes: Mutex<Vec<Abonne>>,
+    /// Told of each event published, by subject and backend (the host's state keeps what no event changed).
+    ecouteur: std::sync::OnceLock<Box<dyn Fn(&str, &str) + Send + Sync>>,
 }
 
 impl Flux {
     /// Un flux vide, et son battement (un fil qui s'arrête avec lui).
     pub fn new() -> Arc<Self> {
-        let flux = Arc::new(Self { prochain: AtomicU64::new(1), tampon: Mutex::new(VecDeque::new()), abonnes: Mutex::new(Vec::new()) });
+        let flux = Arc::new(Self { prochain: AtomicU64::new(1), tampon: Mutex::new(VecDeque::new()), abonnes: Mutex::new(Vec::new()), ecouteur: std::sync::OnceLock::new() });
         let faible: Weak<Self> = Arc::downgrade(&flux);
         let _ = std::thread::Builder::new().name("ide-battement".into()).spawn(move || loop {
             std::thread::sleep(BATTEMENT);
@@ -177,8 +179,17 @@ impl Flux {
         self.publier("etat", cle, serde_json::json!({ "kind": "Etat", "de": de, "cle": cle, "etat": etat }));
     }
 
+    /// **Who is told of each event published** (23 November 2026): set once; the host's state forgets what an event
+    /// says changed.
+    pub fn ecouter(&self, f: impl Fn(&str, &str) + Send + Sync + 'static) {
+        let _ = self.ecouteur.set(Box::new(f));
+    }
+
     /// Publie `evenement` (déjà en JSON) sous `sujet`, pour le backend `backend`.
     pub fn publier(&self, sujet: &str, backend: &str, evenement: Value) {
+        if let Some(f) = self.ecouteur.get() {
+            f(sujet, backend);
+        }
         // **L'id se tire sous le verrou des abonnés**, avec l'empilement et
         // l'envoi (ticket du premier jeton perdu, 7 novembre 2026) : tiré
         // dehors, deux relais pouvaient envoyer N+1 avant N, et `envoyer`, qui

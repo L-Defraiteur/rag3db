@@ -15,6 +15,9 @@
   la requête plutôt que celui où vit la cause. Le nœud reste déclaré dans `search_workspace.mmd`
   (`CallersHopNode(from=0, …)`) : `from=3` le rallume dans ton gabarit. Pour remonter d'un symptôme à sa cause, `usages`
   depuis le premier résultat y mène.
+- 23 novembre 2026 — **L'état de l'hôte se lit sans relire tous les index.** Il garde l'état de l'index de chaque dépôt
+  ouvert jusqu'à ce qu'un événement de ce dépôt dise qu'il a changé, ou qu'il soit rouvert : l'arrivée sur un chat de
+  l'IDE ne paie plus la relecture de chaque index (6,5 s avec 84 dépôts).
 - 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
   commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
   courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
