@@ -35,7 +35,7 @@ fn an_agent_forks_into_an_independent_copy_from_its_head() {
     let plans: super::super::teammate::Plans = serde_json::from_value(json!({ "plans": [{ "number": 1, "request": "r", "proposal": "p", "state": "active",
         "items": [{ "id": "ecrire", "text": "Écrire le travail", "status": "doing" }] }] })).unwrap();
     files.write_plans(&plans).unwrap();
-    let session = crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant("Je m'y mets.")] };
+    let session = crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant("Je m'y mets.")], ..Default::default() };
     std::fs::create_dir_all(d.path().join("chats")).unwrap();
     std::fs::write(d.path().join("chats").join(format!("{}.json", t.id)), json!({ "manifest": t.manifest, "session": session, "last_call": null }).to_string()).unwrap();
     host.reread_chats();
