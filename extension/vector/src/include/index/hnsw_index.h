@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <queue>
 #include <unordered_map>
 
@@ -119,6 +120,11 @@ public:
           typeInfo{std::move(typeInfo)} {
         metricFunc =
             HNSWIndexUtils::getMetricsFunction(this->config.metric, this->typeInfo.getChildType());
+        // For a test only: RAG3DB_HNSW_SEED fixes the draw of the upper layer, otherwise seeded from
+        // the system's entropy, so that a graph seen wrong once can be rebuilt the same.
+        if (const auto* seed = std::getenv("RAG3DB_HNSW_SEED")) {
+            randomEngine.setSeed(std::strtoull(seed, nullptr, 10));
+        }
     }
     ~HNSWIndex() override = default;
 
