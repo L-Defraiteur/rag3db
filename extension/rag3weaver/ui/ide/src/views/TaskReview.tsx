@@ -221,6 +221,71 @@ export function projectGate(backend: string): "bac" | "judge" | "cards" {
   }
 }
 
+/** One call of a tool by the agent, as the stream says it (`ToolCallStarted`, then `ToolCallFinished`). */
+type Call = { id: string; tool: string; what: string; ok?: boolean; ms?: number; tail?: string };
+
+/** The argument a person reads first: the command, the path, the query, else the first text of the call. */
+function callWhat(args: string): string {
+  try {
+    const v = JSON.parse(args) as Record<string, unknown>;
+    const first = ["command", "path", "query", "pattern", "name", "url"].map((k) => v[k]).find((x) => typeof x === "string" && x !== "");
+    const any = first ?? Object.values(v).find((x) => typeof x === "string" && x !== "");
+    const s = typeof any === "string" ? any : "";
+    return s.length > 100 ? `${s.slice(0, 100)}…` : s;
+  } catch {
+    return "";
+  }
+}
+
+/** The last lines of what a call gave, three at most. */
+function lastLines(text: string): string {
+  const lines = text.replace(/\s+$/, "").split("\n");
+  return lines.slice(-3).map((l) => (l.length > 160 ? `${l.slice(0, 160)}…` : l)).join("\n");
+}
+
+/** **What the agent does, as it comes** (the trial of 23 November 2026: minutes of « en train de travailler » and
+ * nothing else): each call of a tool, its argument, then ✓ or ✗, its time and the last lines it gave. The twelve last. */
+function Activity({ manifest }: { manifest: string }) {
+  const [calls, setCalls] = useState<Call[]>([]);
+  useEffect(() => {
+    return onFlux((d: FluxEvent) => {
+      if (d.backend !== manifest) return;
+      const e = (d.evenement ?? {}) as Record<string, unknown>;
+      const tool = String(e.tool ?? "");
+      if (tool === "step_done" || tool === "report") return;
+      if (e.kind === "ToolCallStarted") {
+        const c: Call = { id: String(e.call_id ?? ""), tool, what: callWhat(String(e.arguments ?? "")) };
+        setCalls((cs) => [...cs.filter((x) => x.id !== c.id), c].slice(-12));
+      } else if (e.kind === "ToolCallFinished") {
+        const id = String(e.call_id ?? "");
+        setCalls((cs) => {
+          const known = cs.some((x) => x.id === id);
+          const done = (x: Call): Call => ({ ...x, ok: !!e.ok, ms: Number(e.ms ?? 0), tail: e.result_excerpt ? lastLines(String(e.result_excerpt)) : undefined });
+          return known ? cs.map((x) => (x.id === id ? done(x) : x)) : [...cs, done({ id, tool, what: "" })].slice(-12);
+        });
+      }
+    });
+  }, [manifest]);
+  if (!calls.length) return null;
+  return (
+    <section className="activite grid gap-1 text-sm">
+      <h3 className="text-sm font-semibold">Ce que l'agent fait</h3>
+      <ul className="grid gap-1">
+        {calls.map((c) => (
+          <li key={c.id} data-tool={c.tool} data-ok={c.ok === undefined ? undefined : String(c.ok)} className="rounded-md border px-2.5 py-1.5">
+            <span className="font-mono text-xs">
+              {c.ok === undefined ? "…" : c.ok ? "✓" : "✗"} {c.tool}
+              {c.what ? <> · {c.what}</> : null}
+              {c.ms !== undefined ? <span className="text-muted-foreground"> · {c.ms < 1000 ? `${c.ms} ms` : `${(c.ms / 1000).toFixed(1)} s`}</span> : null}
+            </span>
+            {c.tail ? <pre className="text-xs text-muted-foreground whitespace-pre-wrap mt-1">{c.tail}</pre> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function TeammateSection({ backend, task }: { backend: string; task: string }) {
   const [t, setT] = useState<Teammate | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -303,6 +368,7 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
           )}
         </div>
       ) : null}
+      {manifeste ? <Activity manifest={manifeste} /> : null}
       <h3 className="text-sm font-semibold">Boîte aux lettres</h3>
       {(() => {
         const g = [...t.mailbox].reverse().find((l) => l.kind === "gate_level" && l.from === "host");
