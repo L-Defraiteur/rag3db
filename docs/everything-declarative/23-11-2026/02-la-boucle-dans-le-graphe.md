@@ -148,3 +148,58 @@ de tête. **Ce qui reste à concevoir**, c'est la manière dont l'utilisatrice b
 **Le témoin** : une surcouche qui s'interpose après `reply` relance le tour ; un livré dont le nœud est renommé fait
 refuser la surcouche, avec son nom. La surcouche vient en phase 1, après `emit`, `listen` et la chaîne de gardes,
 puisqu'elle les compose.
+
+## La surcouche par sélecteur
+
+Lucie, 23 novembre (à réfléchir, pas à coder) : « c'est du méta-DAG : tu te branches sur un autre DAG, quelques nœuds
+en override, ou sur des fonctionnements du DAG : "sur chaque boucle for de ce DAG", "sur tous les nœuds qui répondent à
+telle condition", "sur tel nœud, overrider une autre sortie vers ça" ».
+
+**Les sélecteurs**, du plus étroit au plus large :
+- **par nom** : un nœud du graphe livré (`%% between: reply.text`), ce que la section précédente prévoit ;
+- **par genre de nœud** : `%% on: kind=Decide`, `kind=LlmNode` (« tout appel au modèle »), `kind=RunCommandNode`
+  (« toute commande »), `kind=ForEach` ;
+- **par prédicat** sur les paramètres déclarés ou sur un port : `%% on: port=text`, `%% on: kind=LlmNode, via=vertex`.
+  Ce n'est qu'une égalité sur ce que le nœud déclare, jamais du code ;
+- **l'override d'une sortie** d'un nœud nommé : `%% redirect: check.no -> again`, qui branche une sortie ailleurs que
+  là où le livré l'envoie.
+
+**Ce que ça ouvre** : les préoccupations transverses, sans toucher un seul graphe.
+- tracer chaque appel au modèle ;
+- garder chaque commande (une condition avant chaque `RunCommandNode`) ;
+- mesurer chaque nœud ;
+- relire chaque écriture.
+
+C'est « brancher ses propres hooks n'importe où », sans qu'un seul graphe livré change, et nos mises à jour continuent
+d'arriver.
+
+**Les garde-fous, pour que ça reste lisible** :
+- **le graphe composé s'affiche toujours** (`rag3weaver graph --composed`, et dans l'IDE), avec, sur chaque nœud
+  inséré, la surcouche qui l'a mis ;
+- **chaque surcouche dit ce qu'elle a touché** (les nœuds sélectionnés, les arêtes ajoutées ou redirigées). Elle
+  **échoue si elle ne touche rien**, sauf si elle est déclarée `optional` ; un sélecteur qui ne trouve plus rien après une
+  mise à jour se voit donc ;
+- **l'ordre de plusieurs surcouches est déclaré**, et chacune ne sélectionne que les nœuds du graphe tel qu'il était
+  avant elle, jamais ceux qu'elle insère : pas d'auto-application, pas de récursion ;
+- **la validation porte sur le graphe composé**, règle des boucles comprise.
+
+**Ce que je refuserais** :
+- **une surcouche qui sélectionne une garde dure** (le masquage des secrets, le registre et le plafond des dépenses, les
+  accords de dossiers, la signature humaine, l'octroi d'une commande) : ces nœuds sont **scellés**. Un sélecteur qui les
+  atteindrait est refusé à la composition, en les nommant ;
+- **un prédicat en code** (un script dans le sélecteur) : le sélecteur reste une égalité sur ce qui est déclaré, pour que
+  « qu'est-ce que cette surcouche touche ? » se lise sans exécuter quoi que ce soit ;
+- **retirer un nœud du livré** : une surcouche insère, enveloppe ou redirige, elle ne supprime pas. Pour faire moins, on
+  redirige une sortie vers un nœud qui ne fait rien, et ça se voit dans le composé ;
+- **les sélecteurs sur le genre de nœud dans les chemins chauds** (par jeton, par appel d'outil quand il y en a des
+  centaines) sans une mesure avant et après.
+
+**Le coût** : la composition est une passe sur les nœuds, faite une fois à l'ouverture, donc négligeable. Ce qui coûte, ce
+sont les nœuds insérés eux-mêmes, à chaque exécution : une trace sur chaque appel au modèle ajoute un nœud par appel.
+Le vrai risque est la lisibilité, d'où les garde-fous.
+
+**Par où commencer** :
+1. **par nom**, avec `between` et `redirect` : c'est ce dont la relance après une réponse a besoin tout de suite ;
+2. **par genre**, d'abord sur des genres à faible fréquence (`Decide`, `RunCommandNode`, `ForEach`), avec le composé
+   affiché et le « n'a rien touché » ;
+3. **par prédicat** sur les paramètres, en dernier, quand les deux premiers ont servi.
