@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Dans le terminal de l'agent, Ctrl-C arrête le tour, pas la séance.** Pendant que l'agent
+  travaille, Ctrl-C l'arrête comme Échap ; au repos, un premier Ctrl-C dit « Ctrl-C encore pour quitter » et un second,
+  dans les deux secondes, quitte. Un tour dont le travail a atterri dans le dossier n'est plus dit « fini sans
+  répondre », et l'aide montre `--repo`, `--task` et `--continue` comme options.
 - 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
   nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres
   fichiers indexés dans le même paquet, et un fichier édité seul s'en inventait à chaque resynchronisation : l'index

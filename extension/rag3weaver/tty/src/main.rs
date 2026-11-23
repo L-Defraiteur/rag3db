@@ -2,7 +2,7 @@
 //! (lot tty-2) ; `--plain` écrit le texte brut, sans terminal riche (lot tty-1).
 //!
 //! ```text
-//! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request "<texte>"]
+//! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request "<texte>"]
 //!                [--daemon-json <chemin> | --daemon-cmd "<commande>" [--user-token-cmd "<commande>"]] [--address hôte:port]
 //!                [--since <id>] [--log <fichier>]
 //! ```
@@ -133,7 +133,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
 
 fn main() {
     let o = match options() {
