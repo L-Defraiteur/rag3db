@@ -1384,7 +1384,6 @@ impl DaemonHost {
             if !lettre.exists() {
                 std::fs::create_dir_all(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?;
                 git(&lettre, &["init", "-q"])?;
-                premier_commit(&lettre)?;
                 cree = true;
             } else if git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_err() {
                 // **A folder with files that is not a git repository opens as it is** (Lucie, 21 November 2026,
@@ -1393,11 +1392,21 @@ impl DaemonHost {
                 let vide = std::fs::read_dir(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?.next().is_none();
                 if vide {
                     git(&lettre, &["init", "-q"])?;
-                    premier_commit(&lettre)?;
                     cree = true;
                 }
             }
             let est_git = git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_ok();
+            // A repository without a commit (made here, or a git init left as it was) gets its first empty commit, and
+            // the answer says it in one line (c7, 23 November 2026).
+            let first_commit = if est_git && git(&lettre, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+                premier_commit(&lettre)?;
+                Some(format!(
+                    "{} : premier commit vide fait par rag3weaver <rag3weaver@localhost> (un dépôt sans commit n'ouvre pas de tâche)",
+                    lettre.display()
+                ))
+            } else {
+                None
+            };
             // The atelier: a hosted one, else the one the service poses.
             let atelier = self
                 .backends
@@ -1443,7 +1452,7 @@ impl DaemonHost {
             let (offre, pourquoi) = self.index_offer_for(&hosted, &lettre.canonicalize().unwrap_or_else(|_| lettre.clone()));
             #[cfg(not(feature = "code"))]
             let (offre, pourquoi) = (false, "sans la feature code, aucun index".to_string());
-            Ok(json!({ "ok": true, "path": lettre, "created": cree, "git": est_git, "attached": dit, "indexed": false, "index_offer": offre, "index_offer_why": pourquoi }))
+            Ok(json!({ "ok": true, "path": lettre, "created": cree, "git": est_git, "first_commit": first_commit, "attached": dit, "indexed": false, "index_offer": offre, "index_offer_why": pourquoi }))
         });
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
