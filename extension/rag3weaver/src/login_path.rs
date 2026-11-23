@@ -9,7 +9,16 @@ use std::path::Path;
 /// or says no `PATH`.
 pub fn login_shell_path(shell: &Path, current: &str) -> Option<String> {
     use std::process::{Command, Stdio};
-    let mut enfant = Command::new(shell).args(["-l", "-c", "env"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    // A shell file busy a moment (ETXTBSY: a forked process still holds it open for writing) is tried again, 2 s at most.
+    let lancer = || Command::new(shell).args(["-l", "-c", "env"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn();
+    let essai = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut enfant = loop {
+        match lancer() {
+            Ok(e) => break e,
+            Err(e) if e.raw_os_error() == Some(26) && std::time::Instant::now() < essai => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(_) => return None,
+        }
+    };
     let mut sortie = enfant.stdout.take()?;
     let lu = std::thread::spawn(move || {
         let mut s = String::new();
