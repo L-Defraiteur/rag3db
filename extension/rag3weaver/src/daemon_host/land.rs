@@ -310,3 +310,7 @@ impl DaemonHost {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "land_git_lock_tests.rs"]
+mod land_git_lock_tests;
