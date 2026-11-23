@@ -1636,7 +1636,17 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
     };
     let mut enfant = commande
         .spawn()
-        .map_err(|e| ExecErreur::Lancement(format!("{} : {e}", a.0.programme)))?;
+        .map_err(|e| {
+            // **A missing command is said as such** (23 Nov 2026), with what to do, not exec's raw error.
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ExecErreur::Lancement(format!(
+                    "commande introuvable : {} — rien de ce nom dans le PATH du bac. Si le projet en a besoin, installe-la dans son environnement à lui (jamais globalement), puis relance",
+                    a.0.programme
+                ))
+            } else {
+                ExecErreur::Lancement(format!("{} : {e}", a.0.programme))
+            }
+        })?;
 
     // **Chaque flux est lu en entier, dérivé vers son journal, et seuls les
     // premiers octets sont gardés en mémoire.** Lire *tout* est ce qui évite
