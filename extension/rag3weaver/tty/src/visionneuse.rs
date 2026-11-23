@@ -88,7 +88,12 @@ pub fn dessiner_entree(f: &mut Frame, v: &Visionneuse, n_appels: usize, label: &
     let sourdine = style(&theme.couleurs.sourdine);
     let corps = zone.height as usize - 2;
     let fin = (v.defilement + corps).min(lignes.len());
-    let tete = format!("appel {} sur {} · {label} · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
+    // A call names its own rank in its turn; other entries keep their rank in the viewer (23 Nov. 2026).
+    let tete = if label.contains(" du tour ") {
+        format!("{label} · lignes {}-{} sur {}", (v.defilement + 1).min(fin), fin, lignes.len())
+    } else {
+        format!("appel {} sur {} · {label} · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len())
+    };
     f.render_widget(Paragraph::new(Line::from(Span::styled(tete, accent))), Rect { height: 1, ..zone });
     let montrees: Vec<Line> = lignes.get(v.defilement..fin).unwrap_or(&[]).to_vec();
     f.render_widget(Paragraph::new(montrees), Rect { y: zone.y + 1, height: corps as u16, ..zone });

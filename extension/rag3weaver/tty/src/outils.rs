@@ -13,8 +13,10 @@ use serde_json::Value;
 /// Un appel d'outil, de son début à sa fin.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Appel {
-    /// Son numéro dans la séance, à partir de 1.
+    /// Son rang dans son tour, à partir de 1 (23 nov. 2026 : le rang dans la séance se lisait comme une répétition).
     pub n: usize,
+    /// Son tour : la demande qu'il sert, à partir de 1.
+    pub tour: usize,
     /// L'identifiant de l'appel chez l'hôte (`call_id`), qui relie sa fin à son début.
     pub id: String,
     pub outil: String,
@@ -40,7 +42,7 @@ pub struct Lecture {
 
 impl Appel {
     pub fn debut(n: usize, outil: &str, arguments: &str) -> Self {
-        Self { n, id: String::new(), outil: outil.to_string(), arguments: serde_json::from_str(arguments).unwrap_or(Value::Null), ok: None, ms: 0, erreur: None, extrait: None, tronque: false, octets: None }
+        Self { n, tour: 0, id: String::new(), outil: outil.to_string(), arguments: serde_json::from_str(arguments).unwrap_or(Value::Null), ok: None, ms: 0, erreur: None, extrait: None, tronque: false, octets: None }
     }
 
     /// Le fichier (ou le motif) que vise l'appel.

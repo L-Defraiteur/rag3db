@@ -114,8 +114,6 @@ pub enum Genre {
     Outil,
     Boite,
     Note,
-    /// A line for the session journal only (a call's trace), never drawn on the screen.
-    Trace,
     /// Un bloc de code entier (entre deux clôtures ```), à colorer avant
     /// l'historique : `texte` est son code, `langue` celle de sa clôture.
     Code,
@@ -202,6 +200,13 @@ pub struct Vue {
     thinking_live: bool,
     /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
     turn_in_flight: bool,
+    /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
+    tour: usize,
+    calls_this_turn: usize,
+    /// Empty model answers in a row, said in place of the last tool.
+    empty_in_a_row: usize,
+    /// The calls' traces for the session journal, never on the screen nor in the history.
+    traces: Vec<String>,
     /// The last Échap received, acted on or not: a held key's repeats fall within [`ESCAPE_REPEAT`] of it.
     escape_at: Option<Instant>,
     /// The teammate wrote prose in this turn (a report, an answer…).
@@ -292,6 +297,10 @@ impl Vue {
             thinking_doc: None,
             thinking_live: false,
             turn_in_flight: false,
+            tour: 0,
+            calls_this_turn: 0,
+            empty_in_a_row: 0,
+            traces: Vec::new(),
             escape_at: None,
             spoke: false,
             done_step: None,
@@ -388,6 +397,11 @@ impl Vue {
     }
 
     /// Les lignes validées depuis le dernier appel, dans l'ordre.
+    /// The calls' traces since the last time, for the session journal (23 Nov. 2026).
+    pub fn prendre_traces(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.traces)
+    }
+
     pub fn prendre_lignes(&mut self) -> Vec<Validee> {
         std::mem::take(&mut self.validees)
     }
@@ -512,6 +526,23 @@ impl Vue {
                 if let Some(m) = e["model"].as_str() {
                     self.modele = Some(m.rsplit('/').next().unwrap_or(m).to_string());
                 }
+                // **An empty model answer is said, with its reason** (23 Nov. 2026): a call that returned neither
+                // text nor tool has its own line, in place of the last tool.
+                if e["kind"] == "LlmCall" && e["completion_tokens"].as_u64() == Some(0) && e["finish"] != "ToolCall" {
+                    let raison = match (e["empty"]["reason"].as_str(), e["finish"].as_str()) {
+                        (Some(r), _) => r.to_string(),
+                        (None, Some("MaxTokens")) => "le budget de sortie est épuisé (MaxTokens)".to_string(),
+                        (None, Some(f)) => format!("le modèle a fini sans rien écrire ({f})"),
+                        (None, None) => "le modèle n'a rien écrit".to_string(),
+                    };
+                    self.empty_in_a_row += 1;
+                    self.clore();
+                    self.valider(Genre::Note, format!("  réponse vide du modèle : {raison}"));
+                    self.discret = Some(match self.empty_in_a_row {
+                        1 => "réponse vide du modèle".to_string(),
+                        n => format!("réponse vide du modèle ({n} de suite)"),
+                    });
+                }
                 self.changer(Etat::Reflechit);
             }
             // **The model's thinking** (23 November 2026): glimpsed in the animation, never written; Ctrl-O reads it.
@@ -533,6 +564,7 @@ impl Vue {
             }
             "ThinkingEnd" => self.thinking_live = false,
             "Token" => {
+                self.empty_in_a_row = 0;
                 self.thinking_live = false;
                 self.changer(Etat::Ecrit);
                 if let Some(t) = e["text"].as_str() {
@@ -550,8 +582,14 @@ impl Vue {
                     Value::Null => String::new(),
                     autre => autre.to_string(),
                 };
-                let mut appel = crate::outils::Appel::debut(self.appels.len() + 1, &outil, &arguments);
+                self.empty_in_a_row = 0;
+                self.tour = self.tour.max(1);
+                self.calls_this_turn += 1;
+                let mut appel = crate::outils::Appel::debut(self.calls_this_turn, &outil, &arguments);
+                appel.tour = self.tour;
                 appel.id = e["call_id"].as_str().unwrap_or_default().to_string();
+                // The session journal's trace of the call, never on the screen (23 Nov. 2026).
+                self.traces.push(format!("⟦trace⟧ tour {} · appel {} · {} · {} · {}", appel.tour, appel.n, outil, appel.id, appel.arguments));
                 // Sans --etapes, l'appel défile dans la zone vivante (Lucie, 15 nov.) : l'historique ne
                 // garde que la demande et la réponse ; Ctrl-O et le journal gardent le reste.
                 if self.montrer_etapes {
@@ -636,6 +674,10 @@ impl Vue {
             self.valider_avec_tete(Genre::Boite, "› ", &t);
             return;
         }
+        // The host's line for an empty model answer: the run's `LlmCall` already said it (23 Nov. 2026).
+        if l["from"] == "host" && l["kind"] == "report" && l["cut"] == true {
+            return;
+        }
         // **The work landing in the user's folder** (archi's land-each-turn): said, whatever the steps shown.
         if l["from"] == "host" && matches!(l["kind"].as_str(), Some("merged" | "merge_held")) {
             // Work landed in the folder is an answer: the turn is not « fini sans répondre » (23 Nov. 2026).
@@ -670,6 +712,8 @@ impl Vue {
         }
         match (l["from"].as_str(), l["kind"].as_str()) {
             (Some("supervisor"), Some("request" | "instruction")) => {
+                self.tour += 1;
+                self.calls_this_turn = 0;
                 self.repondu = false;
                 self.spoke = false;
                 self.done_step = None;
@@ -841,11 +885,17 @@ impl Vue {
     }
 
     /// The kind of the `i`-th openable entry, for the viewer's header.
-    pub fn openable_label(&self, i: usize) -> &str {
+    pub fn openable_label(&self, i: usize) -> String {
         match self.openables.get(i) {
-            Some(Openable::Message(_)) => "message",
-            Some(Openable::Document(j)) => &self.documents[*j].0,
-            _ => "appel d'outil",
+            Some(Openable::Message(_)) => "message".to_string(),
+            Some(Openable::Document(j)) => self.documents[*j].0.clone(),
+            // A call's rank counts its turn (23 Nov. 2026).
+            Some(Openable::Call(j)) => {
+                let a = &self.appels[*j];
+                let total = self.appels.iter().filter(|x| x.tour == a.tour).count();
+                format!("appel {} sur {total} du tour {}", a.n, a.tour.max(1))
+            }
+            None => "appel d'outil".to_string(),
         }
     }
 

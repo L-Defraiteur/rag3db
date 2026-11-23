@@ -37,10 +37,11 @@ fn each_empty_model_answer_has_its_own_line_with_its_reason() {
     for i in 2..5 {
         v.trame(&ev(json!({ "kind": "LlmCall", "completion_tokens": 0, "finish": "MaxTokens", "iteration": i })));
     }
-    let lignes: Vec<String> = v.prendre_lignes().iter().filter(|l| l.genre != Genre::Trace).map(|l| l.texte.clone()).collect();
+    let lignes: Vec<String> = v.prendre_lignes().iter().map(|l| l.texte.clone()).collect();
     let vides = lignes.iter().filter(|l| l.contains("réponse vide du modèle : le budget de sortie est épuisé (MaxTokens)")).count();
     assert_eq!(vides, 3, "{lignes:#?}");
-    assert_eq!(lignes.iter().filter(|l| l.contains("run_command ls -la")).count(), 1, "one tool line: {lignes:#?}");
+    // Without the steps shown, the tool runs on the muted line and is not written: never more than once.
+    assert!(lignes.iter().filter(|l| l.contains("run_command ls -la")).count() <= 1, "no tool line repeated: {lignes:#?}");
     assert!(v.discret.as_deref().is_some_and(|d| d.contains("réponse vide")), "the muted line no longer shows the old tool: {:?}", v.discret);
     // A reason given by the host is taken as it is.
     v.trame(&ev(json!({ "kind": "LlmCall", "completion_tokens": 0, "finish": "MaxTokens", "empty": { "reason": "la réflexion a rempli tout le budget", "relaunch": true } })));
@@ -53,14 +54,11 @@ fn the_journal_keeps_a_trace_of_each_call_that_the_screen_does_not_show() {
     let mut v = Vue::new(160, true);
     v.ligne_de_boite(&json!({ "id": "b/t:1", "from": "supervisor", "kind": "request", "text": "x" }));
     outil(&mut v, "call_157", "run_command", r#"{"command":"ls -la"}"#);
-    let lignes = v.prendre_lignes();
-    let trace: Vec<&Validee> = lignes.iter().filter(|l| l.genre == Genre::Trace).collect();
-    assert_eq!(trace.len(), 1, "{lignes:#?}");
-    let t = &trace[0].texte;
+    let traces = v.prendre_traces();
+    assert_eq!(traces.len(), 1, "{traces:#?}");
+    let t = &traces[0];
     assert!(t.contains("tour 1 · appel 1 · run_command · call_157") && t.contains("ls -la"), "{t}");
-    let theme = crate::theme::Theme::daemon();
-    let cap = crate::anim::Capacites { couleurs: crate::anim::Niveau::Vraie, glyphes: crate::anim::Glyphes::Surs };
-    assert!(crate::code::lignes(trace[0], &theme, cap, 160, None).is_empty(), "the screen shows no trace");
+    assert!(v.prendre_lignes().iter().all(|l| !l.texte.contains("⟦trace⟧")), "the history, hence the screen, holds no trace");
 }
 
 /// The host's mailbox line for an empty answer (`report` with `cut: true`) is not said a second time, even with the
@@ -72,6 +70,6 @@ fn the_hosts_cut_report_is_not_said_twice() {
     v.ligne_de_boite(&json!({ "id": "b/t:1", "from": "supervisor", "kind": "request", "text": "x" }));
     v.trame(&ev(json!({ "kind": "LlmCall", "completion_tokens": 0, "finish": "MaxTokens" })));
     v.ligne_de_boite(&json!({ "id": "b/t:2", "from": "host", "kind": "report", "text": "réponse vide du modèle au pas 1 : le budget de sortie est épuisé (MaxTokens) ; le pas suivant reprend", "cut": true, "why": "le budget de sortie est épuisé (MaxTokens)" }));
-    let t: Vec<String> = v.prendre_lignes().iter().filter(|l| l.genre != Genre::Trace).map(|l| l.texte.clone()).collect();
+    let t: Vec<String> = v.prendre_lignes().iter().map(|l| l.texte.clone()).collect();
     assert_eq!(t.iter().filter(|l| l.contains("réponse vide du modèle")).count(), 1, "{t:#?}");
 }

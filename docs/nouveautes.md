@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Le terminal de l'agent dit vrai sur ce que fait un tour.** Une réponse vide du modèle a sa
+  propre ligne, « réponse vide du modèle : le budget de sortie est épuisé (MaxTokens) », à la place du dernier outil
+  qui semblait se répéter ; le rang d'un appel compte les appels de son tour (« appel 2 sur 5 du tour 3 ») ; le
+  journal de séance garde, pour chaque appel, son tour, son rang, son outil, son identifiant chez l'hôte et ses
+  arguments, à confronter au journal de l'hôte.
 - 23 novembre 2026 — **Échap dans le terminal de l'agent : une pression, une action.** Il ferme d'abord la visionneuse,
   sinon efface le texte saisi, sinon arrête le tour en cours (de l'envoi à sa fin) ; au repos, il ne fait rien et
   n'envoie plus d'arrêt qui stoppait le tour suivant. Échap maintenu ne compte que pour une pression. Ctrl-G et Ctrl-C

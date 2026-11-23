@@ -788,7 +788,7 @@ fn visionner(vue: &Vue, colorer: Colorer) -> Result<(), String> {
         loop {
             let taille = t.size().map_err(|e| e.to_string())?;
             let lignes = cache.entry((v.index, taille.width)).or_insert_with(|| crate::visionneuse::entry_lines(vue.openable_lines(v.index), &vue.theme, vue.capacites, taille.width as usize, colorer)).clone();
-            t.draw(|f| crate::visionneuse::dessiner_entree(f, &v, vue.openable_count(), vue.openable_label(v.index), &lignes, &vue.theme, vue.capacites)).map_err(|e| e.to_string())?;
+            t.draw(|f| crate::visionneuse::dessiner_entree(f, &v, vue.openable_count(), &vue.openable_label(v.index), &lignes, &vue.theme, vue.capacites)).map_err(|e| e.to_string())?;
             match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
                     if let Some(touche) = touche_de(k) {
@@ -899,17 +899,25 @@ pub type Colorer<'a> = &'a dyn Fn(&str, &str) -> Option<Vec<crate::client::Span>
 /// Les lignes validées dans l'historique (repliées, les blocs de code colorés
 /// par `colorer`), puis la zone vivante. Les mêmes lignes, sans leurs couleurs,
 /// vont au `journal` s'il y en a un.
-pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer, journal: Option<&mut Journal>) -> Result<(), String> {
+pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer, mut journal: Option<&mut Journal>) -> Result<(), String> {
     let validees: Vec<Validee> = vue.prendre_lignes();
+    // The calls' traces go to the journal only, before the lines of the same frame (23 Nov. 2026).
+    let traces = vue.prendre_traces();
+    if let Some(j) = journal.as_deref_mut().filter(|_| !traces.is_empty()) {
+        j.lignes(traces.iter().map(String::as_str));
+    }
     if !validees.is_empty() {
         let largeur = terminal.size().map(|s| s.width).unwrap_or(80) as usize;
         let mut lignes = Vec::new();
+        // The journal takes the same lines without their colours.
+        let mut brutes: Vec<String> = Vec::new();
         for v in &validees {
             let spans = if v.genre == crate::vue::Genre::Code { colorer(&v.texte, &v.langue) } else { None };
-            lignes.extend(crate::code::lignes(v, &vue.theme, vue.capacites, largeur, spans.as_deref()));
+            let faites = crate::code::lignes(v, &vue.theme, vue.capacites, largeur, spans.as_deref());
+            brutes.extend(faites.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()));
+            lignes.extend(faites);
         }
         if let Some(j) = journal {
-            let brutes: Vec<String> = lignes.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
             j.lignes(brutes.iter().map(String::as_str));
         }
         terminal
