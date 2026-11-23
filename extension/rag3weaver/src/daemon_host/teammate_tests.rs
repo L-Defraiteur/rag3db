@@ -46,6 +46,7 @@ mod prompt_roots;
 mod reopen;
 mod run_du_pas;
 mod silent_turn;
+mod silent_turn_channel;
 mod stop_stops;
 mod turn_changes;
 mod turn_failures;
