@@ -39,6 +39,13 @@ fn default_vector_extension() -> PathBuf {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TeammatePolicy {
+    /// **The memory of the conversation** (23 Nov 2026): what a turn receives of the turns before it.
+    #[serde(default)]
+    pub conversation: ConversationPolicy,
+    /// **The protection bound** (23 Nov 2026): a request, or a tool's result, longer than this many characters is cut
+    /// in the context and said cut (the mailbox keeps it whole). Settable, never off: at least 1 000.
+    #[serde(default = "TeammatePolicy::input_max_chars_default")]
+    pub input_max_chars: usize,
     /// Les pas qui n'aboutissent pas d'affilée (le tour entier en erreur) avant
     /// que l'équipier s'arrête en `ended "erreur : …"`. Sous ce nombre, l'échec
     /// s'écrit dans la boîte et le pas suivant repart de la frontière.
@@ -144,6 +151,9 @@ pub struct TeammatePolicy {
 }
 
 impl TeammatePolicy {
+    fn input_max_chars_default() -> usize {
+        40_000
+    }
     fn trois() -> u32 {
         3
     }
@@ -188,6 +198,72 @@ impl TeammatePolicy {
     }
 }
 
+/// **The memory of the conversation** (Lucie, 23 Nov 2026, 08 h 28 and 08 h 34): what a turn receives of the turns
+/// before it. It shapes only the context assembled for a turn: the mailbox, the thread and the journals keep every
+/// turn whole, whatever the setting. A launch overrides it (the request's `conversation`).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ConversationPolicy {
+    /// A turn receives the turns before it; `false`: none.
+    #[serde(default = "TeammatePolicy::oui")]
+    pub earlier_turns: bool,
+    /// The kinds of lines that enter: `request` (the user's), `step_done`, `report`, `question` (the teammate's),
+    /// `ended`, `turn_changes`, `merged` (the host's).
+    #[serde(default = "ConversationPolicy::kinds_default")]
+    pub kinds: Vec<String>,
+    /// How old turns are cut; switched off, they stay whole.
+    #[serde(default)]
+    pub trim: TrimPolicy,
+}
+
+impl ConversationPolicy {
+    fn kinds_default() -> Vec<String> {
+        ["request", "step_done", "report", "question", "ended", "turn_changes", "merged"].map(String::from).to_vec()
+    }
+}
+
+impl Default for ConversationPolicy {
+    fn default() -> Self {
+        ConversationPolicy { earlier_turns: true, kinds: Self::kinds_default(), trim: TrimPolicy::default() }
+    }
+}
+
+/// **The trim of old turns**: the last `full` lines in full (`full_chars` at most), the older ones cut at
+/// `older_chars`, `max` lines at most. `enabled: false`: every earlier line whole.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TrimPolicy {
+    #[serde(default = "TeammatePolicy::oui")]
+    pub enabled: bool,
+    #[serde(default = "TrimPolicy::full_default")]
+    pub full: usize,
+    #[serde(default = "TrimPolicy::full_chars_default")]
+    pub full_chars: usize,
+    #[serde(default = "TrimPolicy::older_chars_default")]
+    pub older_chars: usize,
+    #[serde(default = "TrimPolicy::max_default")]
+    pub max: usize,
+}
+
+impl TrimPolicy {
+    fn full_default() -> usize {
+        8
+    }
+    fn full_chars_default() -> usize {
+        2000
+    }
+    fn older_chars_default() -> usize {
+        200
+    }
+    fn max_default() -> usize {
+        40
+    }
+}
+
+impl Default for TrimPolicy {
+    fn default() -> Self {
+        TrimPolicy { enabled: true, full: 8, full_chars: 2000, older_chars: 200, max: 40 }
+    }
+}
+
 impl Default for TeammatePolicy {
     fn default() -> Self {
         TeammatePolicy {
@@ -213,6 +289,8 @@ impl Default for TeammatePolicy {
             web_search: WebSearchPolicy::default(),
             browser: None,
             background: BackgroundPolicy::default(),
+            conversation: ConversationPolicy::default(),
+            input_max_chars: Self::input_max_chars_default(),
         }
     }
 }
