@@ -357,7 +357,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             let action = match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
                     sale = true;
-                    touche_de(k).and_then(|t| vue.touche(t))
+                    touche_de(k).and_then(|t| vue.touche_a(t, std::time::Instant::now()))
                 }
                 // Un collage d'un bloc : ses sauts de ligne restent dans la saisie.
                 Event::Paste(texte) => {
@@ -397,6 +397,8 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 Some(Action::Ouvrir) => {
                     let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
                     visionner(vue, &colorer)?;
+                    // An Échap held to close the viewer does not go on to empty the input or stop the turn.
+                    vue.escape_seen(std::time::Instant::now());
                     sale = true;
                 }
                 Some(Action::Envoyer(texte, kind)) => {

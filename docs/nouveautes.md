@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Échap dans le terminal de l'agent : une pression, une action.** Il ferme d'abord la visionneuse,
+  sinon efface le texte saisi, sinon arrête le tour en cours (de l'envoi à sa fin) ; au repos, il ne fait rien et
+  n'envoie plus d'arrêt qui stoppait le tour suivant. Échap maintenu ne compte que pour une pression. Ctrl-G et Ctrl-C
+  suivent la même règle.
 - 23 novembre 2026 — **Un tour arrêté se dit dans le terminal de l'agent.** Après Échap ou Ctrl-C, la vue dit « tour
   arrêté : 2 fichier(s) déjà dans ton dossier » (ou « rien n'a encore changé »), d'après ce que l'hôte a fait atterrir,
   et plus « il a fini sans répondre ».

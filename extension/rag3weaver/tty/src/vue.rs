@@ -198,6 +198,10 @@ pub struct Vue {
     thinking_doc: Option<usize>,
     /// The thinking is still the last thing the model gave (no answer token, no tool call since).
     thinking_live: bool,
+    /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
+    turn_in_flight: bool,
+    /// The last Échap received, acted on or not: a held key's repeats fall within [`ESCAPE_REPEAT`] of it.
+    escape_at: Option<Instant>,
     /// The teammate wrote prose in this turn (a report, an answer…).
     spoke: bool,
     /// The turn's last done step and its header: the answer of a turn without prose (23 Nov. 2026).
@@ -285,6 +289,8 @@ impl Vue {
             thinking_iteration: None,
             thinking_doc: None,
             thinking_live: false,
+            turn_in_flight: false,
+            escape_at: None,
             spoke: false,
             done_step: None,
             modele: None,
@@ -315,7 +321,15 @@ impl Vue {
     }
 
     /// Change d'état ; l'animation repart de sa première image quand elle change.
+    /// A turn is running: sent and not ended, or the teammate thinks, writes or acts.
+    fn turn_running(&self) -> bool {
+        self.turn_in_flight || matches!(self.etat, Etat::Reflechit | Etat::Ecrit | Etat::Agit(_))
+    }
+
     fn changer(&mut self, e: Etat) {
+        if matches!(e, Etat::Fini(_)) {
+            self.turn_in_flight = false;
+        }
         let avant = self.quelle();
         self.etat = e;
         if self.quelle() != avant {
@@ -871,8 +885,22 @@ impl Vue {
     }
 
     /// Une touche : rend l'action qu'elle demande.
+    /// An Échap was seen elsewhere at `now` (the viewer closed): its repeats are not new presses here.
+    pub fn escape_seen(&mut self, now: Instant) {
+        self.escape_at = Some(now);
+    }
+
     /// A key at `now` (the time a held Échap's repeats are judged by).
-    pub fn touche_a(&mut self, t: Touche, _now: Instant) -> Option<Action> {
+    pub fn touche_a(&mut self, t: Touche, now: Instant) -> Option<Action> {
+        // **One press, one action** (23 Nov. 2026): the terminal gives a held key's repeats as new presses; an
+        // Échap within ESCAPE_REPEAT of the last one is a repeat, and each repeat keeps the window open.
+        if t == Touche::Echap {
+            let repeat = self.escape_at.is_some_and(|p| now.saturating_duration_since(p) < ESCAPE_REPEAT);
+            self.escape_at = Some(now);
+            if repeat {
+                return None;
+            }
+        }
         self.touche(t)
     }
 
@@ -944,13 +972,19 @@ impl Vue {
                 self.clore();
                 self.valider_avec_tete(Genre::Boite, "› ", &texte);
                 self.retenir_l_envoi(&texte);
+                self.turn_in_flight = true;
                 Some(Action::Envoyer(texte, genre))
             }
-            Touche::Echap => Some(Action::Arreter),
+            // Échap stops a turn, never the session; at rest it sends nothing: a stop with no turn running
+            // would stop the next one before it starts (23 Nov. 2026).
+            // Typed text is emptied first, and nothing else (23 Nov. 2026).
+            Touche::Echap if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
+            Touche::Echap if self.turn_running() => Some(Action::Arreter),
+            Touche::Echap => None,
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             // While the teammate works, Ctrl-C stops the turn, not the session (a trial of the view, 23 Nov. 2026).
-            Touche::CtrlC if matches!(self.etat, Etat::Reflechit | Etat::Ecrit | Etat::Agit(_)) => Some(Action::Arreter),
+            Touche::CtrlC if self.turn_running() => Some(Action::Arreter),
             // At rest, a second Ctrl-C within two seconds quits; the first one says so.
             Touche::CtrlC if self.ctrl_c_at.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(2)) => Some(Action::Quitter),
             Touche::CtrlC => {
@@ -966,7 +1000,8 @@ impl Vue {
             Touche::PageHaut | Touche::PageBas => None,
             Touche::Tab if self.saisie.est_vide() => None,
             Touche::Tab => Some(Action::Completer(self.saisie.texte()[..self.saisie.curseur()].to_string())),
-            Touche::CtrlG => Some(Action::Arreter),
+            Touche::CtrlG if self.turn_running() => Some(Action::Arreter),
+            Touche::CtrlG => None,
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
@@ -1277,6 +1312,10 @@ pub struct SessionMessage {
     pub text: String,
 }
 
+/// **A held Échap's repeats**: longer than a keyboard's first repeat delay (up to ~660 ms), shorter than two
+/// deliberate presses.
+const ESCAPE_REPEAT: Duration = Duration::from_millis(700);
+
 /// **The glimpse of a thinking**: its last sentence on one line, its end kept when it is wider than `budget`.
 fn glimpse_of_thinking(t: &str, budget: usize) -> String {
     if budget < 8 {
@@ -1585,6 +1624,9 @@ mod tests {
         v.touche(Touche::MotDroite);
         assert_eq!(v.touche(Touche::CtrlC), None, "Ctrl-C vide d'abord une saisie non vide");
         assert!(v.saisie.est_vide());
+        // The turn sent above runs until its end: Ctrl-C stops it; once it ended, Ctrl-C is at rest again.
+        assert_eq!(v.touche(Touche::CtrlC), Some(Action::Arreter), "le tour envoyé tourne : Ctrl-C l'arrête");
+        v.ligne_de_boite(&serde_json::json!({ "from": "host", "kind": "ended", "text": "fait", "stopped": true, "by": "human", "landed": [] }));
         assert_eq!(v.touche(Touche::CtrlC), None, "puis, au repos, dit comment quitter");
         assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "et un second quitte");
 
