@@ -5661,6 +5661,10 @@ impl Backend {
         }
         // After the freshness line, which a text already headed by « > » would skip:
         // both lines are said.
+        // **An index left partial is said** (23 Nov 2026): a read on a code synchronisation that stopped before its end.
+        if lit {
+            self.dire_l_index_incomplet(&mut response);
+        }
         if let Some(state) = index_state {
             let line = not_ready_line(&state);
             response["index"] = state;
@@ -5870,6 +5874,34 @@ impl Backend {
     /// présentation d'une recherche) quand le nœud ne l'y a pas déjà mise. Le catalogue se
     /// prend par un essai, jamais une attente : un écrivain qui le tient, et la réponse le dit
     /// (`writing`) sans retarder l'appel.
+    /// **« index incomplet »** at the head of a read's answer, and `index_incomplete` in it, when a synchronisation of
+    /// the code stopped before its end (its session suspended, or its process gone): what the search serves is
+    /// partial. Nothing when the catalog is busy (a writer holds it) or knows no code.
+    fn dire_l_index_incomplet(&self, response: &mut Value) {
+        let Ok(mut cat) = self.catalog.try_lock() else { return };
+        let Ok(arretees) = cat.interrupted_sessions("Scope") else { return };
+        if arretees.is_empty() {
+            return;
+        }
+        let sources: Vec<String> = arretees
+            .iter()
+            .map(|(perimetre, s)| {
+                let source = serde_json::from_str::<Value>(perimetre).ok().and_then(|v| v["source"].as_str().map(str::to_string)).unwrap_or_else(|| perimetre.clone());
+                format!("{source} (commencée il y a {})", crate::catalog::elapsed_since(s.opened_at))
+            })
+            .collect();
+        let texte = format!(
+            "index incomplet : la synchronisation de {} ne s'est pas finie ; la recherche sert ce qui est déjà là. Relance `index` pour la finir",
+            sources.join(", ")
+        );
+        response["index_incomplete"] = json!({ "text": texte, "sources": sources });
+        for cle in ["result", "presentation"] {
+            if let Some(t) = response.get(cle).and_then(Value::as_str) {
+                response[cle] = Value::String(format!("> {texte}\n{t}"));
+            }
+        }
+    }
+
     fn dire_la_fraicheur(&self, response: &mut Value) {
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
         // **Under the view of a worktree, the freshness says that worktree** (recherche's ticket of 21 November 2026):
