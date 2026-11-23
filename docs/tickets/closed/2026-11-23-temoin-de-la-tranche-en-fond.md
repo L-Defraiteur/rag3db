@@ -1,6 +1,12 @@
 # Le témoin de la tranche archivée en fond lisait un fil de fond sans l'attendre
 
-23 nov. 2026, signalé au pousseur (passe de `code-output-40k`, 12 h 49).
+- **État** : corrigé (23 novembre 2026), branche `slice-wait`
+- **Famille** : produit
+- **Gravité** : basse : un témoin qui peut rougir sous charge, sans défaut du produit
+- **Atteignable en service** : non, c'est un témoin
+- **Touche rag3weaver** : oui (`src/daemon_host/chat/tests.rs`)
+- **Pour** : archi
+- **Signalé par** : le pousseur, passe de `code-output-40k` du 23 novembre 2026 à 12 h 49
 
 `daemon_host::chat::tests::a_slice_is_filed_in_the_background_and_the_mark_moves_after_the_commit` a rougi une fois à
 `src/daemon_host/chat/tests.rs:2636` : `left: None`, `right: Some(("chat:…", 1, 1))`. Le témoin lisait `faux.slices`
