@@ -1437,6 +1437,39 @@ fn publish(bus: Option<&crate::events::EventBus>, task: &str, line: &Value) {
 /// pas). Un pas repart d'une session neuve : ce message porte la demande en cours (la
 /// dernière reçue), ce que les pas faits depuis elle ont déclaré (`step_done`), la boîte
 /// depuis le pas précédent et les plans.
+/// **The earlier turns of a conversation**, oldest first: the user's requests and the teammate's answers (its step
+/// reports, its reports, the host's end of each turn); the last eight in full (2 000 characters at most), the older
+/// ones cut at 200, forty at most. `None` before a first turn.
+fn conversation_before(lines: &[Value]) -> Option<String> {
+    let mut tenus: Vec<String> = Vec::new();
+    for l in lines {
+        let (from, kind, text) = (l["from"].as_str().unwrap_or_default(), l["kind"].as_str().unwrap_or_default(), l["text"].as_str().unwrap_or_default());
+        let qui = match (from, kind) {
+            ("teammate", "step_done" | "report" | "question") => "teammate",
+            ("host", "ended" | "turn_changes" | "merged") => "host",
+            (f, "request") if f != "teammate" && f != "host" => "user",
+            _ => continue,
+        };
+        if !text.trim().is_empty() {
+            tenus.push(format!("{qui}: {}", text.trim()));
+        }
+    }
+    if tenus.is_empty() {
+        return None;
+    }
+    let debut = tenus.len().saturating_sub(40);
+    let n = tenus.len();
+    let lignes: Vec<String> = tenus[debut..]
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let max = if debut + i + 8 >= n { 2000 } else { 200 };
+            if t.chars().count() > max { format!("{}…", t.chars().take(max).collect::<String>()) } else { t.clone() }
+        })
+        .collect();
+    Some(format!("Earlier in this conversation (oldest first):\n- {}", lignes.join("\n- ")))
+}
+
 fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, request: &str, faits: &[Value]) -> String {
     let mut m = format!("[Pas {step}]\n");
     if !request.is_empty() && !news.iter().any(|l| l["kind"] == "request" && l["text"] == request) {
@@ -2248,6 +2281,12 @@ impl DaemonHost {
                     }
                     c
                 }
+            };
+            // **A turn receives the turns before it** (c7, 23 Nov 2026): the conversation's earlier requests and what the
+            // teammate answered, the last ones in full, the older ones bounded, before this turn's request.
+            let consigne = match conversation_before(&lines[..ouverture]) {
+                Some(avant) if !consigne.is_empty() => format!("{avant}\n\nThis turn's request:\n{consigne}"),
+                _ => consigne,
             };
             let premiere_ouverte = ouvertes.first().copied().or(derniere);
             if derniere != demande_suivie {

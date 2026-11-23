@@ -323,8 +323,10 @@ fn a_small_request_needs_no_plan_and_an_active_plan_is_paused_then_recalled() {
     let o = host.run_teammate(&h.id, "doc").unwrap();
     assert_eq!(o.ended, "plus rien à faire : compte rendu", "{o:?}");
     let seen = seen.lock().unwrap();
-    // La relance ne relit pas « Bonjour ».
-    assert!(!seen.frontiers[1].contains("Bonjour"), "{}", seen.frontiers[1]);
+    // La relance ne prend pas « Bonjour » pour la demande en cours : un tour d'avant n'est que dans la conversation
+    // d'avant (c7, 23 nov. 2026 : un tour reçoit les tours d'avant).
+    let en_cours = seen.frontiers[1].split("This turn's request:").last().unwrap_or_default();
+    assert!(!en_cours.contains("Bonjour"), "{}", seen.frontiers[1]);
     let f2 = &seen.frontiers[2];
     assert!(f2.contains("Centre le div") && f2.contains("décide d'abord"), "{f2}");
     assert_eq!(o.steps[1]["decision"], "pause", "{:?}", o.steps[1]);
