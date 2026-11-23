@@ -213,6 +213,42 @@ pub struct ConversationPolicy {
     /// How old turns are cut; switched off, they stay whole.
     #[serde(default)]
     pub trim: TrimPolicy,
+    /// **The fallow windows** (Lucie, 23 Nov 2026): the whole thread under a budget, then windows; off by default.
+    #[serde(default)]
+    pub fallow: FallowPolicy,
+}
+
+/// **The fallow windows**: while the earlier lines weigh less than `budget_tokens`, they enter whole; past it, they
+/// are grouped in windows of `window_tokens` (in order), and the last `windows` windows enter in clear, the older ones
+/// set aside (their summary: the next lot). Tokens are estimated at four characters each.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FallowPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "FallowPolicy::budget_tokens_default")]
+    pub budget_tokens: usize,
+    #[serde(default = "FallowPolicy::window_tokens_default")]
+    pub window_tokens: usize,
+    #[serde(default = "FallowPolicy::windows_default")]
+    pub windows: usize,
+}
+
+impl FallowPolicy {
+    fn budget_tokens_default() -> usize {
+        30_000
+    }
+    fn window_tokens_default() -> usize {
+        4_000
+    }
+    fn windows_default() -> usize {
+        2
+    }
+}
+
+impl Default for FallowPolicy {
+    fn default() -> Self {
+        FallowPolicy { enabled: false, budget_tokens: 30_000, window_tokens: 4_000, windows: 2 }
+    }
 }
 
 impl ConversationPolicy {
@@ -223,7 +259,7 @@ impl ConversationPolicy {
 
 impl Default for ConversationPolicy {
     fn default() -> Self {
-        ConversationPolicy { earlier_turns: true, kinds: Self::kinds_default(), trim: TrimPolicy::default() }
+        ConversationPolicy { earlier_turns: true, kinds: Self::kinds_default(), trim: TrimPolicy::default(), fallow: FallowPolicy::default() }
     }
 }
 
