@@ -17,6 +17,9 @@
 - 23 novembre 2026 — **Le terminal de l'agent part en mode auto.** Chaque demande et chaque consigne demandent la porte
   « bac » (l'agent avance, les règles vérifient), comme l'IDE ; `--gate judge` ou `--gate cards` en choisissent une
   autre au lancement. Avant, une tâche ouverte du terminal gardait une carte par commande.
+- 23 novembre 2026 — **L'agent ne parle plus deux fois dans le terminal.** Quand son texte s'est affiché en direct
+  (une annonce avant un outil, puis sa réponse), la copie que l'hôte pose en fin de pas ne s'affiche plus ; elle sert
+  à rouvrir la conversation.
 - 23 novembre 2026 — **Un projet neuf est indexé sans qu'on le demande.** Un dossier que l'hôte a créé à
   l'ouverture (« crée-moi une app ») reçoit son index en fond dès que le premier tour y apporte du code, et la boîte le
   dit en une ligne : la recherche par le sens, `usages` et `impact` y marchent tout de suite. Pour un dépôt existant
