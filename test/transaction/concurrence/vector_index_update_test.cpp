@@ -2022,6 +2022,8 @@ TEST_F(VectorIndexUpdate, ASearchForMoreRowsThanLiveOnesReturnsOnlyTheLiveOnes) 
 struct RegionDeleteCase {
     bool setNullFirst;
     bool keepOnlyAHandful;
+    // The draw of the upper layer, fixed (RAG3DB_HNSW_SEED) ; 0 leaves it to the system's entropy.
+    uint64_t seed = 0;
 };
 
 class RegionDelete : public VectorIndexUpdate,
@@ -2063,6 +2065,9 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
     };
     table = "R";
     mustRun(stringFormat("CREATE NODE TABLE R(id INT64 PRIMARY KEY, vec FLOAT[{}]);", DIM));
+    if (GetParam().seed != 0) {
+        setenv("RAG3DB_HNSW_SEED", std::to_string(GetParam().seed).c_str(), 1);
+    }
     mustRun("CALL CREATE_VECTOR_INDEX('R', 'r_index', 'vec', metric := 'l2');");
     for (auto first = 0; first < NUM_ROWS; first += 100) {
         std::string items;
@@ -2094,6 +2099,7 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
         }
         mustRun("MATCH (n:R) WHERE n.id IN [" + ids + "] DETACH DELETE n;");
     }
+    unsetenv("RAG3DB_HNSW_SEED");
     std::vector<int> survivors;
     for (auto i = 0; i < NUM_ROWS; i++) {
         if (!deletedSet.contains(i)) {
@@ -2139,10 +2145,14 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
 
 INSTANTIATE_TEST_SUITE_P(Cases, RegionDelete,
     ::testing::Values(RegionDeleteCase{false, false}, RegionDeleteCase{true, false},
-        RegionDeleteCase{false, true}, RegionDeleteCase{true, true}),
+        RegionDeleteCase{false, true}, RegionDeleteCase{true, true},
+        // A draw that leaves a survivor unreachable (ticket 2026-11-23-apres-la-suppression-d-une-
+        // region-sauf-cinq-un-survivant-peut-etre-injoignable): red on every run, not one in a hundred.
+        RegionDeleteCase{true, true, 157}),
     [](const ::testing::TestParamInfo<RegionDeleteCase>& info) {
         return std::string(info.param.setNullFirst ? "SetNullFirst" : "Direct") +
-               (info.param.keepOnlyAHandful ? "AllButFive" : "TenPercent");
+               (info.param.keepOnlyAHandful ? "AllButFive" : "TenPercent") +
+            (info.param.seed != 0 ? "Seed" + std::to_string(info.param.seed) : "");
     });
 
 // Les lignes validées pendant le bâti d'un CREATE_VECTOR_INDEX manquent à l'index (ticket
