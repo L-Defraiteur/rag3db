@@ -59,6 +59,7 @@ mod text_first;
 mod turn_changes;
 mod turn_failures;
 mod web;
+mod witness_host_data;
 
 /// **A witness of the approval card** declares the approval mode, committed (since 22 Nov 2026 a new project's
 /// template is in the auto mode, where every command the sandbox runs passes).
