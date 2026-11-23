@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un modèle sans prix devient une carte dans le fil, et le plafond approché se dit.** Au lieu
+  d'une erreur : « ce modèle n'a pas de prix : je le cherche sur la page du fournisseur, ou tu le donnes ? ». Cherché,
+  le prix arrive avec sa source, à accepter d'un clic ; donné, il tient en trois champs ; écrit, le message refusé
+  repart seul. À 50 %, 80 % et au plafond du mois, l'agent le dit d'une phrase et le fil en garde une ligne, une fois
+  par seuil et par fil.
 - 23 novembre 2026 — **Un prix manquant se donne d'un oui.** Un modèle sans prix n'est plus seulement refusé : le
   refus nomme le modèle (`missing_price`), et un prix s'écrit dans `prices.json` par `POST /ide/prices`, à partir du
   jour, avec sa source, sur la seule signature de l'utilisatrice ; un agent, le jeton de l'hôte ou un corps qui se dit
