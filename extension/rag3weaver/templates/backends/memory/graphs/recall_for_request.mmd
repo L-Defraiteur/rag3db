@@ -1,5 +1,5 @@
 %% tool: recall_for_request
-%% description: The automatic recall of a turn (the context policy of the code agent, 23 November 2026): for the request of the turn, searches the turns of the windows already summarised (before active_since, never a passage in clear), then the L1 apports, then the cards; fuses them by weighted rank (turns 1.0 × recency, apports 0.85 × recency, cards 0.7 by default) and renders the best passages in full as a block labelled « Rappel automatique », placed last in the context by the host; nothing under the threshold. prepare « direct »: the request as it is, no model call. Returns {block|null, mode, sources, degraded|null, swarm}.
+%% description: The automatic recall of a turn (the context policy of the code agent, 23 November 2026): for the request of the turn, searches the turns of the windows already summarised (before active_since, never a passage in clear), then the L1 apports, then the cards; fuses them by weighted rank (turns 1.0 × recency, apports 0.85 × recency, cards 0.7 by default) and renders the best passages in full as a block labelled « Rappel automatique », placed last in the context by the host; nothing under the threshold. prepare « direct »: the request as it is, no model call. Returns {block|null, mode, sources, passages (what each signal said of each recalled passage), degraded|null, swarm}.
 %% param: request string! -- The request of the turn, in full.
 %% param: run string = "" -- The run the turns of this conversation are filed under (« <task>:<parent> »); empty: no turn is searched.
 %% param: active_since string = "" -- The time (at) of the first line of the oldest window still in clear, ISO 8601: only the turns said before it are searched. Empty: no window is summarised yet, no turn is searched.
@@ -11,13 +11,14 @@
 %% param: limit int = 10 -- How many hits each source gives to the fusion.
 %% param: weights json = {"turns": 1.0, "apports": 0.85, "cards": 0.7} -- The weight of each source in the fusion.
 %% param: recency json = {"turns": 0.15, "apports": 0.1} -- How fast a hit loses weight with its age among the hits of its source (0: no decay).
-%% param: min_score float = 0.0 -- A hit whose own search score is under it is not recalled (no recall to fill).
+%% param: min_score float = 0.0 -- A hit whose fused search score is under it is not recalled.
+%% param: min_similarity float = 0.5 -- A hit found by the dense signal alone is recalled only if its similarity reaches it (no nearest neighbour recalled to fill); a lexical hit (bm25, sparse) is evidence enough. To be set by the bench on labelled requests.
 %% param: budget_tokens int = 1500 -- The bound of the block, about 4 characters per token, shared by its passages.
 %% result: fuse.result
 
 graph LR
     where["RhaiNode(script_id=recall_where, inputs='request,run,active_since,author,caller,limit,recent', recent=$recent, request=$request, run=$run, active_since=$active_since, author=$author, limit=$limit)"]
     search["ForEachNode(graph='@graphs/recall_search.mmd')"]
-    fuse["RhaiNode(script_id=recall_fuse, inputs='prepare,top,weights,recency,min_score,budget_tokens,swarm', prepare=$prepare, top=$top, weights=$weights, recency=$recency, min_score=$min_score, budget_tokens=$budget_tokens, swarm=$swarm)"]
+    fuse["RhaiNode(script_id=recall_fuse, inputs='prepare,top,weights,recency,min_score,min_similarity,budget_tokens,swarm', min_similarity=$min_similarity, prepare=$prepare, top=$top, weights=$weights, recency=$recency, min_score=$min_score, budget_tokens=$budget_tokens, swarm=$swarm)"]
     where -->|result:elements| search
     search -->|list:value| fuse
