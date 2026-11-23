@@ -214,6 +214,14 @@ impl DaemonHost {
         if self.accorde(chemin, "write", backend) {
             return true;
         }
+        // **A task in place writes in its own folder** (the replay of 23 Nov 2026, 18 h 26): the user opened it for
+        // the agent, which works there by default.
+        if let Some(b) = backend {
+            let taches = self.taches.lock().unwrap_or_else(|p| p.into_inner());
+            if taches.values().any(|t| t.id == b && t.workspace.as_ref().and_then(|w| w.code.as_ref()).is_some_and(|c| c.en_place && chemin.starts_with(&c.depot))) {
+                return true;
+            }
+        }
         let Ok(racines) = self.racines_de_code() else { return false };
         crate::code_tree::name_of_tree(&w.racine).is_ok_and(|nom| racines.marque_de_l_atelier(&nom).is_file())
     }
