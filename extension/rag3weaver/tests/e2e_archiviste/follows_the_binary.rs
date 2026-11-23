@@ -5,24 +5,30 @@
 
 use super::*;
 
-/// Every `graphs/…` of the manifest made `builtin:backends/memory/graphs/…`, the local `graphs/` folder removed.
+/// Every `graphs/…` of the manifest (tools and reactions) made `builtin:backends/memory/graphs/…`, the local `graphs/`
+/// and `plans/` folders removed.
 #[test]
 #[ignore]
 fn a_memory_whose_graphs_are_all_shipped_loads_and_answers() {
     let dir = tempfile::tempdir().expect("dossier");
     let local_graphs = dir.path().join("templates/backends/memory/graphs");
+    let local_plans = dir.path().join("templates/backends/memory/plans");
     let b = ouvrir(dir.path(), |m| {
-        if let Some(tools) = m["tools"].as_object_mut() {
-            for t in tools.values_mut() {
-                if let Some(g) = t["graph"].as_str().filter(|g| g.starts_with("graphs/")).map(str::to_string) {
-                    t["graph"] = json!(format!("builtin:backends/memory/{g}"));
+        // The tools' and the reactions' graphs, all named by `builtin:`.
+        for key in ["tools", "reactions"] {
+            if let Some(all) = m[key].as_object_mut() {
+                for t in all.values_mut() {
+                    if let Some(g) = t["graph"].as_str().filter(|g| g.starts_with("graphs/")).map(str::to_string) {
+                        t["graph"] = json!(format!("builtin:backends/memory/{g}"));
+                    }
                 }
             }
         }
-        // No local copy of the template's graphs: only the shipped ones exist.
+        // No local copy of the template's graphs nor Plans: only the shipped ones exist.
         let _ = std::fs::remove_dir_all(&local_graphs);
+        let _ = std::fs::remove_dir_all(&local_plans);
     });
-    assert!(!local_graphs.exists(), "the witness leaves no local graphs/");
+    assert!(!local_graphs.exists() && !local_plans.exists(), "the witness leaves no local graphs/ nor plans/");
     appel(&b, "put_fiche", json!({"record": {"name": "follows", "about": "a memory that follows the binary", "state": "current"}}));
     let got = appel(&b, "get_fiche", json!({"record": {"name": "follows"}}));
     assert!(got.to_string().contains("a memory that follows the binary"), "{got}");
