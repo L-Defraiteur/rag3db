@@ -95,6 +95,11 @@ fn plain_suspended_on_a_card(lines: &[Value], since: usize) -> bool {
 }
 
 /// The last conversation of a repository in the host's list of teammates.
+/// What the host's answer to opening a folder says at the start (its first commit in a new folder).
+fn opening_line(_r: &Value) -> Option<String> {
+    None
+}
+
 fn last_conversation(list: &Value, parent: &str) -> Option<String> {
     let all = list["teammates"].as_array().or_else(|| list["result"]["teammates"].as_array())?;
     all.iter().filter(|t| t["parent"] == parent).max_by_key(|t| t["at"].as_u64().unwrap_or(0)).and_then(|t| t["task"].as_str()).map(str::to_string)
@@ -535,5 +540,18 @@ mod help_tests {
     fn the_help_shows_repo_and_task_as_options_and_names_continue() {
         assert!(AIDE.contains("[--repo <nom|chemin>]") && AIDE.contains("[--task <nom>]"), "{AIDE}");
         assert!(AIDE.contains("--continue"), "{AIDE}");
+    }
+}
+
+#[cfg(test)]
+mod first_commit_tests {
+    use super::*;
+
+    /// **The host's first commit in a new folder is said at the start** (23 Nov.: it was only in the folder's git).
+    #[test]
+    fn the_first_commit_of_a_new_folder_is_said() {
+        let r = serde_json::json!({ "ok": true, "first_commit": "premier commit par rag3weaver (dossier neuf)", "git": true });
+        assert_eq!(opening_line(&r).as_deref(), Some("premier commit par rag3weaver (dossier neuf)"));
+        assert_eq!(opening_line(&serde_json::json!({ "ok": true })), None);
     }
 }
