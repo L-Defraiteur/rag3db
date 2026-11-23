@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// The turns are found by their meaning too and keep their mailbox line (23 Nov. 2026): the witnesses, in a file of their own.
+#[path = "e2e_archiviste/turn_dense.rs"]
+mod turn_dense;
+
 /// No secret enters the memory (lot 5 of the auto mode): the witnesses of the lot, in a file of their own.
 #[path = "e2e_archiviste/secrets.rs"]
 mod secrets;
