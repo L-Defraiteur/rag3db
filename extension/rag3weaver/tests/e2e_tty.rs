@@ -462,3 +462,88 @@ fn the_teammates_words_reach_the_terminal_live_on_its_tasks_backend() {
     let rendu: String = trames.iter().filter(|(_, v)| v["backend"].as_str() == Some(tache.as_str())).filter_map(|(_, v)| plain::trame(v)).collect();
     assert!(rendu.contains("mot0") && rendu.contains(&format!("mot{}", MOTS - 1)), "--plain renders the words of the task: {}", &rendu[..rendu.len().min(200)]);
 }
+
+/// **Text and tool calls keep their order on the stream** (23 November 2026: « le texte en streaming sera gardé dans
+/// l'ordre d'apparition des outils ? »). A teammate says A then calls a tool, says B then calls a tool, says C then ends
+/// its step, over three model calls. On the task's stream, every word of A comes before the first tool call, every
+/// word of B between the two calls, every word of C after the second.
+fn faux_equipier_qui_entrelace() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-entrelace", 1 << 20, |turns, opts, sink| {
+            let outils = turns.iter().filter(|t| t.role == "tool").count();
+            let mots = |p: &str| (0..60).map(|i| format!("{p}{i}")).collect::<Vec<_>>().join(" ");
+            let fin = json!({ "item": "", "succeeded": true, "done": "j'ai entrelacé", "remaining": "" }).to_string();
+            match outils {
+                0 => MockLlm::new(mots("a")).with_tool_calls(vec![("list_files", "{}")]).generate(turns, opts, sink),
+                1 => MockLlm::new(mots("b")).with_tool_calls(vec![("list_files", "{}")]).generate(turns, opts, sink),
+                2 => MockLlm::new(mots("c")).with_tool_calls(vec![("step_done", fin.as_str())]).generate(turns, opts, sink),
+                _ => MockLlm::new("Fait.").generate(turns, opts, sink),
+            }
+        })))
+    })
+}
+
+#[test]
+#[ignore]
+fn text_and_tool_calls_keep_their_order_on_the_stream() {
+    let d = tempfile::tempdir().unwrap();
+    let manifeste = depot_inscrit(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
+            .with_racine_des_taches(d.path().join("taches"))
+            .with_chats_root(d.path().join("chats"))
+            .with_runs_root(d.path().join("runs"))
+            .with_chat_model(faux_equipier_qui_entrelace()),
+    );
+    let parent = heberger(&host, &manifeste);
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    {
+        let host = host.clone();
+        std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
+    }
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
+    let agent = client::agent();
+    let mut trames: Vec<(u64, Value)> = Vec::new();
+    let mut lance = None;
+    let mut ouvert = || {
+        lance = Some(client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "entrelace", "kind": "request", "text": "Dis, appelle, dis, appelle, dis." })));
+    };
+    let fin_au_plus_tard = Instant::now() + Duration::from_secs(300);
+    flux::suivre(&ep, &["agent", "tokens", "mailbox"], None, &AtomicBool::new(false), &mut ouvert, |t| {
+        if let (Some(id), Ok(v)) = (t.id, serde_json::from_str::<Value>(&t.data)) {
+            trames.push((id, v));
+        }
+        let fini = trames.iter().any(|(_, v)| v["evenement"]["kind"] == "MailboxLine" && v["evenement"]["line"]["kind"] == "ended")
+            || trames.iter().any(|(_, v)| v["sujet"] == "mailbox" && v["evenement"]["kind"] == "ended");
+        if fini || Instant::now() > fin_au_plus_tard {
+            flux::Suite::Couper
+        } else {
+            flux::Suite::Continuer
+        }
+    })
+    .expect("le flux s'ouvre");
+    lance.expect("la demande est partie").expect("la demande ouvre la tâche");
+    let dernier = trames.last().map(|(id, _)| *id);
+    trames.extend(lire_jusqu_au_silence(&ep, dernier, Duration::from_millis(2000)));
+    // The order on the stream: a word's letter, or a tool call's start.
+    let suite: Vec<String> = trames
+        .iter()
+        .filter_map(|(_, v)| match v["evenement"]["kind"].as_str() {
+            Some("Token") => v["evenement"]["text"].as_str().and_then(|t| t.trim().chars().next()).filter(|c| matches!(c, 'a' | 'b' | 'c')).map(|c| c.to_string()),
+            Some("ToolCallStarted") if v["evenement"]["tool"] == "list_files" => Some("|".to_string()),
+            _ => None,
+        })
+        .collect();
+    let dit: String = suite.concat();
+    let compacte: String = dit.chars().fold(String::new(), |mut s, c| {
+        if !s.ends_with(c) {
+            s.push(c);
+        }
+        s
+    });
+    eprintln!("MESURE entrelacement : {compacte} (sur {} trames)", suite.len());
+    assert_eq!(compacte, "a|b|c", "the words of A, a call, the words of B, a call, the words of C, in this order: {dit}");
+}
