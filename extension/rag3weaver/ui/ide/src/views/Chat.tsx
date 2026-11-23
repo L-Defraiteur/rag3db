@@ -756,6 +756,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           };
         }),
       );
+      // The month's spending past an alert: a calm line in the thread, once per level.
+      if (r.spending_notice) setItems((cur) => [...cur, { kind: "info", text: `Dépenses du mois : ${r.spending_notice}`, cls: "spending-notice" }]);
       setStatus(r.stopped_by ? `arrêté ${r.stopped_by === "ide" ? "dans l'IDE" : `par ${r.stopped_by}`}` : "fini");
       // Les compteurs du tour, un total par unité, le modèle nommé une fois.
       const byUnit = new Map<string, number>();

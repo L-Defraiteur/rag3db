@@ -406,6 +406,8 @@ export type TurnResult = {
   propositions: { id: number; paths?: string[]; accepted?: boolean }[];
   tache: Task | null;
   fichiers: string[];
+  /// The month's spending past an alert, said once in this thread (50 %, 80 %, the cap, or a projection past it).
+  spending_notice?: string | null;
 };
 
 export async function sendChat(backend: string, message: string): Promise<TurnResult> {
