@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un graphe cité lit les voisins de son propre gabarit.** Une citation `@graphs/…` se résout
+  près du graphe qui cite, et non plus près du manifeste : un graphe livré lit ses voisins livrés, un graphe local
+  les siens. Une mémoire dont les graphes viennent tous du binaire (`builtin:`) se charge sans copie locale et tient
+  une pose ; le 22 novembre, une copie datée avait cessé de se charger après une pose.
+
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
