@@ -1001,4 +1001,24 @@ PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
   && ok "un train B au créneau 2 : la voie des docs fermée, le lot de docs attend le pas suivant, A et B poussés" \
   || ko "docs avec un train B : poussé pendant la passe ? $([ -s "$D/dm-vu" ] && echo OUI || echo non) ; A $(on_master dm-a && echo poussé || echo non), B $(on_master dm-b && echo poussé || echo non)"
 rm -f "$D/pass-hook" "$D/dm-vu"; P dequeue dm-d > /dev/null 2>&1
+# 53. Two lots that each add a `#[path = "…"] mod x;` at the same place of a tests/*.rs (24 Nov. 2026, c7 after
+# mémoire: half a dozen reposes in a day, each lot with its own witness file): the repose merges them by union, sorted,
+# and both land in one train; the replay of the suite still judges.
+m0=$(master); seed=$(git -C "$D/author" show "$m0:extension/rag3weaver/tests/e2e_code.rs")
+h1=$(FROM=$m0 lot decl-a extension/rag3weaver/tests/e2e_code.rs "#[path = \"e2e/beta.rs\"]
+mod beta;
+$seed"); h2=$(FROM=$m0 lot decl-b extension/rag3weaver/tests/e2e_code.rs "/// The alpha witnesses.
+#[path = \"e2e/alpha.rs\"]
+mod alpha;
+$seed")
+printf 'VERT\nVERT\nVERT\n' >> "$D/outcomes"
+P enqueue decl-a decl-a "$h1" rust some_witness e2e_code - - author-a > /dev/null 2>&1
+P enqueue decl-b decl-b "$h2" rust some_witness e2e_code - - author-a > /dev/null 2>&1
+P step > /dev/null 2>&1; P step > /dev/null 2>&1
+f=$(git -C "$D/author" fetch -q origin && git -C "$D/author" show origin/master:extension/rag3weaver/tests/e2e_code.rs)
+a=$(printf '%s\n' "$f" | grep -n '^mod alpha;' | cut -d: -f1); b=$(printf '%s\n' "$f" | grep -n '^mod beta;' | cut -d: -f1)
+on_master decl-a && on_master decl-b && [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ] && printf '%s\n' "$f" | grep -q '^/// The alpha witnesses.$' \
+  && ok "deux déclarations de module au même endroit d'un tests/*.rs : union triée, les deux lots poussés" \
+  || ko "déclarations de tests : decl-a $(on_master decl-a && echo poussé || echo non), decl-b $(on_master decl-b && echo poussé || echo non), alpha ligne ${a:-absente}, beta ligne ${b:-absente}"
+P dequeue decl-a > /dev/null 2>&1; P dequeue decl-b > /dev/null 2>&1; : > "$D/outcomes"
 exit $red
