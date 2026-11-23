@@ -768,6 +768,14 @@ impl NodeFactory for SearchSourceNodeFactory {
             },
         };
         let mut node = SearchSourceNode::new(name, target_name, query, options);
+        if let Some(a) = config.get("author").and_then(|v| v.as_str()) {
+            node = node.with_author(a);
+        }
+        // `swarm` (23 November 2026): accepted before the swarms exist, it filters nothing yet; a value that is not a
+        // string is refused by name.
+        if let Some(sw) = config.get("swarm").filter(|v| !v.is_null() && !v.is_string()) {
+            return Err(format!("SearchSourceNode: swarm is a string (mine, a name, or *), not {sw}"));
+        }
         if let Some(m) = config.get("mode").and_then(|v| v.as_str()).filter(|m| !m.is_empty()) {
             node = node.with_mode(
                 crate::dataflow::generic_search_nodes::SearchMode::parse(m)
@@ -794,6 +802,24 @@ impl NodeFactory for SearchSourceNodeFactory {
                 PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![
+                ConfigParam {
+                    name: "author".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "Only what this author wrote: « me » (the agent the call is made for, given by the host), an agent key; empty or « * »: every author. Added to the caller's filter".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "swarm".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "Only this swarm: « mine », a name, or « * » / empty. Accepted before the swarms exist: it filters nothing yet".into(),
+                    choices: None,
+                    json_schema: None,
+                },
                 ConfigParam {
                     name: "default_filter".into(),
                     param_type: ConfigParamType::Json,
