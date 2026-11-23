@@ -37,6 +37,10 @@
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
+- 23 novembre 2026 — **Le terminal de l'agent reste « au travail » jusqu'à la fin du tour.** De ta demande jusqu'à la fin
+  du tour, l'animation de travail tourne et dit ce qui se passe : « le modèle réfléchit… (42 s) », puis « relecture
+  du tour… » pendant que l'hôte relit le travail. Plus d'invite au repos pendant un long appel au modèle. « Le modèle
+  répond » ne se dit plus avant que son texte arrive.
 - 23 novembre 2026 — **La réflexion de l'agent défile comme l'affichage d'une gare.** À côté de l'animation, elle glisse
   de droite à gauche, un mot à la fois, à vitesse de lecture, la suite entrant à droite ; sa fin se lit toujours.
   `--still` (ou `--steps`) garde la phrase fixe.
