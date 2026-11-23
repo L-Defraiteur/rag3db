@@ -12,6 +12,50 @@ use super::taches::Tache;
 use super::teammate::TeammateFiles;
 use super::DaemonHost;
 
+/// The commands of the turn that failed, kept beside the mailbox until the turn's facts say them (23 Nov 2026).
+fn echecs_du_tour(files: &TeammateFiles) -> std::path::PathBuf {
+    files.mailbox_path().with_file_name("turn-failures.txt")
+}
+
+/// A command of the turn that failed: not found, or ended in error (read from its result).
+pub(crate) fn note_turn_failure(files: &TeammateFiles, resultat: &str) {
+    let entree = if let Some(r) = resultat.split("commande introuvable : ").nth(1) {
+        format!("commande introuvable : {}", r.split([' ', '\n']).next().unwrap_or_default())
+    } else {
+        let mut lignes = resultat.lines();
+        let Some(tete) = lignes.find(|l| l.starts_with("### `")) else { return };
+        let Some(code) = lignes.next().and_then(|l| l.strip_prefix("code ")).and_then(|l| l.split(' ').next()) else { return };
+        if code == "0" {
+            return;
+        }
+        format!("{} (code {code})", tete.trim_start_matches("### ").trim())
+    };
+    use std::io::Write as _;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(echecs_du_tour(files)) {
+        let _ = writeln!(f, "{entree}");
+    }
+}
+
+/// The turn's failed commands, taken (the file is emptied).
+pub(crate) fn take_turn_failures(files: &TeammateFiles) -> Vec<String> {
+    let p = echecs_du_tour(files);
+    let v: Vec<String> = std::fs::read_to_string(&p).unwrap_or_default().lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
+    let _ = std::fs::remove_file(&p);
+    v
+}
+
+/// The turn's facts: the files changed, then the commands that failed.
+fn faits_du_tour(changes: &[String], echecs: &[String]) -> String {
+    let mut texte = match changes.len() {
+        0 => "aucun fichier modifié dans ce tour".to_string(),
+        n => format!("{n} fichier(s) modifié(s) dans ce tour : {}{}", changes.iter().take(12).cloned().collect::<Vec<_>>().join(", "), if n > 12 { format!(" (et {} autres)", n - 12) } else { String::new() }),
+    };
+    if !echecs.is_empty() {
+        texte.push_str(&format!(" ; {} commande(s) en échec : {}", echecs.len(), echecs.join(" ; ")));
+    }
+    texte
+}
+
 /// Past this many files, a turn is held and said rather than landed.
 const TOO_MANY_FILES: usize = 300;
 
@@ -90,11 +134,9 @@ impl DaemonHost {
         let mut tous: std::collections::BTreeSet<&String> = avant.keys().collect();
         tous.extend(apres.keys());
         let changes: Vec<String> = tous.into_iter().filter(|p| avant.get(*p) != apres.get(*p)).cloned().collect();
-        let texte = match changes.len() {
-            0 => "aucun fichier modifié dans ce tour".to_string(),
-            n => format!("{n} fichier(s) modifié(s) dans ce tour : {}{}", changes.iter().take(12).cloned().collect::<Vec<_>>().join(", "), if n > 12 { format!(" (et {} autres)", n - 12) } else { String::new() }),
-        };
-        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "copy": true })).ok()
+        let echecs = take_turn_failures(files);
+        let texte = faits_du_tour(&changes, &echecs);
+        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "failures": echecs, "copy": true })).ok()
     }
 
     /// The task's tree and its head, at a turn's start (for [`Self::say_turn_changes`]).
@@ -113,15 +155,9 @@ impl DaemonHost {
                 changes.push(f.to_string());
             }
         }
-        let texte = match changes.len() {
-            0 => "aucun fichier modifié dans ce tour".to_string(),
-            n => {
-                let montres: Vec<&str> = changes.iter().take(12).map(String::as_str).collect();
-                let reste = if n > 12 { format!(" (et {} autres)", n - 12) } else { String::new() };
-                format!("{n} fichier(s) modifié(s) dans ce tour : {}{reste}", montres.join(", "))
-            }
-        };
-        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes })).ok()
+        let echecs = take_turn_failures(files);
+        let texte = faits_du_tour(&changes, &echecs);
+        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes, "failures": echecs })).ok()
     }
 
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
