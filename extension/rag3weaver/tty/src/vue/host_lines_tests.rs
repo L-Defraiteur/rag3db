@@ -17,8 +17,11 @@ fn the_turn_changes_and_what_commands_produced_are_shown_without_steps() {
     // The host's other words stay muted.
     v.ligne_de_boite(&json!({ "id": "b/t:3", "from": "host", "kind": "report", "text": "tâche ouverte : x" }));
     let t = texts(&mut v);
-    assert!(t.contains("modifié(s) dans ce tour : a.py, b.py"), "{t}");
-    assert!(t.contains("hors du commit : __pycache__/"), "{t}");
+    // Since a trial on 23 Nov. (« trop de bruit »), the detail is read under Ctrl-O, not in the thread.
+    assert!(!t.contains("a.py") && !t.contains("__pycache__"), "{t}");
+    let n = v.openable_count();
+    let tout: String = (0..n).flat_map(|i| v.openable_lines(i)).map(|l| l.texte).collect::<Vec<_>>().join("\n");
+    assert!(tout.contains("a.py") && tout.contains("b.py") && tout.contains("__pycache__/"), "{tout}");
     assert!(!t.contains("tâche ouverte"), "{t}");
 }
 
