@@ -22,6 +22,33 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 impl DaemonHost {
+    /// The task's tree and its head, at a turn's start (for [`Self::say_turn_changes`]).
+    pub(crate) fn task_tree_head(&self, parent: &str, task: &str) -> Option<(std::path::PathBuf, String)> {
+        let t = self.tache(parent, task)?;
+        let w = t.workspace.as_ref().filter(|w| w.copie.is_none())?;
+        git(&w.racine, &["rev-parse", "HEAD"]).ok().map(|h| (w.racine.clone(), h))
+    }
+
+    /// **The facts of a turn** (c7, 23 Nov 2026, 01:50): what git sees changed in the task's tree since the turn's
+    /// start (committed or not, untracked included), or that nothing changed; written before the turn's end.
+    pub(crate) fn say_turn_changes(&self, files: &TeammateFiles, arbre: &Path, avant: &str) -> Option<serde_json::Value> {
+        let mut changes: Vec<String> = git(arbre, &["diff", "--name-only", avant]).ok()?.lines().map(str::to_string).collect();
+        for f in git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines() {
+            if !changes.iter().any(|c| c == f) {
+                changes.push(f.to_string());
+            }
+        }
+        let texte = match changes.len() {
+            0 => "aucun fichier modifié dans ce tour".to_string(),
+            n => {
+                let montres: Vec<&str> = changes.iter().take(12).map(String::as_str).collect();
+                let reste = if n > 12 { format!(" (et {} autres)", n - 12) } else { String::new() };
+                format!("{n} fichier(s) modifié(s) dans ce tour : {}{reste}", montres.join(", "))
+            }
+        };
+        files.append_with("host", "turn_changes", None, &texte, &json!({ "files": changes })).ok()
+    }
+
     /// After a step: land the task's new commits in the user's folder, or say why not (once per task head).
     pub(crate) fn land_the_turn(&self, t: &Tache, files: &TeammateFiles) {
         let Some(w) = t.workspace.as_ref().filter(|w| w.copie.is_none()) else { return };
