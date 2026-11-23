@@ -30,3 +30,16 @@ fn the_window_and_the_summarised_windows_are_said_when_known() {
     let l = vivante(&v);
     assert!(l.contains("contexte 10,1 k / 1 M · 6,2 k en cache · 3 fenêtres résumées"), "{l}");
 }
+
+/// **The conversation's total beside the active context** (23 Nov. 2026): the host's `conversation_tokens` when it
+/// gives them; otherwise the sum of the calls this session saw, said as the session's.
+#[test]
+fn the_total_is_the_hosts_or_said_as_the_sessions() {
+    let mut v = Vue::new(240, true);
+    v.trame(&ev(json!({ "kind": "LlmCall", "prompt_tokens": 10128, "cached_prompt_tokens": 6242, "cache_reported": true, "completion_tokens": 12, "finish": "ToolCall" })));
+    v.trame(&ev(json!({ "kind": "LlmCall", "prompt_tokens": 4200, "cached_prompt_tokens": 0, "cache_reported": false, "completion_tokens": 3, "finish": "ToolCall" })));
+    assert!(vivante(&v).contains("cumul de la séance 14,3 k dont 6,2 k en cache"), "{}", vivante(&v));
+    v.trame(&ev(json!({ "kind": "LlmCall", "prompt_tokens": 4300, "cached_prompt_tokens": 0, "cache_reported": false, "completion_tokens": 3, "finish": "ToolCall", "conversation_tokens": { "input": 140000, "output": 2100, "cached": 61000 } })));
+    let l = vivante(&v);
+    assert!(l.contains("cumul 142,1 k dont 61,0 k en cache") && !l.contains("séance"), "{l}");
+}
