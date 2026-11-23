@@ -8,6 +8,8 @@ Il sert ce que `rag3weaver-tty` lit (`/ide/etat`, `/ide/teammate`, `/ide/teammat
 
     faux_hote.py <port> <journal.jsonl> <daemon.json à écrire>
 
+Le port 0 en prend un libre ; `daemon.json` n'est écrit qu'une fois le port à l'écoute, avec l'adresse réelle.
+
 `POST /faux/marque {"texte": "…"}` publie tout de suite un token : sert à mesurer la latence
 d'affichage (le temps jusqu'à ce que le texte paraisse à l'écran).
 """
@@ -211,6 +213,12 @@ import os
 # Le pid écrit par le faux hôte lui-même : celui qui l'arrête vise ce processus, pas un lanceur.
 with open(os.path.join(os.path.dirname(DAEMON_JSON), "faux.pid"), "w") as f:
     f.write(str(os.getpid()))
-with open(DAEMON_JSON, "w") as f:
+# **Écouter avant de dire où** (étape tty du pousseur, 23 nov. 2026 : « Connection refused », le fichier était écrit
+# avant le port lié). Le port 0 en prend un libre ; l'adresse écrite est celle où il écoute, d'un seul coup (renommage).
+serveur = Serveur(("127.0.0.1", PORT), Gestion)
+PORT = serveur.server_address[1]
+provisoire = DAEMON_JSON + ".part"
+with open(provisoire, "w") as f:
     json.dump({"address": f"127.0.0.1:{PORT}", "pid": 0, "token": JETON, "build": "faux"}, f)
-Serveur(("127.0.0.1", PORT), Gestion).serve_forever()
+os.replace(provisoire, DAEMON_JSON)
+serveur.serve_forever()
