@@ -127,6 +127,10 @@
   migration, rejoué après un redémarrage de l'hôte, ré-indexe le texte rétabli : une ligne inconnue du cache de la
   session a son identifiant lu en base. Avant, elle était sautée sans un mot, et la recherche par mots rendait le
   texte défait.
+- 23 novembre 2026 — **Un backend occupé se dit transitoire.** Un appel refusé parce qu'une fermeture, une
+  réouverture ou une ouverture tient son backend (la maintenance nocturne du plein texte, par exemple) répond
+  `transient: true` : un client sait qu'il peut recommencer. Avant, le texte disait « recommencez » et le champ disait
+  le contraire.
 
 - 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
   nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres

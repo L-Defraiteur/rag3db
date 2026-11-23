@@ -1795,12 +1795,12 @@ impl DaemonHost {
                     let depuis = *hosted.opening.lock().unwrap_or_else(|p| p.into_inner());
                     return Err(match depuis {
                         Some(t) => format!(
-                            "{} {OPENING} {} s (son schéma et ses index se chargent) : cet appel n'a rien fait, recommencez dans un moment",
+                            "{} {OPENING} {} s (son schéma et ses index se chargent) : {SLOT_BUSY}",
                             hosted.manifest.display(),
                             t.elapsed().as_secs()
                         ),
                         None => format!(
-                            "{} : une fermeture ou une réouverture tient ce backend depuis plus de {} s : cet appel n'a rien fait, recommencez dans un moment",
+                            "{} : une fermeture ou une réouverture tient ce backend depuis plus de {} s : {SLOT_BUSY}",
                             hosted.manifest.display(),
                             SLOT_READ_WAIT.as_secs()
                         ),
@@ -3806,7 +3806,11 @@ fn op_response(result: Result<Value, String>) -> Value {
         Err(e) if e.starts_with("aucune session") || e.starts_with("session inconnue") => {
             json!({ "ok": false, "error": e, "unknownSession": true })
         }
-        Err(e) => json!({ "ok": false, "error": e, "transient": e.starts_with(REOPENED) }),
+        Err(e) => {
+            // A reopening crossed, or a slot held past its wait: nothing was done, the call may be made again.
+            let transient = e.starts_with(REOPENED) || e.ends_with(SLOT_BUSY);
+            json!({ "ok": false, "error": e, "transient": transient })
+        }
     }
 }
 
