@@ -4,6 +4,22 @@
   vectoriel par défaut : `search_turns` cherche par les mots et par le sens. `put_turn` garde l'id de la ligne de
   boîte dont vient le message (`line_id`), rendu par `list_turns` et `search_turns`.
 
+- 23 novembre 2026 — **« Mes tours » : une lecture filtre par son auteur.** `search_turns` prend `author` (« me »,
+  la clé d'un agent, ou « * ») et `swarm` (« mine », un nom, ou « * ») ; « me » est l'agent pour qui l'appel est fait,
+  donné par l'hôte et jamais par l'appelant. `swarm` est accepté avant que les swarms existent, et la réponse dit qu'il
+  n'a rien filtré. Un script de graphe qui déclare `caller` dans ses entrées reçoit la clé de cet agent.
+
+- 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
+  puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
+  fermer une étape n'est pas une réponse.
+- 23 novembre 2026 — **Une réponse vide du modèle dit pourquoi, et le travail reprend.** Quand le modèle rend un
+  appel sans texte ni outil, la boîte de l'agent le dit avec sa raison (« coupée à la limite de sortie », la fin
+  donnée par le fournisseur, les jetons de réflexion) et le pas suivant reprend, au lieu d'un pas fini en silence. Une
+  réponse coupée est relancée en disant d'écrire un grand fichier en plusieurs fois. Les faits du tour (fichiers
+  changés, commits) se disent aussi après une simple instruction.
+- 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
+  passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
+  modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
