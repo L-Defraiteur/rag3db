@@ -126,6 +126,11 @@ pub struct TeammatePolicy {
     /// muet ne suspend pas son superviseur pour toujours. Défaut : 1800.
     #[serde(default = "TeammatePolicy::mille_huit_cents")]
     pub reply_wait_s: u64,
+    /// **A path the user wrote is read without a card** (Lucie, 23 Nov 2026, ~21 h): a path outside the task's roots,
+    /// written in a human's request of the turn, is granted to the task's agent for reading for these minutes. 0 turns
+    /// it off. Default: 10.
+    #[serde(default = "TeammatePolicy::mentioned_path_grant_min_default")]
+    pub mentioned_path_grant_min: u64,
     /// **What bounds a step is its context** (S1, 18 Nov 2026): once the last model call of a
     /// step carried more tokens than this (prompt and completion, as the provider counts them),
     /// work tools are refused and the teammate is told to declare step_done. The steps of the
@@ -217,6 +222,9 @@ impl TeammatePolicy {
         include_str!("../templates/teammate/prompts/reply_first.md").trim().into()
     }
 
+    fn mentioned_path_grant_min_default() -> u64 {
+        10
+    }
     fn text_first_default() -> String {
         include_str!("../templates/teammate/prompts/text_first.md").trim().into()
     }
@@ -231,6 +239,7 @@ impl Default for TeammatePolicy {
             quota_wait_s: Self::soixante(),
             max_unavailable_steps: Self::dix(),
             reply_wait_s: Self::mille_huit_cents(),
+            mentioned_path_grant_min: Self::mentioned_path_grant_min_default(),
             step_context_tokens: Self::step_context_tokens_default(),
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
