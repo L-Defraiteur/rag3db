@@ -1585,6 +1585,9 @@ mod turn_calls_tests;
 /// The active context, said quietly (23 November 2026).
 #[cfg(test)]
 mod context_tests;
+/// By default the view shows what speaks to the user (23 November 2026).
+#[cfg(test)]
+mod quiet_tests;
 
 #[cfg(test)]
 mod tests {
