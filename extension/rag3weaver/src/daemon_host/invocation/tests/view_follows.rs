@@ -9,7 +9,7 @@ use super::*;
 /// under the view. The bound of 30 s only keeps it from hanging; the delays measured are printed, not judged.
 #[test]
 fn a_write_in_a_views_worktree_is_followed_by_a_kernel_event_and_seen_under_the_view() {
-    let v = une_vue_ouverte("delai");
+    let v = opened_view("delai");
     let (evenements, releves) = v.a.host.view_follower_rewrites(&v.couche).expect("the view does not follow its worktree");
     std::fs::write(v.chemin.join("src/lib.rs"), "pub fn un() -> u32 {\n    1\n}\n\npub fn vue_suivie_par_le_noyau() -> u32 {\n    2\n}\n").unwrap();
     let debut = std::time::Instant::now();
@@ -41,7 +41,7 @@ fn a_write_in_a_views_worktree_is_followed_by_a_kernel_event_and_seen_under_the_
 /// follower runs no `git status` — none, or one if the slow poll of 30 s falls in. A poll each second would run five.
 #[test]
 fn a_view_at_rest_runs_no_signature() {
-    let v = une_vue_ouverte("repos");
+    let v = opened_view("repos");
     let avant = v.a.host.view_follower_turns(&v.couche).expect("the view does not follow its worktree");
     std::thread::sleep(std::time::Duration::from_secs(5));
     let tours = v.a.host.view_follower_turns(&v.couche).unwrap() - avant;
@@ -55,7 +55,7 @@ fn a_view_at_rest_runs_no_signature() {
 #[test]
 fn a_write_the_moment_the_view_is_written_is_seen_by_a_kernel_event() {
     let mut porte = None;
-    let v = une_vue_ouverte_avec("guet", |h| porte = Some(h.retenir_le_guet_des_vues()));
+    let v = opened_view_with("guet", |h| porte = Some(h.hold_view_watch_window()));
     let (evenements, releves) = v.a.host.view_follower_rewrites(&v.couche).expect("the view does not follow its worktree");
     std::fs::write(v.chemin.join("src/lib.rs"), "pub fn un() -> u32 {\n    1\n}\n\npub fn ecrite_dans_la_fenetre() -> u32 {\n    3\n}\n").unwrap();
     porte.expect("the gate").relacher();

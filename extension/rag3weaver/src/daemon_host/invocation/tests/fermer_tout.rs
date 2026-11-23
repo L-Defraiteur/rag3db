@@ -14,7 +14,7 @@ fn branche_locale(depot: &std::path::Path, name: &str) -> String {
 /// shares it, the fork's layer `fourche:<commit>`, which `views` no longer lists.
 #[test]
 fn close_view_leaves_neither_the_branch_nor_the_fork() {
-    let v = une_vue_ouverte("fermer");
+    let v = opened_view("fermer");
     // The main repository: `<d>/B/rag3db-essai`, the view's worktree being `<d>/e/git_workspaces/arbre/<date>-<lot>`.
     let depot = v.chemin.ancestors().nth(4).unwrap().join("B/rag3db-essai");
     let branche = String::from_utf8_lossy(

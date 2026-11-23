@@ -9,7 +9,7 @@ use super::*;
 /// the view only.
 #[test]
 fn run_command_under_an_opened_view_runs_in_the_views_worktree() {
-    let v = une_vue_ouverte("commande");
+    let v = opened_view("commande");
     std::fs::write(v.chemin.join("src/lib.rs"), "pub fn seulement_dans_la_vue() -> u32 {\n    7\n}\n").unwrap();
     let r = v.a.host.call(Some(&v.s), &v.manifeste, "run_command", json!({"command": "cat src/lib.rs"}));
     assert_eq!(r["ok"], json!(true), "run_command under the opened view: {r}");
