@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 
 /// The paths read by call: an answer cites rarely more.
+#[cfg(feature = "code")]
 const PATHS_MAX: usize = 64;
 
 impl super::DaemonHost {
@@ -20,19 +21,31 @@ impl super::DaemonHost {
         let Some(b) = slot.as_ref() else {
             return without("le dépôt n'est pas ouvert dans l'hôte : les liens viendront quand il le sera");
         };
-        let Some(source) = b.file_source() else {
-            return without("ce dépôt ne sert pas de fichiers");
-        };
-        let mut found = serde_json::Map::new();
-        for p in paths.iter().take(PATHS_MAX) {
-            let path = p.trim().trim_start_matches("./");
-            if path.is_empty() || path.contains("..") || found.contains_key(p) {
-                continue;
-            }
-            if matches!(source.read(path), Ok(Some(_))) {
-                found.insert(p.clone(), json!(true));
-            }
-        }
-        Ok(json!({ "paths": found }))
+        found_paths(b, paths)
     }
+}
+
+/// The paths that exist in the files the repository's tools read.
+#[cfg(feature = "code")]
+fn found_paths(b: &crate::backend::Backend, paths: &[String]) -> Result<Value, String> {
+    let Some(source) = b.file_source() else {
+        return Ok(json!({ "paths": {}, "why": "ce dépôt ne sert pas de fichiers" }));
+    };
+    let mut found = serde_json::Map::new();
+    for p in paths.iter().take(PATHS_MAX) {
+        let path = p.trim().trim_start_matches("./");
+        if path.is_empty() || path.contains("..") || found.contains_key(p) {
+            continue;
+        }
+        if matches!(source.read(path), Ok(Some(_))) {
+            found.insert(p.clone(), json!(true));
+        }
+    }
+    Ok(json!({ "paths": found }))
+}
+
+/// Without the code feature, no tool reads the repository's files: nothing is linked.
+#[cfg(not(feature = "code"))]
+fn found_paths(_: &crate::backend::Backend, _: &[String]) -> Result<Value, String> {
+    Ok(json!({ "paths": {}, "why": "sans la feature code, aucun outil ne lit les fichiers du dépôt" }))
 }

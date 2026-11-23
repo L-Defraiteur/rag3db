@@ -4454,6 +4454,7 @@ fn nodes_signature(dir: &Path) -> Vec<(String, u64, u128)> {
 
 impl Backend {
     /// The files the tools read (`read_file`, `grep_files`): the chat checks a cited path against it before it links it.
+    #[cfg(feature = "code")]
     pub(crate) fn file_source(&self) -> Option<Arc<dyn crate::code_tools::FileSource>> {
         self.file_source.clone()
     }
