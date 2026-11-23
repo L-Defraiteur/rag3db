@@ -1,5 +1,35 @@
 # Nouveautés
 
+- 23 novembre 2026 — **L'agent de code va au bout, sans carte, et son travail arrive dans ton dossier.** Ce qui
+  s'est posé cette nuit, en un paragraphe :
+  - **un projet neuf travaille en mode auto** dès sa première demande, et le niveau de la porte se choisit au
+    lancement (`bac`, `judge`, `cards`, `bac` par défaut au terminal) : à `bac`, toute commande que le bac lance passe ;
+    un chemin hors du projet est refusé par une phrase à l'agent (« hors de ton projet »), sans carte ; écrire un
+    fichier par les outils de code ne demande jamais d'accord, à aucun niveau ;
+  - **le travail arrive dans ton dossier à chaque tour** : l'hôte commite lui-même ce que l'agent a écrit et ce qu'il
+    a changé dans les fichiers suivis (signé `rag3weaver`, jamais l'identité du poste), puis l'amène en avance rapide ;
+    ce que des commandes ont produit (`node_modules`, `dist`) n'est pas ajouté d'office et c'est dit ; un tour de plus
+    de 300 fichiers n'atterrit pas en silence ; un dossier **sans git** reçoit aussi le travail, recopié, sans écraser
+    un fichier que tu as changé entre-temps ; un dossier vide reçoit son premier commit à l'ouverture ;
+  - **chaque tour dit ses faits** : les fichiers modifiés (ou « aucun fichier modifié dans ce tour ») et les commandes
+    en échec, d'après git, à côté de ce que l'agent affirme ;
+  - **l'agent se souvient de la conversation** : un tour reçoit les tours d'avant (les huit derniers en entier) ;
+  - **une commande manquante se dit** (« commande introuvable : pytest … installe-la dans l'environnement du projet,
+    puis relance »), une ligne de shell complète passe à `bac` (redirection, joker), les commandes trouvent ce que ton
+    terminal trouve (le `PATH` du shell de connexion), et un serveur lancé en fond ne bloque plus la commande
+    suivante ; il s'arrête avec sa tâche.
+- 23 novembre 2026 — **Une session d'indexation abandonnée ne bloque plus le dépôt.** Une synchronisation dont le
+  processus est mort (un index échoué, un hôte relancé) est reprise d'office à l'ouverture suivante, et c'est dit ;
+  une recherche sur un index resté incomplet le dit en tête de sa réponse.
+- 22 novembre 2026 — **Seul un oui humain accorde, et l'entrée humaine tient en un geste.** Une carte n'est accordée
+  que par un oui signé de l'utilisatrice ; un oui d'agent est gardé mais n'accorde pas. `rag3weaver-backend ide --open`
+  ouvre l'IDE déjà reconnu, l'entrée « rag3weaver » du menu fait de même, et la reconnaissance dure un an dans le
+  navigateur ; le terminal porte le titre de ce que tu tapes.
+- 23 novembre 2026 — **L'hôte sert la barre des agents.** `/ide/agents` donne pour chaque agent son état, sa dernière
+  activité, l'étape de son plan, le dernier message de chaque contact et ses agents fermés ; un agent fermé se rouvre
+  avec sa conversation, un agent se duplique sur une branche neuve, et un message entre agents est un événement du
+  flux de l'IDE. L'affichage de la barre vient avec les lots de l'IDE.
+
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
   l'aperçu dit « Ctrl-O pour tout voir », et la visionneuse « appel 2 sur 5 ».
