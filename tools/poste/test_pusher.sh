@@ -924,4 +924,26 @@ grep -q "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" && ! on_master t2ub && on_
   && ok "train de deux rouge : le second rendu seul au pas suivant, B rejoué et poussé, jamais rendu" \
   || ko "train de deux rouge, suite : $(for x in ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" 2>/dev/null | cut -f2 | paste -sd,)"
 : > "$D/outcomes"; rm -f "$D"/outcomes.d/t2u*
+# 51. A commit message says the fact, never a session nor an AI tool (23 Nov. 2026, c7 by Lucie's rule: 204 messages of
+# 1 272 named sessions, two named an AI tool). At the deposit: a warning until PUSHER_COMMIT_NAMES_REFUSE_FROM (the 24th),
+# a refusal from then on. A clean message is said nothing.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B cn-1 origin/master
+echo cn1 > "$D/author/tools/poste/cn1.txt"; git -C "$D/author" add -A && git -C "$D/author" commit -qm "fix(poste): a thing done (asked by c7, guet de G)"
+git -C "$D/author" push -q origin HEAD:cn-1; h=$(git -C "$D/author" rev-parse HEAD)
+out=$(PUSHER_COMMIT_NAMES_REFUSE_FROM=2099-01-01 P enqueue cn-1 cn-1 "$h" scripts - - - - author-n 2>&1); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'nom de session' && echo "$out" | tail -1 | grep -q '^déposé : cn-1' \
+  && grep -q "^avertissement	cn-1	.*nom de session" "$D/pusher/inbox/author-n.txt" 2>/dev/null \
+  && ok "message de commit qui nomme une session : déposé, l'auteur averti (sortie, boîte)" \
+  || ko "message qui nomme une session, avant le refus : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-200)"
+P dequeue cn-1 > /dev/null 2>&1
+out=$(PUSHER_COMMIT_NAMES_REFUSE_FROM=2000-01-01 P enqueue cn-1 cn-1 "$h" scripts - - - - author-n 2>&1); rc=$?
+[ $rc != 0 ] && echo "$out" | grep -q 'nom de session' && ! grep -q "^cn-1	" "$D/pusher/queue.tsv" \
+  && ok "message de commit qui nomme une session, après la date : refusé, dit" \
+  || ko "message qui nomme une session, après la date : rc $rc, en file ? $(grep -c "^cn-1	" "$D/pusher/queue.tsv")"
+git -C "$D/author" checkout -q -B cn-2 origin/master
+echo cn2 > "$D/author/tools/poste/cn2.txt"; git -C "$D/author" add -A && git -C "$D/author" commit -qm "fix(poste): the queue keeps its order under the lock"
+git -C "$D/author" push -q origin HEAD:cn-2; h=$(git -C "$D/author" rev-parse HEAD)
+out=$(PUSHER_COMMIT_NAMES_REFUSE_FROM=2000-01-01 P enqueue cn-2 cn-2 "$h" scripts - - - - author-n 2>&1); rc=$?
+[ $rc = 0 ] && ! echo "$out" | grep -q 'nom de session' && ok "message de commit propre : rien de dit, déposé" || ko "message propre : rc $rc ; $(echo "$out" | tr '\n' ' ' | cut -c1-160)"
+P dequeue cn-2 > /dev/null 2>&1
 exit $red
