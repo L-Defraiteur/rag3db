@@ -347,6 +347,9 @@ pub struct DaemonHost {
     /// The witnesses' count of the index parts the state read.
     #[cfg(test)]
     lectures_d_index: std::sync::atomic::AtomicU64,
+    /// The same reads, by backend's manifest: two reads at once may both read a backend whose part was forgotten.
+    #[cfg(test)]
+    lectures_par_manifeste: Mutex<std::collections::HashMap<String, u64>>,
     /// The witnesses' index part, in place of the backend's.
     #[cfg(test)]
     index_force: Mutex<Option<Value>>,
@@ -654,6 +657,8 @@ impl DaemonHost {
             etat_lent_ms: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             lectures_d_index: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            lectures_par_manifeste: Mutex::new(Default::default()),
             #[cfg(test)]
             index_force: Mutex::new(None),
             etats_d_index,
@@ -3063,6 +3068,10 @@ impl DaemonHost {
                                 None => {
                                     #[cfg(test)]
                                     self.lectures_d_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                    #[cfg(test)]
+                                    {
+                                        *self.lectures_par_manifeste.lock().unwrap_or_else(|p| p.into_inner()).entry(cle.clone()).or_default() += 1;
+                                    }
                                     let index = b.index_states().unwrap_or_else(|e| json!({ "error": e }));
                                     #[cfg(test)]
                                     let index = self.index_force.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or(index);
