@@ -145,6 +145,8 @@ fn background_commands_are_bounded_in_number_and_time() {
     while told.lock().unwrap().is_none() {
         for l in files.mailbox() {
             if l["kind"] == "approval" && answered.insert(l["id"].as_str().unwrap_or_default().to_string()) {
+                // A loaded machine, made deterministic: the yes comes 4 s late (the first command's own time is 3 s).
+                std::thread::sleep(Duration::from_secs(4));
                 host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("le oui");
             }
         }
