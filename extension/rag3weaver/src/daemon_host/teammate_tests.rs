@@ -50,6 +50,7 @@ mod run_du_pas;
 mod silent_turn;
 mod silent_turn_channel;
 mod stop_stops;
+mod text_first;
 mod turn_changes;
 mod turn_failures;
 mod web;
