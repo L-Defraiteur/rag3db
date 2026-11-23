@@ -1394,6 +1394,9 @@ mod host_lines_tests;
 /// The model's thinking glimpsed in the animation (23 November 2026).
 #[cfg(test)]
 mod thinking_tests;
+/// A stopped turn says so (23 November 2026).
+#[cfg(test)]
+mod stopped_tests;
 
 #[cfg(test)]
 mod tests {
