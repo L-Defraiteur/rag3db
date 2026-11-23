@@ -15,7 +15,9 @@ fn the_caller_of_the_first_result_comes_up_in_the_first_five() {
             json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
     });
     drop(p);
-    std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+    // The shipped graph does not hop (`from=0`): the witness turns it on in its own copy.
+    let graph = std::fs::read_to_string(tools.join("search_workspace.mmd")).unwrap().replace("CallersHopNode(from=0,", "CallersHopNode(from=3,");
+    std::fs::write(dir.path().join("search_workspace.mmd"), graph).unwrap();
     let store = "/// Flush the full-text buffer: save the pending fts writes to the file, then sync the file.\n\
                  pub fn flush_blob_store(path: &str) -> std::io::Result<()> {\n    let _ = path;\n    Ok(())\n}\n\n\
                  pub fn commit_lot_after_native(lot: u64) -> Result<(), String> {\n    let _ = lot;\n    \
@@ -56,7 +58,9 @@ fn an_excluded_caller_does_not_come_back_by_the_hop() {
             json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
     });
     drop(p);
-    std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+    // The shipped graph does not hop (`from=0`): the witness turns it on in its own copy.
+    let graph = std::fs::read_to_string(tools.join("search_workspace.mmd")).unwrap().replace("CallersHopNode(from=0,", "CallersHopNode(from=3,");
+    std::fs::write(dir.path().join("search_workspace.mmd"), graph).unwrap();
     let store = "/// Flush the full-text buffer: save the pending fts writes to the file, then sync the file.\n\
                  pub fn flush_blob_store(path: &str) -> std::io::Result<()> {\n    let _ = path;\n    Ok(())\n}\n\n";
     let lot = "pub fn commit_lot_after_native(lot: u64) -> Result<(), String> {\n    let _ = lot;\n    \
