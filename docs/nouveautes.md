@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Une réponse vide du modèle dit pourquoi, et le travail reprend.** Quand le modèle rend un
+  appel sans texte ni outil, la boîte de l'agent le dit avec sa raison (« coupée à la limite de sortie », la fin
+  donnée par le fournisseur, les jetons de réflexion) et le pas suivant reprend, au lieu d'un pas fini en silence. Une
+  réponse coupée est relancée en disant d'écrire un grand fichier en plusieurs fois. Les faits du tour (fichiers
+  changés, commits) se disent aussi après une simple instruction.
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
