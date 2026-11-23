@@ -49,6 +49,10 @@ mod author;
 #[path = "e2e_archiviste/b4_decide.rs"]
 mod b4_decide;
 
+/// The recall of the cards filters by its author, « me » being the agent that calls (23 Nov. 2026): in a file of its own.
+#[path = "e2e_archiviste/cards_author.rs"]
+mod cards_author;
+
 /// 5.2, une proposition de gabarit vérifiée sur une copie : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
 #[path = "e2e_archiviste/check_proposal.rs"]
 mod check_proposal;
