@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 23 novembre 2026 — **La ligne d'état du terminal dit où en est le tour.** Pendant qu'un outil tourne, elle dit
+  l'outil, sa cible et « appel 2 du tour » ; texte et outils gardent leur ordre dans le fil, avec ou sans `--steps`.
 - 23 novembre 2026 — **Le texte de l'agent ne se coupe plus en deux dans le terminal.** À la fin d'un tour, la vue garde
   son texte ouvert jusqu'à un court silence : un dernier mot arrivé après la fin du run continue le même paragraphe.
 - 23 novembre 2026 — **Le terminal de l'agent ne montre plus que ce qui te parle.** Par défaut, le texte de l'agent

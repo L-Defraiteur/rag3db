@@ -1370,6 +1370,15 @@ impl Vue {
             (Some(c), false) => format!("{c} · {}", self.entete),
             (None, _) => self.entete.clone(),
         };
+        // While a tool runs, the turn's count, in words, in the muted part that the animation does not redraw
+        // (23 Nov. 2026): never a bare number beside a command.
+        let avec_contexte = match &self.etat {
+            Etat::Agit(o) if !matches!(o.as_str(), "step_done" | "report" | "edit_plan") => {
+                let compte = format!("appel {} du tour", self.calls_this_turn.max(1));
+                if avec_contexte.is_empty() { compte } else { format!("{compte} · {avec_contexte}") }
+            }
+            _ => avec_contexte,
+        };
         let droite = if occupe + 2 + colonnes(&avec_contexte) <= largeur { avec_contexte } else { self.entete.clone() };
         let entete = colonnes(&droite);
         if !droite.is_empty() && occupe + 2 + entete <= largeur {
@@ -2333,7 +2342,8 @@ mod tests {
         assert!(a(&v, 12).ends_with(" le modèle répond… (12 s)"), "{}", a(&v, 12));
         v.trame(&json!({ "evenement": { "kind": "LlmCall", "model": "google/gemini-3.8-flash", "ms": 2457 } }));
         v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "run_command", "arguments": "{\"command\":\"cargo check\"}" } }));
-        assert!(a(&v, 40).ends_with(" run_command cargo check travaille… (40 s)"), "{}", a(&v, 40));
+        // The turn's count sits at the right, muted (23 Nov. 2026).
+        assert!(a(&v, 40).contains(" run_command cargo check travaille… (40 s)") && a(&v, 40).ends_with("appel 1 du tour"), "{}", a(&v, 40));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "run_command", "ok": true, "ms": 40_000 } }));
         assert!(a(&v, 3).ends_with(" le modèle répond… (gemini-3.8-flash, 3 s)"), "{}", a(&v, 3));
     }
