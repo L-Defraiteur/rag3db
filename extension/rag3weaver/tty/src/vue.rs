@@ -1315,6 +1315,9 @@ mod ctrl_c_tests;
 /// What changed is read in the view as in `--plain` (23 November 2026).
 #[cfg(test)]
 mod host_lines_tests;
+/// The model's thinking glimpsed in the animation (23 November 2026).
+#[cfg(test)]
+mod thinking_tests;
 
 #[cfg(test)]
 mod tests {
