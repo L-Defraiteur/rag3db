@@ -180,13 +180,13 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                 ])),
                 (4, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "titre", "succeeded": true, "done": "titre posé", "remaining": "" }))])),
                 (5, 0) => answer(turns, opts, sink, "", calls(&[("edit_file", edit("CONTRIBUTING.md", "# Contribuer\n"))])),
-                (5, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "contrib", "succeeded": true, "done": "CONTRIBUTING écrit", "remaining": "" }))])),
+                (5, _) => answer(turns, opts, sink, "Le CONTRIBUTING est écrit.", calls(&[("step_done", json!({ "item": "contrib", "succeeded": true, "done": "CONTRIBUTING écrit", "remaining": "" }))])),
                 // Pas 6 : plus rien : compte rendu, clôture, step_done.
                 (6, 0) => answer(turns, opts, sink, "", calls(&[
                     ("report", json!({ "text": "La doc est écrite : README (titre validé), CHANGELOG." })),
                     ("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "les trois éléments sont faits", "concepts": ["documentation"] } })),
                 ])),
-                (6, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "compte rendu", "remaining": "" }))])),
+                (6, _) => answer(turns, opts, sink, "La doc est écrite.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "compte rendu", "remaining": "" }))])),
                 _ => answer(turns, opts, sink, "Je n'ai plus rien à faire.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "", "remaining": "" }))])),
             }
         })))
@@ -300,13 +300,13 @@ fn small_then_long(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatM
                 // Pas 2 : la frontière demande une décision : pause, puis le petit plan du div.
                 (true, 2, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "pause": { "reason": "le superviseur demande le div d'abord" }, "plan": {
                     "request": "Centrer le div", "proposal": "une règle CSS", "items": [{ "id": "div", "text": "centrer", "status": "todo" }] } }))])),
-                (true, 2, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "div", "succeeded": true, "done": "centré", "remaining": "" }))])),
+                (true, 2, _) => answer(turns, opts, sink, "Le div est centré.", calls(&[("step_done", json!({ "item": "div", "succeeded": true, "done": "centré", "remaining": "" }))])),
                 // Pas 3 : le plan 2 n'a plus rien ; la frontière liste le plan 1 en pause :
                 // on clôt le 2 et on reprend le 1.
                 (true, 3, 0) => answer(turns, opts, sink, "", calls(&[("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "centré" }, "resume": 1 }))])),
-                (true, 3, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "contrib", "succeeded": true, "done": "CONTRIBUTING écrit (plan repris)", "remaining": "" }))])),
+                (true, 3, _) => answer(turns, opts, sink, "Le CONTRIBUTING est écrit.", calls(&[("step_done", json!({ "item": "contrib", "succeeded": true, "done": "CONTRIBUTING écrit (plan repris)", "remaining": "" }))])),
                 (true, _, 0) => answer(turns, opts, sink, "", calls(&[("report", json!({ "text": "Tout est fait." })), ("edit_plan", json!({ "close": { "outcome": "accomplished", "reason": "fait" } }))])),
-                _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "", "remaining": "" }))])),
+                _ => answer(turns, opts, sink, "Tout est fait.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "", "remaining": "" }))])),
             }
         })))
     })
@@ -3047,7 +3047,8 @@ fn a_fix_ends_only_through_its_verification_gate() {
                     if ecrit && n == 2 {
                         return answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "FAIT.md", "content": "fait\n" }))]));
                     }
-                    answer(turns, opts, sink, "", calls(&[fini]))
+                    // A closing step_done says its word (23 Nov 2026: the reply after the last tool).
+                    answer(turns, opts, sink, "C'est corrigé.", calls(&[fini]))
                 })))
             })
         };
