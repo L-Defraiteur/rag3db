@@ -7,12 +7,14 @@
 %% param: status string = "" -- Only this status (ok, error, refused, interrupted); empty: all.
 %% param: since string = "" -- Only the messages said at or after this time, ISO 8601 (compared on `at`); empty: no bound.
 %% param: until string = "" -- Only the messages said at or before this time, ISO 8601; empty: no bound.
+%% param: author string = "" -- Only the turns of this author: « me » (the agent this call is made for, given by the host), an agent key, or « * » / empty for every author.
+%% param: swarm string = "" -- Only the turns of this swarm: « mine », a name, or « * » / empty for every swarm. Accepted before the swarms exist: it filters nothing, and the answer says swarm null.
 %% param: options json = {"limit": 20} -- The options of the search (limit, consistency…); the filters above are added to it.
 %% result: found.result
 
 graph LR
-    where["RhaiNode(script_id=turns_where, inputs='query,options,run,role,tool_name,status,since,until', query=$query, options=$options, run=$run, role=$role, tool_name=$tool_name, status=$status, since=$since, until=$until)"]
+    where["RhaiNode(script_id=turns_where, inputs='query,options,run,role,tool_name,status,since,until,author,caller', author=$author, query=$query, options=$options, run=$run, role=$role, tool_name=$tool_name, status=$status, since=$since, until=$until)"]
     search["ForEachNode(graph='@graphs/turns_search.mmd')"]
-    found["RhaiNode(script_id=turns_found)"]
+    found["RhaiNode(script_id=turns_found, inputs='swarm', swarm=$swarm)"]
     where -->|result:elements| search
     search -->|list:value| found
