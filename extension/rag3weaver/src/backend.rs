@@ -89,6 +89,11 @@ pub struct TeammatePolicy {
     /// once, their default time and the time they may not pass.
     #[serde(default)]
     pub background: BackgroundPolicy,
+    /// **A step's output limit** (Lucie, 23 Nov 2026: the chat's 4 096, thinking included on Vertex, gave empty
+    /// replies; « il faut au moins 40 000 »): 16 384 by default, 40 000 in the code template; capped by the model's
+    /// declared maximum.
+    #[serde(default = "TeammatePolicy::max_output_tokens_default")]
+    pub max_output_tokens: usize,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -183,6 +188,9 @@ impl TeammatePolicy {
     fn verify_relaunches_default() -> usize {
         2
     }
+    fn max_output_tokens_default() -> usize {
+        16_384
+    }
     fn cut_relaunch_text_default() -> String {
         "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
     }
@@ -213,6 +221,7 @@ impl Default for TeammatePolicy {
             web_search: WebSearchPolicy::default(),
             browser: None,
             background: BackgroundPolicy::default(),
+            max_output_tokens: Self::max_output_tokens_default(),
         }
     }
 }
