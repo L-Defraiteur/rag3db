@@ -230,8 +230,18 @@ pub enum Event {
         /// The output limit and the thinking effort sent.
         max_tokens: usize,
         reasoning: Option<String>,
-        /// No text and no tool call: an empty reply.
-        empty: bool,
+        /// **An empty reply** (no text and no tool call) says why and whether it is relaunched: `{reason, relaunch}`;
+        /// null otherwise (23 Nov 2026, the views say it once, from here).
+        empty: Option<Value>,
+        /// The model's context window, in tokens, as its adapter declares it; `None` when it declares none.
+        context_window: Option<usize>,
+        /// The tokens counted since the conversation began, this call included.
+        conversation_tokens: ConversationTokens,
+        /// The tokens counted since the conversation's last reduction of its context (or its beginning): what the
+        /// views show beside the context.
+        since_reduction: ConversationTokens,
+        /// The windows the fallow summarised in the context of this call.
+        folded_windows: usize,
     },
     /// Un appel d'outil, avant exécution — les arguments **exacts**.
     ToolCallStarted {
@@ -625,6 +635,22 @@ pub fn maintenant_ms() -> u64 {
 /// chaque événement.
 pub type CatalogEvent = Event;
 
+/// **Tokens counted over a conversation**: sent (`input`, the cached part included), received (`output`), and the
+/// cached part of what was sent (23 Nov 2026).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ConversationTokens {
+    pub input: usize,
+    pub output: usize,
+    pub cached: usize,
+}
+
+impl ConversationTokens {
+    /// These tokens and one call's.
+    pub fn plus(self, usage: &crate::llm::Usage) -> Self {
+        Self { input: self.input + usage.prompt_tokens, output: self.output + usage.completion_tokens, cached: self.cached + usage.cached_prompt_tokens }
+    }
+}
+
 /// One scheduled retry of a model call, as kept in [`Event::LlmCall`].
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RetryRecord {
@@ -758,8 +784,9 @@ impl Event {
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
                 "kept": kept, "dropped": dropped,
             }),
-            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, cache_reported, completion_tokens, ms, retries, retry_log, finish, tool_calls, provider_finish, reasoning_tokens, max_tokens, reasoning, empty } => json!({
+            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, cache_reported, completion_tokens, ms, retries, retry_log, finish, tool_calls, provider_finish, reasoning_tokens, max_tokens, reasoning, empty, context_window, conversation_tokens, since_reduction, folded_windows } => json!({
                 "provider_finish": provider_finish, "reasoning_tokens": reasoning_tokens, "max_tokens": max_tokens, "reasoning": reasoning, "empty": empty,
+                "context_window": context_window, "conversation_tokens": conversation_tokens, "since_reduction": since_reduction, "folded_windows": folded_windows,
                 "kind": "LlmCall", "run": run, "agent": agent, "model": model, "iteration": iteration,
                 "prompt_tokens": prompt_tokens, "cached_prompt_tokens": cached_prompt_tokens, "cache_reported": cache_reported,
                 "completion_tokens": completion_tokens,
@@ -1220,7 +1247,7 @@ mod tests {
         let bus = EventBus::new(2);
         let cursor = bus.cursor(topic::AGENT, "trace");
         for i in 0..5 {
-            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: false });
+            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0 });
         }
         // Le même curseur, retrouvé par son nom — pas un nouveau récepteur.
         let same = bus.cursor(topic::AGENT, "trace");
@@ -1268,7 +1295,7 @@ mod tests {
         let mut own = a.subscribe(&run_topic("r1"));
 
         b.emit(Event::EntitiesStored { count: 7 });
-        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: false });
+        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0, provider_finish: None, reasoning_tokens: 0, max_tokens: 0, reasoning: None, empty: None, context_window: None, conversation_tokens: Default::default(), since_reduction: Default::default(), folded_windows: 0 });
         b.send_message("r1", "spy", "r1", "coucou");
 
         for rx in &mut heard_by_a {

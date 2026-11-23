@@ -712,6 +712,8 @@ pub struct AgentRun {
     pub stop: StopReason,
     /// **Why the last model call answered nothing** (no text, no tool call), if it did not (23 Nov 2026).
     pub empty_reply: Option<String>,
+    /// The conversation's tokens after this run: the base it was given and its calls (23 Nov 2026).
+    pub conversation_tokens: crate::events::ConversationTokens,
 }
 
 /// Le dernier appel au modèle d'un run ([`AgentRun::last_call`]).
@@ -828,6 +830,8 @@ pub trait CompletionCheck: Sync {
 }
 
 pub struct Agent<'a> {
+    /// The conversation's tokens before this run ([`Agent::with_conversation_tokens`]).
+    conversation_tokens: crate::events::ConversationTokens,
     completion: Option<&'a dyn CompletionCheck>,
     llm: &'a dyn Llm,
     tools: &'a (dyn ToolBox + Sync),
@@ -927,6 +931,7 @@ impl<'a> Agent<'a> {
             limits: AgentLimits::default(),
             events: None,
             name: "agent".to_string(),
+            conversation_tokens: Default::default(),
             run_id: None,
             stopped_by: None,
             inbox: false,
@@ -1209,6 +1214,12 @@ impl<'a> Agent<'a> {
 
     /// L'identifiant du run — son adresse sur le bus (`run.<id>`,
     /// `run.<id>.inbox`). Généré (`agent-…`) si absent.
+    /// **The conversation's tokens before this run** (23 Nov 2026): each model call says them, its own added.
+    pub fn with_conversation_tokens(mut self, tokens: crate::events::ConversationTokens) -> Self {
+        self.conversation_tokens = tokens;
+        self
+    }
+
     pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
         self.run_id = Some(run_id.into());
         self
@@ -1664,6 +1675,7 @@ impl<'a> Agent<'a> {
             last_call: None,
             stop: StopReason::MaxIterations,
             empty_reply: None,
+            conversation_tokens: self.conversation_tokens,
         };
         // La dernière erreur observée, `(outil, contenu)`. Remise à zéro par
         // le moindre succès : un résultat utile entre deux échecs, c'est un
@@ -1880,6 +1892,20 @@ impl<'a> Agent<'a> {
             });
             last_finish = finish.clone();
             let model = self.llm.name().to_string();
+            run.conversation_tokens = run.conversation_tokens.plus(&usage);
+            // **An empty reply says why** (23 Nov 2026), once, in words the views show as they are; the run's caller
+            // keeps it too (the teammate's host line).
+            let empty_reason = (text.is_empty() && finish.tool_calls.is_empty()).then(|| match &finish.reason {
+                FinishReason::MaxTokens if usage.reasoning_tokens > 0 => format!(
+                    "la réflexion a rempli tout le budget de sortie : coupée à la limite de sortie ({} jetons de réflexion, max_tokens={})",
+                    usage.reasoning_tokens, opts.max_tokens
+                ),
+                FinishReason::MaxTokens => format!("le budget de sortie est épuisé : coupée à la limite de sortie (MaxTokens, max_tokens={})", opts.max_tokens),
+                r => match usage.provider_finish {
+                    Some(p) => format!("le modèle a fini sans rien dire (fin du fournisseur « {p} »)"),
+                    None => format!("le modèle a fini sans rien dire ({r:?})"),
+                },
+            });
             self.emit(crate::events::CatalogEvent::LlmCall {
                 run: run_id.to_string(),
                 agent: self.name.clone(),
@@ -1898,20 +1924,18 @@ impl<'a> Agent<'a> {
                 reasoning_tokens: usage.reasoning_tokens,
                 max_tokens: opts.max_tokens,
                 reasoning: opts.reasoning.map(|r| format!("{r:?}")),
-                empty: text.is_empty() && finish.tool_calls.is_empty(),
+                empty: empty_reason.as_ref().map(|r| serde_json::json!({ "reason": r, "relaunch": self.limits.cut_relaunch.is_some() })),
+                context_window: Some(self.llm.context_len()).filter(|&n| n > 0),
+                conversation_tokens: run.conversation_tokens,
+                // No reduction of the context exists yet: the fallow's lot moves this base.
+                since_reduction: run.conversation_tokens,
+                folded_windows: 0,
             });
-            // **An empty reply says why** (23 Nov 2026): kept for the run's caller, which tells the user.
-            run.empty_reply = (text.is_empty() && finish.tool_calls.is_empty()).then(|| {
-                let pourquoi = match &finish.reason {
-                    FinishReason::MaxTokens => "coupée à la limite de sortie".to_string(),
-                    r => format!("fin {r:?}"),
-                };
+            run.empty_reply = empty_reason.map(|r| {
                 format!(
-                    "{pourquoi} (max_tokens={}, réflexion {:?}, fin du fournisseur « {} », {} jeton(s) de réflexion dits)",
-                    opts.max_tokens,
+                    "{r} ; réflexion demandée {:?}, fin du fournisseur « {} »",
                     opts.reasoning,
-                    usage.provider_finish.unwrap_or("non dite"),
-                    usage.reasoning_tokens
+                    usage.provider_finish.unwrap_or("non dite")
                 )
             });
             self.meter_call(run_id, run.iterations, &model, &usage);

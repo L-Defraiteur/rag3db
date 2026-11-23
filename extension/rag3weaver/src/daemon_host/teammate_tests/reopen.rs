@@ -34,7 +34,7 @@ fn a_closed_agent_reopens_with_its_key_its_head_its_mailbox_its_plan_and_its_con
     let plans: super::super::teammate::Plans = serde_json::from_value(json!({ "plans": [{ "number": 1, "request": "r", "proposal": "p", "state": "active",
         "items": [{ "id": "ecrire", "text": "Écrire le travail", "status": "done" }] }] })).unwrap();
     files.write_plans(&plans).unwrap();
-    let session = crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant("Je m'y mets.")] };
+    let session = crate::chat::ChatSession { turns: vec![crate::llm::Turn::user("Bonjour"), crate::llm::Turn::assistant("Je m'y mets.")], ..Default::default() };
     std::fs::create_dir_all(d.path().join("chats")).unwrap();
     std::fs::write(d.path().join("chats").join(format!("{}.json", t.id)), json!({ "manifest": t.manifest, "session": session, "last_call": null }).to_string()).unwrap();
     host.reread_chats();
