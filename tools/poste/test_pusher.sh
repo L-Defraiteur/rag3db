@@ -108,6 +108,14 @@ if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)"; pr=$?
   [ $pr = 75 ] && { echo "ARRÊT : le pousseur retire le push (un lot du train a quitté la file)"; exit 1; }
   [ $pr = 0 ] || echo "PR absente : le crochet PRE_PUSH a rendu $pr"; fi
 [ -e "${GUARD_REFUSE:-/nonexistent}" ] && { echo "ARRÊT : push refusé"; exit 1; }
+# As the real guard: master moved with no code since the tested base (a docs lot pushed meanwhile, 23 Nov.): rebased
+# and pushed, without a second pass ; with code, stopped.
+git fetch -q origin master
+if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+  b=$(cat "$PUSHER_JOURNALS_ROOT/$2/base" 2>/dev/null || git merge-base HEAD FETCH_HEAD)
+  [ -z "$(bash "$REAL_GUARD" --code-apporte "$b" "$(git rev-parse FETCH_HEAD)")" ] || { echo "ARRÊT : master a apporté du code depuis la base testée"; exit 1; }
+  git rebase -q FETCH_HEAD > /dev/null 2>&1 || { git rebase --abort 2>/dev/null; echo "ARRÊT : le rebase bute"; exit 1; }
+fi
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 echo POUSSE
 G
@@ -129,7 +137,7 @@ esac
 exit 2
 Q
 chmod +x "$D/poste.sh"
-export ORIGIN=$D/origin.git PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
+export ORIGIN=$D/origin.git PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_WT_DOCS_NAME=wt-docs PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies PASS_SUB=$D/pass_sub PASS_HOOK=$D/pass-hook GUARD_HOOK=$D/guard-hook
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
@@ -964,7 +972,7 @@ h=$(lot dl-r extension/rag3weaver/src/dlr.rs 'fn dlr() {}')
 P enqueue dl-r dl-r "$h" rust some_witness e2e_code - - author-l > /dev/null; echo VERT > "$D/outcomes.d/dl-r"
 git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B dl-d origin/master
 mkdir -p "$D/author/docs/essai"; echo "une page" > "$D/author/docs/essai/dl-d.md"
-git -C "$D/author" add -A && git -C "$D/author" commit -qm "docs(essai): a page" && git -C "$D/author" push -q origin HEAD:dl-d; hd=$(git -C "$D/author" rev-parse HEAD)
+git -C "$D/author" add -A && git -C "$D/author" commit -qm dl-d && git -C "$D/author" push -q origin HEAD:dl-d; hd=$(git -C "$D/author" rev-parse HEAD)
 cat > "$D/pass-hook" <<HOOK
 bash $(printf %q "$PUSHER") enqueue dl-d dl-d $hd docs - - - - author-l > /dev/null 2>&1
 for i in \$(seq 1 40); do grep -qP '\tdl-d\tpoussé' "$D/pusher/log.tsv" && { echo vu > "$D/dl-vu"; break; }; sleep 1; done
