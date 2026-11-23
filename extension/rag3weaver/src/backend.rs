@@ -5663,7 +5663,7 @@ impl Backend {
         // both lines are said.
         // **An index left partial is said** (23 Nov 2026): a read on a code synchronisation that stopped before its end.
         if lit {
-            self.dire_l_index_incomplet(&mut response);
+            self.say_index_incomplete(&mut response);
         }
         if let Some(state) = index_state {
             let line = not_ready_line(&state);
@@ -5877,7 +5877,7 @@ impl Backend {
     /// **« index incomplet »** at the head of a read's answer, and `index_incomplete` in it, when a synchronisation of
     /// the code stopped before its end (its session suspended, or its process gone): what the search serves is
     /// partial. Nothing when the catalog is busy (a writer holds it) or knows no code.
-    fn dire_l_index_incomplet(&self, response: &mut Value) {
+    fn say_index_incomplete(&self, response: &mut Value) {
         let Ok(mut cat) = self.catalog.try_lock() else { return };
         let Ok(arretees) = cat.interrupted_sessions("Scope") else { return };
         if arretees.is_empty() {
