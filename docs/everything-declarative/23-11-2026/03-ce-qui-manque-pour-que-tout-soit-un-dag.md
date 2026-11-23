@@ -38,6 +38,21 @@ fonction composite**. Ce qui est composite se déclare en graphe à partir de pr
 | Signer, vérifier (HMAC, JWT) | rien | `Sign` et `VerifySignature`, scellés, qui prennent une `SecretRef` | un nœud scripté qui manipule la clé |
 | Échanger un jeton (OAuth, compte de service) | `gcp_auth::TokenSource`, en dur pour Vertex | `TokenExchange`, scellé, qui rend une `SecretRef` fraîche | garder le jeton dans l'état du graphe |
 
+**Injecter un secret sans l'exposer à l'agent** (Lucie, 23 novembre : « l'agent ne voit pas que tu passes ce
+paramètre à la requête, et ce n'est tracé nulle part ») :
+1. **Un outil offert à l'agent est un graphe**, et le schéma de l'outil ne montre que ses `%% param`. **Un paramètre lié
+   à une `SecretRef` dans le graphe n'apparaît pas dans ce schéma** : l'agent ne sait même pas qu'il existe, et ne peut
+   pas le fixer.
+2. **La valeur n'est résolue qu'à la frontière du nœud qui s'en sert** (`HttpRequest`, `Sign`), au moment de l'envoi.
+   Elle ne circule sur aucune arête et n'entre dans aucun contexte de modèle : ce qui circule, c'est la poignée.
+3. **La trace, le journal des runs et la trace brute des appels portent le nom de la poignée, jamais la valeur**. C'est
+   vrai aussi d'une erreur ou d'une réponse qui renverrait le secret : la sortie du nœud est masquée avant de quitter
+   le nœud. Le masquage des secrets qui existe pour les outils (`MaskedTools`) s'applique là, avec la valeur connue.
+4. **Le témoin** : un graphe appelle un faux service avec un en-tête secret. L'outil offert à l'agent n'a pas le
+   paramètre ; le service reçoit l'en-tête ; le faux service renvoie le secret dans sa réponse et dans une erreur ; et
+   **une recherche de la valeur dans tout ce que l'hôte a écrit** (traces, journal des runs, trace brute, boîtes, état)
+   **ne trouve rien**.
+
 Ces nœuds sont **scellés** au sens de la page 02 : aucune surcouche ne les sélectionne, et la politique fermée des types
 de nœuds exige qu'ils soient ceux du crate.
 
