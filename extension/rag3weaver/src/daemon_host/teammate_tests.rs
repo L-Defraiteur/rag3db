@@ -44,6 +44,7 @@ mod observed_content;
 mod output_limit;
 mod posture_auto;
 mod prompt_roots;
+mod prompt_templates;
 mod reopen;
 mod reply_channel;
 mod reply_first;
