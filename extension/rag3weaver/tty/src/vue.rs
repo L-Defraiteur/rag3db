@@ -204,6 +204,8 @@ pub struct Vue {
     pub still: bool,
     /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
     turn_in_flight: bool,
+    /// Text of the model flowed in this turn: the host's end of step copy is then never shown (23 Nov. 2026).
+    streamed_this_turn: bool,
     /// The turn's run finished and its `ended` has not come: the host reviews it (23 Nov. 2026).
     reviewing: bool,
     /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
@@ -312,6 +314,7 @@ impl Vue {
             thinking_since: Instant::now(),
             still: false,
             turn_in_flight: false,
+            streamed_this_turn: false,
             reviewing: false,
             turn: 0,
             calls_this_turn: 0,
@@ -649,6 +652,9 @@ impl Vue {
                 self.valider(Genre::Note, format!("  {dit}"));
             }
             "Token" => {
+                if e["text"].as_str().is_some_and(|t| !t.trim().is_empty()) {
+                    self.streamed_this_turn = true;
+                }
                 if self.close_pending.is_some() {
                     self.close_pending = Some(Instant::now());
                 }
@@ -823,6 +829,7 @@ impl Vue {
                     self.attente_depuis = Instant::now();
                 }
                 self.reviewing = false;
+                self.streamed_this_turn = false;
                 self.turn += 1;
                 self.calls_this_turn = 0;
                 self.repondu = false;
@@ -845,6 +852,11 @@ impl Vue {
             self.repondu = true;
             self.done_step = None;
             self.changer(Etat::Fini(l["text"].as_str().unwrap_or_default().to_string()));
+            return;
+        }
+        // **The host's copy of a streamed turn is never shown** (a trial on 23 Nov. 2026: « il parle 2 fois »): it joins
+        // the announcement and the answer the view already wrote, and serves only the reopening of a conversation.
+        if l["from"] == "teammate" && l["kind"] == "report" && l["origin"] == "host_copy" && self.streamed_this_turn {
             return;
         }
         let mut corps_seul: Option<String> = None;
