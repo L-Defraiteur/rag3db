@@ -50,6 +50,9 @@ fn nothing_found_gives_no_block_and_is_not_a_fallback() {
     a_thread(&b);
     let r = recall(&b, Some(ME), json!({"request": "zebracornword", "run": "task:t", "active_since": "2026-11-23T10:30:00Z"}));
     assert_eq!(r["block"], Value::Null, "a nearest neighbour is not evidence: {r}");
+    // An unrelated question that shares only common words (« is », « the ») with the turn: bm25 finds it, it is not evidence.
+    let r2 = recall(&b, Some(ME), json!({"request": "how is the weather in Lisbon", "run": "task:t", "active_since": "2026-11-23T10:30:00Z"}));
+    assert_eq!(r2["block"], Value::Null, "common words are not evidence: {r2}");
     assert_eq!(r["degraded"], Value::Null, "{r}");
     assert_eq!(r["sources"], json!([]), "{r}");
 }
