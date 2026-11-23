@@ -94,6 +94,11 @@ pub struct TeammatePolicy {
     /// declared maximum.
     #[serde(default = "TeammatePolicy::max_output_tokens_default")]
     pub max_output_tokens: usize,
+    /// **What a step_done without a word is told** (Lucie's trial of 23 Nov 2026): in a turn opened by a human, a
+    /// step_done is refused while the step wrote no text, with this message; twice refused, the step ends on a human
+    /// line. Declared in the template, said to the model as it is.
+    #[serde(default = "TeammatePolicy::text_first_default")]
+    pub text_first: String,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -199,6 +204,12 @@ impl TeammatePolicy {
     }
 }
 
+impl TeammatePolicy {
+    fn text_first_default() -> String {
+        "step_done refused: you have not written a word to the user in this turn. Write your answer first, in the text of your reply (it is what the user reads; step_done's done is never shown), then call step_done.".into()
+    }
+}
+
 impl Default for TeammatePolicy {
     fn default() -> Self {
         TeammatePolicy {
@@ -225,6 +236,7 @@ impl Default for TeammatePolicy {
             browser: None,
             background: BackgroundPolicy::default(),
             max_output_tokens: Self::max_output_tokens_default(),
+            text_first: Self::text_first_default(),
         }
     }
 }
