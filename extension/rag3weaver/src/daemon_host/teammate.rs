@@ -879,7 +879,16 @@ impl Step {
 ", t.get("mid_turn.head", &[]));
         for l in neuves {
             tete.push_str(&format!("{}
-", t.get("mid_turn.line", &[("kind", l["kind"].as_str().unwrap_or("?")), ("from", l["from"].as_str().unwrap_or("?")), ("text", l["text"].as_str().unwrap_or(""))])));
+", t.get(
+                "mid_turn.line",
+                &[
+                    ("kind", l["kind"].as_str().unwrap_or("?")),
+                    ("from", l["from"].as_str().unwrap_or("?")),
+                    ("text", l["text"].as_str().unwrap_or("")),
+                    // A card's answer brings the host's grant with it.
+                    ("granted", &l["granted"].as_str().map(|g| format!(" — {g}")).unwrap_or_default()),
+                ],
+            )));
         }
         turn.content = format!("{tete}
 {}", turn.content);
@@ -2785,6 +2794,18 @@ impl DaemonHost {
             // **Un pas qui finit sur une question attend la réponse** : il ne
             // compte ni réussi, ni raté, ni dans les MAX_STEPS. La boîte le dit
             // une fois, à l'heure où l'attente commence.
+            // **A command card the finished work no longer needs closes** (Lucie's trial of 23 Nov 2026, 20 h 54: the
+            // work was done, and the turn waited for a card it did not need any more). Only a command's card, never a
+            // question to the user; said in one line, and the turn ends as its step says.
+            if let (Some(d), Some((_, q))) = (declared.as_ref(), open_question(files)) {
+                let fini = d["succeeded"] == true && d["remaining"].as_str().unwrap_or_default().trim().is_empty() && files.read_plans().active().is_none();
+                if fini && q["kind"] == "approval" {
+                    let texte = textes.get("card.closed_done", &[("command", q["command"].as_str().unwrap_or(""))]);
+                    if let Ok(line) = files.append_with("host", "card_closed", None, &texte, &json!({ "reply_to": q["id"] })) {
+                        publish(bus.as_ref(), task, &line);
+                    }
+                }
+            }
             if let Some((rang, q)) = open_question(files) {
                 if rang >= debut_du_pas {
                     let heure = jiff::Zoned::now().strftime("%H:%M").to_string();

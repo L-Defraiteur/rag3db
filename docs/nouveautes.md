@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille, et une carte inutile se ferme seule.**
+  Quand tu dis oui à une carte, l'accord de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du
+  prochain résultat d'outil, dans le pas en cours. Et quand le travail est fini sans une commande qu'il avait demandée,
+  sa carte se ferme en le disant, au lieu de faire attendre le tour.
 - 23 novembre 2026 — **Ce que tu écris pendant que l'agent travaille lui arrive tout de suite.** Un message envoyé
   pendant ses appels d'outils arrive en tête du résultat de l'outil suivant, dans le même pas, au lieu d'attendre le
   pas d'après. Et l'agent se sert de l'index d'abord : une question sur le code commence par `search_code`, une
