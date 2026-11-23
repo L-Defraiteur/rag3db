@@ -103,6 +103,10 @@ pub struct TeammatePolicy {
     /// it, a text first 3 times in 3): the user reads only the text of the replies, so it comes first.
     #[serde(default = "TeammatePolicy::reply_first_default")]
     pub reply_first: String,
+    /// **Where an agent works** (Lucie, 23 Nov 2026: « oui absolument »): `in_place`, in the user's folder itself, by
+    /// default; `copy`, in a worktree of its own. Another task already open on the same repository makes a copy anyway.
+    #[serde(default)]
+    pub workspace: WorkspaceMode,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -246,8 +250,18 @@ impl Default for TeammatePolicy {
             max_output_tokens: Self::max_output_tokens_default(),
             text_first: Self::text_first_default(),
             reply_first: Self::reply_first_default(),
+            workspace: WorkspaceMode::default(),
         }
     }
+}
+
+/// See [`TeammatePolicy::workspace`].
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceMode {
+    #[default]
+    InPlace,
+    Copy,
 }
 
 /// **What the teammate may read on the web** (`teammate.fetch`, 20 November 2026): the schemes allowed, the hosts

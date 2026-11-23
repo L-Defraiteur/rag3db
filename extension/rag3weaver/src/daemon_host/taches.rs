@@ -254,6 +254,10 @@ pub struct DepotDeCode {
     pub depot: PathBuf,
     pub arbre: PathBuf,
     pub depart: String,
+    /// **The agent works in the user's folder itself** (23 Nov 2026): no worktree, no branch; nothing of the task is
+    /// ever removed from this repository.
+    #[serde(default)]
+    pub en_place: bool,
 }
 
 /// Un dépôt d'une tâche, vu de la tâche : le dépôt du backend, et le dépôt
@@ -270,7 +274,8 @@ impl Tache {
         if !self.sans_depot {
             v.push(Volet { depot: &self.depot, arbre: &self.arbre, depart: &self.depart });
         }
-        if let Some(c) = self.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+        // In place, the user's folder is no volet of the task: no branch to close, no worktree to remove.
+        if let Some(c) = self.workspace.as_ref().and_then(|w| w.code.as_ref()).filter(|c| !c.en_place) {
             v.push(Volet { depot: &c.depot, arbre: &c.arbre, depart: &c.depart });
         }
         v
@@ -410,7 +415,7 @@ fn ce_qui_manque(t: &Tache) -> Option<String> {
     if !t.sans_depot && git(&t.depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{}", t.branche)]).is_err() {
         manque.push(format!("la branche {}", t.branche));
     }
-    if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()) {
+    if let Some(c) = t.workspace.as_ref().and_then(|w| w.code.as_ref()).filter(|c| !c.en_place) {
         if !c.arbre.is_dir() {
             manque.push(format!("le worktree de code {}", c.arbre.display()));
         }
@@ -728,12 +733,14 @@ impl DaemonHost {
             (false, None) => commit_de_depart(&depot)?,
         };
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let code_en_place = std::cell::Cell::new(false);
         let defaire = |etape: &str, e: String| -> String {
             if !sans_depot {
                 let _ = git(&depot, &["worktree", "remove", "--force", &arbre.to_string_lossy()]);
                 let _ = git(&depot, &["branch", "-D", &branche]);
             }
-            if let Some(d) = &depot_code {
+            // Never anything in the user's folder when the agent works in it.
+            if let Some(d) = depot_code.as_ref().filter(|_| !code_en_place.get()) {
                 let _ = git(d, &["worktree", "remove", "--force", &arbre_code.to_string_lossy()]);
                 let _ = git(d, &["branch", "-D", &branche]);
             }
@@ -746,6 +753,28 @@ impl DaemonHost {
         let workspace = match espace {
             None => None,
             Some((racine_principale, permis)) => Some(match &depot_code {
+                Some(d) if {
+                    // **An agent alone works in the user's folder itself** (Lucie, 23 Nov 2026), unless the policy
+                    // asks for a copy or another task is open on the same repository.
+                    let mode = self.with_backend(&hote, |b| b.prepared().manifest.teammate.as_ref().map(|p| p.workspace)).ok().flatten().unwrap_or_default();
+                    let seule = !self
+                        .taches
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .values()
+                        .any(|t| t.workspace.as_ref().and_then(|w| w.code.as_ref()).is_some_and(|c| c.depot == *d));
+                    mode == crate::backend::WorkspaceMode::InPlace && seule
+                } => {
+                    code_en_place.set(true);
+                    let depart_code = commit_de_depart(d).map_err(|e| defaire("le dépôt de code", e))?;
+                    WorkspaceDeTache {
+                        racine: racine_principale.clone(),
+                        ecrit: permis,
+                        racine_principale,
+                        code: Some(DepotDeCode { depot: d.clone(), arbre: d.clone(), depart: depart_code, en_place: true }),
+                        copie: None,
+                    }
+                }
                 Some(d) => {
                     let depart_code = commit_de_depart(d).map_err(|e| defaire("le dépôt de code", e))?;
                     git(d, &["worktree", "add", "-q", "-b", &branche, &arbre_code.to_string_lossy(), &depart_code])
@@ -755,7 +784,7 @@ impl DaemonHost {
                         racine: arbre_code.join(sous),
                         ecrit: permis,
                         racine_principale,
-                        code: Some(DepotDeCode { depot: d.clone(), arbre: arbre_code.clone(), depart: depart_code }),
+                        code: Some(DepotDeCode { depot: d.clone(), arbre: arbre_code.clone(), depart: depart_code, en_place: false }),
                         copie: None,
                     }
                 }
@@ -1068,7 +1097,7 @@ impl DaemonHost {
         if !tache.sans_depot {
             tache.depart = tetes[0].clone();
         }
-        if let Some(c) = tache.workspace.as_mut().and_then(|w| w.code.as_mut()) {
+        if let Some(c) = tache.workspace.as_mut().and_then(|w| w.code.as_mut()).filter(|c| !c.en_place) {
             c.depart = tetes[if tache.sans_depot { 0 } else { 1 }].clone();
         }
         let changements = self.changements(&tache)?;
