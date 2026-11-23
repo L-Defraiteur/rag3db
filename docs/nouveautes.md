@@ -97,6 +97,9 @@
   activité, l'étape de son plan, le dernier message de chaque contact et ses agents fermés ; un agent fermé se rouvre
   avec sa conversation, un agent se duplique sur une branche neuve, et un message entre agents est un événement du
   flux de l'IDE. L'affichage de la barre vient avec les lots de l'IDE.
+- 23 novembre 2026 — **Chaque outil dit combien de temps ont pris ses nœuds.** La réponse de tout outil porte
+  `metadata.timings_ms` : la durée de chaque nœud de son graphe, en millisecondes, et le total du run. Un banc ou
+  l'IDE la lisent telle quelle, sans instrumenter l'outil ; elle n'entre pas dans le texte que lit le modèle.
 
 - 23 novembre 2026 — **Plus de nombre nu à côté d'une commande dans le terminal de l'agent.** La ligne d'un appel
   dit l'outil et son argument (`» run_command ls -la`), sans le numéro qui se lisait comme un nombre de répétitions ;
