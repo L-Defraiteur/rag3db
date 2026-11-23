@@ -682,6 +682,7 @@ impl StepWork {
 
 impl Step {
     /// The paths the step's code tools wrote (23 Nov 2026: what the host's end-of-step commit takes).
+    #[cfg(feature = "code")]
     pub(crate) fn wrote(&self) -> Vec<String> {
         self.work.lock().map(|w| w.wrote.clone()).unwrap_or_default()
     }
