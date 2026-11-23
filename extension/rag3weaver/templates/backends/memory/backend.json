@@ -53,6 +53,9 @@
           "section": {
             "type": "string",
             "isTitle": true
+          },
+          "line_id": {
+            "type": "string"
           }
         },
         "hashsafe": [
@@ -67,10 +70,12 @@
           "tool_name",
           "status",
           "section",
-          "author"
+          "author",
+          "line_id"
         ],
         "signals": [
-          "bm25"
+          "bm25",
+          "vector"
         ]
       },
       "writes": {
