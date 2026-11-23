@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Les règles qui refusent un `step_done` muet sont un fichier.** Le tour sans un mot pour toi, et
+  le `step_done` de clôture juste après des outils sans réponse, se décident dans
+  `templates/teammate/graphs/at_step_done.mmd` et sa table `at_step_done.json` : ta copie dans
+  `~/.config/rag3weaver/templates/teammate/graphs/` les change, relue à chaque pas, sans rien rebâtir. Le texte du
+  refus est la clé `step_done.text_first` de `texts.json`.
 - 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
   de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
   cours, au lieu d'attendre le pas suivant.
