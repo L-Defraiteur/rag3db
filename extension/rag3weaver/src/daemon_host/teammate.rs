@@ -486,6 +486,15 @@ pub(crate) fn in_her_folder(folders: Option<&(String, String)>, text: &str) -> S
     }
 }
 
+/// **The turn was opened by a human**: its last request or instruction comes from a human.
+pub(crate) fn human_turn(lignes: &[Value]) -> bool {
+    lignes
+        .iter()
+        .rev()
+        .find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host")
+        .is_some_and(|l| l["by"]["kind"] == "human")
+}
+
 /// **The turn was opened by someone's request**, a human's or an agent's: a request or instruction neither the teammate
 /// nor the host wrote.
 pub(crate) fn asked_turn(lignes: &[Value]) -> bool {
@@ -1128,10 +1137,13 @@ impl Step {
             let plans = self.files.read_plans();
             plans.active().is_none_or(|p| p.items.iter().all(|i| i.id == cet_element || matches!(i.status, Status::Done | Status::Dropped)))
         };
-        // Asked by a human or by an agent (the replay of 23 Nov 2026, 20 h 30: a supervisor's question went unanswered).
-        let apres_outil = self.used_tools.load(Ordering::SeqCst) && asked_turn(&boite) && clot;
         let depuis_l_outil = self.wrote_text.load(Ordering::SeqCst);
         let dans_le_pas = depuis_l_outil || self.wrote_any.load(Ordering::SeqCst);
+        // Asked by a human, or by an agent once the teammate wrote to it (the replay of 23 Nov 2026, 20 h 30: a
+        // supervisor's question went unanswered after a first sentence); an agent's request with no line at all is
+        // the relaunch's ([`request_without_a_line`]).
+        let demande = human_turn(&boite) || (asked_turn(&boite) && (dans_le_pas || request_without_a_line(&boite).is_none()));
+        let apres_outil = self.used_tools.load(Ordering::SeqCst) && demande && clot;
         if (!dans_le_pas && silent_turn(&boite).is_some()) || (!depuis_l_outil && apres_outil) {
             // Numbered: two refusals in the same words would stop the run as a repeated error.
             let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
