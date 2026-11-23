@@ -1613,6 +1613,9 @@ mod context_tests;
 /// By default the view shows what speaks to the user (23 November 2026).
 #[cfg(test)]
 mod quiet_tests;
+/// The agent's text is seen as it is written (23 November 2026).
+#[cfg(test)]
+mod streamed_text_tests;
 
 #[cfg(test)]
 mod tests {
