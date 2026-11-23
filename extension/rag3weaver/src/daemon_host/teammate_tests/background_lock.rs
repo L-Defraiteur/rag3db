@@ -32,7 +32,7 @@ fn a_command_after_a_background_one_returns_at_once() {
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let seen = Arc::new(Mutex::new(Vec::new()));
     let steps = vec![
-        ("run_command", json!({ "command": "sleep 120", "background": true })),
+        ("run_command", json!({ "command": "sleep 30", "background": true, "timeout_s": 30 })),
         ("run_command", json!({ "command": "ls", "timeout_s": 10 })),
     ];
     let gate = d.path().join("gate");
@@ -48,6 +48,8 @@ fn a_command_after_a_background_one_returns_at_once() {
         assert!(Instant::now() < fin, "in 120 s: {:#?}", files.mailbox());
         std::thread::sleep(Duration::from_millis(100));
     }
+    // The background command dies with its task, as when the task closes: nothing is left behind the witness.
+    host.end_task_background(&h.id, "doc");
     let vus = seen.lock().unwrap().clone();
     let ls = vus.get(1).cloned().unwrap_or_default();
     assert!(ls.contains("code 0") && !ls.contains("délai"), "ls returns at once while a command runs in the background: {vus:#?}");
