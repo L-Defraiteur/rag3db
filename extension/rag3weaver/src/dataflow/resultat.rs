@@ -65,7 +65,7 @@ pub struct UnifiedResult {
     /// Rempli par `FuseResultsNode`, remplacé par `RerankNode` quand il
     /// réordonne ; absent hors fusion. Ce n'est pas un score absolu : un seuil
     /// se mesure, sur des prompts étiquetés.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing)]
     pub best_signal: Option<SignalScore>,
     /// **A row that cannot carry a vector by design** (its parent has no chunk: a short declaration of a value,
     /// 20 November 2026). The fusion judges it by the signals it can have, not by a zero for the dense one.
