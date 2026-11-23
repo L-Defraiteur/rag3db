@@ -198,6 +198,10 @@ pub struct Vue {
     thinking_doc: Option<usize>,
     /// The thinking is still the last thing the model gave (no answer token, no tool call since).
     thinking_live: bool,
+    /// When the current thinking began: the ticker's clock.
+    pub(crate) thinking_since: Instant,
+    /// `--still`: the thinking does not scroll.
+    pub still: bool,
     /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
     turn_in_flight: bool,
     /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
@@ -303,6 +307,8 @@ impl Vue {
             thinking_iteration: None,
             thinking_doc: None,
             thinking_live: false,
+            thinking_since: Instant::now(),
+            still: false,
             turn_in_flight: false,
             turn: 0,
             calls_this_turn: 0,
@@ -1657,6 +1663,9 @@ mod late_tokens_tests;
 /// Text and tool calls keep their order in the thread (23 November 2026).
 #[cfg(test)]
 mod interleave_tests;
+/// The thinking scrolls like a station board (23 November 2026).
+#[cfg(test)]
+mod ticker_tests;
 /// The agent's text is seen as it is written (23 November 2026).
 #[cfg(test)]
 mod streamed_text_tests;
