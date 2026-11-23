@@ -60,7 +60,8 @@ pub(super) fn teammate(commands: Vec<String>, seen: Arc<Mutex<Vec<String>>>) -> 
             }
             match commands.get(n) {
                 Some(c) if !granted && !refused => answer(turns, opts, sink, "", calls(&[("run_command", json!({ "command": c }))])),
-                _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))])),
+                // A word to the user with its step_done, as a turn must end (23 Nov 2026).
+                _ => answer(turns, opts, sink, "Fait.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))])),
             }
         })))
     })
