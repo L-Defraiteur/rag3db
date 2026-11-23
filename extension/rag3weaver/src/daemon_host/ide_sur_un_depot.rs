@@ -69,6 +69,8 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     std::fs::write(&source, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     let ajoute = crate::code_tree::add_files(&roots, &depot, "code-lourd", Some("code-petit")).unwrap();
     let manifeste = ajoute.manifest.canonicalize().unwrap();
+    // The witness of the copy mode: the task works in its own worktree, her repository untouched until the merge.
+    super::chat_qui_code::en_copie(&manifeste);
     let declarations = roots.config.join("code-petit");
     assert!(git(&declarations, &["log", "--format=%s"]).starts_with("code-tree add code-petit"));
 
