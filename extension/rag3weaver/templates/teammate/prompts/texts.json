@@ -25,6 +25,6 @@
   "relaunch.text_missing": "Your step ended without the text the request asks for: your reports describe the work, they are not the text. Write the text itself now, in your answer, then call step_done.",
   "relaunch.verify_red": "Your step_done met the verification gate, and it is red: `{$command}` failed. Its output, the end of it:\n{$tail}\nFix the tree so that it passes, play it yourself, then call step_done. Never say done on a red tree.",
   "mid_turn.head": "Pendant tes appels d'outils, la boîte a reçu (lis-le maintenant : cela peut changer ce que tu fais ensuite) :",
-  "mid_turn.line": "- {$kind} de {$from} : {$text}",
+  "mid_turn.line": "- {$kind} de {$from} : {$text}{$granted}",
   "grant.mentioned": "accès en lecture à {$root} pour {$minutes} min, parce que tu l'as cité"
 }

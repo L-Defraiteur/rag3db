@@ -885,7 +885,16 @@ impl Step {
 ", t.get("mid_turn.head", &[]));
         for l in neuves {
             tete.push_str(&format!("{}
-", t.get("mid_turn.line", &[("kind", l["kind"].as_str().unwrap_or("?")), ("from", l["from"].as_str().unwrap_or("?")), ("text", l["text"].as_str().unwrap_or(""))])));
+", t.get(
+                "mid_turn.line",
+                &[
+                    ("kind", l["kind"].as_str().unwrap_or("?")),
+                    ("from", l["from"].as_str().unwrap_or("?")),
+                    ("text", l["text"].as_str().unwrap_or("")),
+                    // A card's answer brings the host's grant with it.
+                    ("granted", &l["granted"].as_str().map(|g| format!(" — {g}")).unwrap_or_default()),
+                ],
+            )));
         }
         turn.content = format!("{tete}
 {}", turn.content);
