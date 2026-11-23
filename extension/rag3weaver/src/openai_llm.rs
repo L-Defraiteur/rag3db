@@ -1782,6 +1782,10 @@ mod vertex_refresh_tests;
 mod thoughts_tests;
 
 #[cfg(test)]
+#[path = "openai_llm_low_thinking_tests.rs"]
+mod low_thinking_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::llm::{
