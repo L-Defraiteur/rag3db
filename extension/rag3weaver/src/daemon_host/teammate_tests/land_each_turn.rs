@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 fn lancer(d: &std::path::Path, salir: bool) -> (Arc<DaemonHost>, std::path::PathBuf, TeammateFiles) {
     let (depot, manifeste) = depot_inscrit(d, true);
+    crate::daemon_host::chat_qui_code::en_copie(&manifeste);
     if salir {
         std::fs::write(depot.join("README.md"), "# Petit dépôt, modifié par la personne\n").unwrap();
     }

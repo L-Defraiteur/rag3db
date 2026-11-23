@@ -22,6 +22,14 @@ const LIB: &str = "pub fn bonjour() -> &'static str {\n    \"bonjour\"\n}\n";
 /// Un petit dépôt git qui n'est pas rag3weaver, inscrit par `code-tree add`
 /// (qui pose `task_writes`) ; `task_writes: false` le retire, comme un
 /// manifeste écrit à la main qui ne le dit pas.
+/// **A witness of the copy mode** (a worktree of the task's own, its branch merged into the folder) declares it, since
+/// an agent alone works in the folder itself by default (23 Nov 2026).
+pub(super) fn en_copie(manifeste: &Path) {
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(manifeste).unwrap()).unwrap();
+    m["teammate"]["workspace"] = json!("copy");
+    std::fs::write(manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+}
+
 pub(super) fn depot_inscrit(d: &Path, task_writes: bool) -> (PathBuf, PathBuf) {
     let depot = d.join("petit-depot");
     std::fs::create_dir_all(depot.join("src")).unwrap();
@@ -109,6 +117,7 @@ pub(super) fn hote(d: &Path, model: ChatModel) -> DaemonHost {
 fn le_chat_d_une_tache_edite_sa_branche_et_laisse_le_principal_intact() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
+    en_copie(&manifeste);
     let vus = Arc::new(Mutex::new(Vec::new()));
     let host = hote(d.path(), qui_edite(vus.clone())).with_runs_root(d.path().join("runs"));
     let h = host.hosted(&manifeste).unwrap();
