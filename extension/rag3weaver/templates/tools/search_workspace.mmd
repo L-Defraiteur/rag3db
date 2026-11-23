@@ -67,7 +67,7 @@ graph LR
     exact_name["ExactNameNode(field='name', leaf='folds', limit=20)"]
     fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact', exact_name='name', exact_name_leaf='folds')"]
     rerank["RerankNode(keep_signal=true)"]
-    hop["CallersHopNode(from=3, per_source=2, pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, edge_field=resolution, edge_guessed='nom|dossier', edge_doubtful=ambigu, scope=$scope, language=$language)"]
+    hop["CallersHopNode(from=0, per_source=2, pivot=Symbol, key=name, defined_by=DEFINES, used_by=MENTIONS, qualifier_field=parent_name, direct='CONSUMES|INHERITS_FROM|IMPLEMENTS', group_by=usage, usages_field=usages, line=line, title=name, kind_field=scope_type, path_fields='repo_path|file_path', line_field=start_line, edge_field=resolution, edge_guessed='nom|dossier', edge_doubtful=ambigu, scope=$scope, language=$language)"]
     paginate["PaginateNode"]
     highlight["HighlightNode"]
     resolve["ResolveParentNode"]

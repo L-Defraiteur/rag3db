@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Le saut d'appel de la recherche est éteint par défaut.** Mesuré sur le jeu de questions du
+  banc : il ne gagnait aucune question et en faisait reculer six, en insérant des appelants qui partagent les mots de
+  la requête plutôt que celui où vit la cause. Le nœud reste déclaré dans `search_workspace.mmd`
+  (`CallersHopNode(from=0, …)`) : `from=3` le rallume dans ton gabarit. Pour remonter d'un symptôme à sa cause, `usages`
+  depuis le premier résultat y mène.
 - 23 novembre 2026 — **Un agent seul travaille directement dans ton dossier.** Plus de copie cachée : ses outils, ses
   commandes (`npm run dev`), ses chemins sont les tiens. À la fin de chaque tour, l'hôte commite sur ta branche
   courante ce que le tour a changé, et seulement cela : tes modifications d'avant restent non commitées, et une ligne
