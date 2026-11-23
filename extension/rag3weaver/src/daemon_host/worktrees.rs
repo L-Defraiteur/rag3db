@@ -551,6 +551,36 @@ fn no_index_note_path(manifeste: &Path) -> Option<PathBuf> {
 }
 
 /// Whether a tree is attached without an index.
+/// **The repository's index for one of its worktrees** (23 Nov 2026): when `worktree` is a linked worktree of a repository
+/// attached with an index, that repository's base is copied as the worktree's (`manifeste`'s database), before its
+/// backend opens. `false` for anything else, or when the copy fails (said on the host's error output).
+fn copy_the_repositorys_index(hote: &DaemonHost, racines: &crate::code_tree::Roots, worktree: &Path, manifeste: &Path) -> bool {
+    let Ok(commun) = git(worktree, &["rev-parse", "--path-format=absolute", "--git-common-dir"]) else { return false };
+    let Some(principal) = Path::new(commun.trim()).parent().and_then(|p| p.canonicalize().ok()) else { return false };
+    if worktree.canonicalize().is_ok_and(|w| w == principal) {
+        return false;
+    }
+    let Ok(nom) = crate::code_tree::name_of_tree(&principal) else { return false };
+    // Its manifest by its tree's name, whatever its file is called (Lucie's is `rag3db.json`).
+    let du_depot = racines.source_manifest(&nom).unwrap_or_else(|_| racines.manifest(&nom));
+    if !du_depot.is_file() || attached_without_index(&du_depot) {
+        return false;
+    }
+    let du_depot = du_depot.canonicalize().unwrap_or(du_depot);
+    let cible = match crate::backend::PreparedBackend::load(manifeste) {
+        Ok(p) => p.path(&p.manifest.database),
+        Err(_) => return false,
+    };
+    let copie = hote.hosted(&du_depot).and_then(|h| hote.with_backend(&h, |b| b.copy_database_to(&cible))).and_then(|r| r);
+    match copie {
+        Ok(_) => true,
+        Err(e) => {
+            eprintln!("[démon] {} : l'index de {} ne se copie pas pour ce worktree ({e}) : il est attaché sans index", worktree.display(), principal.display());
+            false
+        }
+    }
+}
+
 pub(super) fn attached_without_index(manifeste: &Path) -> bool {
     no_index_note_path(manifeste).is_some_and(|f| f.is_file())
 }
@@ -662,12 +692,16 @@ impl HoteDesWorktrees {
         let nom = crate::code_tree::name_of_tree(&worktree)?;
         let manifeste = racines.manifest(&nom);
         let deja = manifeste.exists();
+        let mut indexer = indexer;
         if !deja {
             std::fs::create_dir_all(&racines.data).map_err(|e| format!("{} : {e}", racines.data.display()))?;
             let (source, a_effacer) = gabarit_livre(&racines.data)?;
             let inscrit = crate::code_tree::add_files(&racines, &worktree, &source.display().to_string(), Some(&nom));
             let _ = std::fs::remove_dir_all(&a_effacer);
             inscrit?;
+            // **A worktree of an indexed repository starts from its index** (Lucie, 6 Nov 2026: one index per
+            // repository): its base is a copy of the repository's, and its first index catches up the branch.
+            indexer = indexer || copy_the_repositorys_index(&hote, &racines, &worktree, &manifeste);
             if !indexer {
                 set_watches_aside(&manifeste)?;
             }
