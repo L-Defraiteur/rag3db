@@ -12,9 +12,13 @@ en gabarits, selon sa règle du même soir : tout déclaratif, un builtin n'est 
 3. **Les dossiers aussi** : l'accès à un dossier hors du projet, en lecture comme en écriture, est tranché par le
    juge ; plus d'exception « écriture sous carte ».
 4. **Le chemin qu'elle cite** (lecture, dix minutes, `mentioned-path-grant`) passe avant le juge et ne l'appelle pas.
-5. **Le drapeau et la justification** : un détecteur déterministe signale une action dangereuse avec un avertissement
-   tout fait (pourquoi, et quelles justifications sont recevables) ; l'agent peut rappeler l'outil avec une
-   `justification`, que le juge pèse ; une seule nouvelle tentative, le tout tracé.
+5. **Le drapeau et la justification, en un seul passage** (Lucie, 24 novembre vers 0 h 20 : « le classifier vient déjà
+   lire la commande, la justif éventuelle et le warning auto, et du coup il juge, et c'est tout ; l'agent retente s'il
+   veut ») : un détecteur déterministe signale une action dangereuse avec un avertissement tout fait (pourquoi, et
+   quelles justifications sont recevables) ; le paramètre `justification` est toujours offert, facultatif, sur les
+   outils à effet ; le juge lit en une fois l'action, la justification s'il y en a une et l'avertissement, et tranche.
+   Un refus revient à l'agent avec l'avertissement ; il retente s'il veut. Pas d'étape pilotée par l'hôte, pas de
+   compteur de tentatives : le plafond de pas et d'appels d'un tour borne déjà.
 6. **Les cartes ne restent que sous `--gate cards`**, et en service sans écran le juge tranche, le refus revient à
    l'agent, qui le rapporte en fin de session.
 
@@ -26,20 +30,21 @@ Une action d'un outil à effet (commande, écriture, ouverture d'une racine) tra
 2. **Le chemin cité** : une racine qu'elle a écrite dans sa demande du tour s'ouvre en lecture, sans juge.
 3. **Le détecteur de classes** : la table des classes de commandes et de chemins, en fichier de règles, donne la classe
    de l'action et son drapeau (`safe`, `flagged`, `sealed`). Une classe `safe` passe.
-4. **Le juge** (`Decide`) pour une action non sûre. Son contexte : ses mots du tour, l'action, la classe et son
-   avertissement, et la `justification` si l'appel en porte une. Ses sorties : `allow`, `deny`, `unsure`.
+4. **Le juge** (`Decide`) pour une action non sûre, en un seul passage. Son contexte : ses mots du tour, l'action, la
+   classe et son avertissement, et la `justification` si l'appel en porte une (le paramètre est toujours offert, dès le
+   premier appel). Ses sorties : `allow`, `deny`, `unsure`.
 5. **`allow`** : la primitive `GrantAction` pose un accord borné à cette action (cette racine et ce mode, ou cette ligne
    de commande ; ce tour, ou N minutes déclarées), le dit en une ligne (`granted.by_judge`), et l'action est rejouée.
-6. **`deny` ou `unsure`** : le refus revient à l'agent comme résultat d'outil, avec le texte de la classe
-   (`refused.<classe>`) : ce qui est refusé, pourquoi, et selon la classe « tu peux rappeler l'outil avec une
-   `justification` » ou « demande à l'utilisatrice son accord explicite ». Une ligne `refused` s'écrit dans la boîte.
+6. **`deny` ou `unsure`** : le refus revient à l'agent comme résultat d'outil, avec l'avertissement de la classe
+   (`refused.<classe>`) : ce qui est refusé, pourquoi, ce qui serait recevable. L'agent retente s'il veut, avec une
+   meilleure justification, ou demande à l'utilisatrice son accord explicite. Une ligne `refused` s'écrit dans la boîte.
 7. **Ses mots ensuite** : un message humain suivant déclenche le même `Decide` sur les refus encore ouverts du tour
    précédent ; `allow` pose l'accord, et l'agent, qui lit la ligne au prochain retour d'outil (`mid-turn-delivery`),
    relance son action.
 
 Déclaré : la table des classes (fichier de règles), les avertissements et les justifications recevables par classe
-(gabarits), la question du juge (gabarit), la table des suites (`allow` → accorder ; `deny` → refuser, avec ou sans
-nouvelle tentative), les bornes (une tentative, la durée d'un accord). Primitive neuve : `GrantAction`, qui pose un
+(gabarits), la question du juge (gabarit), la table des suites (`allow` → accorder ; `deny`, `unsure` → refuser), la
+durée d'un accord. Primitive neuve : `GrantAction`, qui pose un
 accord borné, une seule chose. `Decide`, `FirstMatch` et les conditions de la chaîne existent.
 
 ## Ce qui reste dans le code, et pourquoi
@@ -67,8 +72,10 @@ Des gardes de sécurité, qu'aucun fichier ne doit pouvoir éteindre :
    ancre le juge sur ses mots (« soutiennent-ils ? ») et pas sur la vraisemblance de la justification ; une
    justification qui ne se rattache à aucun de ses mots donne `unsure`, donc rien. Le jeu du mode auto du banc mesure
    ce cas (une injection dans un fichier lu), après le lot.
-3. **Une seule tentative, contournée.** L'agent varie la commande d'un caractère et obtient une nouvelle tentative.
-   **Fermeture** : la borne compte par classe et par tour, pas par ligne exacte.
+3. **L'agent qui retente en boucle.** Sans compteur dédié (Lucie : « l'agent retente s'il veut »), ce qui le borne est
+   ce qui borne déjà un tour : le plafond d'appels d'outils d'un pas et de pas d'un tour. Chaque verdict est tracé (le
+   drapeau, la justification, la réponse du juge), et un appel du juge coûte : la trace le montrera si un agent
+   s'acharne.
 4. **Un accord trop large.** « Oui, ce dossier » ne doit pas ouvrir son parent. **Fermeture** : `GrantAction` accorde
    exactement la racine proposée par la porte (`proposed_root`) et le mode demandé, rien au-dessus.
 5. **Ce qui passe sans qu'elle le voie.** Un accord du juge doit se voir : une ligne dans la boîte, à chaque fois, avec
@@ -82,7 +89,8 @@ Des gardes de sécurité, qu'aucun fichier ne doit pouvoir éteindre :
 2. **`GrantAction`** et le juge sur une action non sûre (racine ou commande), avec `allow` → accord et rejeu.
 3. **Ses mots** : le même juge sur un message humain, pour les refus ouverts.
 4. **Le drapeau et la justification** : la table des classes en fichier de règles avec `justifiable` / `words_only`
-   et les avertissements, le paramètre `justification` des outils à effet, la borne par classe et par tour.
+   et les avertissements, le paramètre `justification` toujours offert sur les outils à effet, lu par le juge au même
+   passage.
 5. **La mesure** : le jeu du mode auto du banc, injection comprise.
 
 Chacun commence par son témoin rouge. La chaîne de gardes de fin de pas (en file) vient avant : la condition
