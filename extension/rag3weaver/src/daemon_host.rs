@@ -2706,15 +2706,24 @@ impl DaemonHost {
                 .and_then(Path::file_name)
                 .map(|n| n.to_string_lossy().to_string())
         };
-        let etat = self.state();
-        let depots: Vec<Value> = etat["backends"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|b| b["tache"].is_null())
-            .map(|b| {
-                let m = b["manifest"].as_str().unwrap_or_default();
-                json!({ "id": b["id"], "repo": b["repo"], "name": complet(m), "manifest": m })
+        // From the table of the hosted backends, not the host's whole state (a measure on 23 November 2026: with 84
+        // backends, `state()` read each one's index, 6.5 s per resolution): the id, the manifest, the repository and the
+        // branch, the way `state()` finds them, nothing that waits on a backend.
+        let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        let depots: Vec<Value> = hotes
+            .iter()
+            .filter(|h| self.tache_de(&h.manifest).is_null())
+            .map(|h| {
+                let m = h.manifest.to_string_lossy().into_owned();
+                let espace = espace_du_manifeste(&h.manifest);
+                let dossier = h.manifest.parent().map(Path::to_path_buf);
+                let repo = espace
+                    .as_deref()
+                    .and_then(repo_of)
+                    .or_else(|| dossier.as_deref().and_then(repo_of))
+                    .or_else(|| espace.as_deref().and_then(Path::file_name).map(|n| n.to_string_lossy().into_owned()));
+                let branche = espace.as_deref().and_then(branch_of).or_else(|| dossier.as_deref().and_then(branch_of));
+                json!({ "id": h.id, "repo": repo, "name": complet(&m), "manifest": m, "branch": branche })
             })
             .collect();
         // By its paths too (tty, 21 November): the repository's root (its manifest's workspace.root) and the manifest's
