@@ -965,6 +965,19 @@ mod tests {
 
     /// **A typed message or answer goes with the user's token; the command line's request never does** (the mode auto's
     /// human title, 21 November 2026): only what the user typed may make an approval.
+    /// **A request and an instruction ask for the gate chosen at launch** (23 Nov. 2026: the terminal sent none, and a
+    /// task kept the project's gate, a card for each command); an answer and a stop carry none.
+    #[test]
+    fn requests_and_instructions_carry_the_gate_answers_and_stops_do_not() {
+        let tache = Tache { depot: Depot { id: "b".into(), manifest: "/d/m.json".into(), repo: "d".into(), branch: "t".into() }, task: "t".into() };
+        for kind in ["request", "instruction"] {
+            let s = sending_of(&Action::Envoyer("x".into(), kind), &tache).unwrap();
+            assert_eq!(s.body["gate"], "bac", "{kind}: {}", s.body);
+        }
+        assert_eq!(request_sending(&tache, "x").body["gate"], "bac");
+        assert!(sending_of(&Action::Arreter, &tache).unwrap().body.get("gate").is_none());
+    }
+
     #[test]
     fn typed_messages_and_answers_are_marked_typed_and_the_command_line_request_is_not() {
         let tache = Tache { depot: Depot { id: "b".into(), manifest: "/d/m.json".into(), repo: "d".into(), branch: "t".into() }, task: "t".into() };
