@@ -4,7 +4,6 @@
 //! its own.
 
 use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
-use super::mode_auto_v1::ended;
 use super::*;
 use std::time::{Duration, Instant};
 
