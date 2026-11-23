@@ -703,7 +703,7 @@ impl Resolveur {
         let refs = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
         let worktrees = crate::couches::git(racine, &["worktree", "list", "--porcelain"])?;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        (refs, worktrees, format!("{declaration:?}"), taches, worktree_du_backend).hash(&mut h);
+        (refs, worktrees, format!("{declaration:?}"), worktree_du_backend).hash(&mut h);
         let empreinte = h.finish();
         let mut cache = self.cache.lock().unwrap_or_else(|p| p.into_inner());
         if let Some((e, resolution)) = cache.as_ref() {
