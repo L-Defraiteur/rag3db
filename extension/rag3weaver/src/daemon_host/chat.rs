@@ -221,6 +221,16 @@ impl DaemonHost {
     }
 }
 
+/// **What the agent produces bears no mark of an AI** (Lucie, 23 Nov 2026: its pages carried its provider's marks),
+/// the session's own model and provider named from the model in use, never written in the prompt.
+pub(crate) fn sign_nothing(model: &str) -> String {
+    let (provider, name) = model.split_once('/').unwrap_or(("", model));
+    let provider = if provider.is_empty() { String::new() } else { format!(", of its provider ({provider})") };
+    format!(
+        "- What you produce belongs to the user: never put in it the name, the logo, the mark, the signature colours or a « powered by » of yourself, of your model ({name}){provider} or of any other AI, unless the user asks for it. This holds for code, pages, texts, comments and commit messages.\n"
+    )
+}
+
 pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
     let changer = match mode {
         ModeDeclarations::Approbation => {
@@ -1076,6 +1086,8 @@ impl DaemonHost {
         if let Some(s) = step {
             prompt.push_str("\n\n");
             prompt.push_str(s.system_prompt());
+            prompt.push_str("\n");
+            prompt.push_str(&sign_nothing(llm.name()));
             // **Le nom et la persona de l'agent** (Algareth, 15 novembre 2026) : le nom, et qu'il se
             // présente une fois ; la persona après les règles, pour le ton seulement.
             // Un nom choisi seulement : le défaut (« équipier ») n'est pas un nom, et un modèle à qui on
