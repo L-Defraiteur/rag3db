@@ -36,8 +36,10 @@ fn the_answer_takes_the_place_of_the_thinking() {
     v.trame(&ev(json!({ "kind": "LlmCall" })));
     v.trame(&ev(json!({ "kind": "Thinking", "iteration": 1, "text": "je réfléchis à la structure" })));
     v.trame(&ev(json!({ "kind": "Token", "text": "Voici le site." })));
-    v.trame(&ev(json!({ "kind": "LlmCall" })));
     assert!(!texte(&vivante(&v)).contains("structure"), "{}", texte(&vivante(&v)));
+    v.trame(&ev(json!({ "kind": "ToolCallStarted", "tool": "read_file" })));
+    v.trame(&ev(json!({ "kind": "LlmCall" })));
+    assert!(!texte(&vivante(&v)).contains("structure"), "a new call does not bring the old thinking back: {}", texte(&vivante(&v)));
     let h: String = v.prendre_lignes().iter().map(|x| x.texte.clone()).collect::<Vec<_>>().join("\n");
     assert!(h.contains("Voici le site.") && !h.contains("structure"), "{h}");
 }
