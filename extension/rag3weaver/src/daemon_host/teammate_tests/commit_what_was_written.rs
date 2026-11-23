@@ -1,7 +1,7 @@
-//! **The host commits what the agent wrote, not what its commands produced** (c7, 23 Nov 2026, 04:14: the nestjs
-//! request landed 18 971 files, both `node_modules` and `dist/`, the agent having written no `.gitignore`). At the end
-//! of a step, the host's commit takes the paths the code tools wrote and the changes to files already tracked; what
-//! commands produced and nobody added stays out, and a line says how much and what to do. A module of its own.
+//! **The host commits what the turn made, not a mass of dependencies** (c7, 23 Nov 2026, 04:14: the nestjs request
+//! landed 18 971 files, both `node_modules` and `dist/`, the agent having written no `.gitignore`). At the end of a
+//! step, the host's commit takes what the turn created and changed; a folder that brings hundreds of files at once stays
+//! out, and a line says how much and where, asking nothing (since Lucie's trial of 23 Nov 2026). A module of its own.
 
 use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
 use super::mode_auto_v1::ended;
@@ -32,7 +32,7 @@ fn the_host_commits_what_the_agent_wrote_and_says_what_commands_left() {
     let (depot, manifeste) = depot_inscrit(d.path(), true);
     let steps = vec![
         ("edit_file", json!({ "path": "src/app.ts", "content": "export const app = 1;\n" })),
-        ("run_command", json!({ "command": "sh -c 'mkdir -p backend/node_modules && for i in $(seq 1 50); do echo $i > backend/node_modules/f$i; done'" })),
+        ("run_command", json!({ "command": "sh -c 'mkdir -p backend/node_modules && for i in $(seq 1 400); do echo $i > backend/node_modules/f$i; done'" })),
         ("run_command", json!({ "command": "sh -c 'echo suivi >> README.md'" })),
     ];
     let gate = d.path().join("gate");
@@ -51,8 +51,8 @@ fn the_host_commits_what_the_agent_wrote_and_says_what_commands_left() {
     let b = files.mailbox();
     assert!(depot.join("src/app.ts").is_file(), "what the agent wrote lands: {b:#?}");
     assert!(std::fs::read_to_string(depot.join("README.md")).unwrap_or_default().contains("suivi"), "a tracked file's change lands");
-    assert!(!depot.join("backend/node_modules").exists(), "what a command produced and nobody added stays out of her folder");
-    let dit = b.iter().find(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("produits par des commandes"))).unwrap_or_else(|| panic!("the line says it: {b:#?}"));
+    assert!(!depot.join("backend/node_modules").exists(), "a mass a command produced stays out of her folder");
+    let dit = b.iter().find(|l| l["from"] == "host" && l["uncommitted"].is_number()).unwrap_or_else(|| panic!("the line says it: {b:#?}"));
     let texte = dit["text"].as_str().unwrap_or_default();
-    assert!(texte.contains("50") && texte.contains("backend/node_modules") && texte.contains(".gitignore"), "{texte}");
+    assert!(texte.contains("400") && texte.contains("backend/node_modules") && !texte.contains(".gitignore"), "{texte}");
 }

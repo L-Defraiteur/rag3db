@@ -76,6 +76,56 @@ fn faits_du_tour(changes: &[String], echecs: &[String]) -> String {
 /// Past this many files, a turn is held and said rather than landed.
 const TOO_MANY_FILES: usize = 300;
 
+/// **The folders that bring a mass of files at once** among `files` (paths relative to the tree): a folder holding more
+/// than `max` of them, descended while one child holds nearly all (nine tenths) of its files, so that `node_modules`
+/// stays out and `package.json` beside it lands. Never the tree's root.
+pub(crate) fn mass_dirs(files: &[String], max: usize) -> Vec<String> {
+    let count = |prefix: &str| files.iter().filter(|f| f.starts_with(&format!("{prefix}/"))).count();
+    let children = |prefix: Option<&str>| -> Vec<String> {
+        let mut c: Vec<String> = Vec::new();
+        for f in files {
+            let rest = match prefix {
+                Some(p) => match f.strip_prefix(&format!("{p}/")) {
+                    Some(r) => r,
+                    None => continue,
+                },
+                None => f.as_str(),
+            };
+            if let Some((d, _)) = rest.split_once('/') {
+                let full = prefix.map_or(d.to_string(), |p| format!("{p}/{d}"));
+                if !c.contains(&full) {
+                    c.push(full);
+                }
+            }
+        }
+        c
+    };
+    let mut masses = Vec::new();
+    let mut todo = children(None);
+    while let Some(d) = todo.pop() {
+        let n = count(&d);
+        if n <= max {
+            continue;
+        }
+        let kids = children(Some(&d));
+        match kids.iter().find(|k| count(k) * 10 >= n * 9) {
+            Some(k) => todo.push(k.clone()),
+            None => {
+                // No child holds the mass: this folder is it; its children with a mass of their own are inside it.
+                masses.push(d);
+            }
+        }
+        // A folder whose mass is one child also has other children: they are judged on their own.
+        for k in kids.iter().filter(|k| count(k) * 10 < n * 9) {
+            if kids.iter().any(|m| count(m) * 10 >= n * 9) {
+                todo.push(k.clone());
+            }
+        }
+    }
+    masses.sort();
+    masses
+}
+
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let o = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| e.to_string())?;
     if o.status.success() {
@@ -96,8 +146,12 @@ impl DaemonHost {
         let registre = files.mailbox_path().with_file_name("landed-copy.json");
         let mut deja: std::collections::BTreeMap<String, String> = std::fs::read(&registre).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
         let (mut poses, mut gardes, mut laisses) = (Vec::new(), Vec::new(), Vec::new());
+        // **What the turn created lands too** (Lucie's trial of 23 Nov 2026), save a mass of files at once.
+        let nouveaux: Vec<String> = maintenant.keys().filter(|p| !c.empreintes.contains_key(*p)).cloned().collect();
+        let masses = mass_dirs(&nouveaux, TOO_MANY_FILES);
         for (p, h) in &maintenant {
-            let de_l_agent = wrote.iter().any(|x| x == p) || deja.contains_key(p);
+            let cree = !c.empreintes.contains_key(p) && !masses.iter().any(|m| p.starts_with(&format!("{m}/")));
+            let de_l_agent = wrote.iter().any(|x| x == p) || deja.contains_key(p) || cree;
             if !de_l_agent && !c.empreintes.contains_key(p) {
                 laisses.push(p.clone());
                 continue;
@@ -131,7 +185,11 @@ impl DaemonHost {
             let _ = files.append_with("host", "merge_held", None, &texte, &json!({ "why": texte, "files": gardes, "copy": w.racine }));
         }
         if !laisses.is_empty() && !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == laisses.len()) {
-            let texte = format!("{} fichier(s) produits par des commandes restent dans la copie de la tâche, pas dans ton dossier ({}) : écris-les par tes outils si on doit les garder", laisses.len(), laisses.iter().take(3).cloned().collect::<Vec<_>>().join(", "));
+            let texte = format!(
+                "{} fichier(s) de {} restent dans la copie de la tâche, pas dans ton dossier : un dossier produit d'un coup (dépendances ou build), que le projet régénère",
+                laisses.len(),
+                masses.join(", ")
+            );
             let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": laisses.len() }));
         }
     }
@@ -202,7 +260,10 @@ impl DaemonHost {
     /// start (committed or not, untracked included), or that nothing changed; written before the turn's end.
     pub(crate) fn say_turn_changes(&self, files: &TeammateFiles, arbre: &Path, avant: &str) -> Option<serde_json::Value> {
         let mut changes: Vec<String> = git(arbre, &["diff", "--name-only", avant]).ok()?.lines().map(str::to_string).collect();
-        for f in git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines() {
+        // The untracked files the landing leaves are the masses it said (23 Nov 2026): not this turn's changes.
+        let nouveaux: Vec<String> = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
+        let masses = mass_dirs(&nouveaux, TOO_MANY_FILES);
+        for f in nouveaux.iter().filter(|f| !masses.iter().any(|m| f.starts_with(&format!("{m}/")))) {
             if !changes.iter().any(|c| c == f) {
                 changes.push(f.to_string());
             }
@@ -239,34 +300,31 @@ impl DaemonHost {
             let ident = crate::backend_code::git_identity_or_default(identite.as_ref()).git_args();
             let mut commit: Vec<&str> = ident.iter().map(String::as_str).collect();
             commit.extend(["commit", "-q", "-m", &message]);
-            // **What the agent wrote, and the changes to tracked files** (c7, 23 Nov 2026, 04:14: 18 971 files of
-            // `node_modules` and `dist/` landed): what commands produced and nobody added stays out, and is said.
+            // **Everything the turn created lands** (Lucie's trial of 23 Nov 2026, `~/essai-2`: what `npm create vite`
+            // wrote stayed in the agent's tree, and her project did not start), the project's `.gitignore` kept; only a
+            // folder that brings hundreds of files at once (dependencies, a build: 18 971 files at 04:14 that night)
+            // stays out, said in a line that asks her nothing.
             let _ = git(arbre, &["add", "-u"]);
             for chemin in wrote {
                 let _ = git(arbre, &["add", "-A", "--", chemin]);
             }
-            let laisses: Vec<String> = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
-            if !laisses.is_empty() {
-                let mut dossiers: Vec<(String, usize)> = Vec::new();
-                for f in &laisses {
-                    let parts: Vec<&str> = f.split('/').collect();
-                    let d = if parts.len() > 2 { format!("{}/{}", parts[0], parts[1]) } else { parts[0].to_string() };
-                    match dossiers.iter_mut().find(|(n, _)| *n == d) {
-                        Some((_, c)) => *c += 1,
-                        None => dossiers.push((d, 1)),
-                    }
-                }
-                dossiers.sort_by(|a, b| b.1.cmp(&a.1));
-                let noms: Vec<&str> = dossiers.iter().take(3).map(|(n, _)| n.as_str()).collect();
+            let nouveaux: Vec<String> = git(arbre, &["ls-files", "--others", "--exclude-standard"]).unwrap_or_default().lines().map(str::to_string).collect();
+            let masses = mass_dirs(&nouveaux, TOO_MANY_FILES);
+            let (dehors, dedans): (Vec<&String>, Vec<&String>) = nouveaux.iter().partition(|f| masses.iter().any(|m| f.starts_with(&format!("{m}/"))));
+            for paquet in dedans.chunks(200) {
+                let mut args: Vec<&str> = vec!["add", "-A", "--"];
+                args.extend(paquet.iter().map(|f| f.as_str()));
+                let _ = git(arbre, &args);
+            }
+            if !dehors.is_empty() {
                 let texte = format!(
-                    "{} fichier(s) produits par des commandes ne sont pas commités ({}{}) : ajoute un .gitignore, ou `git add` ce que tu veux garder",
-                    laisses.len(),
-                    noms.join(", "),
-                    if dossiers.len() > 3 { "…" } else { "" }
+                    "{} fichier(s) de {} restent hors de ton dossier : un dossier produit d'un coup (dépendances ou build), que le projet régénère",
+                    dehors.len(),
+                    masses.join(", ")
                 );
                 // Said once for a given count: a step that changes nothing there does not repeat it.
-                if !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == laisses.len()) {
-                    let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": laisses.len(), "dirs": noms }));
+                if !files.mailbox().iter().any(|l| l["kind"] == "report" && l["uncommitted"] == dehors.len()) {
+                    let _ = files.append_with("host", "report", None, &texte, &json!({ "uncommitted": dehors.len(), "dirs": masses }));
                 }
             }
             let rien = git(arbre, &["diff", "--cached", "--quiet"]).is_ok();

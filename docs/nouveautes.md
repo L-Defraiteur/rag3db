@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Un projet fait par un générateur atterrit entier dans ton dossier.** Ce que les commandes de
+  l'agent créent (`npm create vite` : `package.json`, `index.html`, `src/main.jsx`, `vite.config.js`…) atterrit avec
+  ce qu'il a écrit, le `.gitignore` du projet respecté : ton projet se lance. Seul un dossier qui apporte des centaines
+  de fichiers d'un coup (dépendances, build) reste dehors, et une ligne le dit sans rien te demander. Un tour qui ne
+  change rien ne liste plus les fichiers d'un tour d'avant.
 - 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
   puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
   fermer une étape n'est pas une réponse.
