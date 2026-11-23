@@ -12,6 +12,11 @@
 - 23 novembre 2026 — **Un tour ne finit plus sans un mot pour toi.** Si l'agent a travaillé (fichiers écrits, commandes)
   puis fermé son étape sans t'écrire une phrase, il est relancé une fois pour te dire ce qu'il a fait et ce qui reste :
   fermer une étape n'est pas une réponse.
+- 23 novembre 2026 — **La réflexion du modèle arrive à part, et ne se mêle plus à sa réponse.** Un modèle Google
+  demande désormais ses résumés de pensée (des phrases courtes et titrées, « **Calculating Domino Tilings** … ») à
+  l'effort voulu : ils partent vers l'affichage de la réflexion, jamais dans la réponse que le modèle relira au tour
+  suivant, et la signature de ses appels d'outils repart telle qu'elle est venue. Le réglage `Thoughts::Hidden` garde
+  l'ancienne façon (l'effort seul, sans résumé).
 - 23 novembre 2026 — **Chaque appel au modèle dit la taille du contexte et les jetons déjà comptés.** Le flux d'un
   run donne, à chaque appel, le plafond de contexte du modèle, les jetons envoyés, reçus et en cache depuis le début de
   la conversation et depuis sa dernière réduction (gardés avec elle, même après une reprise), et, pour une réponse
