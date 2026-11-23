@@ -1247,10 +1247,12 @@ bool OnDiskHNSWIndex::keepNodeReachable(Transaction* transaction, common::offset
     // stays there, and a row they do not point to is lost to it (« 9 results » for k = 30 and
     // efs = 1000 in TwentyRowsToDistinctVectorsLineByLine, the row reachable all the same).
     auto entryPoint = searchNNInUpperLayer(vector, searchState);
-    if (entryPoint == offset) {
-        return false; // the query starts on it
-    }
-    if (entryPoint == common::INVALID_OFFSET) {
+    // A query for its own vector may land on the node itself: that proves nothing for the lower
+    // layer. A node of the upper layer whose lower edges all went with deleted rows was left there
+    // without one: no other query reached it, and a query landing on it found only itself
+    // (RegionDelete/SetNullFirstAllButFiveSeed157 : « reached 4/5, nearest 1/5 »). The search
+    // then starts from another node.
+    if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
         entryPoint = hnswStorageInfo.lowerEntryPoint;
     }
     if (entryPoint == offset || entryPoint == common::INVALID_OFFSET) {
