@@ -995,9 +995,22 @@ impl BacASable {
 }
 
 
+/// **What says a command must stop now** (23 Nov 2026: a stop of the user cut nothing in flight): the run's
+/// cancellation, read while the command runs.
+#[derive(Clone)]
+pub struct Annulation(pub std::sync::Arc<dyn Fn() -> bool + Send + Sync>);
+
+impl std::fmt::Debug for Annulation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Annulation")
+    }
+}
+
 /// Les conditions dans lesquelles on exécute.
 #[derive(Debug, Clone)]
 pub struct Atelier {
+    /// The run's cancellation: a command in the foreground stops (its group killed) when it says so.
+    pub annulation: Option<Annulation>,
     /// Le répertoire de travail. **Obligatoire** : hériter de celui du
     /// processus appelant ferait dépendre le résultat d'où l'agent a été
     /// lancé.
@@ -1078,6 +1091,7 @@ impl Atelier {
 
     pub fn dans(cwd: impl Into<std::path::PathBuf>) -> Self {
         Self {
+            annulation: None,
             cwd: cwd.into(),
             delai: std::time::Duration::from_secs(120),
             max_sortie: 100_000,
@@ -1127,6 +1141,8 @@ impl Atelier {
 /// Ce qu'une exécution a produit.
 #[derive(Debug, Clone)]
 pub struct Sortie {
+    /// Stopped by the run's cancellation (a stop of the user).
+    pub annulee: bool,
     /// `None` si tuée par un signal ou par le délai.
     pub code: Option<i32>,
     pub stdout: String,
@@ -1716,6 +1732,7 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou: _verrou, sous_poste } = lancer(&a, atelier, false)?;
 
     let mut expiree = false;
+    let mut annulee = false;
     let code = loop {
         match enfant.try_wait() {
             Ok(Some(statut)) => break statut.code(),
@@ -1729,6 +1746,14 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
             let _ = enfant.kill();
             let _ = enfant.wait();
             expiree = true;
+            break None;
+        }
+        // **A stop of the run stops the command** (23 Nov 2026), its group with it.
+        if atelier.annulation.as_ref().is_some_and(|a| (a.0)()) {
+            signaler_le_groupe(enfant.id(), "KILL");
+            let _ = enfant.kill();
+            let _ = enfant.wait();
+            annulee = true;
             break None;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
@@ -1752,6 +1777,7 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
         code,
         duree: debut.elapsed(),
         expiree,
+        annulee,
         tronquee,
         journal_stdout: chemin_out,
         journal_stderr: chemin_err,

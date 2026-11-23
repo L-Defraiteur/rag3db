@@ -354,6 +354,9 @@ impl Node for RunCommandNode {
             atelier = atelier.avec_bac_a_sable(bac.as_ref().clone());
         }
 
+        // **A stop of the run stops the command in the foreground** (23 Nov 2026), its group with it.
+        let jeton = ctx.cancellation();
+        atelier.annulation = Some(crate::commande::Annulation(std::sync::Arc::new(move || jeton.is_cancelled())));
         let mut rapport = String::new();
         let autorisees = garde.autoriser_ligne(&self.ligne, &contexte)
             .map_err(|e| format!("run: {e}"))?;
@@ -365,7 +368,7 @@ impl Node for RunCommandNode {
                 c.lisible(),
                 s.code.map(|c| c.to_string()).unwrap_or_else(|| "tué".into()),
                 s.duree,
-                if s.expiree { format!(" · **délai de {} s dépassé**", self.delai_s) } else { String::new() }
+                if s.annulee { " · **arrêtée : le tour a été arrêté**".to_string() } else if s.expiree { format!(" · **délai de {} s dépassé**", self.delai_s) } else { String::new() }
             ));
             if !s.stdout.trim().is_empty() {
                 rapport.push_str(&format!("```\n{}\n```\n\n", s.stdout.trim_end()));
