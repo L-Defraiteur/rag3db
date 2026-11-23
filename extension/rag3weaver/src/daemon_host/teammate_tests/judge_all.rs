@@ -26,7 +26,7 @@ fn an_outside_path_the_user_asked_for_is_granted_by_the_judge_and_replayed() {
     let v = v1_with(
         |d| {
             root = ailleurs(d);
-            (vec![format!("cat {}", root.join("notes.txt").display())], format!("Lis les notes dans {}.", root.display()))
+            (vec![format!("cat {}", root.join("notes.txt").display())], "Lis les notes du dossier « ailleurs », à côté du projet.".to_string())
         },
         &["les notes"],
     );
@@ -91,7 +91,7 @@ fn a_root_the_judge_grants_is_said_in_the_mailbox() {
     let v = v1_with(
         |d| {
             root = ailleurs(d);
-            (vec![format!("cat {}", root.join("notes.txt").display())], format!("Lis les notes dans {}.", root.display()))
+            (vec![format!("cat {}", root.join("notes.txt").display())], "Lis les notes du dossier « ailleurs », à côté du projet.".to_string())
         },
         &["les notes"],
     );

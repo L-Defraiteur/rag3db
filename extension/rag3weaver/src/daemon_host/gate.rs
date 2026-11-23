@@ -429,6 +429,20 @@ impl DaemonHost {
                 }
                 return OpenRootOutcome::Card { class: "open_root".into(), args };
             }
+            // **A path she wrote herself is read without a card** (Lucie, 23 Nov 2026, ~21 h): for reading only, from a
+            // human's request of the turn, for `teammate.mentioned_path_grant_min` minutes; said in one line.
+            if mode == "read" {
+                let minutes = h.with_backend_id(&backend_id, |b| b.prepared().manifest.teammate.as_ref().map(|p| p.mentioned_path_grant_min)).ok().flatten().unwrap_or(10);
+                if let (true, Some(citation), Some(agent)) = (minutes > 0, cited_by_a_human(&files.mailbox(), &refused), h.agent_key_of_backend(&backend_id)) {
+                    let maintenant = crate::catalog::retard::now_ms();
+                    let preuve = super::root_grants::Proof { quote: citation, at: Some(maintenant), turn: None };
+                    if h.grant_root_until(&agent, &root, preuve, "mention", "read", Some(maintenant + minutes * 60_000)).is_ok() {
+                        let texte = h.prompt_texts().get("grant.mentioned", &[("root", &root.display().to_string()), ("minutes", &minutes.to_string())]);
+                        let _ = files.append_with("host", "root_granted", None, &texte, &json!({ "root": root, "mode": "read", "by": "mention", "minutes": minutes }));
+                        return OpenRootOutcome::Granted;
+                    }
+                }
+            }
             let carte = |args: Value| OpenRootOutcome::Card { class: "open_root".into(), args };
             let auto = matches!(h.gate_level(&backend_id, &files).as_deref(), Some("bac" | "judge"));
             let (Some(agent), Some(juge), true) = (h.agent_key_of_backend(&backend_id), &juge, auto) else { return carte(args) };
@@ -461,6 +475,33 @@ impl DaemonHost {
     pub fn gate_state(&self) -> (Option<&PathBuf>, bool) {
         (self.gate_dir.as_ref(), self.gate_judge.is_some())
     }
+}
+
+/// **The human line of the current turn that wrote `refused` or a folder holding it** (Lucie, 23 Nov 2026, ~21 h): its
+/// text, else `None`. Only a request or an instruction whose `by.kind` is human, since the turn's last `ended`; never a
+/// path from an agent, a file read or a tool's result. A word is a path when it starts with `/` or `~/`, its quotes and
+/// its end punctuation taken off.
+pub(crate) fn cited_by_a_human(lignes: &[Value], refused: &Path) -> Option<String> {
+    let debut = lignes.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
+    let maison = std::env::var_os("HOME").map(PathBuf::from);
+    let refuse = refused.canonicalize().unwrap_or_else(|_| refused.to_path_buf());
+    lignes[debut..]
+        .iter()
+        .filter(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host" && l["by"]["kind"] == "human")
+        .filter_map(|l| l["text"].as_str())
+        .find(|texte| {
+            texte.split_whitespace().any(|mot| {
+                let mot = mot.trim_matches(|c: char| matches!(c, '`' | '"' | '\'' | '«' | '»' | '(' | ')' | '<' | '>' | ',' | ';')).trim_end_matches(|c: char| matches!(c, '.' | ':' | '!' | '?'));
+                let chemin = match (mot.strip_prefix("~/"), &maison) {
+                    (Some(reste), Some(m)) => m.join(reste),
+                    _ if mot.starts_with('/') => PathBuf::from(mot),
+                    _ => return false,
+                };
+                let chemin = chemin.canonicalize().unwrap_or(chemin);
+                chemin.components().count() > 2 && refuse.starts_with(&chemin)
+            })
+        })
+        .map(str::to_string)
 }
 
 /// The user's gate folder: `~/.config/rag3weaver/gate`.
