@@ -208,7 +208,6 @@ pub fn lignes(v: &Validee, t: &Theme, cap: Capacites, largeur: usize, coloration
             morceaux.extend(prose(t, cap, &v.texte[tete..], ecrit));
             replier_mots(morceaux, largeur)
         }
-        Genre::Trace => replier_mots(vec![(v.texte.clone(), sourdine)], largeur),
         Genre::Note => replier_mots(vec![(v.texte.clone(), sourdine.add_modifier(Modifier::DIM))], largeur),
         Genre::Code => {
             let cadre = teinte(t, cap, "cadre");
