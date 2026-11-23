@@ -2357,7 +2357,7 @@ impl PreparedBackend {
                 .map_err(|e| format!("{name}: {e}"))?;
             // Les sous-graphes cités : lus, liés et vérifiés comme les Plans ;
             // leurs types de nœuds passent sous la politique de l'outil.
-            let types = crate::dataflow::foreach_node::resoudre_les_sous_graphes_avec(&mut tool, &|chemin| lecteur.lire_reference(&directory, chemin), &nodes)
+            let types = crate::dataflow::foreach_node::resolve_cited_graphs_from(&mut tool, &attachment.graph.to_string_lossy(), &|chemin| lecteur.lire_reference(&directory, chemin), &nodes)
                 .map_err(|e| format!("{name}: {e}"))?;
             types_des_sous_graphes.insert(name.clone(), types);
             #[cfg(feature = "code")]
