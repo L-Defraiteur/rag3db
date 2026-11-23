@@ -36,6 +36,9 @@ fn the_summarised_turn_comes_back_in_full_and_the_active_window_never() {
     assert_eq!(r["mode"], json!("recent"), "{r}");
     assert_eq!(r["degraded"], Value::Null, "{r}");
     assert!(r.as_object().is_some_and(|o| o.contains_key("swarm")) && r["swarm"].is_null(), "{r}");
+    // What each signal said of the passage, for the bench (and the threshold it sets).
+    assert!(r["passages"][0]["signals"].as_array().is_some_and(|s| !s.is_empty()), "{r}");
+    eprintln!("recall evidence: {}", r["passages"]);
 }
 
 /// Nothing found: no block, and it is not a fallback (`degraded` stays null).
@@ -46,9 +49,22 @@ fn nothing_found_gives_no_block_and_is_not_a_fallback() {
     let b = ouvrir(dir.path(), |_| {});
     a_thread(&b);
     let r = recall(&b, Some(ME), json!({"request": "zebracornword", "run": "task:t", "active_since": "2026-11-23T10:30:00Z"}));
-    assert_eq!(r["block"], Value::Null, "{r}");
+    assert_eq!(r["block"], Value::Null, "a nearest neighbour is not evidence: {r}");
     assert_eq!(r["degraded"], Value::Null, "{r}");
     assert_eq!(r["sources"], json!([]), "{r}");
+}
+
+/// The dense similarity of an unrelated request, measured (threshold 0): printed for the bench, never asserted.
+#[test]
+#[ignore]
+fn the_similarity_of_an_unrelated_request_is_printed() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    a_thread(&b);
+    for q in ["zebracornword", "how is the weather in Lisbon", "what is quokkaword", "the codename of the night build"] {
+        let r = recall(&b, Some(ME), json!({"request": q, "run": "task:t", "active_since": "2026-11-23T10:30:00Z", "min_similarity": 0.0}));
+        eprintln!("similarity probe « {q} »: {}", r["passages"]);
+    }
 }
 
 /// Without `active_since` (no window summarised yet), no turn is searched: the cards only.
