@@ -126,6 +126,25 @@ function RootOfCard({ root, args }: { root: string; args: Record<string, unknown
   );
 }
 
+/** **Why a card stops, in words** (the audit of 22 November 2026, point 8: « run_command · protected, once » on screen):
+ * the class and the scope of the host's card, said as the terminal says them; an unknown class is not shown as a code. */
+const CLASS_WORDS: Record<string, string> = {
+  protected: "dans un dossier protégé",
+  open_root: "hors de ses dossiers",
+  destroy_local: "supprime un fichier qui n'est sur aucun distant",
+  outbound: "envoie hors de la machine ou installe des paquets",
+  database: "touche une base",
+  system: "touche le système",
+};
+const SCOPE_WORDS: Record<string, string> = { once: "pour cette fois", task: "pour cette tâche" };
+function whyWords(klass: unknown, scope: unknown): string | null {
+  const parts = [CLASS_WORDS[String(klass ?? "")], SCOPE_WORDS[String(scope ?? "")]].filter(Boolean);
+  return parts.length ? `${parts.join(", ")}.` : null;
+}
+function toolWords(tool: string): string {
+  return ({ run_command: "lancer une commande", edit_file: "modifier un fichier", write_file: "écrire un fichier" } as Record<string, string>)[tool] ?? "une action";
+}
+
 function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; waitingId: string | null; onAnswer: (line: Line, approved: boolean) => void }) {
   const cards = cardsOf(mailbox);
   if (!cards.length) return null;
@@ -136,7 +155,8 @@ function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; wait
         const current = c.states[c.states.length - 1];
         const until = current?.until ? Number(current.until) : null;
         const left = until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : null;
-        const command = c.opening.command ? String(c.opening.command) : null;
+        const args0 = (c.opening.args ?? {}) as Record<string, unknown>;
+        const command = c.opening.command ? String(c.opening.command) : typeof args0.command === "string" && args0.command ? args0.command : null;
         const args = (c.opening.args ?? {}) as Record<string, unknown>;
         const root = typeof args.root === "string" ? args.root : null;
         return (
@@ -149,11 +169,17 @@ function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; wait
             data-state={open ? "open" : "closed"}
             className={`approval-card rounded-lg border px-3.5 py-2.5 text-sm grid gap-2 ${open ? "border-primary/60" : "border-border opacity-80"}`}
           >
-            <p>
-              {open ? "L'agent attend ton accord" : "Accord"} : {String(c.opening.tool ?? "run_command")}{" "}
-              {root ? null : <code className="font-mono">{command ?? JSON.stringify(c.opening.args ?? {})}</code>}
-              {c.opening.class ? <span className="text-xs text-muted-foreground"> · {String(c.opening.class)}{c.opening.scope ? `, ${String(c.opening.scope)}` : ""}</span> : null}
+            <p className="card-headline font-medium">
+              {command ? (
+                <>
+                  {open ? "L'agent veut lancer " : "L'agent voulait lancer "}
+                  <code className="font-mono">{command}</code>
+                </>
+              ) : (
+                <>{open ? "L'agent attend ton accord" : "Accord"} : {toolWords(String(c.opening.tool ?? ""))}</>
+              )}
             </p>
+            {whyWords(c.opening.class, c.opening.scope) ? <p className="card-why text-muted-foreground">{whyWords(c.opening.class, c.opening.scope)}</p> : null}
             {root ? <RootOfCard root={root} args={args} /> : null}
             <ol className="timeline flex flex-wrap gap-x-3 text-xs text-muted-foreground">
               <li data-stage="opened">{STAGES.opened}</li>
