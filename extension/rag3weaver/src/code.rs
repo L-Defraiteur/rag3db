@@ -2070,8 +2070,14 @@ pub fn analyze_in_project_avec(
                 let path_root = r.line.checked_sub(1).and_then(|row| reference_lines.get(row))
                     .and_then(|line| r.column.and_then(|column| reference_path_root(line, column, id)));
                 if let Some(path_root) = path_root {
+                    // **The file alone decides** (23 November 2026, ticket `2026-11-23-le-graphe-depend-de-la-taille-des-paquets`):
+                    // a standard namespace of its language (`std::to_string` in C++), a library it uses itself whose
+                    // provenance is certain, a dependency its repository declares. `externes_sures` alone held the
+                    // libraries of the whole batch, across languages: a Rust `use std::…` in the batch made a C++
+                    // `std::to_string` external, and a batch without Rust made it a rendez-vous.
                     if codeparsers::import_resolution::provenance::est_builtin(abs, path_root)
-                        || externes_sures.contains(path_root)
+                        || codeparsers::import_resolution::provenance::est_espace_standard(abs, path_root)
+                        || (externes_sures.contains(path_root) && libraries.contains(path_root))
                         || dependance_declaree(abs, path_root)
                     {
                         continue;
