@@ -582,13 +582,14 @@ cas $? "20 Gio disponibles pour 14 + 12 : le lourd attend en disant la mémoire,
 dispo 20; : > "$J"
 POSTE_PIC_ATTENDU=4G POSTE_RESERVE_ECRAN=12G "$POSTE" cpu -- bash -c 'note P début' > /dev/null 2>&1
 [ -n "$(instant P début)" ]; cas $? "un petit pic déclaré (4 + 12 sous 20 Gio) entre sans attendre"
-dispo 90; : > "$J"
+dispo 90; : > "$J"; rm -f "$POSTE_LOCK_DIR/derniere-entree"
 POSTE_MEM_RECUL=3 travail lourd R1 1 &
 sleep 0.3
 POSTE_MEM_RECUL=3 travail lourd R2 1 &
 wait
 d1=$(instant R1 début); d2=$(instant R2 début)
-[ -n "$d1" ] && [ -n "$d2" ] && [ $((d2 - d1)) -ge 2500 ]
-cas $? "deux lourds arrivés ensemble : le second entre au moins POSTE_MEM_RECUL après le premier ($((d2 - d1)) ms)"
+e=$(( ${d2:-0} - ${d1:-0} )); e=${e#-}
+[ -n "$d1" ] && [ -n "$d2" ] && [ "$e" -ge 2500 ]
+cas $? "deux lourds arrivés ensemble : le second entre au moins POSTE_MEM_RECUL après le premier ($e ms)"
 rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/derniere-entree"
 exit $echec
