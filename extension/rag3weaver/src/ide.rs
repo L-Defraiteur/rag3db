@@ -994,7 +994,8 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     c["text"].as_str().unwrap_or_default(),
                     // L'adresse et la réponse (page 07-novembre-2026-everything-declarative/01, § 2).
                     // `by` is the host's, from who calls; a `by` of the body is never read.
-                    &json!({ "to": c["to"], "reply_to": c["reply_to"], "approved": c["approved"], "expects": c["expects"], "by": by }),
+                    // `gate` (a request's level of the gate: bac, judge, cards) goes to the host, which says it in the mailbox.
+                    &json!({ "to": c["to"], "reply_to": c["reply_to"], "approved": c["approved"], "expects": c["expects"], "gate": c["gate"], "by": by }),
                 ) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
