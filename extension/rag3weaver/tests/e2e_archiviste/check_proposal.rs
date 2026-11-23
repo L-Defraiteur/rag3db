@@ -41,7 +41,8 @@ fn a_proposal_is_checked_on_a_copy_without_touching_the_version_in_service() {
     assert_eq!(appel(&b, "list_turns", json!({}))["metadata"]["template"]["hash"], json!(h0), "the version in service is untouched");
     // A proposal that changes what was fixed at the opening is refused, naming it.
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
-    m["entities"]["Turn"]["config"]["signals"] = json!(["bm25", "vector"]);
+    // (Turn gained the vector signal in the template on 23 November 2026: removing it is still an entity change.)
+    m["entities"]["Turn"]["config"]["signals"] = json!(["bm25"]);
     std::fs::write(&manifest, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     let e = b.check_proposal(&manifest).err().expect("an entity change is refused");
     assert!(e.contains("entities") && e.contains("migration"), "{e}");
