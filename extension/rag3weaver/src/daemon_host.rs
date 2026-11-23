@@ -3065,7 +3065,11 @@ impl DaemonHost {
                                     #[cfg(test)]
                                     let index = self.index_force.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or(index);
                                     let t = (index, json!(b.prepared().template_drift()));
-                                    self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).insert(cle, (instance, t.0.clone(), t.1.clone()));
+                                    // Only a settled index part is kept: one in progress, busy or failing is read again
+                                    // at each read, so its progress and its end are never hidden (23 Nov. 2026).
+                                    if index_pose(&t.0) {
+                                        self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).insert(cle, (instance, t.0.clone(), t.1.clone()));
+                                    }
                                     t
                                 }
                             };
@@ -4467,6 +4471,24 @@ fn espace_du_manifeste(manifest: &Path) -> Option<PathBuf> {
     let m: Value = serde_json::from_slice(&std::fs::read(manifest).ok()?).ok()?;
     let racine = PathBuf::from(m["workspace"]["root"].as_str()?);
     Some(if racine.is_absolute() { racine } else { manifest.parent()?.join(racine) })
+}
+
+/// **A settled index part** (23 November 2026): no busy catalog nor error, and each entity's text indexed (or not
+/// tracked), with no progress under way; only such a part is kept between reads of the host's state.
+fn index_pose(index: &Value) -> bool {
+    let Some(o) = index.as_object() else { return false };
+    if o.contains_key("busy") || o.contains_key("error") {
+        return false;
+    }
+    o.values().filter_map(Value::as_object).filter(|e| e.contains_key("text") || e.contains_key("vectors")).all(|e| {
+        let est = |k: &str, permis: &[&str]| e.get(k).is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| permis.contains(&s)));
+        let pas_en_cours = |k: &str| e.get(k).is_none_or(|v| v.is_null() || v.as_f64().is_some_and(|p| p == 0.0 || p >= 100.0));
+        est("text", &["ready"])
+            && est("vectors", &["ready", "never", "not_declared"])
+            && est("relations", &["ready", "never"])
+            && pas_en_cours("text_percent")
+            && pas_en_cours("vectors_percent")
+    })
 }
 
 /// La branche que tient le dépôt d'un manifeste, relue à chaque état (elle
