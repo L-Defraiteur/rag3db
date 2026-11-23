@@ -121,6 +121,14 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
         match a.as_str() {
             "--plain" => o.plain = true,
             "--theme" => o.theme = Some(valeur()?),
+            // The gate a request asks for (23 Nov. 2026): the bac by default, the judge, or a card for each command.
+            "--gate" => {
+                let v = valeur()?;
+                if !matches!(v.as_str(), "bac" | "judge" | "cards") {
+                    return Err(format!("--gate {v} : la porte est bac, judge ou cards"));
+                }
+                o.gate = v;
+            }
             "--repo" | "--depot" | "--backend" => o.depot = valeur()?,
             "--task" | "--tache" => o.task = valeur()?,
             "--request" | "--demande" => o.demande = Some(valeur()?),
@@ -143,7 +151,7 @@ fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<S
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps] [--still]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] [--repo <nom|chemin>] [--task <nom>] [--continue] [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\" [--user-token-cmd \"<commande>\"]] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps] [--still] [--gate bac|judge|cards]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
 
 fn main() {
     let o = match options() {
@@ -165,6 +173,7 @@ fn main() {
 fn lancer(o: Options) -> Result<(), String> {
     if o.steps { std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"); }
     if o.still { std::env::set_var("RAG3WEAVER_TTY_STILL", "1"); }
+    std::env::set_var("RAG3WEAVER_TTY_GATE", &o.gate);
     let ep = match (&o.daemon_json, &o.daemon_cmd) {
         (Some(p), _) => Endpoint::depuis_fichier(std::path::Path::new(p))?,
         (None, Some(c)) => Endpoint::depuis_commande(c)?,
@@ -355,7 +364,7 @@ fn lancer(o: Options) -> Result<(), String> {
     let arret_de_la_demande = arret.clone();
     let mut ouvert = || {
         if let Some(texte) = demande.take() {
-            match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": backend, "task": o.task, "kind": "request", "text": texte })) {
+            match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": backend, "task": o.task, "kind": "request", "text": texte, "gate": o.gate })) {
                 Ok(r) => eprintln!("[tty] demande posée ({})", if r["started"] == true { "l'équipier part" } else { "l'équipier tournait déjà" }),
                 // **A refused request is said at once** (c7, 22 nov.: 280 s of silence): the session stops on it.
                 Err(e) => {

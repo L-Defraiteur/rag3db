@@ -139,6 +139,12 @@ pub fn depot_resolu(etat: &Value, resolu: &Value) -> Result<Depot, String> {
     Ok(Depot { id: id.to_string(), manifest: s("manifest"), repo: s("repo"), branch: s("branch") })
 }
 
+/// **The gate a request asks for** (23 Nov. 2026): the one chosen at launch (`--gate`, put in `RAG3WEAVER_TTY_GATE`),
+/// the bac by default — the mode auto, Lucie's choice.
+pub fn gate() -> String {
+    std::env::var("RAG3WEAVER_TTY_GATE").ok().filter(|g| matches!(g.as_str(), "bac" | "judge" | "cards")).unwrap_or_else(|| "bac".into())
+}
+
 /// **Le dépôt désigné** par son nom, résolu par l'hôte (`POST /depots/resoudre`), complété par son état.
 pub fn resoudre(agent: &ureq::Agent, ep: &Endpoint, depot: &str) -> Result<Depot, String> {
     let resolu = poster(agent, ep, "/depots/resoudre", &serde_json::json!({ "name": depot }))?;
