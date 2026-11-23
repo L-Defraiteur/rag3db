@@ -22,7 +22,7 @@ import time
 import urllib.request
 
 BINARY, FAKE, DIR = sys.argv[1:4]
-PORT = 17996
+PORT = 0  # a free port, taken by the fake host and read back from its daemon.json (23 Nov. 2026)
 os.makedirs(DIR, exist_ok=True)
 DJ, JOURNAL, BOX = os.path.join(DIR, "daemon.json"), os.path.join(DIR, "plain.journal"), os.path.join(DIR, "fake.jsonl")
 for f in (DJ, JOURNAL, BOX):
@@ -39,10 +39,17 @@ def post(path, body):
 
 fake = subprocess.Popen([sys.executable, FAKE, str(PORT), BOX, DJ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
-    for _ in range(50):
-        if os.path.exists(DJ) and os.path.getsize(DJ) > 0:
+    # The fake host writes its address once it listens: wait for it, bounded, and say it if it never comes.
+    for _ in range(300):
+        try:
+            PORT = int(json.load(open(DJ))["address"].rsplit(":", 1)[1])
             break
-        time.sleep(0.1)
+        except (OSError, ValueError, KeyError):
+            time.sleep(0.1)
+    if not PORT:
+        print("ROUGE environnement : le faux hôte n'a pas dit son adresse en 30 s (fake vivant : %s)" % (fake.poll() is None))
+        print("ROUGE")
+        sys.exit(1)
     tty = subprocess.Popen([BINARY, "--plain", "--depot", "faux", "--tache", "mesure", "--demande", "go", "--daemon-json", DJ, "--journal", JOURNAL], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     time.sleep(6)
     post("/faux/end-then-resume", {"text": ANSWER})
