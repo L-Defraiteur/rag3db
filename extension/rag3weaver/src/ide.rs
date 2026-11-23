@@ -297,6 +297,10 @@ impl Flux {
     /// un graphe long gelait de même la vue vivante de l'IDE.
     pub fn relayer(self: &Arc<Self>, backend: &str, bus: &EventBus) {
         for sujet in SUJETS {
+            // `agent` and `tokens` share one thread, which keeps a run's words between its start and its end.
+            if sujet == "agent" || sujet == "tokens" {
+                continue;
+            }
             let mut rx = bus.subscribe(sujet);
             let (flux, backend, du_fil) = (Arc::downgrade(self), backend.to_string(), sujet.to_string());
             let lance = std::thread::Builder::new().name(format!("ide-relais-{sujet}")).spawn(move || loop {
@@ -311,6 +315,142 @@ impl Flux {
             if let Err(e) = lance {
                 eprintln!("[ide] le relais de « {sujet} » ne part pas : {e}");
             }
+        }
+        self.relayer_les_runs(backend, bus);
+    }
+
+    /// **`agent` and `tokens` by one thread, in a run's order** (an end-to-end witness on 23 November 2026: by two
+    /// threads, 132 to 162 of 300 words of a step passed after the `RunFinished` of their run; the ticket of
+    /// 7 November had seen a `Token` pass its `RunStarted`). The words are emitted before their run's end: the
+    /// relay empties `tokens` before it publishes a `RunFinished`. A run's start is emitted before its first word:
+    /// on the first word of a run it has not seen start, the relay publishes the `agent` events waiting, up to that
+    /// run's `RunStarted`; an end met on the way waits behind the words. Both channels are awaited at once, `tokens`
+    /// first (`select!` biased), on a current-thread runtime of its own (not the graphs' runtime, see above).
+    fn relayer_les_runs(self: &Arc<Self>, backend: &str, bus: &EventBus) {
+        let (mut agent, mut tokens) = (bus.subscribe("agent"), bus.subscribe("tokens"));
+        let (flux, backend) = (Arc::downgrade(self), backend.to_string());
+        let lance = std::thread::Builder::new().name("ide-relais-runs".into()).spawn(move || {
+            let rt = match tokio::runtime::Builder::new_current_thread().build() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("[ide] le relais des runs ne part pas : {e}");
+                    return;
+                }
+            };
+            rt.block_on(async move {
+                let publier = |sujet: &str, e: Value| -> bool {
+                    match flux.upgrade() {
+                        Some(f) => {
+                            f.publier(sujet, &backend, e);
+                            true
+                        }
+                        None => false,
+                    }
+                };
+                let manque = |n: u64| json!({ "kind": "EventsMissed", "count": n });
+                let mut commences: HashSet<String> = HashSet::new();
+                let mut retenues: VecDeque<Value> = VecDeque::new();
+                let (mut agent_ouvert, mut tokens_ouvert) = (true, true);
+                loop {
+                    // An end held back waits behind the words already emitted.
+                    if !retenues.is_empty() {
+                        while let Ok(t) = tokens.try_recv() {
+                            if !publier("tokens", t.to_json()) {
+                                return;
+                            }
+                        }
+                        while let Some(v) = retenues.pop_front() {
+                            if !publier("agent", v) {
+                                return;
+                            }
+                        }
+                    }
+                    if !agent_ouvert && !tokens_ouvert {
+                        break;
+                    }
+                    tokio::select! {
+                        biased;
+                        r = tokens.recv(), if tokens_ouvert => match r {
+                            Ok(e) => {
+                                let v = e.to_json();
+                                let run = v["run"].as_str().unwrap_or_default().to_string();
+                                if !run.is_empty() && !commences.contains(&run) {
+                                    // Its start was emitted before it: publish the agent events waiting, up to it.
+                                    while let Ok(a) = agent.try_recv() {
+                                        let av = a.to_json();
+                                        match av["kind"].as_str() {
+                                            Some("RunFinished") => retenues.push_back(av),
+                                            Some("RunStarted") => {
+                                                let lui = av["run"] == run.as_str();
+                                                if let Some(r) = av["run"].as_str() {
+                                                    commences.insert(r.to_string());
+                                                }
+                                                if !publier("agent", av) {
+                                                    return;
+                                                }
+                                                if lui {
+                                                    break;
+                                                }
+                                            }
+                                            _ => {
+                                                if !publier("agent", av) {
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    commences.insert(run);
+                                }
+                                if !publier("tokens", v) {
+                                    return;
+                                }
+                            }
+                            Err(async_broadcast::RecvError::Overflowed(n)) => {
+                                if !publier("tokens", manque(n)) {
+                                    return;
+                                }
+                            }
+                            Err(async_broadcast::RecvError::Closed) => tokens_ouvert = false,
+                        },
+                        r = agent.recv(), if agent_ouvert => match r {
+                            Ok(a) => {
+                                let v = a.to_json();
+                                match v["kind"].as_str() {
+                                    Some("RunStarted") => {
+                                        if let Some(r) = v["run"].as_str() {
+                                            commences.insert(r.to_string());
+                                        }
+                                        if !publier("agent", v) {
+                                            return;
+                                        }
+                                    }
+                                    // Its words were emitted before it: they pass first.
+                                    Some("RunFinished") => {
+                                        if let Some(r) = v["run"].as_str() {
+                                            commences.remove(r);
+                                        }
+                                        retenues.push_back(v);
+                                    }
+                                    _ => {
+                                        if !publier("agent", v) {
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(async_broadcast::RecvError::Overflowed(n)) => {
+                                if !publier("agent", manque(n)) {
+                                    return;
+                                }
+                            }
+                            Err(async_broadcast::RecvError::Closed) => agent_ouvert = false,
+                        },
+                    }
+                }
+            });
+        });
+        if let Err(e) = lance {
+            eprintln!("[ide] le relais des runs ne part pas : {e}");
         }
     }
 }
