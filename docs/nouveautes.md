@@ -226,6 +226,7 @@
   `transient: true` : un client sait qu'il peut recommencer. Avant, le texte disait « recommencez » et le champ disait
   le contraire.
 
+- 23 novembre 2026 — **Une ligne survivante reste trouvable après de grosses suppressions dans un index vectoriel.** Après la suppression de presque toute une région, une ligne pouvait ne plus être rendue par aucune recherche (environ une fois sur cent) ; elle est maintenant rattachée au graphe.
 - 23 novembre 2026 — **Un même arbre donne un même graphe, quelle que soit la taille des paquets de fichiers.** Un
   nom externe (`tempfile::tempdir()`, `std::to_string`, `queue.Empty`) devenait ou non un rendez-vous selon les autres
   fichiers indexés dans le même paquet, et un fichier édité seul s'en inventait à chaque resynchronisation : l'index

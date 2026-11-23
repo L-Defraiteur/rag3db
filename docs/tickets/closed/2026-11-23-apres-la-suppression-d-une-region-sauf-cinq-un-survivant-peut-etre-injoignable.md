@@ -1,6 +1,6 @@
 # Après la suppression de toute une région sauf cinq lignes, un survivant peut être injoignable
 
-- **État** : ouvert (23 novembre 2026) ; rangé dans `probabilistic.txt` avec sa fréquence mesurée
+- **État** : corrigé (23 novembre 2026, branche `region-delete-seed`) ; le cas sort de `probabilistic.txt` et revient au juge known_red
 - **Famille** : moteur
 - **Gravité** : réponse fausse, rare. Une ligne vivante n'est rendue par aucune recherche, et les plus proches d'une
   requête sont faux.
@@ -43,3 +43,26 @@ Le passage par NULL fait de chaque ligne une mise à jour (retirée du graphe, r
 avec ancre), puis une suppression. Avec presque toutes les lignes retirées, entrée comprise, les survivants dépendent de
 la réparation du point d'entrée (`repairEntryPoint`) et des arêtes de rattrapage. Un témoin déterministe se cherchera
 en fixant le tirage des niveaux (graine du `randomEngine` de l'index), pour retrouver le tour rouge à coup sûr.
+
+## La cause, et le correctif (23 novembre, au soir)
+
+**Un témoin déterministe.** `RAG3DB_HNSW_SEED` fixe, pour un test, le tirage de la couche haute (`HNSWIndex`, semé
+sinon par l'entropie du système). Sur 300 graines, 4 rougissent (23, 93, 157, 217), toutes avec la même signature.
+La graine 157, rejouée 10 fois, rougit 10 fois : l'ordre des fils ne joue pas. Le cas
+`SetNullFirstAllButFiveSeed157` est ajouté à `RegionDelete`.
+
+**Les quatre graines rougissent aussi sans le correctif du 21 novembre** (son diff retiré, puis rebâti). La réserve
+est levée : le défaut est plus ancien.
+
+**Les arêtes des cinq survivants à la graine 157** : quatre forment un bloc connexe dans la couche basse. Le
+cinquième (1253) n'y a plus aucune arête, ni entrante ni sortante : il ne garde qu'une arête vers 1005 dans la
+couche haute.
+
+**La cause** : `keepNodeReachable` vérifie qu'un ancien voisin reste joignable en descendant la couche haute avec
+son propre vecteur, puis en le cherchant dans la couche basse. Quand la descente aboutissait au nœud lui-même,
+la fonction concluait « la requête part de lui » et ne cherchait rien. Pour un nœud de la couche haute dont toutes
+les arêtes basses menaient à des lignes retirées, rien n'était rattaché. Aucune autre requête ne le joignait
+(« reached 4/5 »), et une requête qui atterrissait sur lui ne rendait que lui (« nearest 1/5 »).
+
+**Le correctif** : dans ce cas, la recherche part du point d'entrée bas, et le nœud est rattaché dans les deux
+sens s'il n'est pas trouvé. Les quatre graines passent à 5/5 et 5/5, et les cinq cas de `RegionDelete` sont verts.
