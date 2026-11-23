@@ -3175,7 +3175,8 @@ impl DaemonHost {
                 spaces.push(json!({
                     "backend": t.id,
                     "repo": repo_of(&c.depot),
-                    "branch": t.branche,
+                    // In place, the agent is on her branch: the task has none.
+                    "branch": if c.en_place { Value::Null } else { json!(t.branche) },
                     "path": c.arbre,
                     "loaded": b["open"] == true,
                     "rag": rag(b),
