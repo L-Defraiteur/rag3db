@@ -516,8 +516,8 @@ fn text_and_tool_calls_keep_their_order_on_the_stream() {
         if let (Some(id), Ok(v)) = (t.id, serde_json::from_str::<Value>(&t.data)) {
             trames.push((id, v));
         }
-        let fini = trames.iter().any(|(_, v)| v["evenement"]["kind"] == "MailboxLine" && v["evenement"]["line"]["kind"] == "ended")
-            || trames.iter().any(|(_, v)| v["sujet"] == "mailbox" && v["evenement"]["kind"] == "ended");
+        // The step ends with step_done; what is still on the way is read below, until silence.
+        let fini = trames.iter().any(|(_, v)| v["evenement"]["kind"] == "ToolCallStarted" && v["evenement"]["tool"] == "step_done");
         if fini || Instant::now() > fin_au_plus_tard {
             flux::Suite::Couper
         } else {
