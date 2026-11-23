@@ -181,6 +181,9 @@ pub fn declare_un_outil(outil: &str, arguments: &Value) -> bool {
 }
 
 pub struct JournalDesRuns {
+    /// **The host's data folder was seen** (at the start, or by a write): once seen, its disappearance stops the
+    /// writes, a folder not yet made never does.
+    donnees_vues: std::sync::atomic::AtomicBool,
     /// Faux : le journal ne suit rien (un hôte de témoin sans racine donnée).
     actif: bool,
     racine: PathBuf,
@@ -228,7 +231,11 @@ fn reglage(nom: &str, defaut: u64) -> u64 {
 impl JournalDesRuns {
     /// The folder that holds the runs' root still exists (the host's data folder): else nothing is written.
     fn donnees_presentes(&self) -> bool {
-        self.racine.exists() || self.racine.parent().is_none_or(|p| p.exists())
+        let la = self.racine.exists() || self.racine.parent().is_none_or(|p| p.exists());
+        if la {
+            self.donnees_vues.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        la || !self.donnees_vues.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Le journal sous `racine` ; ses bornes par `RAG3WEAVER_RUNS_MAX_OCTETS`
@@ -246,6 +253,7 @@ impl JournalDesRuns {
     /// Les mêmes, bornes données (les témoins).
     pub fn avec_bornes(racine: PathBuf, max_total: u64, max_jours: u64, max_octets: usize) -> Arc<Self> {
         Arc::new(Self {
+            donnees_vues: std::sync::atomic::AtomicBool::new(racine.parent().is_some_and(|p| p.exists())),
             actif: true,
             racine,
             max_total,
