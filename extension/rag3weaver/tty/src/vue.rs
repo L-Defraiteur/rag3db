@@ -1272,6 +1272,9 @@ fn queue(s: &str, max: usize) -> String {
 /// The approval card's witnesses (lot 4 of the mode auto, 21 November 2026), in a file of their own.
 #[cfg(test)]
 mod card_tests;
+/// Ctrl-C stops the turn, not the session (23 November 2026), in a file of its own.
+#[cfg(test)]
+mod ctrl_c_tests;
 
 #[cfg(test)]
 mod tests {
