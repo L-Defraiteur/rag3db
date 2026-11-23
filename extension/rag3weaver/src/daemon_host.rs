@@ -347,6 +347,9 @@ pub struct DaemonHost {
     /// The witnesses' count of the index parts the state read.
     #[cfg(test)]
     lectures_d_index: std::sync::atomic::AtomicU64,
+    /// The witnesses' index part, in place of the backend's.
+    #[cfg(test)]
+    index_force: Mutex<Option<Value>>,
     /// **The index part of each open backend's state**, by manifest, with the instance it was read on (23 November
     /// 2026: reading 84 indexes took 6.5 s at each `/ide/etat`); forgotten when an event is published for that backend.
     etats_d_index: Arc<Mutex<HashMap<String, (usize, Value, Value)>>>,
@@ -649,6 +652,8 @@ impl DaemonHost {
             etat_lent_ms: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             lectures_d_index: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            index_force: Mutex::new(None),
             etats_d_index,
             task_backgrounds: Default::default(),
             racines_de_code: None,
@@ -3056,7 +3061,10 @@ impl DaemonHost {
                                 None => {
                                     #[cfg(test)]
                                     self.lectures_d_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                    let t = (b.index_states().unwrap_or_else(|e| json!({ "error": e })), json!(b.prepared().template_drift()));
+                                    let index = b.index_states().unwrap_or_else(|e| json!({ "error": e }));
+                                    #[cfg(test)]
+                                    let index = self.index_force.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or(index);
+                                    let t = (index, json!(b.prepared().template_drift()));
                                     self.etats_d_index.lock().unwrap_or_else(|p| p.into_inner()).insert(cle, (instance, t.0.clone(), t.1.clone()));
                                     t
                                 }
