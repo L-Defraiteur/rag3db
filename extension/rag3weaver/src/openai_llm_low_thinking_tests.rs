@@ -17,3 +17,17 @@ fn a_low_effort_lets_google_think_and_a_high_one_is_sent() {
     let body = llm.request_body(&[Turn::user("bonjour")], &GenOptions::default().with_reasoning(ReasoningEffort::High));
     assert_eq!(body["extra_body"]["google"]["thinking_config"]["thinking_level"], "high", "{body}");
 }
+
+/// **No temperature toward Gemini 3** (Google's guide « Get started with Gemini 3 »: keep the temperature at its
+/// default, 1.0; below it, looping or degraded performance; remove explicit low temperatures): neither `temperature`
+/// nor `top_p` is sent to a Gemini 3 model; another model still receives them.
+#[test]
+fn no_temperature_is_sent_to_gemini_3() {
+    let opts = GenOptions::default();
+    let gemini = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.8-flash");
+    let body = gemini.request_body(&[Turn::user("bonjour")], &opts);
+    assert!(body.get("temperature").is_none() && body.get("top_p").is_none(), "Gemini 3 keeps its defaults: {body}");
+    let other = OpenAiLlm::new("http://x/v1", "m");
+    let body = other.request_body(&[Turn::user("bonjour")], &opts);
+    assert!(body.get("temperature").is_some(), "another model still receives its temperature: {body}");
+}
