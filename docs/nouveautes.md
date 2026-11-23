@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Le rappel automatique d'un tour.** `recall_for_request` cherche, pour la demande du tour, les
+  tours des fenêtres déjà résumées (jamais un passage encore en clair), puis les apports L1, puis les fiches ; il les
+  fusionne par rang pondéré et rend les meilleurs passages en entier, dans un bloc étiqueté « Rappel automatique » que
+  l'hôte pose en dernier dans le contexte, ou rien sous son seuil. Mode `direct` : la demande telle quelle, sans appel de
+  modèle. Il filtre par `author` (« me ») et accepte `swarm`.
+
 - 23 novembre 2026 — **« Mes tours » : une lecture filtre par son auteur.** `search_turns` prend `author` (« me »,
   la clé d'un agent, ou « * ») et `swarm` (« mine », un nom, ou « * ») ; « me » est l'agent pour qui l'appel est fait,
   donné par l'hôte et jamais par l'appelant. `swarm` est accepté avant que les swarms existent, et la réponse dit qu'il

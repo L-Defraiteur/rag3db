@@ -800,6 +800,8 @@
     "turns_where": "scripts/turns_where.rhai",
     "turns_list": "scripts/turns_list.rhai",
     "turns_found": "scripts/turns_found.rhai",
+    "recall_where": "scripts/recall_where.rhai",
+    "recall_fuse": "scripts/recall_fuse.rhai",
     "read_turns": "scripts/read_turns.rhai",
     "archive_segment_prompt": "scripts/archive_segment_prompt.rhai",
     "archive_segment_build": "scripts/archive_segment_build.rhai",
@@ -1080,6 +1082,7 @@
     "list_turns": {
       "graph": "graphs/list_turns.mmd"
     },
+    "recall_for_request": {"graph": "graphs/recall_for_request.mmd"},
     "search_turns": {
       "graph": "graphs/search_turns.mmd"
     },
