@@ -1514,6 +1514,31 @@ fn conversation_before(lines: &[Value], policy: &crate::backend::ConversationPol
     if tenus.is_empty() {
         return None;
     }
+    // **The fallow windows** (23 Nov 2026): under the budget, the whole thread (no trim); past it, windows of
+    // `window_tokens`, the last `windows` in clear, the older ones set aside and said.
+    let f = &policy.fallow;
+    let jetons = |l: &String| l.chars().count().div_ceil(4);
+    let mut en_jachere = 0usize;
+    if f.enabled {
+        if tenus.iter().map(jetons).sum::<usize>() <= f.budget_tokens {
+            return Some(format!("Earlier in this conversation (oldest first):\n- {}", tenus.join("\n- ")));
+        }
+        let mut fenetres: Vec<Vec<String>> = vec![Vec::new()];
+        let mut poids = 0usize;
+        for l in tenus.drain(..) {
+            let j = jetons(&l);
+            if poids + j > f.window_tokens.max(1) && !fenetres.last().is_some_and(|w| w.is_empty()) {
+                fenetres.push(Vec::new());
+                poids = 0;
+            }
+            poids += j;
+            fenetres.last_mut().unwrap().push(l);
+        }
+        let garder = f.windows.max(1).min(fenetres.len());
+        let ecartees = fenetres.len() - garder;
+        en_jachere = fenetres[..ecartees].iter().map(Vec::len).sum();
+        tenus = fenetres.into_iter().skip(ecartees).flatten().collect();
+    }
     let t = &policy.trim;
     let lignes: Vec<String> = if t.enabled {
         let debut = tenus.len().saturating_sub(t.max);
@@ -1532,7 +1557,8 @@ fn conversation_before(lines: &[Value], policy: &crate::backend::ConversationPol
     if lignes.is_empty() {
         return None;
     }
-    Some(format!("Earlier in this conversation (oldest first):\n- {}", lignes.join("\n- ")))
+    let jachere = if en_jachere > 0 { format!("({en_jachere} ligne(s) plus ancienne(s) en jachère, hors du contexte ; la boîte les garde)\n- ") } else { String::new() };
+    Some(format!("Earlier in this conversation (oldest first):\n- {jachere}{}", lignes.join("\n- ")))
 }
 
 /// **A text cut at the protection bound**, and said cut (the whole text stays in the mailbox).
