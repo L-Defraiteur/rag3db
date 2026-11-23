@@ -446,6 +446,17 @@ impl DaemonHost {
         }
     }
 
+    /// **The declared output maximum of the model a chat uses**: the task's chosen model's, else the host default's
+    /// settings, else the first declared model's; `None` when nothing is declared.
+    fn declared_output_cap(&self, manifest: &Path, prepared: &crate::backend::PreparedBackend) -> Option<usize> {
+        let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
+        let m = &prepared.manifest.models;
+        match choix {
+            Some(nom) => m.modele_de_langage(&nom).ok().and_then(|s| s.max_output_tokens),
+            None => m.defaut_de_l_hote().and_then(|r| r.max_output_tokens).or_else(|| m.modeles_de_langage().first().and_then(|s| s.max_output_tokens)),
+        }
+    }
+
     /// Choisit le modèle d'une tâche par son nom ; un nom inconnu se refuse en nommant la liste.
     pub fn choisir_le_modele(&self, parent: &str, nom: &str, modele: &str) -> Result<Value, String> {
         let (t, modeles) = self.modeles_declares(parent, nom)?;
@@ -1103,6 +1114,9 @@ impl DaemonHost {
         // 2026: the default of 12 cut half of the D6 steps).
         if let Some(s) = step {
             config["max_iterations"] = json!(s.max_model_calls());
+            // A step's output limit is the teammate's, capped by the model's declared maximum (23 Nov 2026).
+            let plafond = self.declared_output_cap(manifest, &tour.prepared);
+            config["max_output_tokens"] = json!(plafond.map_or(s.max_output_tokens(), |p| s.max_output_tokens().min(p)));
             if let Some(r) = s.cut_relaunch() {
                 config["cut_relaunch"] = json!(r);
             }

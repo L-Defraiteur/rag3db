@@ -566,6 +566,8 @@ pub struct Step {
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
     fetch: crate::backend::FetchPolicy,
+    /// The output limit of the step's model calls.
+    max_output_tokens: usize,
     /// The bounds of the task's background commands (`teammate.background`).
     background_policy: crate::backend::BackgroundPolicy,
     /// The teammate's search by Gemini's grounding (`teammate.web_search`).
@@ -749,6 +751,7 @@ impl Step {
             gate_level: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
+            max_output_tokens: crate::backend::TeammatePolicy::default().max_output_tokens,
             background_policy: crate::backend::BackgroundPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
         }
@@ -796,7 +799,13 @@ impl Step {
         self.fetch = policy.fetch.clone();
         self.web_search = policy.web_search.clone();
         self.background_policy = policy.background.clone();
+        self.max_output_tokens = policy.max_output_tokens.max(256);
         self
+    }
+
+    /// The output limit of the step's model calls (`teammate.max_output_tokens`).
+    pub fn max_output_tokens(&self) -> usize {
+        self.max_output_tokens
     }
 
     /// The `max_iterations` of the step's chat turn.
