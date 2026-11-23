@@ -23,6 +23,7 @@ mod background_lock;
 mod browser_read;
 mod card;
 mod closing;
+mod code_output_limit;
 mod commit_each_turn;
 mod commit_what_was_written;
 mod conversation_memory;
