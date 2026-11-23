@@ -533,7 +533,7 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             }
             vue.note("  !<commande> — la lance ici ; sa sortie part à l'équipier");
             vue.note("  //… — envoie un texte qui commence par /");
-            vue.note("les touches : Entrée envoie, Maj- ou Alt-Entrée va à la ligne, ↑ ↓ l'historique, Ctrl-O un appel d'outil, o / n un accord, Échap ou Ctrl-G arrête, Ctrl-C vide puis quitte");
+            vue.note("les touches : Entrée envoie, Maj- ou Alt-Entrée va à la ligne, ↑ ↓ l'historique, Ctrl-O un appel d'outil, o / n un accord, Échap, Ctrl-G ou Ctrl-C arrête le tour, Ctrl-C deux fois au repos quitte");
         }
         Commande::Quitter => return Ok(Some(Fin::Quitter)),
         Commande::Arreter => {

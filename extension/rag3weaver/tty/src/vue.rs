@@ -189,6 +189,8 @@ pub struct Vue {
     depuis: Instant,
     /// Depuis quand on attend ce qui est en cours (l'appel au modèle, l'outil).
     attente_depuis: Instant,
+    /// The first Ctrl-C at rest: a second within two seconds quits.
+    ctrl_c_at: Option<Instant>,
     /// Le modèle du dernier appel, tel que l'hôte le nomme.
     modele: Option<String>,
     /// What the host says the turn waits for (`Waiting`), until `Resumed` (tty-25, second half).
@@ -267,6 +269,7 @@ impl Vue {
             politiques: HashMap::new(),
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
+            ctrl_c_at: None,
             modele: None,
             attente_dite: None,
             texte_coule: String::new(),
@@ -581,6 +584,8 @@ impl Vue {
         }
         // **The work landing in the user's folder** (archi's land-each-turn): said, whatever the steps shown.
         if l["from"] == "host" && matches!(l["kind"].as_str(), Some("merged" | "merge_held")) {
+            // Work landed in the folder is an answer: the turn is not « fini sans répondre » (23 Nov. 2026).
+            self.repondu = true;
             if let Some(t) = l["text"].as_str().filter(|t| !t.trim().is_empty()) {
                 self.clore();
                 self.valider_avec_tete(Genre::Boite, "› ", t);
@@ -871,7 +876,15 @@ impl Vue {
             Touche::Echap => Some(Action::Arreter),
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
-            Touche::CtrlC => Some(Action::Quitter),
+            // While the teammate works, Ctrl-C stops the turn, not the session (Lucie, 23 Nov. 2026).
+            Touche::CtrlC if matches!(self.etat, Etat::Reflechit | Etat::Ecrit | Etat::Agit(_)) => Some(Action::Arreter),
+            // At rest, a second Ctrl-C within two seconds quits; the first one says so.
+            Touche::CtrlC if self.ctrl_c_at.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(2)) => Some(Action::Quitter),
+            Touche::CtrlC => {
+                self.ctrl_c_at = Some(Instant::now());
+                self.note("Ctrl-C encore pour quitter (Ctrl-D aussi)");
+                None
+            }
             Touche::CtrlO if !self.openables.is_empty() => Some(Action::Ouvrir),
             Touche::CtrlO => {
                 self.note("aucun appel d'outil à ouvrir");
@@ -1443,7 +1456,8 @@ mod tests {
         v.touche(Touche::MotDroite);
         assert_eq!(v.touche(Touche::CtrlC), None, "Ctrl-C vide d'abord une saisie non vide");
         assert!(v.saisie.est_vide());
-        assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "puis quitte");
+        assert_eq!(v.touche(Touche::CtrlC), None, "puis, au repos, dit comment quitter");
+        assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "et un second quitte");
 
         // Le curseur de l'écran : « › » et une espace, puis la colonne de la saisie.
         let mut v = Vue::new(40, true);
