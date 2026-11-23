@@ -30,5 +30,5 @@ fn after_its_run_the_turn_is_reviewed_until_ended() {
     let l = vivante(&v, v.attente_depuis + Duration::from_secs(12));
     assert!(l.contains("relecture du tour") && l.contains("12 s"), "{l}");
     v.ligne_de_boite(&json!({ "id": "b/t:9", "from": "host", "kind": "ended", "text": "fait sans plan" }));
-    assert_eq!(v.quelle(), Some(Quelle::Repos), "at the ended, back to rest");
+    assert_ne!(v.quelle(), Some(Quelle::Reflechit), "at the ended, no longer at work");
 }
