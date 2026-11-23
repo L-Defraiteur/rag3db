@@ -311,6 +311,8 @@ pub fn en_tete(l: &Value) -> String {
     let de = match l["from"].as_str().unwrap_or("?") {
         "teammate" if nom.is_some() => nom.unwrap_or_default(),
         "teammate" => "équipier",
+        // Who wrote a supervisor's line (24 Nov. 2026): a human is you; an agent is named, or said an agent.
+        "supervisor" if l["by"]["kind"] == "agent" => l["by"]["name"].as_str().filter(|n| !n.trim().is_empty()).unwrap_or("un agent"),
         "supervisor" => "toi",
         "host" => "hôte",
         autre => autre,
