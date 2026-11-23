@@ -2557,7 +2557,18 @@ impl DaemonHost {
             if declared.is_none() && r["stopped_by"].is_null() {
                 let texte = r["text"].as_str().unwrap_or_default().trim();
                 if texte.is_empty() {
-                    let line = files.append("host", "report", None, &format!("step {number} ended without step_done and without an answer; the next step continues"))?;
+                    // **An empty reply says why, to the user and to the agent** (23 Nov 2026, Lucie: « il faut
+                    // absolument qu'on sache pourquoi un appel a foiré »).
+                    let line = match r["empty_reply"].as_str() {
+                        Some(pourquoi) => files.append_with(
+                            "host",
+                            "report",
+                            None,
+                            &format!("réponse vide du modèle au pas {number} : {pourquoi} ; le pas suivant reprend"),
+                            &json!({ "cut": true, "why": pourquoi }),
+                        )?,
+                        None => files.append("host", "report", None, &format!("le pas {number} a fini sans step_done ni réponse ; le pas suivant reprend"))?,
+                    };
                     publish(bus.as_ref(), task, &line);
                 } else {
                     let deja = files.mailbox().iter().skip(avant).any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));

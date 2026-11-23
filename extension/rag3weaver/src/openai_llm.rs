@@ -1722,6 +1722,14 @@ fn read_sse(
     if usage.completion_tokens == 0 {
         usage.completion_tokens = emitted;
     }
+    usage.provider_finish = reason.as_deref().map(|r| match r {
+        "stop" => "stop",
+        "length" => "length",
+        "tool_calls" => "tool_calls",
+        "function_call" => "function_call",
+        "content_filter" => "content_filter",
+        _ => "other",
+    });
     Ok((finish, usage))
 }
 
