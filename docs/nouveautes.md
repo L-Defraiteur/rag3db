@@ -11,6 +11,8 @@
   ligne en tête de la boîte.
 - 22 novembre 2026 — **L'IDE dit quand il n'est pas ouvert en ton nom.** Une page entrée avec le seul jeton de l'hôte
   (ce qu'un agent peut tenir) l'annonce en tête : ses « oui » ne compteront pas, et comment l'ouvrir depuis ton lanceur.
+- 22 novembre 2026 — **La carte d'accord dit sa commande d'abord.** « L'agent veut lancer `git status` », puis pourquoi
+  elle s'arrête, en mots (« dans un dossier protégé, pour cette fois ») ; plus de `run_command`, `protected` ni `once`.
 - 22 novembre 2026 — **lucivy 4.5.0.** La fermeture d'un index attend désormais toutes ses fusions de fond : un
   index fermé ne voit plus un fil écrire dans son dossier après coup (les dossiers temporaires laissés par les tests).
   Le moteur de plein texte sait aussi compter un seul budget de fautes pour les mots d'une requête floue ; la
