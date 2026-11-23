@@ -94,6 +94,42 @@ pub struct SnapshotSession {
     /// un `takeover` : rien ne tourne plus derrière elle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suspended_at: Option<i64>,
+    /// **The process that opened it** (`pid:start`, the start in clock ticks since boot): a session whose process no
+    /// longer runs, or that names none (an older binary), is an orphan the next opening takes over (23 Nov 2026).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+}
+
+/// The sessions this process opened and has not given up: an abort that cannot write still frees its session here.
+fn sessions_vivantes() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static V: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    V.get_or_init(Default::default)
+}
+
+/// A process's identity: its pid and its start (field 22 of `/proc/<pid>/stat`); `None` if it does not run.
+fn identite_du_processus(pid: u32) -> Option<String> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let apres = stat.rsplit_once(") ")?.1;
+    let debut = apres.split_whitespace().nth(19)?;
+    Some(format!("{pid}:{debut}"))
+}
+
+/// This process's identity (its pid alone where `/proc` says nothing).
+fn ce_processus() -> String {
+    identite_du_processus(std::process::id()).unwrap_or_else(|| std::process::id().to_string())
+}
+
+/// **An orphan session**: it names no owner, its owner no longer runs, or it is this process's and this process gave
+/// it up (an abort that could not write).
+fn orpheline(open: &SnapshotSession) -> bool {
+    match open.owner.as_deref() {
+        None => true,
+        Some(o) if o == ce_processus() => !sessions_vivantes().lock().map(|v| v.contains(&open.session)).unwrap_or(false),
+        Some(o) => {
+            let pid = o.split(':').next().and_then(|p| p.parse::<u32>().ok());
+            pid.and_then(identite_du_processus).as_deref() != Some(o)
+        }
+    }
 }
 
 /// Une durée lisible : c'est sur elle qu'un appelant décide d'un `takeover`.
@@ -295,6 +331,15 @@ impl Catalog {
         self.check_scope_declared(entity_name, scope)?;
         self.check_no_overlapping_grain(entity_name, scope)?;
         let replaced = match self.open_snapshot_session(entity_name, scope)? {
+            Some(open) if !takeover && open.suspended_at.is_none() && orpheline(&open) => {
+                eprintln!(
+                    "[synchronisation] {entity_name} : session orpheline reprise ('{}', ouverte depuis {}) : son processus ({}) ne tourne plus",
+                    open.session,
+                    elapsed_since(open.opened_at),
+                    open.owner.as_deref().unwrap_or("non dit")
+                );
+                Some(open.session)
+            }
             Some(open) if !takeover && open.suspended_at.is_none() => {
                 return Err(CatalogError::SnapshotRefused(format!(
                     "{entity_name} : une session est déjà ouverte sur ce périmètre ('{}', ouverte depuis {}) ; \
@@ -313,7 +358,13 @@ impl Catalog {
                 "identifiant de session « {session} » : il contient « {WRITTEN_SUFFIX} », réservé à la marque d'une écriture"
             )));
         }
-        let open = SnapshotSession { session, opened_at, replaced, suspended_at: None };
+        let open = SnapshotSession { session, opened_at, replaced, suspended_at: None, owner: Some(ce_processus()) };
+        if let Ok(mut v) = sessions_vivantes().lock() {
+            if let Some(r) = &open.replaced {
+                v.remove(r);
+            }
+            v.insert(open.session.clone());
+        }
         let value = serde_json::to_string(&SnapshotSession { replaced: None, ..open.clone() })
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.persist_meta_key(&self.session_key(entity_name, scope), &value)?;
@@ -350,6 +401,11 @@ impl Catalog {
         session: &str,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        // Given up here first: if the base cannot write any more (a refused COPY), the next opening of this process
+        // still takes the session over.
+        if let Ok(mut v) = sessions_vivantes().lock() {
+            v.remove(session);
+        }
         self.check_ecriture("abort_snapshot")?;
         self.check_entity(entity_name)?;
         self.check_open_session(entity_name, scope, session)?;
