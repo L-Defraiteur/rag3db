@@ -410,8 +410,25 @@ export type TurnResult = {
 
 export async function sendChat(backend: string, message: string): Promise<TurnResult> {
   const r = await (await fetch("/ide/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, message }) })).json();
-  if (!r.ok) throw new Error(r.error);
+  // A model without a price: the error names it (`missing_price`), and the thread offers the gesture.
+  if (!r.ok) throw Object.assign(new Error(r.error), { missingPrice: (r.missing_price as string | null) ?? null });
   return r.result;
+}
+
+/// A model's price, per million tokens, and where it was read.
+export type PriceProposal = { input: number; output: number; cache_read?: number | null; cache_write?: number | null; source?: string };
+
+/// **Looks a model's price up** on its provider's page (the host's web search): a proposal, never written.
+export async function lookupPrice(slug: string): Promise<PriceProposal> {
+  const r = await (await fetch("/ide/prices/lookup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug }) })).json();
+  if (!r.ok) throw new Error(r.error);
+  return r.result.proposal;
+}
+
+/// **Writes a model's price** on the user's yes (the host reads the user's title, never the body).
+export async function setPrice(slug: string, price: PriceProposal): Promise<void> {
+  const r = await (await fetch("/ide/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, ...price }) })).json();
+  if (!r.ok) throw new Error(r.error);
 }
 
 export async function stopRun(backend: string, run: string): Promise<void> {

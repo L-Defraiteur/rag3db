@@ -867,6 +867,18 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        ("POST", "/ide/prices/lookup") => {
+            // **A price looked up** (`{slug}`): a proposal with its sources, never written; the page asks the yes.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("unreadable body: {e}") }),
+                Ok(c) => match crate::daemon_host::prices::lookup_price(&crate::backend::WebSearchPolicy::default(), c["slug"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/chat/compact") => {
             // **The compaction of a chat** (`/compact`, lot 2 of the session archived as it goes):
             // `{backend}`. A refusal (a turn or a filing in flight, no memory) is an answer.

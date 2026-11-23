@@ -45,6 +45,60 @@ impl DaemonHost {
     }
 }
 
+/// **Looks up a model's price** on its provider's official page, by the web search (Gemini grounded by Google Search,
+/// on the host's own model, which has a price: the model without one cannot look for itself). Gives a proposal
+/// `{input, output, cache_read, cache_write}` per million tokens with its sources, never writes it: the user accepts
+/// it (`set_price`). `policy` is the host's web search (its model, its endpoint).
+pub fn lookup_price(policy: &crate::backend::WebSearchPolicy, slug: &str) -> Result<Value, String> {
+    let slug = slug.trim();
+    if slug.is_empty() {
+        return Err("a price lookup needs the model's slug".into());
+    }
+    let query = format!(
+        "What is the official API price of the model « {slug} », in US dollars per million tokens, on its provider's own pricing page? \
+         Answer with one JSON object and nothing else: {{\"input\": <number>, \"output\": <number>, \"cache_read\": <number or null>, \
+         \"cache_write\": <number or null>, \"source\": \"<the pricing page's address>\"}}. When the page gives several tiers, give the highest."
+    );
+    let found = super::web_search::web_search(policy, &json!({ "query": query }))?;
+    let answer = found["answer"].as_str().unwrap_or_default();
+    let proposal = first_json_object(answer).ok_or_else(|| format!("the price of `{slug}` was not found in a form to propose: {answer}"))?;
+    let number = |k: &str| proposal[k].as_f64().filter(|v| v.is_finite() && *v >= 0.0);
+    let (Some(input), Some(output)) = (number("input"), number("output")) else {
+        return Err(format!("the price of `{slug}` was found without its input and output prices: {proposal}"));
+    };
+    let source = proposal["source"]
+        .as_str()
+        .filter(|s| s.starts_with("http"))
+        .map(str::to_string)
+        .or_else(|| found["sources"][0]["url"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    Ok(json!({
+        "slug": slug,
+        "proposal": { "input": input, "output": output, "cache_read": number("cache_read"), "cache_write": number("cache_write"), "source": source },
+        "sources": found["sources"],
+        "answer": answer,
+    }))
+}
+
+/// The first `{…}` of a text that parses as JSON (a model's answer may wrap it in prose or a code fence).
+fn first_json_object(text: &str) -> Option<Value> {
+    let start = text.find('{')?;
+    let mut depth = 0usize;
+    for (i, c) in text[start..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return serde_json::from_str(&text[start..=start + i]).ok();
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 #[path = "prices_tests.rs"]
 mod tests;
