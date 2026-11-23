@@ -21,6 +21,12 @@ fn depot(d: &Path) -> (PathBuf, PathBuf) {
     // A Rust file that uses `std`: its library `std` decided, for the whole batch, that a C++ `std::to_string` was
     // external (the table of libraries was keyed by name, across languages).
     std::fs::write(arbre.join("src/c.rs"), "use std::fmt::Write;\n\npub fn label(n: u32) -> String {\n    let mut s = String::new();\n    let _ = write!(s, \"{n}\");\n    s\n}\n").unwrap();
+    // Python's `queue` is its standard library's; a TypeScript file importing a package `queue` the repository does
+    // not declare made, for the whole batch, the provenance of `queue` uncertain (the table was keyed by name).
+    std::fs::create_dir_all(arbre.join("py")).unwrap();
+    std::fs::create_dir_all(arbre.join("web")).unwrap();
+    std::fs::write(arbre.join("py/m.py"), "import queue\n\n\ndef drain(q):\n    try:\n        return q.get_nowait()\n    except queue.Empty:\n        return None\n").unwrap();
+    std::fs::write(arbre.join("web/a.ts"), "import Queue from \"queue\";\n\nexport function make(): Queue {\n  return new Queue();\n}\n").unwrap();
     std::fs::write(arbre.join("src/b.rs"), "pub fn work() -> bool {\n    let d = tempfile::tempdir();\n    d.is_ok()\n}\n").unwrap();
     std::fs::write(arbre.join("cpp/a.cpp"), "#include <string>\n\nstd::string label(int n) {\n    return std::to_string(n);\n}\n").unwrap();
     std::fs::write(arbre.join("cpp/b.cpp"), "#include <string>\n\nstd::string other(int n) {\n    return std::to_string(n + 1);\n}\n").unwrap();
