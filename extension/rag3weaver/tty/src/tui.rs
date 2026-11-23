@@ -902,7 +902,7 @@ pub type Colorer<'a> = &'a dyn Fn(&str, &str) -> Option<Vec<crate::client::Span>
 pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer, mut journal: Option<&mut Journal>) -> Result<(), String> {
     let validees: Vec<Validee> = vue.prendre_lignes();
     // The calls' traces go to the journal only, before the lines of the same frame (23 Nov. 2026).
-    let traces = vue.prendre_traces();
+    let traces = vue.take_traces();
     if let Some(j) = journal.as_deref_mut().filter(|_| !traces.is_empty()) {
         j.lignes(traces.iter().map(String::as_str));
     }

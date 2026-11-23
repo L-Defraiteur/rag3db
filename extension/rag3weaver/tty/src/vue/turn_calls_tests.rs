@@ -54,7 +54,7 @@ fn the_journal_keeps_a_trace_of_each_call_that_the_screen_does_not_show() {
     let mut v = Vue::new(160, true);
     v.ligne_de_boite(&json!({ "id": "b/t:1", "from": "supervisor", "kind": "request", "text": "x" }));
     outil(&mut v, "call_157", "run_command", r#"{"command":"ls -la"}"#);
-    let traces = v.prendre_traces();
+    let traces = v.take_traces();
     assert_eq!(traces.len(), 1, "{traces:#?}");
     let t = &traces[0];
     assert!(t.contains("tour 1 · appel 1 · run_command · call_157") && t.contains("ls -la"), "{t}");

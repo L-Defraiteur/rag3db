@@ -11,6 +11,10 @@
 - 23 novembre 2026 — **L'agent de code écrit de longs fichiers sans être coupé.** Sa limite de sortie par appel
   passe de 4 096 à 40 000 jetons (`teammate.max_output_tokens` dans le gabarit de code), bornée par le maximum que le
   modèle déclare ; un modèle qui réfléchit ne remplit plus tout son budget avant d'avoir écrit un mot.
+- 23 novembre 2026 — **Le terminal de l'agent montre son contexte.** À droite de la ligne d'état, en sourdine : le
+  contexte envoyé au dernier appel du modèle et sa part lue en cache (« contexte 10,1 k / 1 M · 6,2 k en cache »),
+  jamais un cumul, puis le cumul depuis la dernière compaction. Chaque compaction se dit dans le fil : « contexte
+  réduit : la fenêtre 3 est résumée ; elle pesait 12,4 k, le contexte passe de 96,1 k à 84,0 k ».
 - 23 novembre 2026 — **Le terminal de l'agent dit vrai sur ce que fait un tour.** Une réponse vide du modèle a sa
   propre ligne, « réponse vide du modèle : le budget de sortie est épuisé (MaxTokens) », à la place du dernier outil
   qui semblait se répéter ; le rang d'un appel compte les appels de son tour (« appel 2 sur 5 du tour 3 ») ; le

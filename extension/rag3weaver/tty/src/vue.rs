@@ -201,12 +201,16 @@ pub struct Vue {
     /// A request was sent and its turn has not ended: Échap, Ctrl-G and Ctrl-C stop it (23 Nov. 2026).
     turn_in_flight: bool,
     /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
-    tour: usize,
+    turn: usize,
     calls_this_turn: usize,
     /// Empty model answers in a row, said in place of the last tool.
     empty_in_a_row: usize,
     /// The calls' traces for the session journal, never on the screen nor in the history.
     traces: Vec<String>,
+    /// The active context of the last model call, said quietly at the right of the living line (23 Nov. 2026).
+    context_said: Option<String>,
+    /// What the calls this session saw sent and received, and read from cache: the total when the host gives none.
+    session_tokens: (u64, u64),
     /// The last Échap received, acted on or not: a held key's repeats fall within [`ESCAPE_REPEAT`] of it.
     escape_at: Option<Instant>,
     /// The teammate wrote prose in this turn (a report, an answer…).
@@ -297,10 +301,12 @@ impl Vue {
             thinking_doc: None,
             thinking_live: false,
             turn_in_flight: false,
-            tour: 0,
+            turn: 0,
             calls_this_turn: 0,
             empty_in_a_row: 0,
             traces: Vec::new(),
+            context_said: None,
+            session_tokens: (0, 0),
             escape_at: None,
             spoke: false,
             done_step: None,
@@ -398,7 +404,7 @@ impl Vue {
 
     /// Les lignes validées depuis le dernier appel, dans l'ordre.
     /// The calls' traces since the last time, for the session journal (23 Nov. 2026).
-    pub fn prendre_traces(&mut self) -> Vec<String> {
+    pub fn take_traces(&mut self) -> Vec<String> {
         std::mem::take(&mut self.traces)
     }
 
@@ -526,6 +532,36 @@ impl Vue {
                 if let Some(m) = e["model"].as_str() {
                     self.modele = Some(m.rsplit('/').next().unwrap_or(m).to_string());
                 }
+                // **The active context**: what this call sent, never a total; it drops when turns are cut.
+                if let Some(p) = e["prompt_tokens"].as_u64().filter(|_| e["kind"] == "LlmCall") {
+                    let mut c = format!("contexte {}", tokens_said(p));
+                    if let Some(w) = e["context_window"].as_u64() {
+                        c.push_str(&format!(" / {}", tokens_said(w)));
+                    }
+                    if let Some(k) = e["cached_prompt_tokens"].as_u64().filter(|&k| k > 0 && e["cache_reported"] == true) {
+                        c.push_str(&format!(" · {} en cache", tokens_said(k)));
+                    }
+                    match e["folded_windows"].as_u64().unwrap_or(0) {
+                        0 => {}
+                        1 => c.push_str(" · 1 fenêtre résumée"),
+                        n => c.push_str(&format!(" · {n} fenêtres résumées")),
+                    }
+                    // The conversation's total: the host's, or the session's sum, said as such (23 Nov. 2026).
+                    let lu = e["cached_prompt_tokens"].as_u64().filter(|_| e["cache_reported"] == true).unwrap_or(0);
+                    self.session_tokens.0 += p + e["completion_tokens"].as_u64().unwrap_or(0);
+                    self.session_tokens.1 += lu;
+                    // Since the last compaction, never the whole conversation's (23 Nov. 2026).
+                    let conv = &e["since_reduction"];
+                    let (quoi, total, cache) = match (conv["input"].as_u64(), conv["output"].as_u64()) {
+                        (Some(i), Some(o)) => ("cumul", i + o, conv["cached"].as_u64().unwrap_or(0)),
+                        _ => ("cumul de la séance", self.session_tokens.0, self.session_tokens.1),
+                    };
+                    c.push_str(&format!(" · {quoi} {}", tokens_said(total)));
+                    if cache > 0 {
+                        c.push_str(&format!(" dont {} en cache", tokens_said(cache)));
+                    }
+                    self.context_said = Some(c);
+                }
                 // **An empty model answer is said, with its reason** (23 Nov. 2026): a call that returned neither
                 // text nor tool has its own line, in place of the last tool.
                 if e["kind"] == "LlmCall" && e["completion_tokens"].as_u64() == Some(0) && e["finish"] != "ToolCall" {
@@ -563,6 +599,22 @@ impl Vue {
                 self.thinking_live = true;
             }
             "ThinkingEnd" => self.thinking_live = false,
+            // **A compaction is said in the thread**, and the session's total starts again (23 Nov. 2026).
+            "ContextReduced" => {
+                self.session_tokens = (0, 0);
+                let dit = match e["text"].as_str().filter(|t| !t.trim().is_empty()) {
+                    Some(t) => t.to_string(),
+                    None => format!(
+                        "contexte réduit : la fenêtre {} est résumée ; elle pesait {}, le contexte passe de {} à {}",
+                        e["window"].as_u64().unwrap_or(0),
+                        tokens_said(e["window_tokens"].as_u64().unwrap_or(0)),
+                        tokens_said(e["before"].as_u64().unwrap_or(0)),
+                        tokens_said(e["after"].as_u64().unwrap_or(0)),
+                    ),
+                };
+                self.clore();
+                self.valider(Genre::Note, format!("  {dit}"));
+            }
             "Token" => {
                 self.empty_in_a_row = 0;
                 self.thinking_live = false;
@@ -583,13 +635,13 @@ impl Vue {
                     autre => autre.to_string(),
                 };
                 self.empty_in_a_row = 0;
-                self.tour = self.tour.max(1);
+                self.turn = self.turn.max(1);
                 self.calls_this_turn += 1;
                 let mut appel = crate::outils::Appel::debut(self.calls_this_turn, &outil, &arguments);
-                appel.tour = self.tour;
+                appel.turn = self.turn;
                 appel.id = e["call_id"].as_str().unwrap_or_default().to_string();
                 // The session journal's trace of the call, never on the screen (23 Nov. 2026).
-                self.traces.push(format!("⟦trace⟧ tour {} · appel {} · {} · {} · {}", appel.tour, appel.n, outil, appel.id, appel.arguments));
+                self.traces.push(format!("⟦trace⟧ tour {} · appel {} · {} · {} · {}", appel.turn, appel.n, outil, appel.id, appel.arguments));
                 // Sans --etapes, l'appel défile dans la zone vivante (Lucie, 15 nov.) : l'historique ne
                 // garde que la demande et la réponse ; Ctrl-O et le journal gardent le reste.
                 if self.montrer_etapes {
@@ -712,7 +764,7 @@ impl Vue {
         }
         match (l["from"].as_str(), l["kind"].as_str()) {
             (Some("supervisor"), Some("request" | "instruction")) => {
-                self.tour += 1;
+                self.turn += 1;
                 self.calls_this_turn = 0;
                 self.repondu = false;
                 self.spoke = false;
@@ -892,8 +944,8 @@ impl Vue {
             // A call's rank counts its turn (23 Nov. 2026).
             Some(Openable::Call(j)) => {
                 let a = &self.appels[*j];
-                let total = self.appels.iter().filter(|x| x.tour == a.tour).count();
-                format!("appel {} sur {total} du tour {}", a.n, a.tour.max(1))
+                let total = self.appels.iter().filter(|x| x.turn == a.turn).count();
+                format!("appel {} sur {total} du tour {}", a.n, a.turn.max(1))
             }
             None => "appel d'outil".to_string(),
         }
@@ -1262,11 +1314,18 @@ impl Vue {
             }
         };
         let occupe: usize = ligne.spans.iter().map(|s| colonnes(&s.content)).sum();
-        let entete = colonnes(&self.entete);
-        if !self.entete.is_empty() && occupe + 2 + entete <= largeur {
+        // At the right, muted: the active context then the header, or the header alone when both do not fit.
+        let avec_contexte = match (&self.context_said, self.entete.is_empty()) {
+            (Some(c), true) => c.clone(),
+            (Some(c), false) => format!("{c} · {}", self.entete),
+            (None, _) => self.entete.clone(),
+        };
+        let droite = if occupe + 2 + colonnes(&avec_contexte) <= largeur { avec_contexte } else { self.entete.clone() };
+        let entete = colonnes(&droite);
+        if !droite.is_empty() && occupe + 2 + entete <= largeur {
             let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
             ligne.spans.push(Span::raw(" ".repeat(largeur - occupe - entete)));
-            ligne.spans.push(Span::styled(self.entete.clone(), sourdine));
+            ligne.spans.push(Span::styled(droite, sourdine));
         }
         ligne
     }
@@ -1362,6 +1421,18 @@ impl Vue {
 pub struct SessionMessage {
     pub header: String,
     pub text: String,
+}
+
+/// A token count said short, in French: `9,8 k`, `1 M`, `640`.
+fn tokens_said(n: u64) -> String {
+    if n >= 1_000_000 {
+        let m = n as f64 / 1_000_000.0;
+        if (m - m.round()).abs() < 0.1 { format!("{} M", m.round()) } else { format!("{m:.1} M").replace('.', ",") }
+    } else if n >= 1000 {
+        format!("{:.1} k", n as f64 / 1000.0).replace('.', ",")
+    } else {
+        n.to_string()
+    }
 }
 
 /// **A held Échap's repeats**: longer than a keyboard's first repeat delay (up to ~660 ms), shorter than two
