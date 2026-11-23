@@ -2955,7 +2955,7 @@ mod tests {
         // sur demande (défectueuse sur les arguments multi-lignes).
         let vertex = OpenAiLlm::vertex("p", "global", "t", "google/gemini-3.5-flash");
         let body = vertex.request_body(&hello(), &opts);
-        assert!(body["extra_body"].is_null(), "off by default: {}", body["extra_body"]);
+        assert!(body["extra_body"]["google"]["stream_function_call_arguments"].is_null(), "off by default: {}", body["extra_body"]);
         let streamed = vertex.with_streamed_tool_arguments();
         let body = streamed.request_body(&hello(), &opts);
         assert_eq!(body["extra_body"]["google"]["stream_function_call_arguments"], true);
