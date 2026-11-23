@@ -86,6 +86,92 @@ fn background_commands_are_bounded_in_number_and_time() {
     let d = tempfile::tempdir().unwrap();
     let (depot, manifeste) = depot_inscrit(d.path(), true);
     super::en_approbation(&manifeste);
+    // The first command lives until the witness frees it (a file), not for a time: the bound is met whenever the yes
+    // comes (c7, 23 Nov 2026: this witness alone showed « attente d'accord » instead of the bound, under load).
+    std::fs::write(depot.join("dort.sh"), "echo je-dors\nwhile [ ! -f libere ]; do sleep 0.1; done\n").unwrap();
+    for args in [&["add", "dort.sh"][..], &["commit", "-q", "-m", "dort"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
+    }
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "background": { "max": 1, "max_timeout_s": 60 }, "reply_wait_s": 2 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "bornes"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let told = Arc::new(Mutex::new(None::<String>));
+    let launched = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let results = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let (told, launched, results) = (told.clone(), launched.clone(), results.clone());
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (told, launched, results) = (told.clone(), launched.clone(), results.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let user = boundary(turns);
+                if user.contains("délai atteint") {
+                    *told.lock().unwrap() = Some(user);
+                    return super::answer(turns, opts, sink, "", super::calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fin lue", "remaining": "" }))]));
+                }
+                let got = super::tool_results(turns);
+                if got.iter().any(|r| r.contains("**En fond**")) {
+                    launched.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                results.lock().unwrap().extend(got.iter().cloned());
+                if !launched.load(std::sync::atomic::Ordering::SeqCst) && got.is_empty() {
+                    let fond = |extra: Value| {
+                        let mut a = json!({ "command": "sh dort.sh", "background": true });
+                        for (k, v) in extra.as_object().cloned().unwrap_or_default() {
+                            a[k] = v;
+                        }
+                        ("run_command", a)
+                    };
+                    return super::answer(turns, opts, sink, "", super::calls(&[
+                        fond(json!({ "timeout_s": 50 })),
+                        fond(json!({})),
+                        fond(json!({ "timeout_s": 120 })),
+                        fond(json!({ "timeout_s": 0 })),
+                    ]));
+                }
+                super::answer(turns, opts, sink, "", super::calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "lancées", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance dort.sh en fond, plusieurs fois.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let end = Instant::now() + Duration::from_secs(90);
+    let mut answered = std::collections::HashSet::new();
+    // The yes are given; the bounds are said while the first one runs; then the witness frees it.
+    let bornes = |r: &[String]| {
+        r.iter().any(|x| x.contains("teammate.background.max") && !x.contains("max_timeout_s")) && r.iter().any(|x| x.contains("teammate.background.max_timeout_s")) && r.iter().any(|x| x.contains("jamais"))
+    };
+    while !bornes(&results.lock().unwrap()) {
+        for l in files.mailbox() {
+            if l["kind"] == "approval" && answered.insert(l["id"].as_str().unwrap_or_default().to_string()) {
+                host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true, "by": { "kind": "human", "client": "tty" } })).expect("le oui");
+            }
+        }
+        assert!(Instant::now() < end, "in 90 s, the bounds were not all said (launched: {}); tool results: {:#?}; mailbox: {:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), results.lock().unwrap(), files.mailbox());
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let r = results.lock().unwrap().clone();
+    assert!(r.iter().any(|x| x.contains("teammate.background.max") && !x.contains("max_timeout_s")), "a second one while one runs is refused, naming the bound: {r:#?}");
+    assert!(r.iter().any(|x| x.contains("teammate.background.max_timeout_s")), "a time above the cap is refused, naming it: {r:#?}");
+    assert!(r.iter().any(|x| x.contains("jamais")), "« never » is refused: {r:#?}");
+    std::fs::write(depot.join("libere"), "").unwrap();
+    host.end_task_background(&h.id, "doc");
+}
+
+/// **The same bounds at `bac`** (23 Nov 2026): the four calls go in one step, in their order, without a card; the
+/// first one is stopped at its time and the teammate is told so.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn at_bac_background_commands_are_bounded_and_stopped_at_their_time() {
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
     std::fs::write(depot.join("dort.sh"), "echo je-dors\nsleep 30\n").unwrap();
     for args in [&["add", "dort.sh"][..], &["commit", "-q", "-m", "dort"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
@@ -138,7 +224,7 @@ fn background_commands_are_bounded_in_number_and_time() {
     host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
-    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance dort.sh en fond, plusieurs fois.", &Value::Null).expect("la request");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance dort.sh en fond, plusieurs fois.", &json!({ "gate": "bac" })).expect("la request");
     let files = host.teammate_files(&h.id, "doc").unwrap();
     let end = Instant::now() + Duration::from_secs(90);
     let mut answered = std::collections::HashSet::new();
@@ -157,4 +243,5 @@ fn background_commands_are_bounded_in_number_and_time() {
     assert!(r.iter().any(|x| x.contains("jamais")), "« never » is refused: {r:#?}");
     let said = told.lock().unwrap().clone().unwrap_or_default();
     assert!(said.contains("arrêtée après") && said.contains("délai atteint") && said.contains("je-dors"), "stopped at its time, said with its last lines: {said}");
+    host.end_task_background(&h.id, "doc");
 }
