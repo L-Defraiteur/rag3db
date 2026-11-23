@@ -267,9 +267,8 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     }
 
     let largeur = terminal.size().map(|s| s.width).unwrap_or(80);
-    let mut vue = Vue::new(largeur, demande.is_some());
+    let mut vue = Vue::avec_theme(largeur, demande.is_some(), theme);
     vue.capacites = Capacites::du_terminal();
-    vue.theme = theme;
     vue.maj_entree = maj_entree;
     vue.montrer_etapes = std::env::var("RAG3WEAVER_TTY_ETAPES").is_ok_and(|v| !v.is_empty() && v != "0");
     vue.still = std::env::var("RAG3WEAVER_TTY_STILL").is_ok_and(|v| !v.is_empty() && v != "0");
@@ -457,7 +456,9 @@ pub fn dossier_de_commande(manifeste: Option<&str>) -> std::path::PathBuf {
 fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, load_state: &dyn Fn(&str) -> Result<Value, String>) -> crate::commandes::Sources {
     use crate::commandes::Commande;
     let command = crate::commandes::lire(debut).0;
-    let mut s = crate::commandes::Sources { themes: crate::theme::THEMES.iter().map(|(n, _)| n.to_string()).collect(), ..Default::default() };
+    // The theme names are the host's, read only when Tab completes `/theme`.
+    let themes = if matches!(command.as_ref(), Some(Commande::Theme(_))) { crate::theme::noms_de_l_hote(agent, ep).unwrap_or_default() } else { Vec::new() };
+    let mut s = crate::commandes::Sources { themes, ..Default::default() };
     if matches!(command.as_ref(), Some(Commande::Modele(_))) {
         if let Ok(v) = modeles_de_tache(agent, ep, tache) {
             s.modeles = v["models"].as_array().into_iter().flatten().filter_map(|m| m["name"].as_str().map(str::to_string)).collect();
@@ -549,8 +550,11 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
                 Err(e) => vue.note(&format!("l'arrêt est refusé : {e}")),
             }
         }
-        Commande::Theme(None) => vue.note(&format!("thèmes : {} (actuel : {})", crate::theme::THEMES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", "), vue.theme.nom)),
-        Commande::Theme(Some(n)) => match crate::theme::Theme::par_nom(&n) {
+        Commande::Theme(None) => match crate::theme::noms_de_l_hote(agent, ep) {
+            Ok(noms) => vue.note(&format!("thèmes : {} (actuel : {})", noms.join(", "), vue.theme.nom)),
+            Err(e) => vue.note(&format!("les thèmes de l'hôte ne se lisent pas : {e}")),
+        },
+        Commande::Theme(Some(n)) => match crate::theme::Theme::de_l_hote(agent, ep, &n) {
             Ok(t) => {
                 vue.theme = t;
                 vue.note(&format!("thème : {n}"));

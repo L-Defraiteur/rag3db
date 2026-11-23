@@ -353,7 +353,7 @@ mod tests {
     /// differently.
     #[test]
     fn a_glitch_animation_glitches_its_cause_and_keeps_it_readable() {
-        let t = Theme::par_nom("alien").unwrap();
+        let t = Theme::du_depot("alien");
         let cause = "run_command cargo check travaille… (40 s)";
         let c = cap(Niveau::Vraie, Glyphes::Tous);
         let frame_len = morceaux(Quelle::Ecrit.de(&t), 0, 42).len();
@@ -476,14 +476,14 @@ mod tests {
 #[cfg(test)]
 mod tests_de_tous_les_themes {
     use super::*;
-    use crate::theme::THEMES;
+    use crate::theme::noms_du_depot;
 
     /// **L'ASCII pur, pour chaque thème** : un terminal qui ne montre que
     /// l'ASCII lit toutes les animations de tous les thèmes.
     #[test]
     fn ascii_mode_is_pure_ascii_for_every_theme() {
-        for (nom, _) in THEMES {
-            let t = Theme::par_nom(nom).unwrap();
+        for nom in noms_du_depot() {
+            let t = Theme::du_depot(&nom);
             for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit, Quelle::Repos] {
                 for n in 0..30 {
                     let s = texte(&t, q, n, 11, Capacites { couleurs: Niveau::Aucune, glyphes: Glyphes::Ascii });

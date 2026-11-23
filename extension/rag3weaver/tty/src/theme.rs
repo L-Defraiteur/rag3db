@@ -79,35 +79,52 @@ pub struct Ascii {
     pub cadre: BTreeMap<String, String>,
 }
 
-/// Le fichier du thème « daemon », embarqué.
-/// C'est le fichier commun à l'IDE (`extension/rag3weaver/templates/themes/`) :
-/// le terminal et la page lisent les mêmes couleurs et les mêmes animations.
-pub const SOURCE: &str = include_str!("../../templates/themes/daemon.json");
-
-/// **Les thèmes embarqués**, par nom : chacun est un fichier de
-/// `templates/themes/`, de même forme que « daemon » (l'IDE lit les mêmes).
-pub const THEMES: &[(&str, &str)] = &[
-    ("daemon", SOURCE),
-    ("foret", include_str!("../../templates/themes/foret.json")),
-    ("cyberpunk", include_str!("../../templates/themes/cyberpunk.json")),
-    ("cyborg", include_str!("../../templates/themes/cyborg.json")),
-    ("alien", include_str!("../../templates/themes/alien.json")),
-];
-
+/// **The themes are the host's** (23 November 2026, Lucie: « tout déclaratif, rien d'autre »): the terminal embeds no
+/// theme; it reads `GET /ide/theme/<nom>.json`, the file of `templates/themes/` the host serves byte for byte, and the
+/// list from `GET /ide/themes.json`. The IDE reads the same files.
 impl Theme {
-    /// Le thème « daemon », embarqué.
-    pub fn daemon() -> Theme {
-        serde_json::from_str(SOURCE).expect("le thème daemon se lit (témoin : theme::tests)")
-    }
-
-    /// Un thème embarqué, par son nom (`--theme <nom>`).
-    pub fn par_nom(nom: &str) -> Result<Theme, String> {
-        let (_, source) = THEMES
-            .iter()
-            .find(|(n, _)| *n == nom)
-            .ok_or_else(|| format!("pas de thème « {nom} » ; thèmes : {}", THEMES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")))?;
+    /// A theme from its JSON (the body of `/ide/theme/<nom>.json`).
+    pub fn from_json(nom: &str, source: &str) -> Result<Theme, String> {
         serde_json::from_str(source).map_err(|e| format!("le thème « {nom} » ne se lit pas : {e}"))
     }
+
+    /// The theme `nom`, from the host.
+    pub fn de_l_hote(agent: &ureq::Agent, ep: &crate::endpoint::Endpoint, nom: &str) -> Result<Theme, String> {
+        let v = crate::client::lire_brut(agent, ep, &format!("/ide/theme/{}.json", crate::client::encoder(nom)))
+            .map_err(|e| match noms_de_l_hote(agent, ep) {
+                Ok(noms) => format!("pas de thème « {nom} » ; thèmes : {} ({e})", noms.join(", ")),
+                Err(_) => e,
+            })?;
+        serde_json::from_value(v).map_err(|e| format!("le thème « {nom} » ne se lit pas : {e}"))
+    }
+
+    /// A theme of the repository (`templates/themes/<nom>.json`), for a witness: the same file the host serves.
+    #[cfg(test)]
+    pub fn du_depot(nom: &str) -> Theme {
+        let f = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../templates/themes/{nom}.json"));
+        Theme::from_json(nom, &std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{} : {e}", f.display()))).unwrap()
+    }
+
+    /// The theme « daemon » of the repository, for a witness.
+    #[cfg(test)]
+    pub fn daemon() -> Theme {
+        Theme::du_depot("daemon")
+    }
+}
+
+/// The names of the host's themes (`GET /ide/themes.json`).
+pub fn noms_de_l_hote(agent: &ureq::Agent, ep: &crate::endpoint::Endpoint) -> Result<Vec<String>, String> {
+    let v = crate::client::lire_brut(agent, ep, "/ide/themes.json")?;
+    Ok(v.as_array().into_iter().flatten().filter_map(|n| n.as_str().map(str::to_string)).collect())
+}
+
+/// The names of the repository's themes, for a witness.
+#[cfg(test)]
+pub fn noms_du_depot() -> Vec<String> {
+    let d = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes");
+    let mut v: Vec<String> = std::fs::read_dir(&d).unwrap().filter_map(|e| e.ok()).filter_map(|e| e.file_name().to_string_lossy().strip_suffix(".json").map(str::to_string)).collect();
+    v.sort();
+    v
 }
 
 /// `#rrggbb` en trois octets.
@@ -124,30 +141,69 @@ pub fn rgb(hex: &str) -> Option<(u8, u8, u8)> {
 mod tests {
     use super::*;
 
-    /// **Le thème vient du fichier commun à l'IDE** (`templates/themes/`, Lucie le
-    /// 8 nov. 2026 : brancher sans attendre) : ce qui est embarqué est ce fichier,
-    /// octet pour octet.
+    /// **The terminal embeds no theme** (23 November 2026): the crate's sources hold no theme file nor
+    /// `include_str!` of one; every file of `templates/themes/` reads as a theme.
     #[test]
-    fn the_embedded_theme_is_the_shared_templates_file() {
-        let commun = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes/daemon.json");
-        let octets = std::fs::read_to_string(&commun).unwrap_or_else(|e| panic!("{} : {e}", commun.display()));
-        assert_eq!(SOURCE, octets, "le thème embarqué est templates/themes/daemon.json");
-        assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/daemon.json").exists(), "plus de copie locale au crate");
+    fn the_terminal_embeds_no_theme_and_every_shared_file_reads() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        for e in std::fs::read_dir(&src).unwrap().filter_map(|e| e.ok()) {
+            let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+            let needle = ["include_str!(\"../../templates/", "themes/"].concat();
+            assert!(!text.contains(&needle), "{} embeds a theme", e.path().display());
+        }
+        assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/daemon.json").exists(), "no local copy in the crate");
+        let noms = noms_du_depot();
+        assert!(noms.contains(&"daemon".to_string()), "{noms:?}");
+        for n in &noms {
+            Theme::du_depot(n);
+        }
     }
 
-    /// **Chaque fichier de `templates/themes/` est un thème embarqué**, octet pour
-    /// octet, et aucun thème embarqué n'est absent du dossier commun à l'IDE.
+    /// A host of a test that serves `templates/themes/` as the real one does: `/ide/theme/<nom>.json` byte for byte,
+    /// `/ide/themes.json`, a 404 for an unknown name.
+    fn theme_host(requests: usize) -> crate::endpoint::Endpoint {
+        use std::io::{BufRead, BufReader, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = l.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            for c in l.incoming().take(requests).flatten() {
+                let mut r = BufReader::new(c.try_clone().unwrap());
+                let mut first = String::new();
+                r.read_line(&mut first).unwrap();
+                loop {
+                    let mut line = String::new();
+                    if r.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                }
+                let path = first.split_whitespace().nth(1).unwrap_or("").to_string();
+                let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes");
+                let (status, body) = if path == "/ide/themes.json" {
+                    (200, serde_json::to_string(&noms_du_depot()).unwrap())
+                } else {
+                    match path.strip_prefix("/ide/theme/").and_then(|n| n.strip_suffix(".json")).map(|n| std::fs::read_to_string(dir.join(format!("{n}.json")))) {
+                        Some(Ok(text)) => (200, text),
+                        _ => (404, format!("thème inconnu : {path}")),
+                    }
+                };
+                let mut c = c;
+                let _ = write!(c, "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
+        });
+        crate::endpoint::Endpoint { address, token: "t".into(), user_token: None }
+    }
+
+    /// **The terminal reads its theme from the host**: the theme served is the repository's file; an unknown name is
+    /// refused, naming the host's themes.
     #[test]
-    fn every_templates_theme_file_is_embedded_byte_for_byte() {
-        let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes");
-        let mut fichiers: Vec<String> = std::fs::read_dir(&dossier).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".json")).collect();
-        fichiers.sort();
-        let mut embarques: Vec<String> = THEMES.iter().map(|(n, _)| format!("{n}.json")).collect();
-        embarques.sort();
-        assert_eq!(fichiers, embarques, "les fichiers de templates/themes et les thèmes embarqués");
-        for (nom, source) in THEMES {
-            assert_eq!(*source, std::fs::read_to_string(dossier.join(format!("{nom}.json"))).unwrap(), "{nom}");
-        }
+    fn the_theme_is_read_from_the_host_and_an_unknown_one_names_the_host_s() {
+        let ep = theme_host(3);
+        let agent = crate::client::agent();
+        let t = Theme::de_l_hote(&agent, &ep, "foret").unwrap();
+        assert_eq!(t.nom, "foret");
+        assert_eq!(t.couleurs.texte, Theme::du_depot("foret").couleurs.texte);
+        let e = Theme::de_l_hote(&agent, &ep, "inconnu").unwrap_err();
+        assert!(e.contains("pas de thème « inconnu »") && e.contains("daemon") && e.contains("foret"), "{e}");
     }
 
     /// La luminance relative d'une couleur (WCAG 2.x).
@@ -174,8 +230,8 @@ mod tests {
     #[test]
     fn every_theme_keeps_a_minimal_contrast_against_its_background() {
         let accompagne = ["comment", "punctuation", "cadre"];
-        for (nom, _) in THEMES {
-            let t = Theme::par_nom(nom).unwrap();
+        for nom in noms_du_depot() {
+            let t = Theme::du_depot(&nom);
             let fond = &t.couleurs.fond;
             let mut paires: Vec<(String, &String, f64)> = vec![("texte".into(), &t.couleurs.texte, 4.5), ("sourdine".into(), &t.couleurs.sourdine, 3.0)];
             for (sorte, c) in &t.code {
@@ -194,8 +250,9 @@ mod tests {
     /// code en sont dérivés par un seul rédacteur, qui le dit.
     #[test]
     fn every_theme_carries_its_named_palette_its_mode_and_says_its_colours_are_derived() {
-        for (nom, source) in THEMES {
-            let v: serde_json::Value = serde_json::from_str(source).unwrap();
+        for nom in noms_du_depot() {
+            let source = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../templates/themes/{nom}.json"))).unwrap();
+            let v: serde_json::Value = serde_json::from_str(&source).unwrap();
             let palette = v["palette"].as_object().unwrap_or_else(|| panic!("{nom} : pas de palette"));
             assert!(palette.len() >= 6, "{nom} : {} couleurs nommées", palette.len());
             for (n, c) in palette {
@@ -224,7 +281,8 @@ mod tests {
     /// mention dérivée, ses couleurs et son code suffisent.
     #[test]
     fn an_old_theme_without_a_palette_still_loads() {
-        let mut v: serde_json::Value = serde_json::from_str(SOURCE).unwrap();
+        let source = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes/daemon.json")).unwrap();
+        let mut v: serde_json::Value = serde_json::from_str(&source).unwrap();
         for cle in ["palette", "mode", "derive", "roles"] {
             v.as_object_mut().unwrap().remove(cle);
         }
@@ -236,7 +294,7 @@ mod tests {
     #[test]
     fn the_cyberpunk_cyborg_and_alien_themes_are_there() {
         for nom in ["cyberpunk", "cyborg", "alien"] {
-            let t = Theme::par_nom(nom).unwrap_or_else(|e| panic!("{e}"));
+            let t = Theme::du_depot(nom);
             assert_eq!(t.nom, nom);
         }
     }
@@ -245,9 +303,8 @@ mod tests {
     /// bureau, papillons, Mordor, Dracula).
     #[test]
     fn the_forest_theme_is_there_and_named_foret() {
-        let t = Theme::par_nom("foret").unwrap_or_else(|e| panic!("{e}"));
+        let t = Theme::du_depot("foret");
         assert_eq!(t.nom, "foret");
-        assert!(Theme::par_nom("inconnu").unwrap_err().contains("daemon"), "un nom inconnu liste les thèmes");
     }
 
     /// **Tout thème a la forme de « daemon »** : couleurs en hex, cadences de
@@ -257,8 +314,8 @@ mod tests {
     fn every_theme_has_the_daemon_shape_and_one_column_glyphs() {
         use unicode_width::UnicodeWidthChar;
         let sortes = ["keyword", "type", "function", "string", "comment", "number", "constant", "variable", "property", "operator", "punctuation", "attribute", "label", "module", "other", "en_ligne", "cadre"];
-        for (nom, _) in THEMES {
-            let t = Theme::par_nom(nom).unwrap();
+        for nom in noms_du_depot() {
+            let t = Theme::du_depot(&nom);
             for c in [&t.couleurs.fond, &t.couleurs.texte, &t.couleurs.sourdine].into_iter().chain(t.couleurs.halo.iter()) {
                 assert!(rgb(c).is_some(), "{nom} : couleur en hex : {c}");
             }
