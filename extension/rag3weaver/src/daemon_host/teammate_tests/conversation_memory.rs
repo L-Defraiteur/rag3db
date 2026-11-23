@@ -13,7 +13,7 @@ fn listening(heard: Arc<Mutex<Vec<String>>>) -> ChatModel {
         let heard = heard.clone();
         Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
             heard.lock().unwrap().push(turns.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n"));
-            answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "trouvé : la suppression ne retire rien", "remaining": "" }))]))
+            answer(turns, opts, sink, "", calls(&[("report", json!({ "text": "trouvé : la suppression ne retire rien" })), ("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
         })))
     })
 }
