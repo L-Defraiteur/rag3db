@@ -1,7 +1,7 @@
 //! **A folder without git receives the work too** (c7, 23 Nov 2026: a full folder, not versioned, never received
 //! anything: the task works in a copy). At the end of each step, the host copies into the user's folder what the agent
-//! wrote by its code tools and the files that existed and changed; what commands produced stays in the copy and is
-//! said. The line says there is no git there. And the turn's facts come from the folder's diff. A module of its own.
+//! wrote by its code tools, the files that existed and changed, and what commands produced (since Lucie's trial of
+//! 23 Nov 2026: a project made by a generator lands whole); only a mass of files at once stays in the copy, said. The line says there is no git there. And the turn's facts come from the folder's diff. A module of its own.
 
 use crate::daemon_host::chat_qui_code::hote;
 use crate::daemon_host::DaemonHost;
@@ -71,7 +71,7 @@ fn a_folder_without_git_receives_what_the_agent_wrote() {
     let b = files.mailbox();
     assert_eq!(std::fs::read_to_string(racine.join("src/main.py")).unwrap(), "def supprime(): return True\n", "the changed file is in her folder: {b:#?}");
     assert!(racine.join("tests/test_main.py").is_file(), "the file the agent wrote is in her folder");
-    assert!(!racine.join("build").exists(), "what a command produced stays in the copy");
+    assert!(racine.join("build/out.bin").is_file(), "what a command produced lands too");
     let dit = b.iter().find(|l| l["from"] == "host" && l["kind"] == "merged").unwrap_or_else(|| panic!("the line: {b:#?}"));
     assert!(dit["text"].as_str().unwrap_or_default().contains("pas de git"), "{dit}");
     let faits = b.iter().find(|l| l["from"] == "host" && l["kind"] == "turn_changes").unwrap_or_else(|| panic!("the turn's facts, by the folder's diff: {b:#?}"));
