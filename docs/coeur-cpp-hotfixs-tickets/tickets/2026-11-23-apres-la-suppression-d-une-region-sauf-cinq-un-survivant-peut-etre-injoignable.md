@@ -33,6 +33,10 @@ centre 0. Seuls le tirage des niveaux du graphe (pu) et l'ordre des fils varient
 La même signature des deux côtés. **Ce n'est pas une régression du correctif du 21 novembre** : le défaut est plus
 ancien, et rare.
 
+**Une réserve** (c7, 23 novembre) : 1 sur 121 contre 1 sur 100 ne sépare pas les deux moteurs, mais ne prouve pas non
+plus que le correctif du 21 novembre est sans effet sur ce cas. À cette fréquence, il faudrait des milliers de tours
+pour départager. C'est le témoin déterministe (la graine du tirage des niveaux fixée sur un tour rouge) qui le dira.
+
 ## Ce qu'il faut chercher
 
 Le passage par NULL fait de chaque ligne une mise à jour (retirée du graphe, réparée par `keepFormerNeighboursReachable`
