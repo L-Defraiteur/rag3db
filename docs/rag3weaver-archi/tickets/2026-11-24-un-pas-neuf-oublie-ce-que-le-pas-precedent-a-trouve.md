@@ -27,6 +27,23 @@ des noms, chemins et lignes que l'index avait rendus. Le modèle a écrit de mé
 Le tour 1 avait le même défaut : deux refus « the context of the step is full », puis un rapport avec 8 noms inventés
 sur 32.
 
+## La confirmation, et un second effet plus grave
+
+- **Par l'autre bout** (tour 3) : avec la méthode « un appel, puis un `edit_file` qui recopie le résultat, point par
+  point » (21 `grep_files`, 9 `edit_file`, aucun refus, 4 minutes), les six points sont justes, vérifiés par
+  `git grep`. Avec les faits sous les yeux, le modèle n'invente pas.
+- **Un pas sans les faits abîme ce qui était juste** (tour 2) : son `edit_file` a réécrit tout le tableau du rapport.
+  Les lignes 6 à 24, justes au tour 1 (commit `5918c2d67b`), portent depuis `ad79437aab` 17 noms qui n'existent pas,
+  et le fichier est passé de lignes détaillées à des lignes abrégées.
+
+**La mesure compte donc tout le fichier** après chaque tour, et pas seulement les lignes demandées : les noms absents
+du code (`git grep`) sur l'ensemble du rapport (8, puis 13 + 17, puis 17 ; la cible est 0).
+
+**Une garde de plus, à mesurer** : un `edit_file` qui remplace beaucoup plus de lignes que la demande n'en vise est
+refusé une fois, avec « tu réécris N lignes ; ne change que celles que la demande vise, ou dis pourquoi ». C'est une
+condition sur l'appel d'outil (ses arguments et le fichier), pas sur le `step_done` : elle se branche sur la porte
+déclarée, comme les classifieurs de l'accord explicite.
+
 ## Ce qu'on attend
 
 Les faits trouvés par les outils survivent au pas qui les a trouvés. Trois leviers, déclaratifs, à mesurer sur ce cas :
