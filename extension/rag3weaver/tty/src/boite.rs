@@ -366,6 +366,17 @@ mod tests {
         assert_eq!(en_tete(&ligne(4, "supervisor", "request", json!({ "name": "Algareth" }))), "[toi · demande] ", "le nom est celui de l'agent, pas de toi");
     }
 
+    /// **A message an agent posted is not said as yours** (a trial on 24 November 2026: an instruction a peer posted by
+    /// the API, while no terminal was open, came back at `--continue` as « [toi · consigne] »). `by` says who wrote it:
+    /// a human is you; an agent is named when the line names it, and said an agent otherwise.
+    #[test]
+    fn a_line_an_agent_posted_is_not_said_as_yours() {
+        assert_eq!(en_tete(&ligne(1, "supervisor", "instruction", json!({ "by": { "kind": "human" } }))), "[toi · consigne] ");
+        assert_eq!(en_tete(&ligne(2, "supervisor", "instruction", json!({}))), "[toi · consigne] ", "no by: as before");
+        assert_eq!(en_tete(&ligne(3, "supervisor", "instruction", json!({ "by": { "kind": "agent", "client": "ide" } }))), "[un agent · consigne] ");
+        assert_eq!(en_tete(&ligne(4, "supervisor", "request", json!({ "by": { "kind": "agent", "name": "veilleur" } }))), "[veilleur · demande] ");
+    }
+
     #[test]
     fn what_the_teammate_asks_waits_until_a_line_replies_to_it() {
         let mut b = Boite::default();
