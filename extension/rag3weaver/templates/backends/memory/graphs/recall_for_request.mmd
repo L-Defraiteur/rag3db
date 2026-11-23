@@ -12,7 +12,7 @@
 %% param: weights json = {"turns": 1.0, "apports": 0.85, "cards": 0.7} -- The weight of each source in the fusion.
 %% param: recency json = {"turns": 0.15, "apports": 0.1} -- How fast a hit loses weight with its age among the hits of its source (0: no decay).
 %% param: min_score float = 0.0 -- A hit whose fused search score is under it is not recalled.
-%% param: min_similarity float = 0.5 -- A hit found by the dense signal alone is recalled only if its similarity reaches it (no nearest neighbour recalled to fill); a lexical hit (bm25, sparse) is evidence enough. To be set by the bench on labelled requests.
+%% param: min_similarity float = 0.5 -- A hit is recalled only if its dense similarity reaches it (no nearest neighbour recalled to fill); a lexical match counts only for a hit with no dense signal, bm25 matching common words. Measured on 23 November 2026: unrelated requests 0.29 and 0.44, relevant ones 0.69 and 0.82; to be set by the bench on labelled requests.
 %% param: budget_tokens int = 1500 -- The bound of the block, about 4 characters per token, shared by its passages.
 %% result: fuse.result
 
