@@ -44,6 +44,28 @@ base de données.
 - **Séparé du grand hôte.** Les données d'une application ne vivent pas dans la base de l'utilisatrice ; le
   mini-hôte tourne à côté, et se déplace avec le projet.
 
+## La porte de sortie : partir vers Supabase
+
+*Lucie, le même matin : « ou pouvoir exporter un backup pour importer sur Supabase, ou carrément convertir les
+tables de l'hôte rapide vers des migrations et des commandes `npx supabase` ? »*
+
+Un mini-hôte ne doit pas enfermer. Deux sorties, de la plus simple à la plus complète :
+
+- **Exporter les données.** Une sauvegarde du mini-hôte dans une forme que Postgres importe (un fichier SQL, ou un
+  CSV par table avec son ordre de chargement), et la page qui dit comment la charger dans un projet Supabase.
+- **Convertir le schéma.** Les entités déclarées deviennent des **migrations Supabase** : une table par entité,
+  ses colonnes et leurs types, une table de liaison ou une clé étrangère par relation, les index ; et la suite de
+  commandes à lancer (`npx supabase init`, `npx supabase migration new …`, `npx supabase db push`). L'agent sait
+  le faire puisque le schéma est déclaré : c'est une traduction, pas une réécriture.
+
+Le parcours que ça ouvre : **prototyper vite sur le mini-hôte** (aucun compte, aucun service à créer, l'agent a
+tout sous la main), puis, le jour où l'application doit vivre chez un hébergeur connu, **partir en une commande**.
+Qu'on puisse sortir est ce qui rend l'entrée sans risque ; et ce qui ne se traduit pas (une recherche par le sens
+déclarée sur un champ, une relation traversée en graphe) est dit au moment de la conversion, avec ce que Supabase
+offre à la place (pgvector, une vue).
+
+Le même traducteur vaut pour un Postgres nu, et dans l'autre sens : importer une base existante dans un mini-hôte.
+
 ## Pourquoi c'est notre intérêt
 
 Chaque application qu'un agent construit avec nous **emploie notre base**, et la montre à ceux qui la lisent, la
