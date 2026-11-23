@@ -366,7 +366,10 @@ fn score_scale(scores: &[f64]) -> usize {
 ///
 /// Le regroupement **réordonne** — les groupes sortent dans l'ordre de leur
 /// meilleur score, la numérotation reste globale, et un résultat seul dans son
-/// groupe n'a pas d'en-tête.
+/// groupe n'a pas d'en-tête. **Dans un groupe, l'ordre du code** (Lucie, 23
+/// novembre 2026 : « si c'est dans l'ordre naturel du code, ok ») : les membres
+/// suivent leurs lignes, et des scopes collés n'ont qu'un lieu, celui du bloc
+/// (« un seul wrapper de lignes »).
 pub fn build_view(
     results: &[UnifiedResult],
     max_chars: usize,
@@ -387,6 +390,8 @@ pub fn build_view_with(
 ) -> ResultsView {
     let mut order: Vec<usize> = (0..results.len()).collect();
     let mut header_at: std::collections::HashMap<usize, GroupView> = std::collections::HashMap::new();
+    // The location of a block of scopes that touch, on its first; `None` on the others of the block.
+    let mut block_location: std::collections::HashMap<usize, Option<String>> = std::collections::HashMap::new();
     if group {
         // Un groupe par (fichier, parent) ; sans parent, chacun le sien.
         let mut groups: Vec<(Option<(String, String)>, Vec<usize>)> = Vec::new();
@@ -398,7 +403,32 @@ pub fn build_view_with(
             }
         }
         order.clear();
-        for (key, members) in groups {
+        for (key, mut members) in groups {
+            if key.is_some() && members.len() > 1 {
+                // The order of the code: by first line, the score's order for scopes without lines.
+                members.sort_by_key(|&m| int_field(results[m].data.as_ref(), "start_line").unwrap_or(i64::MAX));
+                let lines = |m: usize| Some((int_field(results[m].data.as_ref(), "start_line")?, int_field(results[m].data.as_ref(), "end_line")?));
+                let mut k = 0;
+                while k < members.len() {
+                    let Some((start, mut end)) = lines(members[k]) else { k += 1; continue };
+                    let mut last = k;
+                    while let Some((s2, e2)) = members.get(last + 1).and_then(|&m| lines(m)) {
+                        if s2 > end + 1 {
+                            break;
+                        }
+                        end = end.max(e2);
+                        last += 1;
+                    }
+                    if last > k {
+                        let path = lens.path_of(results[members[k]].data.as_ref());
+                        block_location.insert(members[k], path.map(|p| format!("{p}:{start}-{end}")));
+                        for &m in &members[k + 1..=last] {
+                            block_location.insert(m, None);
+                        }
+                    }
+                    k = last + 1;
+                }
+            }
             if let (Some((file, parent)), true) = (key, members.len() > 1) {
                 let premier = &results[members[0]];
                 let (title, file) = match text_field(premier.data.as_ref(), crate::dataflow::search_nodes::FRAME_TITLE) {
@@ -526,7 +556,7 @@ pub fn build_view_with(
             score: format!("{:.decimals$}", r.score),
             signal: r.signal.clone(),
             relation: r.relation.clone(),
-            location: location(r.data.as_ref(), lens),
+            location: block_location.remove(&i).unwrap_or_else(|| location(r.data.as_ref(), lens)),
             path: lens.path_of(r.data.as_ref()),
             signature,
             doc: text_field(r.data.as_ref(), "docstring").map(|s| ellipsize(&s, max_chars)),
@@ -1504,8 +1534,9 @@ mod tests {
         // meilleur score), la numérotation reste globale et continue.
         let order: Vec<&str> = md.lines().filter(|l| l.starts_with("### ")).collect();
         assert_eq!(order.len(), 3, "{md}");
-        assert!(order[0].starts_with("### 1. PortValue::take"), "{md}");
-        assert!(order[1].starts_with("### 2. PortValue::downcast"), "{md}");
+        // Dans le groupe, l'ordre du code (Lucie, 23 novembre 2026) : downcast (110) avant take (120).
+        assert!(order[0].starts_with("### 1. PortValue::downcast"), "{md}");
+        assert!(order[1].starts_with("### 2. PortValue::take"), "{md}");
         assert!(order[2].starts_with("### 3. merge_port_values"), "{md}");
 
         // Sans regroupement : l'ordre des scores, et aucun en-tête.
