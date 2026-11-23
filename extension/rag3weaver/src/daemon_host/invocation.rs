@@ -290,7 +290,7 @@ mod tests {
         let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
         let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
         let s = r["session"].as_str().unwrap().to_string();
-        let porte = a.host.retenir_les_ecritures_de_vues();
+        let porte = a.host.hold_view_writes();
         let r = a.host.open_view(Some(&s), &manifeste, "fond", None);
         assert_eq!((&r["ok"], &r["indexing"]), (&json!(true), &json!(true)), "open_view waits for its layer: {r}");
         let lu = a.host.call(Some(&s), &manifeste, "usages", json!({"name": "un"}));
@@ -304,7 +304,7 @@ mod tests {
 
     /// A view opened for « le témoin » (session S1) on the atelier's backend, its layer written: the atelier, the
     /// manifest, the session, the view's name and path, and the folder of the test.
-    struct VueOuverte {
+    struct OpenedView {
         a: crate::daemon_host::atelier_fichiers::tests::Atelier,
         manifeste: std::path::PathBuf,
         s: String,
@@ -314,12 +314,12 @@ mod tests {
         _d: tempfile::TempDir,
     }
 
-    fn une_vue_ouverte(lot: &str) -> VueOuverte {
-        une_vue_ouverte_avec(lot, |_| ())
+    fn opened_view(lot: &str) -> OpenedView {
+        opened_view_with(lot, |_| ())
     }
 
-    /// [`une_vue_ouverte`], `avant` given the host before the view opens (a witness's gate).
-    fn une_vue_ouverte_avec(lot: &str, avant: impl FnOnce(&crate::daemon_host::DaemonHost)) -> VueOuverte {
+    /// [`opened_view`], `avant` given the host before the view opens (a witness's gate).
+    fn opened_view_with(lot: &str, avant: impl FnOnce(&crate::daemon_host::DaemonHost)) -> OpenedView {
         let d = tempfile::tempdir().unwrap();
         let a = atelier(d.path());
         let depot = petit_depot(&d.path().join("B"));
@@ -340,14 +340,14 @@ mod tests {
         assert!(a.host.attendre_l_ecriture_des_vues(std::time::Duration::from_secs(120)), "the view's layer is not written");
         let (nom, chemin) = (r["name"].as_str().unwrap().to_string(), std::path::PathBuf::from(r["path"].as_str().unwrap()));
         let couche = r["layer"].as_str().expect("the view's layer").to_string();
-        VueOuverte { a, manifeste, s, nom, chemin, couche, _d: d }
+        OpenedView { a, manifeste, s, nom, chemin, couche, _d: d }
     }
 
     /// **`close_view` refuses a view the host did not open for the session** (O3, page 03 of 20 November 2026), Lucie's
     /// tree among them.
     #[test]
     fn close_view_refuses_a_view_it_did_not_open() {
-        let v = une_vue_ouverte("a");
+        let v = opened_view("a");
         for autre in ["arbre/20-11-2026-jamais", "rag3db"] {
             let r = v.a.host.close_view(Some(&v.s), &v.manifeste, autre, false);
             assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("pas ouverte"), "{autre}: {r}");
@@ -358,7 +358,7 @@ mod tests {
     /// **`close_view` refuses a dirty tree.**
     #[test]
     fn close_view_refuses_a_dirty_tree() {
-        let v = une_vue_ouverte("b");
+        let v = opened_view("b");
         std::fs::write(v.chemin.join("sale.rs"), "pub fn sale() {}\n").unwrap();
         let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("sale"), "{r}");
@@ -368,7 +368,7 @@ mod tests {
     /// **`close_view` refuses commits no remote branch holds.**
     #[test]
     fn close_view_refuses_commits_not_pushed() {
-        let v = une_vue_ouverte("c");
+        let v = opened_view("c");
         std::fs::write(v.chemin.join("neuf.rs"), "pub fn neuf() {}\n").unwrap();
         let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).status().unwrap().success());
         git(&["add", "."]);
@@ -381,7 +381,7 @@ mod tests {
     /// **`close_view` refuses a tree a process works in.**
     #[test]
     fn close_view_refuses_a_tree_a_process_works_in() {
-        let v = une_vue_ouverte("d");
+        let v = opened_view("d");
         let mut dedans = std::process::Command::new("sleep").arg("60").current_dir(&v.chemin).spawn().unwrap();
         let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         let _ = dedans.kill();
@@ -394,7 +394,7 @@ mod tests {
     /// view back to the backend.
     #[test]
     fn close_view_removes_a_clean_tree_and_its_target() {
-        let v = une_vue_ouverte("e");
+        let v = opened_view("e");
         let etat: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(v._d.path().join("e/vues/S1.json")).unwrap()).unwrap();
         let target = std::path::PathBuf::from(etat["ouvertes"][&v.nom]["target"].as_str().unwrap());
         std::fs::create_dir_all(target.join("debug")).unwrap();
@@ -411,7 +411,7 @@ mod tests {
     }
 
     /// The generations of a view's layer, by its name, on the atelier's backend.
-    fn generations_de(v: &VueOuverte) -> i64 {
+    fn generations_de(v: &OpenedView) -> i64 {
         let hosted = v.a.host.hosted(&v.manifeste).unwrap();
         v.a.host
             .with_backend(&hosted, |b| {
@@ -436,7 +436,7 @@ mod tests {
     /// `landed.tsv` read as a file; the view named in the 6th column is closed, its generations purged.
     #[test]
     fn landed_views_close_on_their_machine() {
-        let v = une_vue_ouverte("f");
+        let v = opened_view("f");
         assert!(generations_de(&v) > 0, "the view opened has no generation");
         let journal = v._d.path().join("landed.tsv");
         // The lot's landed head is the worktree's own (c7's guard: closed only at the landed head or behind it).
@@ -453,7 +453,7 @@ mod tests {
     /// another machine closes nothing, the host of the view's machine closes it.
     #[test]
     fn landed_views_close_only_on_their_own_machine() {
-        let v = une_vue_ouverte("g");
+        let v = opened_view("g");
         let journal = v._d.path().join("landed.tsv");
         let tete = String::from_utf8(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["rev-parse", "HEAD"]).output().unwrap().stdout).unwrap();
         std::fs::write(&journal, format!("le-lot\t{}\th2\ttemoin\tlib\tposte-a:{}\n", tete.trim(), v.nom)).unwrap();
@@ -472,7 +472,7 @@ mod tests {
     /// close_view's guards sees it, and it must not be closed. Its head at the landed head (or an ancestor of it), it is.
     #[test]
     fn a_landed_view_whose_head_moved_on_is_kept() {
-        let v = une_vue_ouverte("i");
+        let v = opened_view("i");
         let git = |dans: &std::path::Path, args: &[&str]| -> String {
             let o = std::process::Command::new("git").arg("-C").arg(dans).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).output().unwrap();
             assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
@@ -506,7 +506,7 @@ mod tests {
     /// **`close_view` purges on demand** (O4): by hand, a view's generations stay; with `purge`, they go.
     #[test]
     fn close_view_purges_on_demand() {
-        let v = une_vue_ouverte("h");
+        let v = opened_view("h");
         let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, true);
         assert_eq!(r["ok"], json!(true), "{r}");
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
@@ -516,7 +516,7 @@ mod tests {
     /// changed in the view's worktree is the one `read_file` gives under the session's view, not the main tree's.
     #[test]
     fn read_file_under_the_active_view_reads_the_views_tree() {
-        let v = une_vue_ouverte("lire");
+        let v = opened_view("lire");
         std::fs::write(v.chemin.join("src/lib.rs"), "pub fn de_la_vue() -> u32 {\n    42\n}\n").unwrap();
         let lu = v.a.host.call(Some(&v.s), &v.manifeste, "read_file", json!({"path": "src/lib.rs"}));
         assert_eq!(lu["ok"], json!(true), "{lu}");
@@ -838,7 +838,7 @@ mod tests {
     /// opened and active, and the repository attached.
     #[test]
     fn the_machine_at_a_glance_says_its_sessions_folders_views_and_repositories() {
-        let v = une_vue_ouverte("p");
+        let v = opened_view("p");
         let (code, r) = v.a.host.handle("GET", "/poste", None, &[]);
         assert_eq!(code, 200, "{r}");
         let sessions = r["sessions"].as_array().cloned().unwrap_or_default();
@@ -859,7 +859,7 @@ mod tests {
     /// `use_view` takes back, and the one `views` says active; the layer's own name still works.
     #[test]
     fn use_view_takes_the_name_open_view_gives() {
-        let v = une_vue_ouverte("nom");
+        let v = opened_view("nom");
         let retour = v.a.host.use_view(Some(&v.s), &v.manifeste, "backend");
         assert_eq!(retour["ok"], json!(true), "{retour}");
         let r = v.a.host.use_view(Some(&v.s), &v.manifeste, &v.nom);

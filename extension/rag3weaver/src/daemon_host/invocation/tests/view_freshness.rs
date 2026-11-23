@@ -7,7 +7,7 @@ use super::*;
 /// layer; they said the main tree of the repository, which misled the reader.
 #[test]
 fn the_freshness_under_a_worktree_view_says_the_views_worktree() {
-    let v = une_vue_ouverte("fraicheur");
+    let v = opened_view("fraicheur");
     let lu = v.a.host.call(Some(&v.s), &v.manifeste, "read_file", json!({"path": "src/lib.rs"}));
     assert_eq!(lu["ok"], json!(true), "{lu}");
     let fraicheur = &lu["result"]["freshness"];

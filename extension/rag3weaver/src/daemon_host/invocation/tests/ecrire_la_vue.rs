@@ -8,7 +8,7 @@ use super::*;
 /// its branch, and never the main tree; under the backend's view, the main tree is still refused.
 #[test]
 fn edit_file_under_an_opened_view_writes_the_views_worktree_only() {
-    let v = une_vue_ouverte("ecrire");
+    let v = opened_view("ecrire");
     // The main tree: `<d>/B/rag3db-essai`, the view's worktree being `<d>/e/git_workspaces/arbre/<date>-<lot>`.
     let principal = v.chemin.ancestors().nth(4).unwrap().join("B/rag3db-essai/src/lib.rs");
     let avant = std::fs::read_to_string(&principal).unwrap();

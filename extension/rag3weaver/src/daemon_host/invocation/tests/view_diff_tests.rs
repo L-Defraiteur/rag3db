@@ -15,7 +15,7 @@ fn git(dans: &std::path::Path, args: &[&str]) -> String {
 /// base and fork.
 #[test]
 fn the_diff_of_a_view_says_what_is_not_pushed_yet() {
-    let v = une_vue_ouverte("diff");
+    let v = opened_view("diff");
     // A remote of its own, on the disk: the pushed commit is held by it.
     let distant = v.chemin.ancestors().nth(4).unwrap().join("distant.git");
     git(v.chemin.ancestors().nth(4).unwrap(), &["init", "-q", "--bare", &distant.to_string_lossy()]);

@@ -327,7 +327,7 @@ pub struct DaemonHost {
     /// The witnesses' gate between a view said written and the loop that follows its worktree.
     #[cfg(test)]
     #[cfg_attr(not(feature = "code"), allow(dead_code))]
-    porte_du_guet: Mutex<Option<PorteDEcriture>>,
+    watch_window_gate: Mutex<Option<PorteDEcriture>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
@@ -619,7 +619,7 @@ impl DaemonHost {
             #[cfg(test)]
             porte_d_ecriture: Mutex::new(None),
             #[cfg(test)]
-            porte_du_guet: Mutex::new(None),
+            watch_window_gate: Mutex::new(None),
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
@@ -779,7 +779,7 @@ impl DaemonHost {
 
     /// The witnesses: shut the gate of the views' background writing, and get it to open it again.
     #[cfg(test)]
-    pub fn retenir_les_ecritures_de_vues(&self) -> PorteDEcriture {
+    pub fn hold_view_writes(&self) -> PorteDEcriture {
         let p = PorteDEcriture::default();
         *self.porte_d_ecriture.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
         p
@@ -788,9 +788,9 @@ impl DaemonHost {
     /// The witnesses: shut the gate between a view said written and the loop that follows its worktree, and get it to
     /// open it again — the window in which a write in the worktree must already be seen by the kernel's events.
     #[cfg(test)]
-    pub fn retenir_le_guet_des_vues(&self) -> PorteDEcriture {
+    pub fn hold_view_watch_window(&self) -> PorteDEcriture {
         let p = PorteDEcriture::default();
-        *self.porte_du_guet.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+        *self.watch_window_gate.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
         p
     }
 
@@ -982,7 +982,7 @@ impl DaemonHost {
                         }
                         hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
                         #[cfg(test)]
-                        if let Some(p) = hote.porte_du_guet.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                        if let Some(p) = hote.watch_window_gate.lock().unwrap_or_else(|e| e.into_inner()).clone() {
                             p.attendre();
                         }
                         // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): the kernel's events on
