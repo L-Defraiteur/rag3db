@@ -61,6 +61,8 @@ pub fn model_text(result: &Value) -> String {
 pub fn metadata_for_the_model(result: &Value) -> Option<Value> {
     let mut metadata = result.get("metadata")?.as_object()?.clone();
     metadata.remove("template");
+    // The durations of the nodes are for the bench, the IDE and the journal: never tokens for the model.
+    metadata.remove("timings_ms");
     (!metadata.is_empty()).then(|| Value::Object(metadata))
 }
 
@@ -144,6 +146,16 @@ mod tests {
         let not_text = json!({ "result": { "files": ["a.rs"] }, "run": "r-2" });
         assert_eq!(serde_json::from_str::<serde_json::Value>(&model_text(&not_text)).unwrap(), not_text, "a result that is not text stays JSON");
     }
+}
+
+/// **The durations of the nodes stay out of the model text** (23 November 2026): every tool answer carries them in its
+/// metadata, and an agent would pay them in tokens at every call.
+#[test]
+fn the_node_durations_stay_out_of_the_model_text() {
+    let searched = json!({ "presentation": "# Search", "metadata": { "timings_ms": { "render": 3, "total": 12 }, "skipped": 48 } });
+    assert_eq!(model_text(&searched), "# Search\nMetadata: {\"skipped\":48}");
+    let read = json!({ "result": "fn main() {}", "metadata": { "timings_ms": { "total": 1 } } });
+    assert_eq!(model_text(&read), "fn main() {}");
 }
 
 impl crate::agent::ToolBox for BackendTools<'_> {
