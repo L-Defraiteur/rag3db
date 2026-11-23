@@ -571,7 +571,7 @@ pub struct Step {
     /// The step_dones refused for want of a word, and whether the step ended without one.
     text_refusals: AtomicUsize,
     /// **Delivered up to this line of the mailbox** (Lucie's trial of 23 Nov 2026): what arrives during the step comes
-    /// at the head of its next tool result; the loop's next frontier starts after it.
+    /// at the head of its next tool result; the next frontier still recalls it, with the rest of the step's news.
     delivered: AtomicUsize,
     /// The loop's texts, for what is delivered during the step.
     texts: Option<super::prompts::Texts>,
@@ -863,11 +863,6 @@ impl Step {
         self.delivered = AtomicUsize::new(read);
         self.texts = Some(texts);
         self
-    }
-
-    /// The mailbox line the step delivered up to.
-    pub fn delivered(&self) -> usize {
-        self.delivered.load(Ordering::SeqCst)
     }
 
     /// **The news of the mailbox, at the head of a tool result** (Lucie, 23 Nov 2026: « comme les sorties d'outils
@@ -2603,11 +2598,6 @@ impl DaemonHost {
                 Ok(r) => {
                     failed = 0;
                     unavailable = 0;
-                    // What the step delivered during it is read: the next frontier starts after it.
-                    if step.delivered() > read {
-                        read = step.delivered();
-                        files.write_cursor(read);
-                    }
                     // **The turn's commits land in the user's folder** (the terminal's night, 22 Nov 2026).
                     #[cfg(feature = "code")]
                     self.land_the_turn(&t, &files, &step.wrote(), !r["stopped_by"].is_null());
