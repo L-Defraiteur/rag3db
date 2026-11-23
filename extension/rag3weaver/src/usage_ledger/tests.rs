@@ -339,5 +339,25 @@ fn the_months_alert_says_the_threshold_passed_or_the_projection() {
     spend(20);
     let at_cap = l.alert_on("2026-11-30");
     assert_eq!(at_cap["threshold"], json!(100.0));
-    assert!(at_cap["text"].as_str().unwrap().contains("cap is reached"), "{at_cap:#}");
+    assert!(at_cap["text"].as_str().unwrap().contains("plafond du mois est atteint"), "{at_cap:#}");
+}
+
+/// **The month's alert is said once per level in a thread** (« le plafond approché se dit dans le fil »): the first
+/// turn past 50 % says it, the next does not, the next level is said again, and another thread says its own.
+#[test]
+fn the_months_alert_is_said_once_per_level_in_a_thread() {
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":100,"prices":{"paid":[{"from":"2026-01-01","input":0,"output":1}]}}"#));
+    let spend = |usd: u64| {
+        let k = Tokens { output: usd * 1_000_000, ..Default::default() };
+        let r = l.reserve_on("2026-11-01".into(), "paid", "vertex", false, k, &Caller { human: true, ..Default::default() }, false).unwrap();
+        l.settle(&r, Some(k)).unwrap();
+    };
+    assert_eq!(l.alert_to_say_on("chat:a", "2026-11-30"), None, "nothing under 50 %");
+    spend(55);
+    let said = l.alert_to_say_on("chat:a", "2026-11-30").expect("said at 50 %");
+    assert!(said["text"].as_str().unwrap().contains("50 % du plafond"), "{said:#}");
+    assert_eq!(l.alert_to_say_on("chat:a", "2026-11-30"), None, "said once");
+    assert!(l.alert_to_say_on("chat:b", "2026-11-30").is_some(), "another thread says its own");
+    spend(30);
+    assert_eq!(l.alert_to_say_on("chat:a", "2026-11-30").expect("the next level")["threshold"], json!(80.0));
 }

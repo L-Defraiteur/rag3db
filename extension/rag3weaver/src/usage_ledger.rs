@@ -481,7 +481,7 @@ impl Ledger {
         use serde_json::json;
         let r = self.report(&today[..7], today);
         if let Some(e) = r["error"].as_str() {
-            return json!({ "threshold": null, "projection_over": false, "text": format!("the spending cap cannot be read: {e}") });
+            return json!({ "threshold": null, "projection_over": false, "text": format!("le plafond des dépenses ne se lit pas : {e}") });
         }
         let (spent, cap, projection) = (r["spent"].as_f64().unwrap_or(0.0), r["cap"].as_f64().unwrap_or(0.0), r["projection"].as_f64().unwrap_or(0.0));
         let alerts: Vec<f64> = Prices::load(&self.prices_path).map(|p| p.alerts).unwrap_or_else(|_| default_alerts());
@@ -497,12 +497,41 @@ impl Ledger {
         let cur = r["currency"].as_str().unwrap_or("");
         let text = match passed {
             Some(t) if t >= 100.0 => format!(
-                "the monthly spending cap is reached: {spent:.2} / {cap:.0} {cur}; an agent's paid call is refused until the next month or a higher cap"
+                "le plafond du mois est atteint : {spent:.2} / {cap:.0} {cur} ; l'appel payant d'un agent est refusé jusqu'au mois prochain ou à un plafond relevé"
             ),
-            Some(t) => format!("{t:.0} % of the monthly spending cap: {spent:.2} / {cap:.0} {cur}, projection {projection:.0} {cur}"),
-            None => format!("the month's spending is on course to pass its cap: projection {projection:.0} / {cap:.0} {cur} ({spent:.2} so far)"),
+            Some(t) => format!("{t:.0} % du plafond du mois : {spent:.2} / {cap:.0} {cur}, projection {projection:.0} {cur}"),
+            None => format!("le mois va dépasser son plafond : projection {projection:.0} / {cap:.0} {cur} ({spent:.2} dépensés)"),
         };
         json!({ "threshold": passed, "projection_over": projection_over, "spent": spent, "cap": cap, "projection": projection, "currency": cur, "text": text })
+    }
+
+    /// **The alert to say in a thread** (« le plafond approché se dit dans le fil, avant de bloquer »): the month's
+    /// alert when its level (the threshold passed, or the projection past the cap) has not been said yet in the thread
+    /// `key` this month; then it is marked said. Once per level, per thread, per month: a higher level is said again.
+    pub fn alert_to_say_on(&self, key: &str, today: &str) -> Option<serde_json::Value> {
+        let alert = self.alert_on(today);
+        if alert.is_null() {
+            return None;
+        }
+        let level = alert["threshold"].as_f64().map(|t| format!("{t:.0}")).unwrap_or_else(|| "projection".to_string());
+        let month = &today[..7];
+        let _lock = self.lock(month).ok()?;
+        let path = self.dir.join(format!("{month}.said.json"));
+        let mut said: serde_json::Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+        let levels = said.as_object_mut()?.entry(key.to_string()).or_insert_with(|| serde_json::json!([]));
+        if levels.as_array().is_some_and(|l| l.iter().any(|x| x == &serde_json::json!(level))) {
+            return None;
+        }
+        levels.as_array_mut()?.push(serde_json::json!(level));
+        let tmp = path.with_extension("json.new");
+        std::fs::write(&tmp, said.to_string()).ok()?;
+        std::fs::rename(&tmp, &path).ok()?;
+        Some(alert)
+    }
+
+    /// [`alert_to_say_on`](Self::alert_to_say_on) today (UTC).
+    pub fn alert_to_say(&self, key: &str) -> Option<serde_json::Value> {
+        self.alert_to_say_on(key, &utc_day(now_secs()))
     }
 
     /// [`alert_on`](Self::alert_on) today (UTC).
