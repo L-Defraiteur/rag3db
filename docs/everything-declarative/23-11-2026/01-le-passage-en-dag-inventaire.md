@@ -149,6 +149,21 @@ Le terminal lit un seul flux, `GET /ide/flux?sujets=agent,tokens,mailbox,declara
 | La visionneuse d'appels | `visionneuse.rs` 29–55 | un format de clavier | petite |
 | Le thème | `theme.rs` | déjà déclaré ; reste à le faire servir par l'hôte au lieu de l'embarquer | petite |
 
+### Ajouts du 24 novembre
+
+Un agent rag3weaver a fait cette nuit son propre inventaire, sans lire cette page (`docs/pair/24-11-2026/01-ce-qui-est-en-dur.md`
+de son essai). Environ 19 de ses 24 points recoupent ceux d'ici. Quatre n'y étaient pas, et ils sont justes :
+
+| Point | Où | Ce qui bloque | Taille |
+|---|---|---|---|
+| La coupe des retours d'outils trop gros : seuil et stratégie par outil | `truncate_tool_output`, `ToolOutputLimit` (`agent.rs`) | **aucune** : une table déclarée par outil (seuil, garder la tête, la queue ou les deux), lue par un nœud de coupe primitif | petite |
+| Le masquage des secrets dans les retours d'outils | `mask_value`, `MaskedTools` | **garde dure** : le masquage reste en Rust et scellé ; seuls les **motifs** (les noms de variables et les formes de jetons à reconnaître) peuvent venir d'un fichier, qui ne peut qu'en ajouter, comme le plancher des dossiers protégés | petite |
+| L'ouverture d'une tâche depuis le chat, traitée à part du flux d'outils | `OutilsDuChat::ouvrir_une_tache` | **aucune** : un outil comme les autres, en graphe (ouvrir le worktree, poser la demande, lancer l'équipier) | moyenne |
+| Le rendu des outils dans le terminal, qui lit en dur la sortie de `read_file` et les arguments d'`edit_file` | `tty/src/outils.rs` (`lecture`, `ecriture`) | **le format de vue** du terminal (primitive 8) : un gabarit de rendu par outil, servi par l'hôte comme le thème | moyenne |
+
+Deux corrections de son inventaire, pour mémoire : le thème du terminal est lu chez l'hôte depuis le lot
+`ed-tty-theme-served`, et `sign_nothing` est déjà un gabarit (`templates/teammate/prompts/sign_nothing.md`).
+
 ## L'ordre proposé
 
 **Phase 0, sans primitive neuve**, chaque point avec son témoin, la sortie à l'octet près contre le Rust qu'il remplace :
@@ -158,6 +173,7 @@ Le terminal lit un seul flux, `GET /ide/flux?sujets=agent,tokens,mailbox,declara
 4. les appels d'outils écrits dans le texte, en nœud sur `model_out` ;
 5. le message système du chat et le message de frontière de l'équipier, en gabarits ou en nœuds scriptés ;
 6. le doublon Rust du bloc « Previous step », retiré ;
+6 bis. la coupe des retours d'outils en table déclarée ;
 7. le thème du terminal servi par l'hôte.
 
 **Phase 1, les primitives qui débloquent le plus** : les nœuds de boîte (5), la chaîne de gardes (4), la reprise avec
