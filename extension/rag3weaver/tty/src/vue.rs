@@ -1409,6 +1409,9 @@ mod thinking_tests;
 /// A stopped turn says so (23 November 2026).
 #[cfg(test)]
 mod stopped_tests;
+/// Échap stops the turn, never the session (23 November 2026).
+#[cfg(test)]
+mod escape_tests;
 
 #[cfg(test)]
 mod tests {
