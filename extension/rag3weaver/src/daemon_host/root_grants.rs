@@ -141,6 +141,11 @@ impl DaemonHost {
 }
 
 /// Whether `chemin` is `root` or under it, by whole components (`notes-privees` is not under `notes`).
+/// A grant without an end, or whose end is still to come.
+fn in_force(a: &Grant) -> bool {
+    a.expires_at.is_none_or(|fin| crate::catalog::retard::now_ms() < fin)
+}
+
 fn covers(root: &Path, chemin: &Path) -> bool {
     chemin.starts_with(root)
 }
@@ -168,7 +173,7 @@ impl DaemonHost {
     /// **The grant that covers `chemin`** for `agent` (or for `"*"`): the path, canonical, is the root or under it.
     pub fn root_grant_for(&self, agent: &str, chemin: &Path) -> Option<Grant> {
         let chemin = canonical(chemin)?;
-        self.read_grants().into_iter().find(|a| (a.agent == agent || a.agent == "*") && covers(&a.root, &chemin))
+        self.read_grants().into_iter().find(|a| (a.agent == agent || a.agent == "*") && covers(&a.root, &chemin) && in_force(a))
     }
 
     /// **Grant a root** (the Card's « yes » on an `open_root` card): kept in the register, canonical; a grant already
@@ -182,8 +187,8 @@ impl DaemonHost {
         if !matches!(mode, "read" | "write") {
             return Err(format!("accorder une racine : le mode « {mode} » n'est ni read ni write"));
         }
-        if !matches!(by, "user" | "judge" | "survivor") {
-            return Err(format!("accorder une racine : « {by} » n'est pas user, judge ni survivor"));
+        if !matches!(by, "user" | "judge" | "survivor" | "mention") {
+            return Err(format!("accorder une racine : « {by} » n'est pas user, judge, survivor ni mention"));
         }
         if agent != "*" && !agent.starts_with("agent:") {
             return Err(format!("accorder une racine : « {agent} » n'est ni « * » ni une clé agent:<clé>"));
@@ -229,7 +234,7 @@ impl DaemonHost {
 
     /// The roots granted to `agent`, its own and those of `"*"` (`None`: every grant, for the IDE).
     pub fn root_grants(&self, agent: Option<&str>) -> Vec<Grant> {
-        self.read_grants().into_iter().filter(|a| agent.is_none_or(|k| a.agent == k || a.agent == "*")).collect()
+        self.read_grants().into_iter().filter(|a| agent.is_none_or(|k| a.agent == k || a.agent == "*") && in_force(a)).collect()
     }
 
     /// **The root to propose for a refused path**: its deepest existing folder; never `$HOME`, `/`, a parent of several
