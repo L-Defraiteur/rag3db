@@ -73,6 +73,9 @@ fn l_agent_edite_un_depot_d_a_cote_dans_une_tache_depuis_l_ide() {
     super::chat_qui_code::en_copie(&manifeste);
     let declarations = roots.config.join("code-petit");
     assert!(git(&declarations, &["log", "--format=%s"]).starts_with("code-tree add code-petit"));
+    // Committed, as a declaration is: the task opens from a commit, and its merge wants a clean tree.
+    git(&declarations, &["add", "-A"]);
+    git(&declarations, &["-c", "user.name=Personne Test", "-c", "user.email=personne@example.org", "commit", "-q", "-m", "le mode copie"]);
 
     let taches = d.path().join("taches");
     let (adresse, fil) = super::tests::hote_garde_avec("j", |h| h.with_racine_des_taches(taches));
