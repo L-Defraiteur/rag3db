@@ -20,11 +20,13 @@ fn a_silent_turn_shows_its_done_in_her_folder_words_and_the_relaunch_names_the_c
             let seen = seen.clone();
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
                 let frontier = last_user(turns);
-                seen.lock().unwrap().push(frontier.clone());
-                // The agent names its tree as the frontier gives it, if it does.
+                let results = tool_results(turns).join("\n");
+                seen.lock().unwrap().push(format!("{frontier}\n{results}"));
+                // The agent names its tree as the frontier gives it, if it does; silent until its step_done is refused.
                 let tree = frontier.split("your own tree (").nth(1).and_then(|r| r.split(')').next()).unwrap_or("/nowhere").to_string();
-                let done = format!("Lance npm run dev dans {tree}");
-                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": done, "remaining": "" }))]))
+                let refused = results.contains("\"ok\":false");
+                let text = if refused { format!("Lance npm run dev dans {tree}") } else { String::new() };
+                answer(turns, opts, sink, &text, calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
             })))
         })
     };
@@ -42,9 +44,9 @@ fn a_silent_turn_shows_its_done_in_her_folder_words_and_the_relaunch_names_the_c
     let b = files.mailbox();
     let seen = seen.lock().unwrap().clone();
     let folder = depot.canonicalize().unwrap().display().to_string();
-    assert!(seen.iter().any(|f| f.contains("never shown")), "the relaunch names the channel: {seen:#?}");
+    assert!(seen.iter().any(|f| f.contains("never shown")), "the refusal names the channel: {seen:#?}");
     assert!(seen.iter().all(|f| f.contains(&folder)), "each step names her folder: {seen:#?}");
-    let shown = b.iter().find(|l| l["from"] == "teammate" && l["kind"] == "report").unwrap_or_else(|| panic!("the silent turn's done is shown to her: {b:#?}"));
+    let shown = b.iter().find(|l| l["from"] == "teammate" && l["kind"] == "report").unwrap_or_else(|| panic!("what the agent wrote reaches her: {b:#?}"));
     let text = shown["text"].as_str().unwrap_or_default();
     assert!(text.contains(&format!("Lance npm run dev dans {folder}")), "in her folder's words: {text}");
 }

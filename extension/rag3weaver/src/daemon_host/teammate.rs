@@ -1105,8 +1105,10 @@ impl Step {
         // **A word to the user first** (23 Nov 2026, `~/essai-3`): in a turn a human opened that has no line of the
         // agent yet, a step without text is refused twice, then accepted and said by the host.
         if !self.wrote_text.load(Ordering::SeqCst) && silent_turn(&self.files.mailbox()).is_some() {
-            if self.text_refusals.fetch_add(1, Ordering::SeqCst) < 2 {
-                return Err(self.text_first.clone());
+            // Numbered: two refusals in the same words would stop the run as a repeated error.
+            let n = self.text_refusals.fetch_add(1, Ordering::SeqCst);
+            if n < 2 {
+                return Err(format!("{} ({}/2)", self.text_first, n + 1));
             }
             self.answered_nothing.store(true, Ordering::SeqCst);
         }

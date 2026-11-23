@@ -39,15 +39,12 @@ fn a_turn_that_wrote_nothing_to_its_user_is_relaunched_once() {
         std::thread::sleep(Duration::from_millis(100));
     }
     let b = files.mailbox();
-    assert!(
-        b.iter().any(|l| l["from"] == "host" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains("rien écrit"))),
-        "the host says the agent wrote nothing to its user: {b:#?}"
-    );
+    // Since the refusal of a silent step_done (23 Nov 2026), the agent writes in the same step: no step relaunched.
     assert!(
         b.iter().any(|l| l["from"] == "teammate" && l["text"].as_str().is_some_and(|t| t.contains("J'ai écrit a.txt"))),
-        "the relaunched step writes to its user: {b:#?}"
+        "the step, its silent step_done refused, writes to its user: {b:#?}"
     );
-    assert_eq!(*calls.lock().unwrap(), 3, "relaunched once, not more");
+    assert_eq!(*calls.lock().unwrap(), 3, "one call more, not a whole step");
 }
 
 fn calls_of(v: &[(&str, Value)]) -> Vec<(String, String)> {
