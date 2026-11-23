@@ -614,6 +614,7 @@ impl Vue {
                     self.thinking_iteration = iteration;
                     self.open_document("réflexion", Vec::new());
                     self.thinking_doc = Some(self.documents.len() - 1);
+                    self.thinking_since = Instant::now();
                 }
                 if let Some(t) = e["text"].as_str() {
                     self.thinking.push_str(t);
@@ -1332,7 +1333,12 @@ impl Vue {
                     let libre = largeur.saturating_sub(occupe + 1);
                     let entete = colonnes(&self.entete);
                     let budget = if !self.entete.is_empty() && libre >= entete + 2 + 24 { libre - entete - 2 } else { libre };
-                    let vu = glimpse_of_thinking(&self.thinking, budget);
+                    // A station board by default; fixed with the steps shown or `--still` (23 Nov. 2026).
+                    let vu = if self.montrer_etapes || self.still {
+                        glimpse_of_thinking(&self.thinking, budget)
+                    } else {
+                        ticker_of_thinking(&self.thinking, budget, maintenant.saturating_duration_since(self.thinking_since))
+                    };
                     if !vu.is_empty() {
                         let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
                         l.spans.push(Span::raw(" "));
@@ -1507,6 +1513,53 @@ const LATE_WORDS_SILENCE: Duration = Duration::from_millis(1500);
 /// **A held Échap's repeats**: longer than a keyboard's first repeat delay (up to ~660 ms), shorter than two
 /// deliberate presses.
 const ESCAPE_REPEAT: Duration = Duration::from_millis(700);
+
+/// **How long the ticker stays on a word**: about eight characters a second, a reading pace. Each step redraws the
+/// whole window (about 50 bytes); a step by column every 200 ms cost 125.7 bytes a frame against the circle's 105.
+const TICKER_MS: u128 = 700;
+
+/// **The thinking as a station board**: a window of `budget` columns sliding over the whole thinking, one word every
+/// [`TICKER_MS`], held at the end until more comes; wide characters are never cut.
+fn ticker_of_thinking(t: &str, budget: usize, depuis: Duration) -> String {
+    if budget < 8 {
+        return String::new();
+    }
+    let flat = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    let largeurs: Vec<(char, usize)> = flat.chars().map(|c| (c, colonnes(&c.to_string()))).collect();
+    let total: usize = largeurs.iter().map(|(_, w)| w).sum();
+    if total <= budget {
+        return flat;
+    }
+    // The words' starts, in columns: the window steps from one to the next.
+    let mut debuts = vec![0usize];
+    let mut col = 0usize;
+    for (i, (c, w)) in largeurs.iter().enumerate() {
+        col += w;
+        if *c == ' ' && i + 1 < largeurs.len() {
+            debuts.push(col);
+        }
+    }
+    // The last step sets the window on the text's very end, so its last words always show (a word may be cut on the
+    // left, as on a station board).
+    let pas = (depuis.as_millis() / TICKER_MS) as usize;
+    let decalage = match debuts.get(pas) {
+        Some(&d) if d < total - budget => d,
+        _ => total - budget,
+    };
+    let (mut vu, mut avant, mut pris) = (String::new(), 0usize, 0usize);
+    for (c, w) in largeurs {
+        if avant < decalage {
+            avant += w;
+            continue;
+        }
+        if pris + w > budget {
+            break;
+        }
+        pris += w;
+        vu.push(c);
+    }
+    vu
+}
 
 /// **The glimpse of a thinking**: its last sentence on one line, its end kept when it is wider than `budget`.
 fn glimpse_of_thinking(t: &str, budget: usize) -> String {

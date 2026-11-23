@@ -22,7 +22,8 @@ fn the_thinking_is_glimpsed_in_the_living_line_and_never_written() {
     v.trame(&ev(json!({ "kind": "LlmCall" })));
     v.trame(&ev(json!({ "kind": "Thinking", "iteration": 1, "text": "L'utilisatrice veut un site. " })));
     v.trame(&ev(json!({ "kind": "Thinking", "iteration": 1, "text": "Je vais lire le dossier puis écrire index.html" })));
-    let l = vivante(&v);
+    // The ticker starts at the thinking's beginning; once it has slid to the end, the last words show.
+    let l = v.ligne_vivante(120, v.thinking_since + Duration::from_secs(60));
     let t = texte(&l);
     assert!(t.contains("puis écrire index.html"), "{t}");
     let span = l.spans.iter().find(|s| s.content.contains("index.html")).expect("a span of thinking");
