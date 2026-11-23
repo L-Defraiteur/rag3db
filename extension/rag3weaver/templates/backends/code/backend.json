@@ -21,9 +21,18 @@
     "root": "workspace",
     "commands": "auto",
     "index": "code",
-    "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576},
+    "index_exclude": {
+      "minified_line_max_bytes": 5000,
+      "code_file_max_bytes": 1048576
+    },
     "sandbox": {
-      "extra_read": ["~/.rustup", "~/.cargo/bin", "~/.cargo/registry", "~/.cargo/git", "~/.cargo/config.toml"],
+      "extra_read": [
+        "~/.rustup",
+        "~/.cargo/bin",
+        "~/.cargo/registry",
+        "~/.cargo/git",
+        "~/.cargo/config.toml"
+      ],
       "env": {
         "CARGO_TARGET_DIR": "{repo_target}",
         "TMPDIR": "{task_dir}/tmp",
@@ -173,5 +182,8 @@
       "graph": "graphs/reindex_on_change.mmd",
       "description": "Un fichier changé hors de nos outils est réindexé ; un fichier supprimé est retiré."
     }
+  },
+  "teammate": {
+    "max_output_tokens": 40000
   }
 }
