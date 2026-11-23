@@ -990,3 +990,7 @@ impl Catalog {
             .ok_or_else(|| CatalogError::ValidationFailed(format!("{entity_name} ne déclare pas de synchronisation (snapshot)")))
     }
 }
+
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "session_orpheline_tests.rs"]
+mod session_orpheline_tests;
