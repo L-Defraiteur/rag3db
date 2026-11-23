@@ -156,6 +156,34 @@ batch = 64
 Le registre remplace la température en dur (`model-temperature`) et la règle provisoire de Gemini 3 ; Vertex et
 Anthropic y restent des entrées de leur protocole.
 
+## Ce qui est déclaré, et ce qui reste du code (Lucie, 23 novembre au soir : « tout déclaratif »)
+
+La règle : tout ce qui décide se déclare ; un builtin n'est qu'une primitive, une seule chose. Pour le service :
+
+**Déclaré, dans des fichiers que l'utilisatrice peut changer sans rebâtir :**
+
+- **le contrat** : le schéma OpenAPI de `/v1`, dans le dépôt ; les SDK et le témoin de conformité en sont tirés ;
+- **la correspondance entre le bus et le flux** : quel événement du bus devient quel type du flux SSE
+  (`turn.started`, `tool.finished`, `card.opened`…), et quels champs il porte, dans un gabarit ;
+- **le registre des points d'accès** (§ 5), en TOML ;
+- **la politique d'une session** (`workspace`, la porte, les bornes, le juge sans humain) : celle du manifeste et de
+  la porte, déjà déclarées ;
+- **les textes** que la session envoie au modèle : les gabarits de l'équipier, déjà.
+
+**Du code, et pourquoi :**
+
+- **le transport** : écouter HTTP, servir le SSE, sa reprise par `Last-Event-ID` et son tampon. Ce sont des
+  primitives de réseau, sans règle métier : une route lit sa requête, appelle une fonction de l'hôte, rend sa réponse.
+  Une route ne décide de rien ; ce qu'elle appelle est déjà là (ouvrir une tâche, poster à l'équipier, l'arrêter, lire
+  la boîte) ;
+- **l'authentification** : comparer un jeton lu d'un fichier, refuser une adresse non locale sans jeton. C'est une
+  garde de sécurité qui doit tenir même si un gabarit est faux ; elle ne se déclare pas, pour qu'aucun fichier ne
+  puisse l'éteindre ;
+- **l'arrêt propre** sur SIGTERM et SIGINT (fermer les bases avant de sortir) : une primitive du processus.
+
+Rien d'autre : une décision qui apparaîtrait dans une route (qui a le droit, quand finir, quoi rejouer) est une
+garde déclarée, comme la chaîne de fin de pas.
+
 ## L'ordre des lots, et ce qui part en parallèle
 
 1. **archi** : le schéma `/v1` (OpenAPI) et le registre (le format ci-dessus, lu au démarrage et par
