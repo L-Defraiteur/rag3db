@@ -3494,7 +3494,21 @@ fn admitted_parent_uuids_for(
     options: &SearchOptions,
     conn: &Arc<dyn crate::connection::DbConnection>,
 ) -> Result<Option<HashSet<String>>, String> {
-    use crate::filter::{FilterCondition, FilterValue};
+    admitted_parent_uuids_among(ctx, target, options, conn, None)
+}
+
+/// **Les parents admis, parmi des uuids donnés** : le même prédicat que les signaux (le filtre de l'appelant, la
+/// portée, `exclude`/`must`/`phrase`, la cellule et la visibilité), borné à `among` par la clé primaire — une
+/// lecture de ces lignes, pas de la table. Ce qu'un nœud ajoute après les signaux (les appelants du saut d'appel)
+/// passe par lui. `None` : tout est admis (aucune condition, tout visible).
+pub(crate) fn admitted_parent_uuids_among(
+    ctx: &NodeContext,
+    target: &SearchTarget,
+    options: &SearchOptions,
+    conn: &Arc<dyn crate::connection::DbConnection>,
+    among: Option<&[String]>,
+) -> Result<Option<HashSet<String>>, String> {
+    use crate::filter::{FilterCondition, FilterOp, FilterValue};
     let resolve = |forme: crate::read_view::Forme<'_>, cell: &crate::scope::Scope| {
         let mut conditions: Vec<_> = options.filter_condition.iter().cloned().collect();
         if forme.multi_cell {
@@ -3513,6 +3527,12 @@ fn admitted_parent_uuids_for(
         let toutes_visibles = forme.generations.as_ref().map_or(true, |v| v.tout_visible);
         if conditions.is_empty() && toutes_visibles {
             return Ok(None);
+        }
+        if let Some(uuids) = among {
+            conditions.push(FilterCondition::Field {
+                key: "_uuid".into(),
+                value: FilterValue::Ops(vec![FilterOp::In(uuids.iter().map(|u| crate::connection::CypherValue::String(u.clone())).collect())]),
+            });
         }
         forme.resolve_filter_to_ids(&target.parent_table, &FilterCondition::Must(conditions), target)
     };
