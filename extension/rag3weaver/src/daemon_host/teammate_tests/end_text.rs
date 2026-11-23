@@ -42,36 +42,29 @@ fn a_step_done_right_after_a_tool_is_refused_until_the_agent_explains() {
 }
 
 /// **Only the step_done that closes the turn asks for the explanation** (Lucie, 23 Nov 2026: an explanation at the
-/// end of the turn, not a comment after each step): a plan of three items, no text asked at the first two step_dones,
-/// asked at the last.
+/// end of the turn, not a comment after each step): three steps of work, the first two saying what is left, no text
+/// asked; the last one, with nothing left, asked.
 #[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
 #[test]
-fn only_the_step_done_that_closes_the_plan_asks_for_the_explanation() {
+fn only_the_step_done_that_closes_the_turn_asks_for_the_explanation() {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
-    let refused = Arc::new(Mutex::new(Vec::<String>::new()));
+    let refused = Arc::new(Mutex::new(Vec::<usize>::new()));
     let model: ChatModel = {
         let refused = refused.clone();
         Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
             let refused = refused.clone();
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 16384, move |turns, opts, sink| {
-                let step = step_of(turns);
+                let step = step_of(turns).max(1);
                 let results = tool_results(turns);
-                let item = ["a", "b", "c"][(step.max(1) - 1).min(2)];
-                let done = json!({ "item": item, "succeeded": true, "done": format!("{item} fait"), "remaining": "" });
+                let left = match step { 1 => "b et c", 2 => "c", _ => "" };
+                let done = json!({ "item": "", "succeeded": true, "done": format!("pas {step}"), "remaining": left });
                 if results.iter().any(|r| r.contains("\"ok\":false")) {
-                    refused.lock().unwrap().push(item.to_string());
-                    return answer(turns, opts, sink, "Tout est fait : les trois éléments du plan sont posés.", calls(&[("step_done", done)]));
+                    refused.lock().unwrap().push(step);
+                    return answer(turns, opts, sink, "Tout est fait : les trois parties sont posées.", calls(&[("step_done", done)]));
                 }
-                match (step, results.len()) {
-                    (1, 0) => answer(turns, opts, sink, "Je pose un plan en trois éléments.", calls(&[("edit_plan", json!({ "plan": {
-                        "request": "Trois petites choses", "proposal": "Une par pas",
-                        "items": [
-                            { "id": "a", "text": "a", "status": "todo", "alone": true },
-                            { "id": "b", "text": "b", "status": "todo", "alone": true },
-                            { "id": "c", "text": "c", "status": "todo", "alone": true }
-                        ] } }))])),
-                    (1, 1) | (_, 0) => answer(turns, opts, sink, "", calls(&[("list_files", json!({}))])),
+                match results.len() {
+                    0 => answer(turns, opts, sink, if step == 1 { "Je m'y mets." } else { "" }, calls(&[("list_files", json!({}))])),
                     _ => answer(turns, opts, sink, "", calls(&[("step_done", done)])),
                 }
             })))
@@ -88,5 +81,5 @@ fn only_the_step_done_that_closes_the_plan_asks_for_the_explanation() {
         std::thread::sleep(Duration::from_millis(100));
     }
     let r = refused.lock().unwrap().clone();
-    assert_eq!(r, vec!["c".to_string()], "only the last step_done asks for the explanation: {:#?}", files.mailbox());
+    assert_eq!(r, vec![3], "only the step_done with nothing left asks for the explanation: {:#?}", files.mailbox());
 }
