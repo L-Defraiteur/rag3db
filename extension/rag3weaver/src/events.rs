@@ -152,6 +152,9 @@ pub enum Event {
     Consumed {
         run: String,
         agent: String,
+        /// The call's duration, retry waits included (`Usage::ms`; 23 Nov 2026, the bench of the conversation's
+        /// policies reads it per call).
+        ms: u64,
         /// Le tour qui a consommé.
         ///
         /// **Il n'est pas décoratif** : sans lui, deux appels au même modèle
@@ -712,8 +715,8 @@ impl Event {
                 }
                 v
             }
-            Self::Consumed { run, agent, iteration, resource, provider, units } => json!({
-                "kind": "Consumed", "run": run, "agent": agent, "iteration": iteration,
+            Self::Consumed { run, agent, ms, iteration, resource, provider, units } => json!({
+                "kind": "Consumed", "run": run, "agent": agent, "ms": ms, "iteration": iteration,
                 "resource": resource, "provider": provider,
                 "units": units.iter().map(|(u, n)| json!({ "unit": u.as_str(), "amount": n }))
                     .collect::<Vec<_>>(),
