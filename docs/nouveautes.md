@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 23 novembre 2026 — **Chaque appel au modèle dit la taille du contexte et les jetons déjà comptés.** Le flux d'un
+  run donne, à chaque appel, le plafond de contexte du modèle, les jetons envoyés, reçus et en cache depuis le début de
+  la conversation et depuis sa dernière réduction (gardés avec elle, même après une reprise), et, pour une réponse
+  vide, sa raison en clair et si le pas reprend : de quoi écrire « contexte 9,8 k / 1 M · cumul 142 k ».
 - 23 novembre 2026 — **Une réponse vide du modèle dit pourquoi, et le travail reprend.** Quand le modèle rend un
   appel sans texte ni outil, la boîte de l'agent le dit avec sa raison (« coupée à la limite de sortie », la fin
   donnée par le fournisseur, les jetons de réflexion) et le pas suivant reprend, au lieu d'un pas fini en silence. Une
