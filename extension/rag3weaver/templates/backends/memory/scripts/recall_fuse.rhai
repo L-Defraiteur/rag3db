@@ -1,4 +1,5 @@
-// recall_fuse — the fusion of recall_for_request: each hit scores weight(tier) × decay(its age rank in its tier) /
+// recall_fuse — the fusion of recall_for_request: a hit is recalled only on evidence — a lexical signal (bm25, sparse)
+// found it, or its dense similarity reaches min_similarity (never a nearest neighbour recalled to fill); then each hit scores weight(tier) × decay(its age rank in its tier) /
 // (60 + its rank in its tier); the best `top`, deduplicated, rendered in full under the budget as one block labelled
 // « Rappel automatique », placed last in the context by the host. Nothing found (or nothing above min_score): no block,
 // and it is not a fallback.
@@ -25,6 +26,17 @@ let i = input;
 let weights = if i.weights == () { #{} } else { i.weights };
 let recency = if i.recency == () { #{} } else { i.recency };
 let min_score = if i.min_score == () { 0.0 } else { 0.0 + i.min_score };
+let min_similarity = if i.min_similarity == () { 0.5 } else { 0.0 + i.min_similarity };
+// The evidence of a hit: what each signal said of it (label, raw score, rank), as the fusion kept it.
+fn evidence(r, min_similarity) {
+    let sigs = if r.signals == () { [] } else { r.signals };
+    if sigs.is_empty() { return true; }
+    for s in sigs {
+        if s.label == "bm25" || s.label == "sparse" { return true; }
+        if s.label == "vector" && 0.0 + s.score >= min_similarity { return true; }
+    }
+    false
+}
 let top = if i.top == () { 2 } else { i.top };
 let budget_chars = (if i.budget_tokens == () { 1500 } else { i.budget_tokens }) * 4;
 let degraded = ();
@@ -41,7 +53,7 @@ for s in sources {
     let w = if weights[tier] == () { 0.0 } else { 0.0 + weights[tier] };
     let rate = if recency[tier] == () { 0.0 } else { 0.0 + recency[tier] };
     let kept = [];
-    for r in s.results { if r.data != () && (r.score == () || 0.0 + r.score >= min_score) { kept.push(r); } }
+    for r in s.results { if r.data != () && (r.score == () || 0.0 + r.score >= min_score) && evidence(r, min_similarity) { kept.push(r); } }
     // The age rank in the tier: the newest hit is 0 (turns by `at`, apports by `created_at`).
     let ages = [];
     for r in kept {
@@ -68,7 +80,7 @@ for h in hits {
     chosen.push(#{ tier: h.tier, r: h.r, id: id });
 }
 if chosen.is_empty() {
-    return #{ block: (), mode: "recent", sources: [], degraded: degraded, swarm: () };
+    return #{ block: (), mode: "recent", sources: [], passages: [], degraded: degraded, swarm: () };
 }
 let each = budget_chars / chosen.len();
 let parts = [];
@@ -81,5 +93,9 @@ let block = "Rappel automatique (mode recent) : ces passages ont été retrouvé
 let first = true;
 for p in parts { if !first { block += "\n\n"; } block += p; first = false; }
 let ids = [];
-for c in chosen { ids.push(c.id); }
-#{ block: block, mode: "recent", sources: ids, degraded: degraded, swarm: () }
+let passages = [];
+for c in chosen {
+    ids.push(c.id);
+    passages.push(#{ id: c.id, tier: c.tier, signals: if c.r.signals == () { [] } else { c.r.signals } });
+}
+#{ block: block, mode: "recent", sources: ids, passages: passages, degraded: degraded, swarm: () }
