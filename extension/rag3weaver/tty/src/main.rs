@@ -96,8 +96,8 @@ fn plain_suspended_on_a_card(lines: &[Value], since: usize) -> bool {
 
 /// The last conversation of a repository in the host's list of teammates.
 /// What the host's answer to opening a folder says at the start (its first commit in a new folder).
-fn opening_line(_r: &Value) -> Option<String> {
-    None
+fn opening_line(r: &Value) -> Option<String> {
+    r["first_commit"].as_str().filter(|t| !t.trim().is_empty()).map(str::to_string)
 }
 
 fn last_conversation(list: &Value, parent: &str) -> Option<String> {
@@ -188,7 +188,10 @@ fn lancer(o: Options) -> Result<(), String> {
     let depot = match client::resoudre(&agent, &ep, &o.depot) {
         Ok(d) => d,
         Err(_) if depuis_le_dossier || std::path::Path::new(&o.depot).is_absolute() => {
-            client::open_folder(&agent, &ep, &o.depot).map_err(|e| format!("l'hôte n'ouvre pas {} : {}", o.depot, tui::refusal_in_words(&e)))?;
+            let ouvert = client::open_folder(&agent, &ep, &o.depot).map_err(|e| format!("l'hôte n'ouvre pas {} : {}", o.depot, tui::refusal_in_words(&e)))?;
+            if let Some(t) = opening_line(&ouvert) {
+                eprintln!("[tty] {t}");
+            }
             client::resoudre(&agent, &ep, &o.depot).map_err(|e| tui::refusal_in_words(&e))?
         }
         Err(e) => return Err(tui::refusal_in_words(&e)),

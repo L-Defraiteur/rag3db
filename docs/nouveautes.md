@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 23 novembre 2026 — **La vue du terminal dit ce qui a changé, comme `--plain`.** Les fichiers modifiés dans le tour
+  et ce que les commandes ont laissé hors du commit s'y lisent ; un tour où l'agent n'a pas écrit de texte répond par
+  son étape faite ; le premier commit d'un dossier neuf se dit au départ, et l'en-tête dit « conversation ».
 - 23 novembre 2026 — **Dans le terminal de l'agent, Ctrl-C arrête le tour, pas la séance.** Pendant que l'agent
   travaille, Ctrl-C l'arrête comme Échap ; au repos, un premier Ctrl-C dit « Ctrl-C encore pour quitter » et un second,
   dans les deux secondes, quitte. Un tour dont le travail a atterri dans le dossier n'est plus dit « fini sans
