@@ -338,6 +338,7 @@ pub struct DaemonHost {
     soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
     /// A publication of the host's state runs in the background; one asked meanwhile is redone after it.
     publication_en_cours: std::sync::atomic::AtomicBool,
+    #[allow(dead_code)] // read by the background publication, the fix that follows this witness
     publication_a_refaire: std::sync::atomic::AtomicBool,
     /// The witnesses' count of the states published, and their slow state.
     #[cfg(test)]
