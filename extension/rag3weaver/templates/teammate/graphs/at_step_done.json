@@ -1,3 +1,13 @@
 {
-  "accept": { "action": "accept" }
+  "silent_turn": {
+    "action": "refuse",
+    "text_key": "step_done.text_first"
+  },
+  "reply_after_tools": {
+    "action": "refuse",
+    "text_key": "step_done.text_first"
+  },
+  "accept": {
+    "action": "accept"
+  }
 }

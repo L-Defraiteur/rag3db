@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Les règles qui refusent un `step_done` muet sont un fichier.** Le tour sans un mot pour toi, et
+  le `step_done` de clôture juste après des outils sans réponse, se décident dans
+  `templates/teammate/graphs/at_step_done.mmd` et sa table `at_step_done.json` : ta copie dans
+  `~/.config/rag3weaver/templates/teammate/graphs/` les change, relue à chaque pas, sans rien rebâtir. Le texte du
+  refus est la clé `step_done.text_first` de `texts.json`.
 - 23 novembre 2026 — **Un chemin que tu écris se lit sans carte, pendant dix minutes.** Quand ta demande cite un fichier
   ou un dossier hors du projet, l'agent peut le lire tout de suite : l'hôte lui en ouvre le dossier en lecture seule,
   pour dix minutes, et le dit en une ligne. Seuls tes mots comptent, jamais un chemin venu d'un agent ou d'un fichier
