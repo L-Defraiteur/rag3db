@@ -48,9 +48,14 @@ fn a_command_after_a_background_one_returns_at_once() {
         assert!(Instant::now() < fin, "in 120 s: {:#?}", files.mailbox());
         std::thread::sleep(Duration::from_millis(100));
     }
-    // The background command dies with its task, as when the task closes: nothing is left behind the witness.
+    // The background command dies with its task, as when the task closes: nothing is left behind the witness. Read by
+    // the command's own pid (from its result), not by a wrapper's (c7, 23 Nov 2026: the confiner saw `sleep 30` alive).
     host.end_task_background(&h.id, "doc");
     let vus = seen.lock().unwrap().clone();
+    let pid: Option<u32> = vus.first().and_then(|r| r.split("(pid ").nth(1)).and_then(|r| r.split(')').next()).and_then(|p| p.trim().parse().ok());
+    let pid = pid.unwrap_or_else(|| panic!("the background command's pid: {vus:#?}"));
+    let vivant = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok().filter(|s| !s.contains(") Z "));
+    assert!(vivant.is_none(), "the background command dies with its task's background: pid {pid} still runs ({vivant:?})");
     let ls = vus.get(1).cloned().unwrap_or_default();
     assert!(ls.contains("code 0") && !ls.contains("délai"), "ls returns at once while a command runs in the background: {vus:#?}");
 }
