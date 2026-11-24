@@ -18,14 +18,19 @@ L'index sert l'agent sans attendre qu'il le choisisse. Au début d'un tour ouver
 `templates/teammate/graphs/at_turn_start.mmd` (le rappel de mémoire y est déjà) :
 
 1. **Une condition** : une demande sur le code, dans un dossier dont l'index est prêt. Un « bonjour » ne lance rien.
-2. **Les requêtes** : un appel court au modèle, à sortie structurée, tourne la demande en deux ou trois requêtes de
-   `search_code` (et un nom à passer à `usages` s'il en voit un).
+2. **Les requêtes** : un appel court au modèle, à sortie structurée (pas un mini-agent : Lucie et c7, 24 novembre
+   2026), reçoit la demande, le contexte récent de la conversation et le plan du projet que l'index connaît (ses
+   dossiers de tête, les noms de ses modules), et rend trois requêtes de `search_code` (et un nom à passer à `usages`
+   s'il en voit un).
 3. **Les recherches** : chacune par `CallTool`, en parallèle.
 4. **La synthèse** : un appel au modèle, à sortie structurée, met la demande en regard de tous les résultats :
    - `orientation` : comment le projet est organisé pour cette demande, où sont ses primitives, ce qui s'y rattache ;
    - `relevant` : les résultats les plus utiles, par leur numéro dans les recherches, avec `chemin:ligne`, le symbole
      et une raison en une ligne ;
    - `queries` : les requêtes jouées, pour que l'agent sache ce qui a déjà été cherché.
+   - `follow_up` : zéro à deux requêtes de plus, quand un résultat ouvre une piste (un nom à suivre par `usages`, une
+     interface dont il faut les implémentations). **Une seule relance** : ces requêtes jouées, la synthèse est refaite,
+     et c'est fini (une boucle à `max_iterations: 1`, déclarée, comme toute boucle arrêtée par un modèle).
 5. **Le rendu** : un bloc « Ce que l'index a trouvé pour ta demande », avec la synthèse et les lignes `chemin:ligne`.
    Il passe d'un pas à l'autre comme un fait (`carry_over`).
 
@@ -52,6 +57,8 @@ nécessaire.
 - Coupable sans bâti, par la table de l'utilisatrice.
 
 ## La mesure
+
+- Avec et sans la relance, sur les mêmes demandes : si elle ne rapporte rien, elle se coupe dans la table.
 
 - Sur l'invite d'étude de Lucie et sur la demande Houdini dans `tisserande` : le nombre de fichiers lus en entier avant
   d'agir, avant et après ; les noms absents du code dans ce qu'il écrit ; le temps du tour.
