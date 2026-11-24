@@ -44,6 +44,10 @@ fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_greeting_with_nothi
     ]);
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let mut c: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    // The index in full text alone: this build has no token counter for the template's embedding model, and the scout
+    // reads the text index; the scout's model, by its name.
+    c.as_object_mut().unwrap().remove("embeddings");
+    c["models"] = json!({});
     c["models"]["llm"] = json!([
         { "name": "equipier", "access": "compatible", "provider": "openai", "model": "faux-equipier", "address": "http://127.0.0.1:9/v1", "default": true },
         { "name": "eclaireur", "access": "compatible", "provider": "openai", "model": "faux-eclaireur", "address": server.url }
