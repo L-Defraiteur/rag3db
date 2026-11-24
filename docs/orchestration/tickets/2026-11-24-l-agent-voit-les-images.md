@@ -25,6 +25,11 @@ ne lit une image ; `read_file` sur une image ne rend rien d'utile. Le terminal n
 3. **Mieux qu'une description quand le modèle de l'équipier voit** : déclaré par modèle (`vision: true`), l'image part
    directement dans le message au modèle, en partie image, et la description n'est qu'un repli. À mesurer : une image
    jointe coûte des jetons à chaque appel du tour ; la description, une fois.
+   **Les deux chemins existent, choisis par la capacité déclarée** (Lucie, 24 novembre 2026 : « c'est un cas spécial,
+   d'autres modèles ne l'ont pas, donc savoir avoir les deux sur capacité déclarée ») : chaque modèle du registre déclare
+   `vision: true | false`. Vrai : l'image part en partie image. Faux, ou non déclaré : elle est décrite par le modèle de
+   vision déclaré, et l'équipier reçoit la description. Jamais de choix par le nom du fournisseur ou du modèle dans le
+   code. Le même `read_image` sert les deux, et dit lequel il a pris.
 4. Une image collée ou lue est un fait du tour : son chemin et sa description passent d'un pas à l'autre.
 
 ## Le témoin
