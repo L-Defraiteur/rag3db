@@ -1714,6 +1714,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Décider et aiguiller (les agents qui se parlent, lot 2).
     registry.register(Box::new(super::decide_nodes::DecideNodeFactory));
     registry.register(Box::new(super::decide_nodes::RouteNodeFactory));
+    // A report keeps only the findings its diff quotes (24 November 2026, the lot judge).
+    registry.register(Box::new(super::quote_nodes::KeepQuotedNodeFactory));
     // Les sections d'un Markdown, pour l'archiviste (M4).
     registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));
@@ -1747,7 +1749,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 61 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 62 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
