@@ -2070,6 +2070,7 @@ mod tests {
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
                 "Route" => serde_json::json!({ "routes": "a|b" }),
                 "FirstMatch" => serde_json::json!({ "rules": "a", "otherwise": "end" }),
+                "CallTool" => serde_json::json!({ "tool": "recall_for_request" }),
                 "Collect" => serde_json::json!({ "inputs": "a,b" }),
                 "Spot" => serde_json::json!({ "patterns": { "a": "a" } }),
                 "ReindexFileNode" => serde_json::json!({}),
