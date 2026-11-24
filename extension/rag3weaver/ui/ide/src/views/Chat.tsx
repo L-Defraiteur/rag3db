@@ -1125,7 +1125,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               id="message"
               rows={3}
               required
-              disabled={!chat?.on}
+              // **Ready before the agent** (24 November 2026): the input takes the focus and the typing at once; only the
+              // sending waits for the chat (`send` returns without clearing while it is not on).
               placeholder="Que voulez-vous explorer ?"
               ref={input}
               autoFocus
@@ -1142,7 +1143,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                 <Square className="size-3.5" /> Arrêter
               </Button>
               <Button id="send" type="submit" size="sm" disabled={busy || !chat?.on}>
-                Envoyer <SendHorizontal className="size-3.5" />
+                {chat ? <>Envoyer <SendHorizontal className="size-3.5" /></> : "L'agent arrive…"}
               </Button>
             </div>
           </div>
