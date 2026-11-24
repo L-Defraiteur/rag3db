@@ -98,6 +98,13 @@ impl Theme {
         serde_json::from_value(v).map_err(|e| format!("le thème « {nom} » ne se lit pas : {e}"))
     }
 
+    /// **The theme `nom`, or none when the host serves no theme** (24 Nov. 2026): `None` when the host does not answer
+    /// its list of themes (a host without the route, or none at all), the view then going plain rather than stopping;
+    /// an unknown name, or a theme that does not read, is still refused.
+    pub fn of_the_host_or_none(agent: &ureq::Agent, ep: &crate::endpoint::Endpoint, nom: &str) -> Result<Option<Theme>, String> {
+        Theme::de_l_hote(agent, ep, nom).map(Some)
+    }
+
     /// A theme of the repository (`templates/themes/<nom>.json`), for a witness: the same file the host serves.
     #[cfg(test)]
     pub fn du_depot(nom: &str) -> Theme {
@@ -204,6 +211,20 @@ mod tests {
         assert_eq!(t.couleurs.texte, Theme::du_depot("foret").couleurs.texte);
         let e = Theme::de_l_hote(&agent, &ep, "inconnu").unwrap_err();
         assert!(e.contains("pas de thème « inconnu »") && e.contains("daemon") && e.contains("foret"), "{e}");
+    }
+
+    /// **A host that serves no theme leaves the view without one, not stopped** (24 Nov. 2026): no theme is embedded
+    /// in the terminal any more; a host that does not answer its themes gives `None` (the terminal then goes plain),
+    /// while an unknown name on a host that serves themes is still refused.
+    #[test]
+    fn a_host_that_serves_no_theme_gives_none_and_an_unknown_name_is_refused() {
+        let agent = crate::client::agent();
+        let mort = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().to_string();
+        let sans = crate::endpoint::Endpoint { address: mort, token: "t".into(), user_token: None };
+        assert!(matches!(Theme::of_the_host_or_none(&agent, &sans, "daemon"), Ok(None)), "no host: no theme, no stop");
+        let ep = theme_host(4);
+        assert_eq!(Theme::of_the_host_or_none(&agent, &ep, "foret").unwrap().map(|t| t.nom), Some("foret".to_string()));
+        assert!(Theme::of_the_host_or_none(&agent, &ep, "inconnu").is_err(), "an unknown name is refused");
     }
 
     /// La luminance relative d'une couleur (WCAG 2.x).
