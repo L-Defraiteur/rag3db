@@ -42,7 +42,7 @@ fn the_lot_judge_graph_gives_the_findings_of_the_model() {
     }));
     let mut services = ServiceRegistry::new();
     services.register(LLM_SERVICE, llm);
-    let def = graph.instantiate(&json!({ "diff": DIFF, "rules": { "agents_md": "No force push.", "rules": rules["rules"] } })).expect("the params");
+    let def = graph.instantiate(&json!({ "lot": { "diff": DIFF, "agents_md": "No force push.", "rules": rules["rules"] } })).expect("the params");
     let report = execute_definition(&def, &nodes, Arc::new(services), &NodeTypePolicy::All, graph.result()).expect("the graph runs");
     let report: Value = serde_json::from_str(&report).expect("the report is JSON");
     assert_eq!(report["findings"][0]["rule"], json!("hardcoded_list"), "{report:#}");
