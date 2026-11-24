@@ -56,5 +56,6 @@ fn a_full_step_writes_its_findings_and_the_next_step_reads_them() {
         std::thread::sleep(Duration::from_millis(100));
     }
     let vus = vus.lock().unwrap().join("\n");
-    assert!(vus.contains("bonjour — src/lib.rs:1"), "the full step's note of its findings reaches the next step: {vus}");
+    let boite: Vec<String> = files.mailbox().iter().map(|l| format!("{} {}: {}", l["from"], l["kind"], l["text"].as_str().unwrap_or_default().chars().take(160).collect::<String>())).collect();
+    assert!(vus.contains("bonjour — src/lib.rs:1"), "the full step's note of its findings reaches the next step: {vus}\n[mailbox]\n{}", boite.join("\n"));
 }
