@@ -17,3 +17,15 @@ Ce qui marche, selon l'étude : `search_code` sur le vocabulaire métier, `usage
 pour trouver le fichier de test à rejouer, `outline` sur un module TypeScript, `grep_files`.
 
 Chaque défaut se prouve rouge d'abord, sur un extrait minimal de ce dépôt rangé en corpus de test.
+
+## Le filtre par défaut de `search_code` (Lucie, 24 novembre 2026, 12 h 05)
+
+Pour le défaut 2 : sans `scope` donné, si le dossier a un `src/`, la recherche s'y borne par défaut, et le résultat le
+dit en tête : « filtre `src/` appliqué d'office ; pour chercher ailleurs, donne `scope` (une autre valeur, ou vide pour
+tout le dépôt) ».
+
+Une précision à trancher à l'écriture (c7) : beaucoup de dépôts ont leur code hors de `src/` (`lib/`, `packages/`,
+`crates/`, `extension/`, la racine). Le défaut pourrait être « les fichiers de code » (les langues que le parseur
+reconnaît) plutôt qu'un chemin, avec `src/` en plus quand il existe ; la même ligne d'en-tête le dit. Le défaut et son
+texte vivent dans le gabarit de l'outil, modifiables sans bâti.
+
