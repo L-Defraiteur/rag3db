@@ -12,18 +12,30 @@
       ]
     },
     {
+      "id": "hardcoded_model_or_provider",
+      "severity": "medium",
+      "question": "Does an added line write a model name or a provider in code or in a test (gemini-…, claude-…, gpt-…, vertex, anthropic, a model slug), where the registry (models.llm) or a declared template should name it?",
+      "violates": [
+        "a test that sets the model to \"gemini-3\"",
+        "match provider { \"vertex\" => … }"
+      ]
+    },
+    {
       "id": "identifier_not_english",
       "severity": "low",
-      "question": "Does an added line DECLARE a new identifier that is not English (fn, let, struct, enum, a field, const, a parameter, a test name, a file, a route, a JSON key, a node type), absent from the removed lines of the same file? A name that already existed and is only called or used in an added line is never a violation, nor a field moved from elsewhere. Prose, comments and user-facing texts in French are fine.",
+      "question": "Does an added line DECLARE an identifier that is not English: a fn, a let, a struct or enum, a field, a const, a parameter, a JSON key, a script variable, a test name, a file, a route, a node type? A declaration in an added line counts even when the name looks short or common. A name that is only called or used in an added line, declared elsewhere, never counts. Prose, comments and user-facing texts in French are fine.",
       "violates": [
-        "fn avec_theme",
-        "let reponse =",
-        "a test named la_page_s_ouvre"
+        "let index_pose = …",
+        "let est = …",
+        "fn pas_en_cours(…)",
+        "let chemin = …",
+        "let outils = …",
+        "fn avec_theme(…)"
       ],
       "not_violations": [
-        "hote(…) called in an added line, declared before the lot",
-        "a field lectures_d_index moved from one struct to another",
-        "racines_de_code() called"
+        "hote(…) only called",
+        "racines_de_code() only called",
+        "a call of depot_inscrit(…)"
       ]
     },
     {
@@ -65,7 +77,7 @@
     {
       "id": "reverted_master_change",
       "severity": "high",
-      "question": "Does the lot REMOVE lines it should not: lines in files outside the lot's announced subject (given in subject: the titles of its commits), lines that a recent commit of master had just added (given in recent_master_added when the pusher has them), or a rule, a guard or a test without replacing it? Give one finding per file, its excerpt being the first removed line, and say in why how many lines are removed there. This is the one rule that reads the removed lines: a repose that resolves a conflict by dropping master's side undoes someone else's work.",
+      "question": "Does the lot REMOVE lines it should not: lines in files the lot's announced subject (subject: the titles of its commits) does not explain, lines that a recent commit of master had just added (recent_master_added, when given), or a rule, a guard or a test without replacing it? A removal the subject announces (a commit title that says it removes, moves or replaces that rule or that code) is not a finding. Give one finding per file, its excerpt being the first removed line, and say in why how many lines are removed there. This is the one rule that reads the removed lines.",
       "violates": [
         "a repose of a lot about a page that removes 52 lines of teammate.rs",
         "a repose that removes the end-of-turn rule master added an hour before",
