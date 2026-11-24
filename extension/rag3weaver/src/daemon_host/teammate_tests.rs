@@ -54,6 +54,7 @@ mod output_limit;
 mod posture_auto;
 mod prompt_roots;
 mod prompt_templates;
+mod recall_at_turn_start;
 mod reopen;
 mod reply_channel;
 mod reply_first;
