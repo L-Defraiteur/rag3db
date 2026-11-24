@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
+  du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Le nom d'un outil et sa cible restent toujours lisibles** sous l'animation Glitch, même quand
   la cible contient des points de suspension : seul le verbe « travaille… » se brouille.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son

@@ -1452,15 +1452,19 @@ impl Vue {
             (None, _) => self.entete.clone(),
         };
         // While a tool runs, the turn's count, in words, in the muted part that the animation does not redraw
-        // (23 Nov. 2026): never a bare number beside a command.
-        let avec_contexte = match &self.etat {
-            Etat::Agit(o) if !matches!(o.as_str(), "step_done" | "report" | "edit_plan") => {
-                let compte = format!("appel {} du tour", self.calls_this_turn.max(1));
-                if avec_contexte.is_empty() { compte } else { format!("{compte} · {avec_contexte}") }
-            }
-            _ => avec_contexte,
+        // (23 Nov. 2026): never a bare number beside a command. On a full line the count stays: the header gives way
+        // first, then the context (24 Nov. 2026: at 160 columns the header alone took its place).
+        let compte = match &self.etat {
+            Etat::Agit(o) if !matches!(o.as_str(), "step_done" | "report" | "edit_plan") => Some(format!("appel {} du tour", self.calls_this_turn.max(1))),
+            _ => None,
         };
-        let droite = if occupe + 2 + colonnes(&avec_contexte) <= largeur { avec_contexte } else { self.entete.clone() };
+        let joindre = |parts: &[&str]| parts.iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join(" · ");
+        let contexte = self.context_said.clone().unwrap_or_default();
+        let candidats: Vec<String> = match &compte {
+            Some(c) => vec![joindre(&[c, &avec_contexte]), joindre(&[c, &contexte]), c.clone()],
+            None => vec![avec_contexte.clone(), self.entete.clone()],
+        };
+        let droite = candidats.into_iter().find(|d| occupe + 2 + colonnes(d) <= largeur).unwrap_or_default();
         let entete = colonnes(&droite);
         if !droite.is_empty() && occupe + 2 + entete <= largeur {
             let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
