@@ -1,0 +1,219 @@
+{
+ "about": "The judge's bench (24 Nov. 2026): eight lots of 23 Nov. with their known defects, and every finding judged by hand against the diff (an identifier counts only when it is declared in an added line). A finding is true when its rule, file and excerpt match one of « true »; false when they match one of « false »; otherwise it is to judge, and a person adds it here.",
+ "lots": [
+  {
+   "id": "task-page-in-place-3",
+   "base": null,
+   "tip": "1e61ad9250",
+   "known": "a repose removed the end-of-turn rule from teammate.rs",
+   "true": [
+    {
+     "rule": "reverted_master_change",
+     "file": "teammate.rs",
+     "excerpt": "human_turn"
+    },
+    {
+     "rule": "reverted_master_change",
+     "file": "teammate.rs",
+     "excerpt": "used_tools"
+    },
+    {
+     "rule": "identifier_not_english",
+     "file": "teammate.rs",
+     "excerpt": "en_place"
+    }
+   ],
+   "false": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "navigateur_ou_saut"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "depot_inscrit"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "hote("
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "shows_nothing_to_merge"
+    }
+   ]
+  },
+  {
+   "id": "imported-tools",
+   "base": "e216da66bc",
+   "tip": "5187c73c21",
+   "known": "new identifiers in French",
+   "true": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let leurs"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let chemin"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let outils"
+    }
+   ],
+   "false": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "for d in leurs"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "Ok((h, leurs))"
+    }
+   ]
+  },
+  {
+   "id": "step-done-needs-text",
+   "base": null,
+   "tip": "dcbfd119dd",
+   "known": "a model name (gemini-3) hard-coded in code and test",
+   "true": [
+    {
+     "rule": "*",
+     "file": "openai_llm.rs",
+     "excerpt": "gemini-3"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let ecrit"
+    }
+   ],
+   "false": [
+    {
+     "rule": "reverted_master_change",
+     "file": "openai_llm.rs"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "&ecrit"
+    }
+   ]
+  },
+  {
+   "id": "tty-gate",
+   "base": "82fba2be9e",
+   "tip": "46c166bae7",
+   "known": "its witness affirms the wrong contract (gate on every instruction): out of reach of a judge of rules",
+   "true": [],
+   "debatable": [
+    {
+     "rule": "hardcoded_list",
+     "excerpt": "\"bac\""
+    }
+   ],
+   "false": []
+  },
+  {
+   "id": "memoire-turn-dense",
+   "base": "4efc5e4e46",
+   "tip": "62f80a7bd1",
+   "known": null,
+   "true": [],
+   "false": [
+    {
+     "rule": "test_without_red"
+    }
+   ]
+  },
+  {
+   "id": "host-state-cache-settled",
+   "base": "2551ef04ed",
+   "tip": "91e59c3073",
+   "known": null,
+   "true": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "fn index_pose"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let est "
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let pas_en_cours"
+    }
+   ],
+   "false": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "lectures_d_index"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "etats_d_index"
+    }
+   ]
+  },
+  {
+   "id": "witness-host-data",
+   "base": "26c5c3a6b0",
+   "tip": "88b496ed6a",
+   "known": null,
+   "true": [],
+   "false": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "hote"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "racine"
+    }
+   ]
+  },
+  {
+   "id": "mentioned-path-grant",
+   "base": "6d98fe3baf",
+   "tip": "9e8db45512",
+   "known": "new identifiers in French (found by the bench on 24 Nov., missed by the hand verdict of the night)",
+   "true": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let maintenant"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let preuve"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let texte"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let debut"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let maison"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let mot"
+    },
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let chemin"
+    }
+   ],
+   "false": [],
+   "debatable": [
+    {
+     "rule": "identifier_not_english",
+     "excerpt": "let refuse"
+    }
+   ]
+  }
+ ]
+}
