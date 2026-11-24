@@ -2675,7 +2675,9 @@ impl DaemonHost {
                         (Some(nom), Some(d)) => Some((d.as_path(), nom.as_str(), &policy.carry_over_node_config)),
                         _ => None,
                     };
-                    let (bloc, erreur) = step.carry_over_with(r["text"].as_str().unwrap_or_default(), policy.carry_over_chars, noeud);
+                    // The step's own text, all of it since its frontier: `r["text"]` keeps only the last call's, empty
+                    // after a step_done (24 Nov 2026: a full step's note of its findings never reached the next step).
+                    let (bloc, erreur) = step.carry_over_with(&self.step_text(&t.id), policy.carry_over_chars, noeud);
                     previous_step = bloc;
                     if let Some(e) = erreur.filter(|e| erreur_du_bloc.as_ref() != Some(e)) {
                         let line = files.append(
@@ -2762,16 +2764,7 @@ impl DaemonHost {
             // 2026) : c'est souvent la réponse elle-même (un texte demandé) ; il va dans la boîte en
             // `report`, sauf si un report de ce pas le porte déjà (le report l'emporte, c7).
             if declared.is_some() && r["stopped_by"].is_null() {
-                // Les textes de l'assistant depuis le message du pas (sa frontière) : `r["text"]` ne
-                // garde que celui du dernier appel, souvent vide après step_done.
-                let tours = self.chat_state(&t.id).map(|e| e["turns"].as_array().cloned().unwrap_or_default()).unwrap_or_default();
-                let depuis = tours.iter().rposition(|t| t["role"] == "user").map_or(0, |i| i + 1);
-                let textes: Vec<String> = tours[depuis..]
-                    .iter()
-                    .filter(|t| t["role"] == "assistant")
-                    .filter_map(|t| t["content"].as_str().map(str::trim).filter(|c| !c.is_empty()).map(str::to_string))
-                    .collect();
-                let texte = textes.join("\n\n");
+                let texte = self.step_text(&t.id);
                 let texte = texte.trim();
                 texte_du_pas = texte.to_string();
                 let deja = files
@@ -3065,6 +3058,19 @@ impl DaemonHost {
     /// temperature 0, the least reasoning and room for it (archi's review: 2 805 reasoning tokens in
     /// D1 on gemini-3.8-flash would leave 50 tokens empty). Its consumption is recorded on the step's
     /// run by the chat's meter, as `content-judge`. The verdict is the answer's first word.
+    /// **The step's text**: what the assistant wrote since the step's message (its frontier), every call of it joined;
+    /// `r["text"]` keeps only the last call's, often empty after step_done.
+    fn step_text(&self, task_id: &str) -> String {
+        let tours = self.chat_state(task_id).map(|e| e["turns"].as_array().cloned().unwrap_or_default()).unwrap_or_default();
+        let depuis = tours.iter().rposition(|t| t["role"] == "user").map_or(0, |i| i + 1);
+        let textes: Vec<String> = tours[depuis..]
+            .iter()
+            .filter(|t| t["role"] == "assistant")
+            .filter_map(|t| t["content"].as_str().map(str::trim).filter(|c| !c.is_empty()).map(str::to_string))
+            .collect();
+        textes.join("\n\n")
+    }
+
     fn judge_the_content(&self, t: &super::taches::Tache, run: &str, boite: &[Value], avant: usize, texte_du_pas: &str) -> ContentVerdict {
         if !texte_du_pas.trim().is_empty() {
             return ContentVerdict::NotAsked;
