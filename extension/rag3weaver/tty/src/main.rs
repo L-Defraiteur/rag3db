@@ -170,6 +170,40 @@ fn main() {
     }
 }
 
+/// Whether something listens at the host's address (a socket unit answers for a host it starts).
+fn answers(address: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    address
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next())
+        .is_some_and(|a| std::net::TcpStream::connect_timeout(&a, std::time::Duration::from_secs(1)).is_ok())
+}
+
+/// Starts the user's host units (the socket, then the host), and says so once.
+fn start_the_local_host() {
+    eprintln!("[tty] l'hôte ne répond pas : je le relance");
+    let _ = std::process::Command::new("systemctl")
+        .args(["--user", "start", "rag3weaver-daemon.socket", "rag3weaver-daemon.service"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+/// Waits up to 30 s for `f` to give something.
+fn wait_for<T>(mut f: impl FnMut() -> Option<T>) -> Option<T> {
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if let Some(v) = f() {
+            return Some(v);
+        }
+        if std::time::Instant::now() >= fin {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
+
 fn lancer(o: Options) -> Result<(), String> {
     if o.steps { std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"); }
     if o.still { std::env::set_var("RAG3WEAVER_TTY_STILL", "1"); }
@@ -177,8 +211,19 @@ fn lancer(o: Options) -> Result<(), String> {
     let ep = match (&o.daemon_json, &o.daemon_cmd) {
         (Some(p), _) => Endpoint::depuis_fichier(std::path::Path::new(p))?,
         (None, Some(c)) => Endpoint::depuis_commande(c)?,
-        (None, None) => Endpoint::par_defaut()?,
+        // **The host comes up with the terminal** (Lucie, 24 Nov 2026): a local host that is not there is started.
+        (None, None) => match Endpoint::par_defaut() {
+            Ok(e) => e,
+            Err(_) => {
+                start_the_local_host();
+                wait_for(|| Endpoint::par_defaut().ok()).ok_or("l'hôte ne démarre pas : systemctl --user status rag3weaver-daemon.service")?
+            }
+        },
     };
+    if o.daemon_json.is_none() && o.daemon_cmd.is_none() && o.adresse.is_none() && !answers(&ep.address) {
+        start_the_local_host();
+        wait_for(|| answers(&ep.address).then_some(())).ok_or("l'hôte ne répond pas après sa relance : systemctl --user status rag3weaver-daemon.service")?;
+    }
     let ep = match &o.adresse {
         Some(a) => ep.a_l_adresse(a),
         None => ep,
