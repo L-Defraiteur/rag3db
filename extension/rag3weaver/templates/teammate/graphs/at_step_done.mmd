@@ -20,7 +20,10 @@ graph LR
     agent_spoke["All(inputs='agent|spoke')"]
     asked["Any(inputs='human|agent_spoke')"]
     reply["All(inputs='tools|closing|noafter|asked')"]
-    chain["FirstMatch(rules='silent_turn|reply_after_tools', otherwise='accept')"]
+    full["StepFull()"]
+    read_code["UsedToolsAmong(tools='read_file|outline|grep_files|search_code|usages|callees|impact')"]
+    findings["All(inputs='full|read_code|noafter')"]
+    chain["FirstMatch(rules='write_findings_first|silent_turn|reply_after_tools', otherwise='accept')"]
     facts -->|result:step| human
     facts -->|result:step| agent
     facts -->|result:step| line
@@ -29,6 +32,12 @@ graph LR
     facts -->|result:step| tools
     facts -->|result:step| expects
     facts -->|result:step| closing
+    facts -->|result:step| full
+    facts -->|result:step| read_code
+    full -->|holds:full| findings
+    read_code -->|holds:read_code| findings
+    noafter -->|holds:noafter| findings
+    findings -->|holds:write_findings_first| chain
     line -->|holds:holds| noline
     wrote -->|holds:holds| nowrote
     after -->|holds:holds| noafter

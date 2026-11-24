@@ -9,5 +9,10 @@
   },
   "accept": {
     "action": "accept"
+  },
+  "write_findings_first": {
+    "action": "refuse",
+    "text_key": "step_done.write_findings",
+    "max_refusals": 1
   }
 }
