@@ -374,6 +374,22 @@ mod tests {
         assert_ne!(other, first, "another seed, another glitch");
     }
 
+    /// **The tool's label stays readable, whatever it holds** (24 Nov. 2026: a label is never glitched, only the verb):
+    /// a target with its own « … » (a query, a command that echoes one) keeps all its characters; only « travaille… »,
+    /// the last word marked, is glitched.
+    #[test]
+    fn a_label_with_its_own_ellipsis_is_never_glitched() {
+        let t = Theme::du_depot("alien");
+        let label = "search_code fn ligne… de la vue";
+        let cause = format!("{label} travaille… (3 s)");
+        let c = cap(Niveau::Vraie, Glyphes::Tous);
+        let frame_len = morceaux(Quelle::Ecrit.de(&t), 0, 42).len();
+        for n in 0..30 {
+            let shown = cause_of(&ligne(&t, Quelle::Ecrit, n, 42, c, &cause), frame_len);
+            assert!(shown.trim_start().starts_with(label), "the label is whole at frame {n}: {shown:?}");
+        }
+    }
+
     /// In a circle or a transmutation, the cause takes the halo's colour, framed by a glyph of the frame;
     /// in ASCII it stays as it is, plain.
     #[test]
