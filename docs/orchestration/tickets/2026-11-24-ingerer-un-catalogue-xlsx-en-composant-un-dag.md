@@ -107,10 +107,22 @@ Ce qui existe déjà et sert tel quel : `LlmNode` à `response_schema`, `RhaiNod
 `RouteNode`, `CollectNode` et `AggregateNode`, `LireFichierNode` et `EcrireFichierNode`, `IngestEntitiesNode`,
 `search_structured` et `select_structured`. Ce qui manque, ou est à vérifier :
 
-1. **`XlsxReadNode`** : les onglets ; chaque cellule avec son type d'origine (nombre, texte, booléen, date stockée en
-   nombre de jours, formule et sa valeur calculée) ; les cellules fusionnées et leur zone ; un minimum de mise en forme
-   (gras, ligne à une seule cellule remplie) ; les lignes d'en-tête brutes. Il dit ce que contient le fichier, il
-   n'interprète rien : la lecture des sections, des en-têtes doubles et des onglets-catégories est l'affaire du DAG.
+1. **`ReadDocumentNode`, sur une crate `docparsers`** (sœur de `codeparsers`, décidé avec Lucie le 24 novembre) : chaque
+   format est lu dans **une représentation typée commune**, jamais en markdown (le markdown n'est qu'une vue dérivée,
+   produite pour le modèle quand il en a besoin). Un classeur : des onglets, des cellules (position, valeur brute, type
+   d'origine, formule et sa valeur calculée, style, lien), les zones fusionnées. Un document : des blocs (titre,
+   paragraphe, tableau avec ses fusions, image), avec leur page et leur position. Le lecteur dit ce que contient le
+   fichier, il n'interprète rien : les sections, les en-têtes doubles et les onglets-catégories sont l'affaire du DAG.
+   - **Tableurs** (xlsx, xlsm, xlsb, xls, ods) et csv d'abord, pour la quête : `calamine` (types, formules, fusions à
+     confirmer) et un petit complément qui lit les XML internes du xlsx pour ce que calamine ne donne pas (les liens
+     hypertextes, souvent la photo d'un catalogue derrière un texte, et le gras).
+   - **Ensuite, quand une quête en aura besoin** : docx et pptx par `zip` et `quick-xml` (titres, styles, tableaux et
+     fusions) ; les PDF par pdfium (texte avec sa position), notre OCR pour les scans ; html, courriels et csv par des
+     crates éprouvées.
+   - **Pas de dépendance à un extracteur généraliste.** Kreuzberg sert de référence : sa dernière version sous MIT
+     (licence lue à l'étiquette exacte) permet de reprendre un extracteur précis avec sa notice ; ses versions récentes
+     sont sous Elastic-2.0, qui interdit de le servir comme service hébergé, et sont donc exclues. Le parseur XML de
+     Lucie en TypeScript (npm, luciformresearch) est à relire pour ce que `quick-xml` ne ferait pas.
 2. **Un profil de colonnes en Rust** (`ProfileColumnsNode`) : sur toutes les lignes, le remplissage, les valeurs
    distinctes **avec leurs effectifs**, la part de valeurs uniques, des exemples, la forme des nombres (séparateurs vus,
    ordres de grandeur). Il parcourt tout le fichier : c'est de la performance, donc une primitive. Il sert au classement
