@@ -1,0 +1,9 @@
+%% tool: at_turn_start_scout_call
+%% description: One call of a tool of the folder's code index (the caller the host lends under `code`), with the element as its arguments, and its result.
+%% param: element json! -- the tool's arguments
+%% param: tool string! -- the tool's name: search_code, usages
+%% result: call.result
+graph LR
+    args["RhaiNode(script='input', value=$element)"]
+    call["CallTool(tool=$tool, on='code')"]
+    args -->|result:args| call

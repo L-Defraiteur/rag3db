@@ -1,5 +1,15 @@
 # Nouveautés
 
+- 24 novembre 2026 — **L'index cherche pour l'agent au début d'un tour.** Dans un dossier dont l'index est prêt, une
+  demande sur le code fait d'abord deux appels courts au modèle : le premier dit si l'agent semble déjà savoir ce qu'il
+  faut (un score de 0 à 1) et donne trois recherches et un nom à suivre ; sous le seuil, les recherches partent sur
+  l'index (`search_code`, `usages`), et le second appel les met en regard de la demande. Le premier pas reçoit « What the
+  code index found for this request » : comment le projet s'organise pour elle, et ses lignes `chemin:ligne`, chacune
+  vérifiée dans les résultats. Un « bonjour » ne lance rien. Le premier pas attend ce bloc au plus `max_ms`, puis part
+  sans lui ; un appel qui échoue ne bloque rien. Le score et la décision sont dans la boîte de la tâche (ligne `scout`
+  de l'hôte). Le seuil, le mode (`blocking` ou `off`), la durée et le modèle des deux appels se règlent dans
+  `templates/teammate/graphs/at_turn_start.json` ; les graphes `at_turn_start*.mmd` et ta copie les changent sans
+  rebâtir.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code

@@ -1,0 +1,33 @@
+%% tool: at_turn_start_scout
+%% description: The scout of the index, for the turn's request: a structured call says how far the agent already knows what the request needs (`knows`, 0 to 1) and gives three searches and a name to follow; under the threshold, the searches run (at_turn_start_scout_search.mmd) and give the block; at or over it, nothing. Gives {block, trace}: the block's lines, and the score and decision for the turn's trace.
+%% param: element json! -- the turn's facts: request, recent, threshold
+%% param: ask_instruction string = "You prepare the code searches of a coding agent, at the start of its turn: read the project's plan, the conversation before this turn and the request, then say how far the agent already knows what the request needs, and what to search." -- The task line of the first call; the meaning of each field is in ask_schema.
+%% param: ask_schema json = {"type": "object", "properties": {"knows": {"type": "number", "description": "From 0 to 1: how far the agent already has, from the conversation before this turn, what it needs to answer the request without searching the code. 1 for a greeting, a thanks, or a request that is not about this project's code; near 0 for a request about code the conversation has not shown."}, "queries": {"type": "array", "items": {"type": "string"}, "description": "Three searches for search_code that together find the code the request is about: each a short phrase in words, or an identifier, using the project's own names from its plan when they fit. Empty when knows is high."}, "usages": {"type": "string", "description": "One exact name (a function, a type, a method) whose definitions and users the request needs, as written in the code; empty when no name is clear."}}, "required": ["knows", "queries", "usages"], "additionalProperties": false} -- The shape of the first call's reply.
+%% param: ask_max_tokens int = 2048 -- The output bound of the first call (on Vertex, the reasoning counts in it).
+%% param: reasoning string = "low" -- The reasoning effort of the scout's two calls (minimal, low, medium, high).
+%% param: plan_files int = 2000 -- How many of the index's files the plan is read from.
+%% result: out.result
+graph LR
+    facts["RhaiNode(script='input', value=$element)"]
+    list_args["RhaiNode(script='#{ format: `json`, limit: input.limit }', inputs='limit', limit=$plan_files)"]
+    files["CallTool(tool='list_files', on='code')"]
+    ask_in["Collect(inputs='facts,files', keep_empty=true)"]
+    ask_parts["RhaiNode(script='fn line(head, m) { let t = ``; for k in m.keys() { if t != `` { t += `, `; } t += `${k}/ (${m[k]})`; } head + t } fn paths(v) { let out = []; if type_of(v) == `map` { for k in v.keys() { let x = v[k]; if (k == `path` || k == `file_path`) && type_of(x) == `string` { out.push(x); } else { out += paths(x); } } } else if type_of(v) == `array` { for x in v { if type_of(x) == `string` { out.push(x); } else { out += paths(x); } } } out } let f = input[0]; let ps = paths(input[1]); let tops = #{}; let subs = #{}; let mods = []; let roots = []; for p in ps { let parts = p.split(`/`); let n = parts.len(); if n == 1 { if roots.len() < 30 { roots.push(p); } } else { let t = parts[0]; if tops.contains(t) { tops[t] += 1; } else { tops[t] = 1; } if n > 2 { let s = parts[0] + `/` + parts[1]; if subs.contains(s) { subs[s] += 1; } else if subs.len() < 60 { subs[s] = 1; } } } let file = parts[n - 1]; let dot = file.index_of(`.`); let stem = if dot > 0 { file.sub_string(0, dot) } else { file }; if mods.len() < 200 && stem != `mod` && stem != `index` && !mods.contains(stem) { mods.push(stem); } } let names = ``; for m in mods { if names != `` { names += `, `; } names += m; } let rest = ``; for r in roots { if rest != `` { rest += `, `; } rest += r; } let plan = [line(`Top folders (files): `, tops), line(`Their folders (files): `, subs), `Files at the root: ` + rest, `Module and file names: ` + names]; [#{ name: `plan`, title: `The project, as its index knows it`, value: plan }, #{ name: `recent`, title: `The conversation before this turn`, value: f.recent, max_tokens: 3000 }, #{ name: `request`, title: `The request`, value: f.request }]')"]
+    ask["LlmNode(instruction=$ask_instruction, response_schema=$ask_schema, max_tokens=$ask_max_tokens, reasoning=$reasoning, temperature=0)"]
+    dec_in["Collect(inputs='facts,ask', keep_empty=true)"]
+    decision["RhaiNode(script='let f = input[0]; let a = input[1]; let k = a.knows; if type_of(k) == `i64` { k = k.to_float(); } let t = f.threshold; if type_of(t) == `i64` { t = t.to_float(); } let q = []; for x in a.queries { if type_of(x) == `string` && x != `` && q.len() < 3 { q.push(x); } } let u = []; if type_of(a.usages) == `string` && a.usages != `` { u.push(a.usages); } let go = k < t && (q.len() > 0 || u.len() > 0); let why = if go { `search` } else if k < t { `no_query` } else { `known` }; #{ search: go, decision: why, knows: k, threshold: t, queries: q, usages: u, request: f.request }')"]
+    search["ForEachNode(graph='@graphs/at_turn_start_scout_search.mmd', when='search', on_error='report', reasoning=$reasoning)"]
+    out_in["Collect(inputs='decision,search', keep_empty=true)"]
+    out["RhaiNode(script='let d = input[0]; let s = input[1][0]; let tr = #{ knows: d.knows, threshold: d.threshold, decision: d.decision, queries: d.queries, usages: d.usages }; let b = []; if d.search { if type_of(s) == `map` && s.contains(`error`) { tr.error = s.error; tr.decision = `failed`; } else if type_of(s) == `map` && s.contains(`block`) { b = s.block; tr.kept = s.kept; tr.dropped = s.dropped; } } #{ block: b, trace: tr }')"]
+    facts -->|result:facts| ask_in
+    list_args -->|result:args| files
+    files -->|result:files| ask_in
+    ask_in -->|list:value| ask_parts
+    ask_parts -->|result:context| ask
+    facts -->|result:facts| dec_in
+    ask -->|json:ask| dec_in
+    dec_in -->|list:value| decision
+    decision -->|result:elements| search
+    decision -->|result:decision| out_in
+    search -->|list:search| out_in
+    out_in -->|list:value| out

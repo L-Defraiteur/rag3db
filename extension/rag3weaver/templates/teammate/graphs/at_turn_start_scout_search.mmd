@@ -1,0 +1,33 @@
+%% tool: at_turn_start_scout_search
+%% description: The scout's searches and their synthesis: each query by search_code and the name by usages, on the folder's index (at_turn_start_scout_call.mmd, in parallel), the results numbered; a structured call relates them to the request (`orientation`, `relevant`); a line of `relevant` whose path:line is in no result is dropped. Gives {block, kept, dropped}.
+%% param: element json! -- the scout's decision: request, queries, usages
+%% param: per_query int = 6 -- The results kept from each search, and from each part of the usages.
+%% param: search_options json = {"limit": 8} -- The options of each search_code.
+%% param: synth_instruction string = "You brief a coding agent, at the start of its turn, on what the code index found for its request: relate the numbered search results to the request." -- The task line of the second call; the meaning of each field is in synth_schema.
+%% param: synth_schema json = {"type": "object", "properties": {"orientation": {"type": "string", "description": "In three to six sentences, for the agent: how the project is organised for this request, where its primitives are (the modules, types and functions to start from), and what attaches to them. Only what the results show."}, "relevant": {"type": "array", "description": "The most useful results for the request, at most eight, the best first.", "items": {"type": "object", "properties": {"n": {"type": "integer", "description": "The result's number, [n] in the results."}, "at": {"type": "string", "description": "Its path:line, copied exactly from the result."}, "symbol": {"type": "string", "description": "Its symbol, as the result names it."}, "why": {"type": "string", "description": "Why it matters for the request, in one line."}}, "required": ["n", "at", "symbol", "why"], "additionalProperties": false}}}, "required": ["orientation", "relevant"], "additionalProperties": false} -- The shape of the second call's reply.
+%% param: synth_max_tokens int = 4096 -- The output bound of the second call (on Vertex, the reasoning counts in it).
+%% param: reasoning string = "low" -- The reasoning effort of the second call.
+%% result: render.result
+graph LR
+    facts["RhaiNode(script='input', value=$element)"]
+    queries["RhaiNode(script='let out = []; for x in input.queries { out.push(#{ query: x, options: input.options }); } out', inputs='options', options=$search_options, value=$element)"]
+    names["RhaiNode(script='let out = []; for x in input.usages { out.push(#{ name: x, format: `json`, limit: 20 }); } out', value=$element)"]
+    searches["ForEachNode(graph='@graphs/at_turn_start_scout_call.mmd', tool='search_code', parallelism=3, on_error='report')"]
+    uses["ForEachNode(graph='@graphs/at_turn_start_scout_call.mmd', tool='usages', on_error='report')"]
+    hits_in["Collect(inputs='facts,searches,uses', keep_empty=true)"]
+    hits["RhaiNode(script='fn txt(v) { if type_of(v) == `string` { v } else if type_of(v) == `i64` { `${v}` } else { `` } } fn inner(v) { if type_of(v) == `map` && v.contains(`result`) && !v.contains(`data`) { inner(v.result) } else { v } } let f = input.value[0]; let ss = input.value[1]; let us = input.value[2]; let max = input.per_query; let n = 0; let hits = []; let lines = []; let searched = ``; for i in 0..ss.len() { let r = inner(ss[i]); let q = f.queries[i]; if searched != `` { searched += ` ; `; } searched += `search_code « ${q} »`; lines.push(`## search_code « ${q} »`); if type_of(r) == `map` && r.contains(`error`) { lines.push(`(failed: ${txt(r.error)})`); continue; } if type_of(r) != `array` { lines.push(`(no result)`); continue; } let k = 0; for x in r { if k >= max { break; } if type_of(x) != `map` { continue; } let d = x.data; if type_of(d) != `map` { continue; } let p = txt(d.file_path); if p == `` { p = txt(d.path); } let l = txt(d.start_line); if p == `` || l == `` { continue; } n += 1; k += 1; let at = p + `:` + l; let sig = txt(d.signature); if sig.len() > 160 { sig = sig.sub_string(0, 160); } let doc = txt(d.docstring); if doc.len() > 160 { doc = doc.sub_string(0, 160); } hits.push(#{ n: n, at: at, symbol: txt(d.name) }); lines.push(`[${n}] ${at} ${txt(d.scope_type)} ${txt(d.name)} ${sig} ${doc}`); } } for i in 0..us.len() { let r = inner(us[i]); let name = f.usages[i]; if searched != `` { searched += ` ; `; } searched += `usages « ${name} »`; lines.push(`## usages « ${name} »`); if type_of(r) != `map` || !r.contains(`definitions`) { lines.push(`(no result)`); continue; } let k = 0; for x in r.definitions { if k >= max { break; } let p = txt(x.path); let l = txt(x.line); if p == `` || l == `` { continue; } n += 1; k += 1; let at = p + `:` + l; hits.push(#{ n: n, at: at, symbol: txt(x.title) }); lines.push(`[${n}] ${at} definition, ${txt(x.kind)} ${txt(x.title)}`); } let k = 0; for u in r.usages { if k >= max { break; } let x = u.user; if type_of(x) != `map` { continue; } let p = txt(x.path); let l = txt(x.line); if p == `` || l == `` { continue; } n += 1; k += 1; let at = p + `:` + l; hits.push(#{ n: n, at: at, symbol: txt(x.title) }); lines.push(`[${n}] ${at} used by ${txt(x.kind)} ${txt(x.title)} (${txt(u.usage)})`); } } #{ hits: hits, searched: searched, context: [#{ name: `request`, title: `The request`, value: f.request }, #{ name: `results`, title: `The search results, numbered`, value: lines }] }', inputs='per_query', per_query=$per_query)"]
+    parts["RhaiNode(script='input.context')"]
+    synth["LlmNode(instruction=$synth_instruction, response_schema=$synth_schema, max_tokens=$synth_max_tokens, reasoning=$reasoning, temperature=0)"]
+    keep_in["Collect(inputs='hits,synth', keep_empty=true)"]
+    render["RhaiNode(script='fn txt(v) { if type_of(v) == `string` { v } else if type_of(v) == `i64` { `${v}` } else { `` } } let h = input[0]; let s = input[1]; let ok = #{}; for x in h.hits { ok[x.at] = x.n; } let kept = []; let dropped = []; for r in s.relevant { let at = txt(r.at); if ok.contains(at) { kept.push(`- ${at} ${txt(r.symbol)}: ${txt(r.why)}`); } else { dropped.push(at); } } let lines = [txt(s.orientation)]; if kept.len() > 0 { lines.push(`The most useful results:`); lines += kept; } lines.push(`Already searched: ${h.searched}`); #{ block: lines, kept: kept.len(), dropped: dropped }')"]
+    facts -->|result:facts| hits_in
+    queries -->|result:elements| searches
+    names -->|result:elements| uses
+    searches -->|list:searches| hits_in
+    uses -->|list:uses| hits_in
+    hits_in -->|list:value| hits
+    hits -->|result:value| parts
+    hits -->|result:hits| keep_in
+    parts -->|result:context| synth
+    synth -->|json:synth| keep_in
+    keep_in -->|list:value| render
