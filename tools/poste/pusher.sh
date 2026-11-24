@@ -852,6 +852,7 @@ PEER
 replay_and_push_a() {
   # The replay, with the bisection: part is the prefix under test.
   part=("${train[@]}")
+  local train_red="" train_label=""
   while :; do
     if [ "$reposed" = 1 ]; then
       TRAIN_LABEL=$(f_ "${part[0]}" 1); [ ${#part[@]} -gt 1 ] && TRAIN_LABEL="$TRAIN_LABEL+$(( ${#part[@]} - 1 ))"
@@ -884,6 +885,8 @@ replay_and_push_a() {
       return 0
     fi
     half=$(( n / 2 ))
+    # The red of the whole train, kept for the deduction below (a code red: an environment red returned above).
+    [ -z "$train_label" ] && { train_label=$TRAIN_LABEL; train_red=$(head -1 "$SD/last-red.txt" 2>/dev/null); }
     log "$TRAIN_LABEL" bissection "rouge sur $n lots, rejoue les $half premiers"
     part=("${part[@]:0:$half}")
   done
@@ -902,6 +905,13 @@ replay_and_push_a() {
     4) log "$TRAIN_LABEL" "la garde n'a pas poussé : un lot a quitté la file pendant la garde" ;;
     0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
        [ ${#part[@]} = ${#train[@]} ] && A_FULL_PUSHED=1
+       # **The culprit by deduction** (24 Nov. 2026, c7: ed-lot-judge, the second of a red train of two whose first
+       # landed green alone, was taken again at the same head and cost a pass): the train was red in code, its green
+       # prefix is pushed, one lot is left: that lot is returned red now, never replayed alone.
+       if [ -n "$train_label" ] && [ $(( ${#train[@]} - ${#part[@]} )) = 1 ]; then
+         line=${train[$(( ${#train[@]} - 1 ))]}
+         red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" code "le train $train_label a rougi (${train_red:-rouge}) et $(f_ "${part[0]}" 1), rejoué seul, est vert : ce lot en est la seule cause"
+       fi
        # A refused recopy has paused the queue already; 3 means pusher.sh itself was recopied.
        recopy "$TRAIN_LABEL"; [ $? = 3 ] && return 3 ;;
     1) log "$TRAIN_LABEL" "master a bougé : reposé au pas suivant" ;;
