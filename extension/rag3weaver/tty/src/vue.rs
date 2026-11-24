@@ -452,6 +452,8 @@ impl Vue {
     }
 
     pub fn prendre_lignes(&mut self) -> Vec<Validee> {
+        // A landing held for its turn's words is said at the end of the batch that brought it, whatever follows.
+        self.say_landing();
         std::mem::take(&mut self.validees)
     }
 
