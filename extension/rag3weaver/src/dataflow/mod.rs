@@ -16,6 +16,7 @@ pub mod background;
 pub mod spawn_nodes;
 pub mod guard_nodes;
 pub mod step_conditions;
+pub mod quote_nodes;
 pub mod graph;
 pub mod node;
 pub mod observe;
