@@ -38,6 +38,8 @@ pub fn conditions() -> Vec<Condition> {
         Condition { node_type: "TurnAskedBy", description: "The turn was opened by a request of `who` (human, agent or any).", params: who_param, question: turn_asked_by },
         Condition { node_type: "TurnHasTeammateLine", description: "The teammate wrote a line to the asker since the turn's request.", params: no_params, question: turn_has_teammate_line },
         Condition { node_type: "ClosingStepDone", description: "The step_done closes the turn: nothing left, nothing else to do in the active plan, and succeeded unless `succeeded` is `any`.", params: succeeded_param, question: closing_step_done },
+        Condition { node_type: "UsedToolsAmong", description: "The step called one of `tools` (a list, `a|b|c`).", params: tools_param, question: used_tools_among },
+        Condition { node_type: "StepFull", description: "The step's last model call passed the step's context bound.", params: no_params, question: step_full },
         Condition { node_type: "RequestExpects", description: "The turn's request declares what it expects (`expects`).", params: no_params, question: request_expects },
         Condition { node_type: "OpenCard", description: "A card of the teammate's waits for an answer in the turn (`kind`: approval, question or any).", params: kind_param, question: open_card },
     ]
@@ -61,6 +63,29 @@ fn choice(name: &'static str, default: &'static str, choices: &[&str], descripti
 
 fn who_param() -> Vec<ConfigParam> {
     choice("who", "any", &["human", "agent", "any"], "Whose request opened the turn.")
+}
+
+fn tools_param() -> Vec<ConfigParam> {
+    vec![ConfigParam {
+        name: "tools".into(),
+        param_type: ConfigParamType::String,
+        required: true,
+        default: None,
+        description: "The tools, `a|b|c`.".into(),
+        choices: None,
+        json_schema: None,
+    }]
+}
+
+fn used_tools_among(step: &Value, config: &Value) -> Result<(bool, String), String> {
+    let wanted: Vec<&str> = config["tools"].as_str().ok_or("UsedToolsAmong: `tools` is missing")?.split('|').map(str::trim).filter(|t| !t.is_empty()).collect();
+    let used: Vec<&str> = step["tools"].as_array().into_iter().flatten().filter_map(Value::as_str).filter(|t| wanted.contains(t)).collect();
+    Ok((!used.is_empty(), if used.is_empty() { "none of these tools in the step".into() } else { format!("the step called {}", used.join(", ")) }))
+}
+
+fn step_full(step: &Value, _config: &Value) -> Result<(bool, String), String> {
+    let holds = step["context_full"].as_bool().unwrap_or(false);
+    Ok((holds, if holds { "the step's context is full" } else { "the step has room" }.into()))
 }
 
 fn succeeded_param() -> Vec<ConfigParam> {

@@ -571,6 +571,8 @@ pub struct Step {
     used_tools: std::sync::atomic::AtomicBool,
     /// The step wrote text at some point (kept across its tool calls): the rule of the silent turn reads it.
     wrote_any: std::sync::atomic::AtomicBool,
+    /// The work tools the step called, in order, for the declared rules (`tools` in the step's facts).
+    tools_called: std::sync::Mutex<Vec<String>>,
     answered_nothing: std::sync::atomic::AtomicBool,
     reply_first: String,
     /// Ce que `step_done` a déclaré.
@@ -788,6 +790,7 @@ impl Step {
             verdict_refusals: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             used_tools: std::sync::atomic::AtomicBool::new(false),
             wrote_any: std::sync::atomic::AtomicBool::new(false),
+            tools_called: std::sync::Mutex::new(Vec::new()),
             answered_nothing: std::sync::atomic::AtomicBool::new(false),
             reply_first: crate::backend::TeammatePolicy::default().reply_first,
             done: Mutex::new(None),
@@ -881,6 +884,13 @@ impl Step {
     /// **The facts of the step**, as the step's graphs read them (`at_step_done.mmd`, `end_of_step.mmd`): whether it
     /// wrote after its last tool and in the step, whether it used tools, the `step_done` being called, the active plan,
     /// and the turn's mailbox lines since the last `ended`. A fact the step does not know is absent: it reads false.
+    /// **The step's context bound**: the larger of the fixed bound and its declared share of the model's window, when
+    /// the window is known.
+    fn context_bound(&self) -> usize {
+        let window = self.context_window.load(Ordering::SeqCst);
+        self.context_tokens.max((window as f64 * self.context_share) as usize)
+    }
+
     pub(crate) fn step_facts(&self, step_done: Option<&Value>) -> Value {
         let boite = self.files.mailbox();
         let debut = boite.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
@@ -895,6 +905,8 @@ impl Step {
             "text_since_last_tool": since_tool,
             "text_in_step": since_tool || self.wrote_any.load(Ordering::SeqCst),
             "used_tools": self.used_tools.load(Ordering::SeqCst),
+            "tools": self.tools_called.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+            "context_full": self.last_context.load(Ordering::SeqCst) > self.context_bound(),
             "step_done": step_done.map(|a| json!({ "item": a["item"], "succeeded": a["succeeded"], "remaining": a["remaining"] })),
             "plan": plan,
             "turn": turn,
@@ -952,6 +964,7 @@ impl Step {
     pub fn tool_of_work(&self, name: &str) {
         if !matches!(name, STEP_DONE | REPORT) {
             self.used_tools.store(true, Ordering::SeqCst);
+            self.tools_called.lock().unwrap_or_else(|p| p.into_inner()).push(name.to_string());
             if self.wrote_text.swap(false, Ordering::SeqCst) {
                 self.wrote_any.store(true, Ordering::SeqCst);
             }
@@ -1334,9 +1347,8 @@ impl Step {
     /// The refusal of a work tool past a bound of the step, `None` under them.
     fn refusal(&self, call: &ToolCall) -> Option<Turn> {
         let context = self.last_context.load(Ordering::SeqCst);
-        // The bound follows the model's window when it is known: the larger of the fixed bound and its declared share.
         let window = self.context_window.load(Ordering::SeqCst);
-        let bound = self.context_tokens.max((window as f64 * self.context_share) as usize);
+        let bound = self.context_bound();
         let why = if context > bound {
             format!(
                 "the context of the step is full ({context} tokens; the bound is {bound}: teammate.step_context_tokens = {}, teammate.step_context_share = {} of a {window}-token window)",

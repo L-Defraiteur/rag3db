@@ -6,6 +6,10 @@
   « Previous step » prend ses lignes « nom — chemin:ligne » à tour de rôle dans chaque résultat d'index (12 au plus par
   fichier, `max_facts_per_file`), sans les en-têtes `file_scope`, et garde après elles celles du pas d'avant tant qu'il
   reste de la place : un fait du premier pas est encore là au troisième.
+- 24 novembre 2026 — **Un pas plein écrit ce qu'il a trouvé avant de finir.** Quand le contexte d'un pas est plein et
+  qu'il a lu du code, son `step_done` est refusé une fois tant qu'il n'a pas écrit, dans sa réponse, les noms, chemins
+  et lignes qu'il compte utiliser ensuite ; cette note passe au pas suivant. La règle est dans
+  `templates/teammate/graphs/at_step_done.mmd` (`write_findings_first`), et ta copie peut la changer sans rebâtir.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
   manifeste déclare le nœud `PreviousStep` (`teammate.carry_over_node`) : un pas qui a cartographié le code par
   `outline` ou cherché par l'index laisse au suivant ses lignes « nom — chemin:ligne ». Un dossier déjà attaché garde
