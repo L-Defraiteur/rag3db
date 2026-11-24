@@ -1,5 +1,5 @@
 %% tool: outline
-%% description: Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire.
+%% description: Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire. Il ne dit ni qui appelle un nom, ni où vit un nom défini ailleurs : pour cela, usages (un nom connu) ou search_code (par le sens).
 %% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
 %% param: path string! -- Le chemin du fichier, tel que list_files ou search_code le rendent (ex. 'src/main/database.cpp').
 %% param: source string = "" -- La source de l'index, quand le même chemin existe dans deux (vide : toutes).
