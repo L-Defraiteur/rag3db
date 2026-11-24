@@ -58,7 +58,7 @@ fn the_lot_judge_graph_gives_the_findings_of_the_model() {
 #[test]
 fn the_pusher_backend_declares_the_judge_tool_and_its_model() {
     let manifest: Value = serde_json::from_str(include_str!("../templates/backends/pusher/backend.json")).expect("the manifest parses");
-    assert_eq!(manifest["tools"]["lot_judge"]["graph"], json!("builtin:pusher/judge.mmd"));
+    assert_eq!(manifest["tools"]["lot_judge"]["graph"], json!("../../pusher/judge.mmd"), "a shipped manifest names its graph by a relative path, as the others");
     assert_eq!(manifest["models"]["llm"]["model"], json!("google/gemini-3.1-flash-lite"));
     let source: crate::model_source::ModelSource = serde_json::from_value(manifest["models"]["llm"].clone()).expect("an ordinary model entry");
     assert_eq!(source.model, "google/gemini-3.1-flash-lite");
