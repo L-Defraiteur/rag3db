@@ -5,6 +5,8 @@ recherche filtrable, à partir d'un fichier xlsx (caractéristiques, prix, liens
 
 ## Le principe
 
+**Ce ticket est aussi la consigne de la quête** (Lucie, 24 novembre 2026) : c'est ce texte, tel quel, qu'on donne à l'agent comme spécification de son outil d'ingestion de catalogue, et l'agent le construit à partir de lui.
+
 rag3weaver ne livre pas un « importeur de catalogue » tout fait. Il livre de quoi **composer** l'ingestion en DAG : une
 primitive qui lit un xlsx, les nœuds qui existent déjà (appel structuré au modèle, script, boucle, ingestion, recherche),
 et un **exemple de DAG** prêt à copier. Un utilisateur ou un agent l'adapte à son fichier sans recompiler.
