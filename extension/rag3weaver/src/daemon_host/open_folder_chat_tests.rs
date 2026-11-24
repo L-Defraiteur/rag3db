@@ -133,3 +133,60 @@ fn the_input_takes_the_focus_when_the_chat_is_ready_before_it_is_mounted() {
     assert_eq!(status, 200);
     thread.join().unwrap();
 }
+
+/// **The input is ready before the agent is** (c7 and Lucie's rule, 24 November 2026: « un débutant parle à un agent
+/// et ça commence »; the red of 01:02 under load: the welcome shown, the input still disabled until `/ide/chat`
+/// answered, what one types then lost). The chat's answer is held back 2.5 s by the page: the input already has the
+/// focus and takes the typing, only the sending waits (the button says the agent is coming), and the text is still
+/// there once the chat answered.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn the_input_takes_the_typing_before_the_chat_answers() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("the_input_takes_the_typing_before_the_chat_answers") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let a = atelier(d.path());
+    let space = d.path().join("e/git_workspaces");
+    std::fs::create_dir_all(space.join("rag3db")).unwrap();
+    std::fs::write(d.path().join("e/dossiers.json"), "{}").unwrap();
+    a.host.set_espace(space, d.path().join("e/dossiers.json"));
+    a.host.set_vues_dir(d.path().join("e/vues"));
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(listener, None).unwrap();
+    let host = a.host.clone();
+    let thread = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(host, Some("j".to_string())));
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{base}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.attendre("document.querySelector('#ouvrir input[name=chemin]')", "the field « Ouvrir un dossier »");
+    // From the next document on: the chat's state answers 2.5 s late, and the page says when it did.
+    n.commande(
+        "Page.addScriptToEvaluateOnNewDocument",
+        json!({ "source": "(() => { const f = window.fetch; window.__chat_answered = false; window.fetch = async (...a) => { \\
+            const u = String(a[0] && a[0].url ? a[0].url : a[0]); \\
+            if (u.includes('/ide/chat?')) { await new Promise((ok) => setTimeout(ok, 2500)); const r = await f(...a); window.__chat_answered = true; return r; } \\
+            return f(...a); }; })();" }),
+    );
+    let folder = d.path().join("essai-avant");
+    n.evaluer("document.querySelector('#ouvrir input[name=chemin]').focus()");
+    n.commande("Input.insertText", json!({ "text": folder.to_string_lossy() }));
+    n.evaluer("document.querySelector('#ouvrir').requestSubmit()");
+    n.attendre("location.pathname.endsWith('/chat') && !!document.querySelector('#message')", "the chat of the folder, its input there");
+    let early = n.evaluer("JSON.stringify({ answered: window.__chat_answered, focused: document.activeElement?.id ?? '', disabled: document.querySelector('#message').disabled })");
+    let early: serde_json::Value = serde_json::from_str(early.as_str().unwrap_or("{}")).unwrap_or_default();
+    assert_eq!(early["answered"], json!(false), "the chat had not answered yet: {early}");
+    assert_eq!(early["disabled"], json!(false), "the input takes the typing before the chat answers: {early}");
+    n.attendre("document.activeElement?.id === 'message'", "the input with the focus before the chat answers");
+    n.commande("Input.insertText", json!({ "text": "Bonjour" }));
+    let button = n.evaluer("document.querySelector('#send').innerText").as_str().unwrap_or_default().to_string();
+    assert!(button.contains("arrive"), "the sending waits and says why: {button}");
+    n.attendre("window.__chat_answered === true && !document.querySelector('#send').disabled", "the chat answered, the sending possible");
+    let kept = n.evaluer("document.querySelector('#message').value");
+    assert_eq!(kept, json!("Bonjour"), "what was typed before the chat answered is still there");
+    drop(n);
+    let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
+    assert_eq!(status, 200);
+    thread.join().unwrap();
+}
