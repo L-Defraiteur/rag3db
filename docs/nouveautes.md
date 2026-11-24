@@ -7,6 +7,10 @@
 - 24 novembre 2026 — **Une conversation n'affiche plus les lignes d'une autre.** En `--plain`, une conversation neuve
   sans demande montrait les messages d'une autre conversation du même hôte ; elle n'affiche plus que les siens, et sans
   demande ni tour à suivre, elle le dit et rend la main.
+- 24 novembre 2026 — **Les outils d'index disent à l'agent quand s'en servir.** La description de `usages` dit qu'il
+  vérifie un nom avant de le citer (où il est défini, qui l'appelle, dans tout le dépôt), et celle d'`outline` dit ce
+  qu'il ne voit pas et quel outil le voit. Un dossier déjà attaché garde ses descriptions : elles arrivent avec un
+  dossier neuf, ou en recopiant les deux gabarits.
 - 24 novembre 2026 — **Ce que l'index a trouvé passe au pas suivant.** Quand un pas de l'agent a cherché par
   l'index (`search_code`, `usages`, `callees`, `impact`, `outline`) ou par `grep_files`, le bloc « Previous step » du pas d'après garde les
   lignes « nom — chemin:ligne » qu'il a rendues, avant toute prose, avec la consigne de les citer telles quelles :
