@@ -66,3 +66,19 @@ test), et pendant qu'elle dure, `GET /ide/etat` répond en moins d'une seconde, 
 - `src/daemon_host/taches.rs` : l'ouverture d'une tâche, `copier_l_espace` et `copier_la_base_sous_la_porte`,
   appelées dans la requête qui ouvre la tâche.
 - La route qui reçoit l'arrêt du tour depuis le terminal (`tty/src/vue.rs`, Ctrl-C pendant un tour), et ce qu'elle attend.
+
+## La forme du nœud d'attente (Lucie et c7, 24 novembre 2026, 11 h 50)
+
+- **Une entrée `channels`** : la sortie d'un nœud asynchrone branchée directement (sa poignée, ou une liste), ou des
+  noms de canaux en texte. Une poignée est un nom de canal (`run/<poignée>`) : le nœud ne distingue pas les deux.
+- **Des ports de sortie déduits du câblage, à la validation** (Lucie : « le listener obtient auto des poignées d'output
+  compatibles avec le handle ») : une poignée porte le type du résultat de son nœud ; pour chaque poignée branchée, un
+  port de ce type, nommé d'après le nœud source, plus `errors`, typé. Un branchement de type faux est refusé au
+  chargement du graphe, jamais à l'exécution. Un canal donné en texte rend un port non typé, sauf s'il est déclaré
+  avec son type dans le graphe.
+- **`mode`** : `all` (la jointure, un port par poignée), `any` (la première) ou `each` (une à une) ; `any` et `each`
+  rendent un port de l'union des types. **`timeout`**, borné, qui expire en erreur typée.
+- **`%% async` sur un nœud** : du sucre qui relie sa poignée à un nœud d'attente là où son résultat est lu.
+- Le morceau neuf du moteur : des ports déduits du câblage à la validation (aujourd'hui, chaque nœud fixe les siens).
+  Il servira aussi à la jointure et aux sous-graphes qui exposent ce qu'ils rendent.
+
