@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
+  manifeste déclare le nœud `PreviousStep` (`teammate.carry_over_node`) : un pas qui a cartographié le code par
+  `outline` ou cherché par l'index laisse au suivant ses lignes « nom — chemin:ligne ». Un dossier déjà attaché garde
+  son manifeste : ajoute la ligne à la main, ou rouvre-le.
 - 24 novembre 2026 — **Ce que l'index a trouvé passe au pas suivant.** Quand un pas de l'agent a cherché par
   l'index (`search_code`, `usages`, `callees`, `impact`, `outline`) ou par `grep_files`, le bloc « Previous step » du pas d'après garde les
   lignes « nom — chemin:ligne » qu'il a rendues, avant toute prose, avec la consigne de les citer telles quelles :
