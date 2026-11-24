@@ -11,6 +11,8 @@
   d'un pas n'est plus 64 000 jetons pour tout modèle : c'est le plus grand de `teammate.step_context_tokens` et d'une
   part de la fenêtre que le modèle annonce (`teammate.step_context_share`, un quart par défaut), soit environ 262 000
   jetons pour une fenêtre d'un million. Une recherche longue n'est plus coupée au milieu.
+- 24 novembre 2026 — **Une conversation rouverte garde l'ordre de ses tours.** À `--continue`, « ✓ N fichier(s) dans
+  ton dossier » vient après les mots de l'agent qui les a écrits, comme en direct.
 - 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
   de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
   cours, au lieu d'attendre le pas suivant.
