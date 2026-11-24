@@ -3394,6 +3394,10 @@ mod tests {
 mod context_share_tests;
 
 #[cfg(test)]
+#[path = "teammate/carry_over_default_tests.rs"]
+mod carry_over_default_tests;
+
+#[cfg(test)]
 mod carry_over_tests {
     //! **The scripted `Previous step`, against the Rust one** (validation of the scripted node, 21 November 2026).
     use super::*;
