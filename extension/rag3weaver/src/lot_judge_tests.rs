@@ -51,3 +51,15 @@ fn the_lot_judge_graph_gives_the_findings_of_the_model() {
     assert!(context.contains("const PROVIDERS") && context.contains("composite_rule_in_code") && context.contains("No force push."), "the diff and the rules reach the model: {context}");
     assert!(structured, "the reply is asked under the report's schema");
 }
+
+/// **The pusher's door to the judge**: a backend manifest declares the tool `lot_judge` on the shipped graph and the
+/// model in `models.llm` (an ordinary entry of the registry); a script calls it by `rag3weaver-backend <manifest>` and a
+/// JSON line `{"op": "call", "name": "lot_judge", "arguments": {"lot": …}}`.
+#[test]
+fn the_pusher_backend_declares_the_judge_tool_and_its_model() {
+    let manifest: Value = serde_json::from_str(include_str!("../templates/backends/pusher/backend.json")).expect("the manifest parses");
+    assert_eq!(manifest["tools"]["lot_judge"]["graph"], json!("builtin:pusher/judge.mmd"));
+    assert_eq!(manifest["models"]["llm"]["model"], json!("google/gemini-3.1-flash-lite"));
+    let source: crate::model_source::ModelSource = serde_json::from_value(manifest["models"]["llm"].clone()).expect("an ordinary model entry");
+    assert_eq!(source.model, "google/gemini-3.1-flash-lite");
+}
