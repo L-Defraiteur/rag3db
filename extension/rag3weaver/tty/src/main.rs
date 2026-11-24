@@ -313,6 +313,10 @@ fn lancer(o: Options) -> Result<(), String> {
     let deja = au_depart.as_ref().and_then(|v| v["mailbox"].as_array().map(Vec::len)).unwrap_or(0);
     let task_manifest: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(au_depart.as_ref().and_then(|v| v["backend"].as_str().map(str::to_string))));
     let lues = Arc::new(AtomicUsize::new(deja));
+    if nothing_to_follow(o.demande.as_deref(), task_manifest.lock().unwrap_or_else(|p| p.into_inner()).is_some()) {
+        eprintln!("[tty] rien à suivre : la conversation « {} » n'a pas encore de tour, et aucune demande n'est donnée (--request)", o.task);
+        return Ok(());
+    }
 
     // La boîte n'est pas encore relayée sur le flux (lot 1 de l'équipier) :
     // on la relit toutes les 2 s, et on s'arrête à la ligne `ended`. Quand le
@@ -371,7 +375,13 @@ fn lancer(o: Options) -> Result<(), String> {
     let mut ouvert = || {
         if let Some(texte) = demande.take() {
             match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": backend, "task": o.task, "kind": "request", "text": texte, "gate": o.gate })) {
-                Ok(r) => eprintln!("[tty] demande posée ({})", if r["started"] == true { "l'équipier part" } else { "l'équipier tournait déjà" }),
+                Ok(r) => {
+                    eprintln!("[tty] demande posée ({})", if r["started"] == true { "l'équipier part" } else { "l'équipier tournait déjà" });
+                    // The task exists now: its manifest filters the flux from its first frame (24 Nov. 2026).
+                    if let Some(m) = client::lire(&agent, &ep, &chemin).ok().and_then(|v| v["backend"].as_str().map(str::to_string)) {
+                        *task_manifest.lock().unwrap_or_else(|p| p.into_inner()) = Some(m);
+                    }
+                }
                 // **A refused request is said at once** (c7, 22 nov.: 280 s of silence): the session stops on it.
                 Err(e) => {
                     let dit = tui::refusal_in_words(&e);
@@ -419,13 +429,12 @@ fn lancer(o: Options) -> Result<(), String> {
 
 /// **Is a frame of the flux this session's** (24 Nov. 2026)? Its backend is the task's manifest.
 fn frame_is_ours(v: &Value, task_manifest: Option<&str>) -> bool {
-    task_manifest.is_none_or(|m| v["backend"].as_str() == Some(m))
+    task_manifest.is_some_and(|m| v["backend"].as_str() == Some(m))
 }
 
 /// **Is there nothing to follow** (24 Nov. 2026)? No request given, and the task does not exist yet.
 fn nothing_to_follow(request: Option<&str>, task_exists: bool) -> bool {
-    let _ = (request, task_exists);
-    false
+    request.is_none() && !task_exists
 }
 
 #[cfg(test)]
