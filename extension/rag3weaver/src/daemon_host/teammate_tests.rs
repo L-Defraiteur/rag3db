@@ -29,6 +29,7 @@ mod closing;
 mod code_output_limit;
 mod commit_each_turn;
 mod commit_what_was_written;
+mod context_rewrite;
 mod conversation_memory;
 mod copy_lands;
 mod end_text;
