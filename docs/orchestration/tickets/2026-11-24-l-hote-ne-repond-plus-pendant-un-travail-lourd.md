@@ -18,11 +18,27 @@ fond reste : **un travail lourd de l'hôte le rend sourd**.
 
 Lucie, 24 novembre 2026 : « pas normal que l'hôte sache pas répondre quand il fait quelque chose de lourd ».
 
-- Un travail long de l'hôte (copie, indexation, ouverture d'une base, fermeture de 135 bases à une pose) se fait hors du
-  fil qui sert les requêtes, et hors des verrous que ces requêtes prennent.
-- Pendant ce travail, l'hôte répond : l'état (« j'ouvre la tâche : copie à 40 % »), les autres dossiers, et surtout
-  l'arrêt, qui n'attend jamais.
-- Un refus dit ce que l'hôte fait et pour combien de temps, jamais seulement « pas dispo ».
+L'indexation tourne déjà en fond : l'outil `index` rend la main tout de suite, et la recherche répond avec ce qui est
+prêt. Deux travaux bloquent encore la requête qui les lance :
+
+- **l'ouverture d'une tâche** : la copie du dossier (retirée par le lot `c7/24-11-2026-sans-copie`) et la copie de la
+  base (`copier_la_base_sous_la_porte`), faites dans la requête même ;
+- **la réindexation d'un fichier après une écriture de l'agent** : `code_sync::edit_file_shared_with_hash` prend le
+  verrou du catalogue et attend la fin de `reingest_file`, dont le plein texte rendu durable (1 à 5 s par petit
+  fichier, mesuré le 24 novembre).
+
+**Une seule abstraction, facile à réutiliser** (Lucie, 24 novembre 2026 : « ça doit être une abstraction facile à
+réutiliser pour tout autre truc async ») : un travail de fond de l'hôte se déclare une fois et se lance par elle, quel
+qu'il soit (copie, indexation, ouverture, fermeture, réindexation, un outil asynchrone d'agent). Elle porte d'elle-même :
+
+- le travail hors du fil qui sert les requêtes, et hors des verrous qu'elles prennent ;
+- un état lisible à tout moment (ce qu'il fait, son avancement, depuis quand) ;
+- l'arrêt, accepté tout de suite ;
+- la fin publiée sur le flux, pour qu'un agent ou le terminal attende un événement au lieu d'interroger ;
+- un refus qui dit ce que l'hôte fait et pour combien de temps, jamais seulement « pas dispo ».
+
+Partir de ce qui existe déjà pour l'indexation (le journal suivi par `wait`, `lancer_l_index`) plutôt que d'écrire un
+second mécanisme. Elle sert aussi au chantier « outils asynchrones et réveils » de l'agent.
 
 ## Le témoin à écrire, rouge d'abord
 
