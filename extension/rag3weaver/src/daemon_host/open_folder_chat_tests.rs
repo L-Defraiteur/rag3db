@@ -50,7 +50,17 @@ fn opening_a_folder_lands_on_its_chat_with_a_welcome() {
     let welcome = n.evaluer("document.querySelector('.chat-accueil').innerText").as_str().unwrap_or_default().to_string();
     assert!(welcome.contains("essai-auto") && welcome.contains("créé"), "the welcome says what was opened: {welcome}");
     assert!(welcome.contains("chercher") && welcome.contains("modifier"), "the welcome says what the agent can do here: {welcome}");
-    let focused = n.evaluer("document.activeElement?.tagName ?? ''");
+    // The event judged is « the agent ready », the focus in the input, not an instant after the welcome: the welcome
+    // comes from the address and shows before the chat answers (the red of 01:02 under load, 24 November 2026).
+    let ready = (0..100).any(|_| {
+        let f = n.evaluer("document.activeElement?.tagName ?? ''");
+        if f == json!("TEXTAREA") {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        false
+    });
+    let focused = if ready { json!("TEXTAREA") } else { n.evaluer("document.activeElement?.tagName ?? ''") };
     if focused != json!("TEXTAREA") {
         let why = focus_diagnosis(&mut n);
         panic!("the agent is ready: the input has the focus; it is on {focused} — {why}");
