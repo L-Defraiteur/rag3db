@@ -32,6 +32,9 @@ fn a_full_step_writes_its_findings_and_the_next_step_reads_them() {
                 if step >= 2 && results.is_empty() {
                     vus.lock().unwrap().push(last_user(turns));
                 }
+                if step == 1 && !results.is_empty() {
+                    vus.lock().unwrap().push(format!("[results of step 1] {}", results.join(" | ")));
+                }
                 let asked_to_write = results.iter().any(|r| r.contains("names, paths and lines"));
                 match (step, results.len(), asked_to_write) {
                     (1, 0, _) => answer(turns, opts, sink, "Je lis le code.", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
