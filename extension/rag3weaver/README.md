@@ -630,6 +630,20 @@ weight and age with pinned runs. Since then:
   `templates/teammate/graphs/before_model_call.json` (`on` or `off`, the
   threshold, the kept part) and the stub's text in `texts.json`; the user's
   copy takes their place without a rebuild.
+- **A step's context has a policy, stage by stage** (after gemini-cli's
+  context pipelines). A tool output past 8 000 estimated tokens is written
+  whole to the task's folder (`tool-outputs/`), and the agent receives its
+  head and tail, the shape of a JSON, the raw file's path to read it again and
+  a short summary by a light model. In a batch, an old output the agent did
+  not comment becomes a stub with the light model's summary. Past 65 000
+  estimated tokens in a step, its biggest outputs are summarized; past
+  150 000, a state snapshot of at most 4 000 tokens replaces its oldest
+  exchanges. The light model is named in the table (the first one the
+  manifest declares in `models.llm`, else the agent's own); a call that fails
+  leaves the output as it was, and says why. Each stage writes a line of the
+  mailbox (`context_offload`, `context_rewrite`, `context_budget`) with the
+  estimated tokens before and after. Every stage, threshold, model and text is
+  declared in `before_model_call.json` and `texts.json`.
 - **Without its backend, it still reads and edits** the task's files, and says
   so; it stops after three failed steps in a row.
 - **A task without git.** A task on a folder that no repository tracks opens

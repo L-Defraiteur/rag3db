@@ -1,5 +1,15 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Le contexte d'un pas a sa politique, étape par étape** (sur le modèle de gemini-cli). Une sortie
+  d'outil de plus de 8 000 jetons estimés est écrite entière dans le dossier de la tâche (`tool-outputs/`) ; l'agent en
+  reçoit le début et la fin, la forme d'un JSON, le chemin du brut pour le relire, et un court résumé par un modèle
+  léger. Dans un paquet de réécriture, une vieille sortie qu'il n'a pas commentée devient un talon avec le résumé du
+  modèle léger. Au-delà de 65 000 jetons estimés dans un pas, ses plus grosses sorties sont résumées ; au-delà de
+  150 000, un instantané d'état (4 000 jetons au plus) remplace ses plus vieux échanges. Le modèle léger est nommé dans
+  la table (le premier que le manifeste déclare dans `models.llm`, sinon celui de l'agent) ; un appel qui échoue laisse
+  la sortie telle quelle et le dit. Chaque étape écrit sa ligne dans la boîte de la tâche (`context_offload`,
+  `context_rewrite`, `context_budget`), avec les jetons avant et après. Étapes, seuils, modèle et textes :
+  `templates/teammate/graphs/before_model_call.json` et `texts.json` ; ta copie les change sans rebâtir.
 - 24 novembre 2026 — **Un pas long ne relit plus ses vieux résultats d'outils.** L'agent écrit, avant chaque appel
   d'outil, ce que le résultat d'avant lui a appris (« Appris : … Ensuite : … »). Quand les résultats d'un pas dépassent
   20 000 jetons estimés, ceux qui sont plus vieux que les 8 000 derniers et qu'il a commentés sont remplacés d'un coup
