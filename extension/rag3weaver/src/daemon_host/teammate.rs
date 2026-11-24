@@ -629,6 +629,8 @@ struct StepWork {
     /// **What the step's tools returned** (24 Nov 2026: a new step wrote names the step before had found otherwise):
     /// the tool's name and its result, bounded, for the declared `Previous step` to keep the facts it chooses.
     results: Vec<(String, String)>,
+    /// The `Previous step` block this step received: its facts may stay for the next one (24 Nov 2026).
+    previous: String,
 }
 
 impl StepWork {
@@ -641,6 +643,7 @@ impl StepWork {
             "wrote": self.wrote,
             "command": self.command.as_ref().map(|(c, o)| serde_json::json!({ "command": c, "output": o })),
             "results": self.results.iter().map(|(t, r)| serde_json::json!({ "tool": t, "result": r })).collect::<Vec<_>>(),
+            "previous_block": self.previous,
             "last_text": last_text,
             "budget": budget,
         })
@@ -864,6 +867,12 @@ impl Step {
     /// The refusal of a silent step_done, from the user's own template file when she has one (read at each step).
     /// **What the mailbox received before the step**: read by its frontier; what comes after is delivered during it.
     /// The graph asked at each `step_done`.
+    /// The `Previous step` block this step received, for the next one's facts.
+    pub(crate) fn with_previous_block(self, block: &str) -> Self {
+        self.work.lock().unwrap_or_else(|p| p.into_inner()).previous = block.to_string();
+        self
+    }
+
     pub(crate) fn with_at_step_done(mut self, graph: Option<std::sync::Arc<super::step_graphs::StepGraph>>) -> Self {
         self.at_step_done = graph;
         self
@@ -2642,7 +2651,7 @@ impl DaemonHost {
             }
             step.woke_by = woke_by.take();
             // The refusal of a silent step_done, from the user's own template file, read at each step.
-            step = step.with_delivery(read, textes.clone()).with_at_step_done(self.at_step_done_graph());
+            step = step.with_delivery(read, textes.clone()).with_at_step_done(self.at_step_done_graph()).with_previous_block(&previous_step);
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
             // `teammate.max_failed_steps` échecs d'affilée l'arrêtent.
@@ -3366,6 +3375,7 @@ mod carry_over_tests {
             wrote: wrote.iter().map(|s| s.to_string()).collect(),
             command: command.map(|(c, o)| (c.to_string(), o.to_string())),
             results: Vec::new(),
+            previous: String::new(),
         };
         let long: String = "é😀".repeat(5_000);
         vec![
@@ -3422,6 +3432,7 @@ mod carry_over_tests {
             wrote: (0..50).map(|i| format!("src/écrit_{i}.rs")).collect(),
             command: Some(("cargo test --lib".into(), "test ok 😀\n".repeat(150))),
             results: Vec::new(),
+            previous: String::new(),
         };
         let texte = "Je relis le module, puis j'édite la fonction. ".repeat(65);
         let n = 200;
@@ -3494,6 +3505,7 @@ mod carry_over_tests {
                 ("usages".into(), "**1 usage** of `teammate_loop`\n- method teammate_loop — src/daemon_host/teammate.rs:2415, called by run_teammate (src/daemon_host/teammate.rs:2363)\n".into()),
                 ("read_file".into(), "fn quelque_chose() — src/ailleurs.rs:12\n".into()),
             ],
+            previous: String::new(),
         };
         let prose = "Je cherche la boucle de l'équipier. ".repeat(40);
         for budget in [8_000, 400] {
