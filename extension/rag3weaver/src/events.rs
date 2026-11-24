@@ -355,6 +355,12 @@ pub enum Event {
         /// (`TokenEvents.batch_ms`).
         count: u64,
     },
+    /// **A piece of the model's thinking** (24 November 2026), as the provider gives its thought summaries: on
+    /// `tokens` and `run.<id>`, beside the words and never among them. `iteration` is the model call of the run it
+    /// belongs to; never sent back to the model, never written in the mailbox.
+    Thinking { run: String, text: String, iteration: u64 },
+    /// **The model's thinking of a call ended**: its words, or its call's end, follow.
+    ThinkingEnd { run: String, iteration: u64 },
     /// Un message d'une boucle à une autre. Fire and forget des deux côtés :
     /// un accusé est un second message, pas un verrou.
     Message {
@@ -685,7 +691,7 @@ impl Event {
             Self::FileChanged { .. } => topic::FILES,
             Self::ComponentsChanged { .. } => topic::COMPONENTS,
             Self::PropositionChanged { .. } => topic::DECLARATIONS,
-            Self::Token { .. } => topic::TOKENS,
+            Self::Token { .. } | Self::Thinking { .. } | Self::ThinkingEnd { .. } => topic::TOKENS,
             _ => topic::CATALOG,
         }
     }
@@ -705,6 +711,8 @@ impl Event {
             | Self::Consumed { run, .. }
             | Self::NodeRun { run, .. }
             | Self::Token { run, .. }
+            | Self::Thinking { run, .. }
+            | Self::ThinkingEnd { run, .. }
             | Self::Message { run, .. } => Some(run),
             Self::EntitiesChanged { run: Some(run), .. } | Self::RelationsChanged { run: Some(run), .. } => Some(run),
             _ => None,
@@ -852,6 +860,8 @@ impl Event {
                 "kind": "Token", "event": "token", "run": run, "node": node, "seq": seq, "text": text,
                 "count": count,
             }),
+            Self::Thinking { run, text, iteration } => json!({ "kind": "Thinking", "run": run, "text": text, "iteration": iteration }),
+            Self::ThinkingEnd { run, iteration } => json!({ "kind": "ThinkingEnd", "run": run, "iteration": iteration }),
             other => json!({ "kind": other.kind(), "detail": format!("{other:?}") }),
         }
     }

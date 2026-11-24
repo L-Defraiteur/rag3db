@@ -1158,6 +1158,7 @@ impl DaemonHost {
         // Les jetons du tour, sur `tokens` : le flux de l'IDE les relaie.
         let events: EventHandler = {
             let (bus, run, rang) = (bus.clone(), run_id.to_string(), Arc::new(AtomicU64::new(0)));
+            let (appel, pense) = (Arc::new(AtomicU64::new(0)), Arc::new(std::sync::atomic::AtomicBool::new(false)));
             let meter = step.map(|s| s.context_meter());
             let ecrit = step.map(|s| s.text_flag());
             Arc::new(move |ev: Value| {
@@ -1171,7 +1172,27 @@ impl DaemonHost {
                     }
                 }
                 let Some(bus) = &bus else { return };
+                // **The model's thinking, relayed beside its words** (24 Nov. 2026): a `reasoning` piece goes on the bus as
+                // `Thinking`, never as a word; its first word, or its call's end, closes it with a `ThinkingEnd`.
+                let iteration = appel.load(Ordering::SeqCst);
+                let fermer = |bus: &crate::events::EventBus| {
+                    if pense.swap(false, Ordering::SeqCst) {
+                        bus.emit(crate::events::Event::ThinkingEnd { run: run.clone(), iteration });
+                    }
+                };
+                if ev["event"] == "reasoning" {
+                    if let Some(text) = ev["text"].as_str().filter(|t| !t.is_empty()) {
+                        pense.store(true, Ordering::SeqCst);
+                        bus.emit(crate::events::Event::Thinking { run: run.clone(), text: text.to_string(), iteration });
+                    }
+                    return;
+                }
+                if ev["event"] == "generation_end" {
+                    fermer(bus);
+                    appel.fetch_add(1, Ordering::SeqCst);
+                }
                 if ev["event"] == "token" {
+                    fermer(bus);
                     if let Some(text) = ev["text"].as_str() {
                         bus.emit(crate::events::Event::Token {
                             run: run.clone(),
