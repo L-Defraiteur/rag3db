@@ -5,10 +5,9 @@
 //! `path:line` is not in the results is dropped. A greeting, or a request the agent already knows, runs no search and
 //! adds nothing. The score and the decision are in the turn's trace (a host line `scout` of the mailbox). The scout's
 //! two calls go to the model the user's table names (`at_turn_start.json`), here the local fake server of
-//! `tests/common/fake_sse.rs`. By the host's own path. A module of its own.
+//! `tests/common/fake_sse.rs`. Two turns of one task, in its folder. By the host's own path. A module of its own.
 
 use crate::daemon_host::chat_qui_code::{depot_inscrit, hote};
-use super::mode_auto_v1::ended;
 use super::*;
 use std::time::{Duration, Instant};
 
@@ -26,7 +25,7 @@ fn replies(json: &Value) -> fake_sse::Reply {
 
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
 #[test]
-fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_greeting_with_nothing() {
+fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_thanks_with_nothing() {
     let d = tempfile::tempdir().unwrap();
     let server = fake_sse::FakeServer::start_sequence(vec![
         // The request on the code: the agent knows little, three searches and a name to follow.
@@ -39,7 +38,7 @@ fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_greeting_with_nothi
                 { "n": 9, "at": "src/fantome.rs:42", "symbol": "fantome", "why": "une ligne qui n'est dans aucun résultat" }
             ]
         })),
-        // The greeting: nothing to search.
+        // The thanks: nothing to search.
         replies(&json!({ "knows": 0.95, "queries": [], "usages": "" })),
     ]);
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
@@ -72,7 +71,7 @@ fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_greeting_with_nothi
         Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
             let premiers = premiers.clone();
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 16384, move |turns, opts, sink| {
-                if step_of(turns) <= 1 && tool_results(turns).is_empty() {
+                if tool_results(turns).is_empty() {
                     premiers.lock().unwrap().push(last_user(turns));
                 }
                 answer(turns, opts, sink, "Voici ma réponse.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "répondu", "remaining": "" }))]))
@@ -96,33 +95,34 @@ fn a_turn_on_the_code_starts_with_what_the_index_found_and_a_greeting_with_nothi
         assert!(Instant::now() < fin, "the index did not end: {derniere}");
         std::thread::sleep(Duration::from_millis(200));
     }
-    let tour = |tache: &str, demande: &str| {
-        host.post_to_teammate(&h.id, tache, "lucie", "request", None, demande, &json!({ "by": { "kind": "human", "client": "tty" } })).unwrap();
-        let files = host.teammate_files(&h.id, tache).unwrap();
+    // A turn ends with the host's `ended` line: the n-th turn of the task, when there are n of them.
+    let tour = |demande: &str, n: usize| {
+        host.post_to_teammate(&h.id, "code", "lucie", "request", None, demande, &json!({ "by": { "kind": "human", "client": "tty" } })).unwrap();
+        let files = host.teammate_files(&h.id, "code").unwrap();
         let fin = Instant::now() + Duration::from_secs(120);
-        while !ended(&files.mailbox()) && Instant::now() < fin {
+        while files.mailbox().iter().filter(|l| l["kind"] == "ended").count() < n && Instant::now() < fin {
             std::thread::sleep(Duration::from_millis(100));
         }
         files.mailbox()
     };
-    let code = tour("code", "Où est définie la fonction bonjour, et qui l'appelle ?");
-    let salut = tour("salut", "bonjour !");
+    tour("Où est définie la fonction bonjour, et qui l'appelle ?", 1);
+    let boite = tour("Merci, c'est tout !", 2);
     let premiers = premiers.lock().unwrap().clone();
     let bodies: Vec<String> = server.request.try_iter().collect();
     eprintln!("first steps: {premiers:#?}\nscout calls: {}", bodies.len());
-    let premier = premiers.first().cloned().unwrap_or_default();
+    let premier = premiers.iter().find(|m| m.contains("Où est définie la fonction bonjour")).cloned().unwrap_or_default();
+    let merci = premiers.iter().find(|m| m.contains("Merci, c'est tout")).cloned();
     assert!(premier.contains("What the code index found for this request"), "the first step of a turn on the code gets the scout's block: {premiers:#?}");
     assert!(premier.contains("src/lib.rs:1") && premier.contains("Le petit dépôt tient sa seule fonction"), "with its orientation and its checked path:line: {premier}");
     assert!(!premier.contains("src/fantome.rs:42"), "a path:line that no result holds is dropped: {premier}");
-    assert!(premiers.get(1).is_some_and(|m| !m.contains("What the code index found")), "a greeting gets no block: {premiers:#?}");
-    assert_eq!(bodies.len(), 3, "two calls for the request on the code, one for the greeting, none more: {bodies:#?}");
+    assert!(merci.is_some_and(|m| !m.contains("What the code index found")), "a thanks gets no block: {premiers:#?}");
+    assert_eq!(bodies.len(), 3, "two calls for the request on the code, one for the thanks, none more: {bodies:#?}");
     assert!(bodies[0].contains("Où est définie la fonction bonjour") && bodies[0].contains("src"), "the first call reads the request and the project's plan: {}", bodies[0]);
     assert!(bodies[1].contains("src/lib.rs:1"), "the synthesis reads the numbered results: {}", bodies[1]);
-    assert!(bodies[2].contains("bonjour !"), "{}", bodies[2]);
-    let trace = |boite: &[Value]| boite.iter().find(|l| l["from"] == "host" && l["kind"] == "scout").cloned();
-    let t = trace(&code).unwrap_or_else(|| panic!("the turn's trace holds the scout's score and decision: {code:#?}"));
-    assert_eq!((t["knows"].as_f64(), t["decision"].as_str()), (Some(0.1), Some("search")), "{t}");
-    assert_eq!(t["dropped"], json!(["src/fantome.rs:42"]), "{t}");
-    let t = trace(&salut).unwrap_or_else(|| panic!("{salut:#?}"));
-    assert_eq!((t["knows"].as_f64(), t["decision"].as_str()), (Some(0.95), Some("known")), "{t}");
+    assert!(bodies[2].contains("Merci, c'est tout") && bodies[2].contains("Où est définie la fonction bonjour"), "the call reads the request and the conversation before it: {}", bodies[2]);
+    let traces: Vec<&Value> = boite.iter().filter(|l| l["from"] == "host" && l["kind"] == "scout").collect();
+    assert_eq!(traces.len(), 2, "each turn's trace holds the scout's score and decision: {boite:#?}");
+    assert_eq!((traces[0]["knows"].as_f64(), traces[0]["decision"].as_str()), (Some(0.1), Some("search")), "{}", traces[0]);
+    assert_eq!(traces[0]["dropped"], json!(["src/fantome.rs:42"]), "{}", traces[0]);
+    assert_eq!((traces[1]["knows"].as_f64(), traces[1]["decision"].as_str()), (Some(0.95), Some("known")), "{}", traces[1]);
 }
