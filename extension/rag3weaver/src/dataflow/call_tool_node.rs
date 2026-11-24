@@ -38,8 +38,15 @@ impl Node for CallToolNode {
     fn outputs(&self) -> Vec<PortDef> {
         vec![PortDef::value("result", PortType::Map, true)]
     }
-    fn execute(&mut self, _ctx: &mut NodeContext) -> Result<(), String> {
-        Err("CallTool: not written yet".into())
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let caller = ctx
+            .service::<Arc<dyn ToolCaller>>(TOOL_CALLER_SERVICE)
+            .cloned()
+            .ok_or_else(|| format!("CallTool: no caller lent by the host (service {TOOL_CALLER_SERVICE}), so `{}` is not called", self.tool))?;
+        let args = ctx.input("args").and_then(|v| v.downcast::<Value>().cloned()).unwrap_or(Value::Null);
+        let result = caller.call(&self.tool, &args)?;
+        ctx.set_output("result", PortValue::new(result));
+        Ok(())
     }
 }
 
@@ -71,9 +78,6 @@ impl NodeFactory for CallToolNodeFactory {
         }
     }
 }
-
-#[allow(dead_code)]
-fn _uses(_: Arc<dyn ToolCaller>, _: PortValue) {}
 
 #[cfg(test)]
 #[path = "call_tool_node/tests.rs"]
