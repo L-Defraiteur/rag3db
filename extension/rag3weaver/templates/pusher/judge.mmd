@@ -6,8 +6,12 @@
 %% result: model.json
 
 graph LR
-    lot["RhaiNode(script='input', value=$lot)"]
-    parts["Collect(inputs='lot')"]
+    agents["RhaiNode(script='#{name: `agents_md`, title: `AGENTS.md, the rules of the repository`, value: input.agents_md, format: `markdown`}', value=$lot)"]
+    rules["RhaiNode(script='#{name: `rules`, title: `The rules of the judge`, value: input.rules}', value=$lot)"]
+    diff["RhaiNode(script='#{name: `diff`, title: `The diff of the lot`, value: input.diff, format: `markdown`}', value=$lot)"]
+    parts["Collect(inputs='agents,rules,diff')"]
     model["LlmNode(instruction=$instruction, response_schema=$schema, max_tokens=16384)"]
-    lot -->|result:lot| parts
+    agents -->|result:agents| parts
+    rules -->|result:rules| parts
+    diff -->|result:diff| parts
     parts -->|list:context| model
