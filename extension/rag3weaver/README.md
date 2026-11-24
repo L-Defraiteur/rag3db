@@ -617,6 +617,19 @@ weight and age with pinned runs. Since then:
   (`at_turn_start*.mmd`, and `at_turn_start.json` for the mode, `blocking` or
   `off`, the threshold, the wait bound and the models of the two calls); the
   user's copy of any of these files takes its place without a rebuild.
+- **A long step stops reading its old tool results again.** The agent writes,
+  before each tool call, what the previous result taught it (« Appris : …
+  Ensuite : … »). When a step's tool outputs pass 20 000 estimated tokens, the
+  ones older than the last 8 000 that it commented are replaced at once by a
+  stub that keeps its note (and the `path:line` lines of the index's tools); an
+  output without a note stays whole. The rewrite happens by batches, only when
+  the threshold is crossed, so that the provider's cache holds between batches;
+  each message keeps its place and its tool call id. Each batch is a
+  `context_rewrite` line of the mailbox (estimated tokens before and after,
+  outputs replaced). It is declared in
+  `templates/teammate/graphs/before_model_call.json` (`on` or `off`, the
+  threshold, the kept part) and the stub's text in `texts.json`; the user's
+  copy takes their place without a rebuild.
 - **Without its backend, it still reads and edits** the task's files, and says
   so; it stops after three failed steps in a row.
 - **A task without git.** A task on a folder that no repository tracks opens
