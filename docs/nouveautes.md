@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 24 novembre 2026 — **La réflexion du modèle arrive jusqu'au terminal.** Les résumés de pensée que donne le
+  fournisseur (Gemini sur Vertex) passent sur le flux à côté des mots, jamais dedans : le terminal les fait défiler
+  près de l'animation et Ctrl-O les relit ; ils n'entrent ni dans la réponse ni dans la boîte.
 - 24 novembre 2026 — **Le nom d'un outil et sa cible restent toujours lisibles** sous l'animation Glitch, même quand
   la cible contient des points de suspension : seul le verbe « travaille… » se brouille.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
