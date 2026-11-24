@@ -1021,4 +1021,23 @@ on_master decl-a && on_master decl-b && [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt
   && ok "deux déclarations de module au même endroit d'un tests/*.rs : union triée, les deux lots poussés" \
   || ko "déclarations de tests : decl-a $(on_master decl-a && echo poussé || echo non), decl-b $(on_master decl-b && echo poussé || echo non), alpha ligne ${a:-absente}, beta ligne ${b:-absente}"
 P dequeue decl-a > /dev/null 2>&1; P dequeue decl-b > /dev/null 2>&1; : > "$D/outcomes"
+# 54. Slot 2 says why it leaves (24 Nov. 2026, c7: at 01:19:27 and 01:36:58 slot 2 was thrown, « rouge d'environnement,
+# rien de jugé », with no repose and no pass; two exits of spec_run wrote their code without a line). The origin refuses
+# the push of B's reposed branch: the line « créneau 2 jeté » names that push and git's message.
+for x in sa sb; do eval "h_$x=\$(lot s2$x extension/rag3weaver/src/s2$x.rs 'fn s2$x() {}')"; done
+for x in sa sb; do eval "P enqueue s2$x s2$x \"\$h_$x\" rust some_witness e2e_code - - author-c > /dev/null"; done
+cat > "$D/origin.git/hooks/pre-receive" <<'HOOK'
+#!/bin/bash
+while read -r _ _ ref; do case "$ref" in refs/heads/pusher/*-s2sb) echo "refusé par le témoin : $ref" >&2; exit 1 ;; esac; done
+exit 0
+HOOK
+chmod +x "$D/origin.git/hooks/pre-receive"
+echo VERT > "$D/outcomes.d/s2sa"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+rm -f "$D/origin.git/hooks/pre-receive"
+l=$(grep -P '\ts2sb\tcréneau 2 jeté\t' "$D/pusher/log.tsv" | tail -1)
+printf '%s' "$l" | grep -q 'push' && printf '%s' "$l" | grep -q 'refusé par le témoin' \
+  && ok "créneau 2 : un push de la branche de B refusé se dit, avec le message de git" \
+  || ko "créneau 2 : la sortie ne dit pas sa raison (« ${l##*	} »)"
+P dequeue s2sa > /dev/null 2>&1; P dequeue s2sb > /dev/null 2>&1; : > "$D/outcomes"; rm -f "$D"/outcomes.d/s2*
 exit $red
