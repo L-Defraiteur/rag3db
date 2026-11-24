@@ -30,8 +30,10 @@ struct MemoryCaller {
 impl ToolCaller for MemoryCaller {
     fn call(&self, tool: &str, args: &Value) -> Result<Value, String> {
         let h = self.host.upgrade().ok_or("the host is gone")?;
-        let v = crate::backend::as_agent(self.agent.as_deref(), || h.call(None, &self.memory, tool, args.clone()));
-        if v["error"].is_null() { Ok(v.get("result").cloned().unwrap_or(v)) } else { Err(v["error"].to_string()) }
+        let memory = h.hosted(&self.memory)?;
+        // The memory's own tool, called as the host's other memory writes are (file_closed_plan): under the agent's key.
+        let v = crate::backend::as_agent(self.agent.as_deref(), || h.with_backend(&memory, |b| b.call(tool, args.clone()))).and_then(|r| r)?;
+        Ok(v.get("result").cloned().unwrap_or(v))
     }
 }
 
