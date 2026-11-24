@@ -2626,6 +2626,13 @@ impl DaemonHost {
             // The loop's texts, read at each step: an edit of the user's texts.json is in the next step (23 Nov 2026).
             let textes = self.prompt_texts();
             let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits, &textes);
+            // **The start of a turn asks its graph** (`at_turn_start.mmd`, 24 Nov 2026): what the long-term memory holds for
+            // the request that opens it, as a block, or nothing.
+            if let Some(request) = news.iter().rev().find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host").and_then(|l| l["text"].as_str()) {
+                if let Some(block) = self.recall_at_turn_start(&t, request) {
+                    message.push_str(&block);
+                }
+            }
             // **Its tree is not her folder** (23 Nov 2026, `~/essai-2`).
             if let Some(w) = t.workspace.as_ref().filter(|w| w.racine != w.racine_principale) {
                 message.push_str(&format!(

@@ -2,6 +2,12 @@
 
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
+- 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
+  déclare sa mémoire (`bilans.memoire`, comme le `rag3db.json` de Lucie vers `memoire-longue`), le premier pas d'un tour
+  ouvert par une demande reçoit ce qu'elle en tient (fiches et apports, ceux de toi et des autres agents), avec leur
+  source, et rien quand elle n'a rien de proche. Cela ne dépend pas de la ligne `"imports"`, qui donne à l'agent ses
+  propres outils de mémoire. Un dossier neuf (le gabarit livré) ne déclare pas de mémoire : pas de rappel. Le rappel
+  est le graphe `templates/teammate/graphs/at_turn_start.mmd` ; ta copie le change sans rebâtir.
 - 24 novembre 2026 — **Le nom d'un outil et sa cible restent toujours lisibles** sous l'animation Glitch, même quand
   la cible contient des points de suspension : seul le verbe « travaille… » se brouille.
 - 24 novembre 2026 — **Chaque fichier cartographié garde sa part des faits, et ils traversent les pas.** Le bloc
