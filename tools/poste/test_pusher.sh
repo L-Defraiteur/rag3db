@@ -1062,4 +1062,31 @@ on_master dcl-c && on_master dcl-d && printf '%s\n' "$f" | grep -q '^mod delta;'
   && ok "une copie du pousseur sans son pilote à côté prend celui de son worktree : l'union tient" \
   || ko "copie seule du pousseur : dcl-c $(on_master dcl-c && echo poussé || echo non), dcl-d $(on_master dcl-d && echo poussé || echo non)"
 P dequeue dcl-c > /dev/null 2>&1; P dequeue dcl-d > /dev/null 2>&1; : > "$D/outcomes"
+# 56. The lot judge at the deposit (24 Nov. 2026, Lucie: a report of what breaks the repository's rules; c7: an opinion,
+# never a refusal, once per diff). A fake backend counts its calls. A first deposit calls it once: the opinion in the
+# log and in the author's inbox; the same diff deposited under another id is served again without a call; the daily cap
+# stops a call; and without PUSHER_JUDGE=1 nothing is judged.
+cat > "$D/fake-judge.sh" <<'FJ'
+#!/bin/bash
+echo x >> "$JUDGE_CALLS"; cat > "$JUDGE_INPUT"
+printf '%s\n' '{"ok":true,"result":{"model":{"findings":[{"rule":"identifier_not_english","file":"a.rs","line":1,"excerpt":"let x","severity":"low","why":"w"}],"summary":"s"}}}' '{"ok":true,"result":{"closed":true}}'
+FJ
+chmod +x "$D/fake-judge.sh"; : > "$D/judge-calls"; echo '{}' > "$D/fake-manifest.json"
+J1() { JUDGE_CALLS="$D/judge-calls" JUDGE_INPUT="$D/judge-input" PUSHER_JUDGE=1 PUSHER_JUDGE_SYNC=1 PUSHER_JUDGE_CMD="$D/fake-judge.sh" PUSHER_JUDGE_MANIFEST="$D/fake-manifest.json" "$@"; }
+m0=$(master)
+h1=$(FROM=$m0 lot jg-1 extension/rag3weaver/src/jg.rs 'fn jg() {}'); J1 P enqueue jg-1 jg-1 "$h1" rust some_witness e2e_code - - author-j > /dev/null 2>&1
+h2=$(FROM=$m0 lot jg-2 extension/rag3weaver/src/jg.rs 'fn jg() {}'); J1 P enqueue jg-2 jg-2 "$h2" rust some_witness e2e_code - - author-j > /dev/null 2>&1
+h3=$(FROM=$m0 lot jg-3 extension/rag3weaver/src/jg3.rs 'fn jg3() {}'); PUSHER_JUDGE_MAX_PER_DAY=1 J1 P enqueue jg-3 jg-3 "$h3" rust some_witness e2e_code - - author-j > /dev/null 2>&1
+h4=$(FROM=$m0 lot jg-4 extension/rag3weaver/src/jg4.rs 'fn jg4() {}'); P enqueue jg-4 jg-4 "$h4" rust some_witness e2e_code - - author-j > /dev/null 2>&1
+jl() { grep -P "\t$1\tjuge\t" "$D/pusher/log.tsv" | tail -1 | cut -f4; }
+calls=$(wc -l < "$D/judge-calls")
+[ "$calls" = 1 ] && jl jg-1 | grep -q '^1 constat ' && grep -q '^juge	jg-1	1 constat' "$D/pusher/inbox/author-j.txt" \
+  && grep -q 'fn jg() {}' "$D/judge-input" \
+  && ok "juge des lots : un appel au dépôt, l'avis au journal et à l'auteur, le diff donné au juge" \
+  || ko "juge des lots, premier dépôt : $calls appel(s), journal « $(jl jg-1) »"
+jl jg-2 | grep -q '^avis repris (1 constat)' && ok "juge des lots : le même diff sous un autre id, avis repris sans appel" \
+  || ko "juge des lots, même diff : « $(jl jg-2) », $calls appel(s)"
+jl jg-3 | grep -q '^plafond du jour atteint' && ok "juge des lots : le plafond du jour arrête l'appel, et le dit" || ko "juge des lots, plafond : « $(jl jg-3) »"
+[ -z "$(jl jg-4)" ] && ok "juge des lots : éteint sans PUSHER_JUDGE=1" || ko "juge des lots allumé par défaut : « $(jl jg-4) »"
+for x in 1 2 3 4; do P dequeue jg-$x > /dev/null 2>&1; done
 exit $red
