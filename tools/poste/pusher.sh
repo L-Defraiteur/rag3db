@@ -1143,6 +1143,11 @@ step() {
   if [ $rank = 2 ] && [ ${#spec[@]} = 0 ]; then : > "$D/rust-running"; docs_lane "$D/rust-running" & docs_pid=$!; fi
   replay_and_push_a; rc=$?
   [ -n "$docs_pid" ] && { rm -f -- "$D/rust-running"; wait "$docs_pid"; }
+  # A step that waits for B says so (24 Nov. 2026, c7: ten minutes without « pris » after a push read as a halt); said
+  # each time B is to be settled, its pass running or just ended.
+  if [ -n "$spec_pid" ]; then
+    log "$(f_ "${spec[0]}" 1)$([ ${#spec[@]} -gt 1 ] && echo "+$(( ${#spec[@]} - 1 ))")" "attend la passe du créneau 2" "$(for line in "${spec[@]}"; do f_ "$line" 1; done | paste -sd' ')"
+  fi
   if [ -n "$spec_pid" ]; then wait "$spec_pid"; spec_settle; [ $? = 3 ] && rc=3; fi
   return $rc
 }
