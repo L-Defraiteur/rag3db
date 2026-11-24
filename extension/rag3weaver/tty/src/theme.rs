@@ -102,7 +102,13 @@ impl Theme {
     /// its list of themes (a host without the route, or none at all), the view then going plain rather than stopping;
     /// an unknown name, or a theme that does not read, is still refused.
     pub fn of_the_host_or_none(agent: &ureq::Agent, ep: &crate::endpoint::Endpoint, nom: &str) -> Result<Option<Theme>, String> {
-        Theme::de_l_hote(agent, ep, nom).map(Some)
+        match crate::client::lire_brut(agent, ep, &format!("/ide/theme/{}.json", crate::client::encoder(nom))) {
+            Ok(v) => serde_json::from_value(v).map(Some).map_err(|e| format!("le thème « {nom} » ne se lit pas : {e}")),
+            Err(e) => match noms_de_l_hote(agent, ep) {
+                Ok(noms) => Err(format!("pas de thème « {nom} » ; thèmes : {} ({e})", noms.join(", "))),
+                Err(_) => Ok(None),
+            },
+        }
     }
 
     /// A theme of the repository (`templates/themes/<nom>.json`), for a witness: the same file the host serves.

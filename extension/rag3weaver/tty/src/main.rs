@@ -204,7 +204,7 @@ fn lancer(o: Options) -> Result<(), String> {
     // the start pays no request in series; `--plain` draws no theme and asks none.
     let theme_en_vol = (!o.plain).then(|| {
         let (a, e, nom) = (agent.clone(), ep.clone(), o.theme.clone().unwrap_or_else(|| "daemon".into()));
-        std::thread::spawn(move || Theme::de_l_hote(&a, &e, &nom))
+        std::thread::spawn(move || Theme::of_the_host_or_none(&a, &e, &nom))
     });
     let depot = match client::resoudre(&agent, &ep, &o.depot) {
         Ok(d) => d,
@@ -253,8 +253,13 @@ fn lancer(o: Options) -> Result<(), String> {
     };
     let mut depot = depot;
     if !o.plain {
-        // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu, ou un hôte qui ne le sert pas, s'y dit.
-        let mut theme = theme_en_vol.ok_or("no theme was asked")?.join().map_err(|_| "the theme's request failed".to_string())??;
+        // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit et arrête. Un hôte qui ne sert aucun
+        // thème (le terminal n'en embarque plus, 24 Nov. 2026) se dit, et le texte brut prend la suite.
+        'vue: {
+        let Some(mut theme) = theme_en_vol.ok_or("no theme was asked")?.join().map_err(|_| "the theme's request failed".to_string())?? else {
+            eprintln!("[tty] l'hôte ne sert aucun thème : je passe en texte brut (--plain)");
+            break 'vue;
+        };
         loop {
             match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme, journal.take(), mosh) {
                 Ok(tui::Fin::Quitter) => return Ok(()),
@@ -285,6 +290,7 @@ fn lancer(o: Options) -> Result<(), String> {
                     break;
                 }
             }
+        }
         }
     }
     if let (true, Some(j)) = (mosh, &journal) {
