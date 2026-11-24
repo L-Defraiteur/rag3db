@@ -273,8 +273,9 @@ fn cause_spans(t: &Theme, a: &Animation, n: u64, graine: u64, cap: Capacites, ca
         Forme::Glitch => {
             let chars: Vec<char> = cause.chars().collect();
             // What the cause names (the tool, its target, the model, the time) stays readable: the glitch takes
-            // only the word marked with « … » (« travaille… », « répond… »), or any character if none is.
-            let verb: Vec<usize> = match chars.iter().position(|c| *c == '…') {
+            // only the word marked with « … » (« travaille… », « répond… »), or any character if none is. The verb's
+            // mark is the last one: a target may hold its own « … » (a query, a command), which stays whole (24 Nov. 2026).
+            let verb: Vec<usize> = match chars.iter().rposition(|c| *c == '…') {
                 Some(end) => {
                     let start = chars[..end].iter().rposition(|c| c.is_whitespace()).map_or(0, |i| i + 1);
                     (start..end).collect()
