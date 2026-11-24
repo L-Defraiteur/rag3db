@@ -64,3 +64,33 @@ fn the_pusher_backend_declares_the_judge_tool_and_its_model() {
     let source: crate::model_source::ModelSource = serde_json::from_value(manifest["models"]["llm"].clone()).expect("an ordinary model entry");
     assert_eq!(source.model, "google/gemini-3.1-flash-lite");
 }
+
+/// **A finding the diff does not quote is dropped** (`KeepQuoted` after the model): a declared `let index_pose` stays,
+/// an invented `fn hote` (only called in the diff) goes; a removal finding is checked against the removed lines; the
+/// report says how many were dropped.
+#[test]
+fn a_finding_whose_excerpt_is_not_in_the_diff_is_dropped() {
+    const DIFF: &str = "--- a/src/x.rs\n+++ b/src/x.rs\n@@ -1,3 +1,3 @@\n-    fn old_rule() {}\n+    let index_pose = hote(&c);\n     keep();\n";
+    let mut nodes = NodeRegistry::new();
+    crate::dataflow::node_factories::register_builtins(&mut nodes);
+    let graph = GraphTool::from_mermaid(include_str!("../templates/pusher/judge.mmd")).and_then(|g| g.bind(&nodes)).expect("the judge's graph binds");
+    let llm: Arc<dyn Llm> = Arc::new(CallbackLlm::new("judge-witness", 100_000, |_: &[Turn], _: &GenOptions, sink: &mut dyn TokenSink| {
+        let reply = json!({ "findings": [
+            { "rule": "identifier_not_english", "file": "src/x.rs", "line": 1, "excerpt": "let index_pose = hote(&c);", "severity": "low", "why": "declared" },
+            { "rule": "identifier_not_english", "file": "src/x.rs", "line": 1, "excerpt": "fn hote(c: &Conf)", "severity": "low", "why": "invented" },
+            { "rule": "reverted_master_change", "file": "src/x.rs", "line": 1, "excerpt": "fn old_rule() {}", "severity": "high", "why": "1 line removed" },
+            { "rule": "reverted_master_change", "file": "src/x.rs", "line": 1, "excerpt": "fn never_there() {}", "severity": "high", "why": "invented" }
+        ], "summary": "4 findings" });
+        sink.on_token(&reply.to_string());
+        sink.on_finish(&Finish::eos());
+        Ok((Finish::eos(), Usage::default()))
+    }));
+    let mut services = ServiceRegistry::new();
+    services.register(LLM_SERVICE, llm);
+    let def = graph.instantiate(&json!({ "lot": { "diff": DIFF, "agents_md": "", "rules": [] } })).expect("the params");
+    let report = execute_definition(&def, &nodes, Arc::new(services), &NodeTypePolicy::All, graph.result()).expect("the graph runs");
+    let report: Value = serde_json::from_str(&report).expect("the report is JSON");
+    let kept: Vec<&str> = report["findings"].as_array().unwrap().iter().filter_map(|f| f["excerpt"].as_str()).collect();
+    assert_eq!(kept, ["let index_pose = hote(&c);", "fn old_rule() {}"], "{report:#}");
+    assert_eq!(report["dropped_unquoted"], json!(2));
+}

@@ -17,6 +17,7 @@ pub mod spawn_nodes;
 pub mod guard_nodes;
 pub mod step_conditions;
 pub mod call_tool_node;
+pub mod quote_nodes;
 pub mod graph;
 pub mod node;
 pub mod observe;

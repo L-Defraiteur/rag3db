@@ -1751,6 +1751,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     }
     // A tool of a backend the host lends (the recall at the start of a turn).
     registry.register(Box::new(super::call_tool_node::CallToolNodeFactory));
+    // A report keeps only the findings its diff quotes (24 November 2026, the lot judge).
+    registry.register(Box::new(super::quote_nodes::KeepQuotedNodeFactory));
     // Les sections d'un Markdown, pour l'archiviste (M4).
     registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));
@@ -1784,7 +1786,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 76 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 77 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
