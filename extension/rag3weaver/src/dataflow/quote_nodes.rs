@@ -63,7 +63,7 @@ impl Node for KeepQuotedNode {
         out["findings"] = json!(kept);
         out["dropped_unquoted"] = json!(dropped);
         ctx.info(&format!("KeepQuoted: {} of {total} findings kept, {dropped} not quoted in the diff", total - dropped));
-        ctx.emit("report", PortValue::new(out)).map_err(|e| e.to_string())?;
+        ctx.emit("report", PortValue::new(out)).map_err(|e| -> String { e.into() })?;
         Ok(())
     }
 }
