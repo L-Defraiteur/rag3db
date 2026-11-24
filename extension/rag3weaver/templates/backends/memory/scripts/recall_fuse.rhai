@@ -6,18 +6,19 @@
 // « Rappel automatique », placed last in the context by the host. Nothing found (or nothing above min_score): no block,
 // and it is not a fallback.
 fn text_of(tier, d) {
-    if tier == "turns" { return if d.text == () { "" } else { d.text }; }
+    if tier == "turns" || tier == "own_turns" { return if d.text == () { "" } else { d.text }; }
     if tier == "apports" { return if d.texte == () { "" } else { d.texte }; }
     if d.about == () { "" } else { d.about }
 }
 fn header_of(tier, d) {
     if tier == "turns" { return `[tour ${d.turn}, ${d.at}, ${d.role}]`; }
+    if tier == "own_turns" { return `[tour ${d.turn} d'une autre conversation (${d.run}), ${d.at}, ${d.role}]`; }
     if tier == "apports" { return `[apport de la fiche « ${d.fiche} », ${d.section}]`; }
     `[fiche « ${d.name} » (${d.state})]`
 }
 fn source_of(tier, r) {
     let d = r.data;
-    if tier == "turns" {
+    if tier == "turns" || tier == "own_turns" {
         if d.line_id != () && d.line_id != "" { return "turn:" + d.line_id; }
         return `turn:${d.run}#${d.turn}#${d.seq}`;
     }
@@ -63,7 +64,7 @@ for s in sources {
     // The age rank in the tier: the newest hit is 0 (turns by `at`, apports by `created_at`).
     let ages = [];
     for r in kept {
-        let k = if tier == "turns" { r.data.at } else if tier == "apports" { r.data.created_at } else { () };
+        let k = if tier == "turns" || tier == "own_turns" { r.data.at } else if tier == "apports" { r.data.created_at } else { () };
         ages.push(if k == () { "" } else { k.to_string() });
     }
     let rank = 0;

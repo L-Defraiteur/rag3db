@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 24 novembre 2026 — **« Mes tours d'abord » : le rappel cherche aussi les autres conversations de l'agent.** Le
+  rappel automatique d'un tour (`recall_for_request`) rend un fait que l'agent a dit dans une autre de ses
+  conversations : les tours signés de sa clé, hors de la conversation en cours, pèsent juste sous les tours résumés de
+  celle-ci. Jamais le tour d'un autre agent, jamais la fenêtre active ; `own_turns: false` l'éteint.
+
 - 24 novembre 2026 — **Ce que l'index a trouvé passe au pas suivant.** Quand un pas de l'agent a cherché par
   l'index (`search_code`, `usages`, `callees`, `impact`, `outline`) ou par `grep_files`, le bloc « Previous step » du pas d'après garde les
   lignes « nom — chemin:ligne » qu'il a rendues, avant toute prose, avec la consigne de les citer telles quelles :
