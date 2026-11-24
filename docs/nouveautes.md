@@ -7,6 +7,10 @@
   lignes se règlent dans le nœud `previous_step` (`fact_tools`, `max_facts`).
 - 24 novembre 2026 — **Le terminal dit qui a écrit une consigne.** Un message posé par un autre agent, par exemple
   pendant la nuit sans écran, s'affiche sous le nom de cet agent (ou « un agent ») et non plus sous « toi ».
+- 24 novembre 2026 — **Un pas de l'agent peut remplir une part de la fenêtre de son modèle.** La borne de contexte
+  d'un pas n'est plus 64 000 jetons pour tout modèle : c'est le plus grand de `teammate.step_context_tokens` et d'une
+  part de la fenêtre que le modèle annonce (`teammate.step_context_share`, un quart par défaut), soit environ 262 000
+  jetons pour une fenêtre d'un million. Une recherche longue n'est plus coupée au milieu.
 - 23 novembre 2026 — **Ton accord arrive à l'agent pendant qu'il travaille.** Quand tu dis oui à une carte, l'accord
   de l'hôte (la racine ouverte, la commande à relancer) arrive en tête du prochain résultat d'outil, dans le pas en
   cours, au lieu d'attendre le pas suivant.

@@ -566,6 +566,10 @@ pub struct Step {
     /// The tokens of the last model call of the step (prompt and completion), from
     /// `generation_end`.
     last_context: std::sync::Arc<AtomicUsize>,
+    /// The model's window, as its last call said it (`generation_end`'s `context_window`); 0 when unknown.
+    context_window: std::sync::Arc<AtomicUsize>,
+    /// The share of that window a step may fill (`teammate.step_context_share`).
+    context_share: f64,
     /// **The step wrote text to the user** (its reply's tokens, seen as they stream).
     wrote_text: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The step_dones refused for want of a word, and whether the step ended without one.
@@ -789,6 +793,8 @@ impl Step {
             context_tokens: crate::backend::TeammatePolicy::default().step_context_tokens,
             max_model_calls: crate::backend::TeammatePolicy::default().max_model_calls_per_step,
             last_context: std::sync::Arc::new(AtomicUsize::new(0)),
+            context_window: std::sync::Arc::new(AtomicUsize::new(0)),
+            context_share: crate::backend::TeammatePolicy::default().step_context_share,
             wrote_text: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             text_refusals: AtomicUsize::new(0),
             delivered: AtomicUsize::new(0),
@@ -863,6 +869,7 @@ impl Step {
     pub fn with_policy(mut self, policy: &crate::backend::TeammatePolicy) -> Self {
         self.max_tool_calls = policy.max_tool_calls_per_step.max(1);
         self.context_tokens = policy.step_context_tokens.max(1);
+        self.context_share = policy.step_context_share;
         self.max_model_calls = policy.max_model_calls_per_step.clamp(1, 100);
         self.cut_relaunch = (policy.cut_relaunch_text.clone(), policy.cut_relaunches_per_step.min(10));
         self.fetch = policy.fetch.clone();
@@ -990,20 +997,30 @@ impl Step {
     }
 
     /// Where the turn's event handler records the tokens of each model call of the step.
-    pub fn context_meter(&self) -> std::sync::Arc<AtomicUsize> {
-        self.last_context.clone()
+    pub fn context_meter(&self) -> ContextMeter {
+        ContextMeter { used: self.last_context.clone(), window: self.context_window.clone() }
     }
 }
 
 /// Records the tokens of a model call (prompt and completion) from a `generation_end` event
 /// of a step's turn.
-pub fn record_context(meter: &AtomicUsize, ev: &Value) {
+pub fn record_context(meter: &ContextMeter, ev: &Value) {
     if ev["event"] == "generation_end" {
         let tokens = ev["prompt_tokens"].as_u64().unwrap_or(0) + ev["completion_tokens"].as_u64().unwrap_or(0);
         if tokens > 0 {
-            meter.store(tokens as usize, Ordering::SeqCst);
+            meter.used.store(tokens as usize, Ordering::SeqCst);
+        }
+        if let Some(w) = ev["context_window"].as_u64().filter(|&w| w > 0) {
+            meter.window.store(w as usize, Ordering::SeqCst);
         }
     }
+}
+
+/// **What a step's model calls tell of its context** (24 Nov 2026): the tokens of the last call, and the model's window.
+#[derive(Clone)]
+pub struct ContextMeter {
+    used: std::sync::Arc<AtomicUsize>,
+    window: std::sync::Arc<AtomicUsize>,
 }
 
 impl Step {
@@ -1360,8 +1377,14 @@ impl Step {
     /// The refusal of a work tool past a bound of the step, `None` under them.
     fn refusal(&self, call: &ToolCall) -> Option<Turn> {
         let context = self.last_context.load(Ordering::SeqCst);
-        let why = if context > self.context_tokens {
-            format!("the context of the step is full ({context} tokens, teammate.step_context_tokens = {})", self.context_tokens)
+        // The bound follows the model's window when it is known: the larger of the fixed bound and its declared share.
+        let window = self.context_window.load(Ordering::SeqCst);
+        let bound = self.context_tokens.max((window as f64 * self.context_share) as usize);
+        let why = if context > bound {
+            format!(
+                "the context of the step is full ({context} tokens; the bound is {bound}: teammate.step_context_tokens = {}, teammate.step_context_share = {} of a {window}-token window)",
+                self.context_tokens, self.context_share
+            )
         } else if let Some(chemin) = self.refused_twice.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             format!("the sandbox refused `{chemin}` twice in this step, and retrying will not change it: do not look for another way to the same path")
         } else if self.calls.load(Ordering::SeqCst) > self.max_tool_calls {

@@ -137,6 +137,11 @@ pub struct TeammatePolicy {
     /// D6 campaign peaked at 14 to 21 k. Default: 64 000.
     #[serde(default = "TeammatePolicy::step_context_tokens_default")]
     pub step_context_tokens: usize,
+    /// **The share of the model's window a step may fill** (24 Nov 2026: a step of a million-token model stopped at
+    /// 64 000 in the middle of its search): the step's bound is the larger of `step_context_tokens` and this share of
+    /// the window the model's calls say. Default: 0.25.
+    #[serde(default = "TeammatePolicy::step_context_share_default")]
+    pub step_context_share: f64,
     /// A safety bound on the work tool calls of a step, against a loop that never ends.
     /// Default: 60 (the former fixed budget was 12).
     #[serde(default = "TeammatePolicy::max_tool_calls_per_step_default")]
@@ -184,6 +189,9 @@ impl TeammatePolicy {
     }
     fn mille_huit_cents() -> u64 {
         1800
+    }
+    fn step_context_share_default() -> f64 {
+        0.25
     }
     fn step_context_tokens_default() -> usize {
         64_000
@@ -241,6 +249,7 @@ impl Default for TeammatePolicy {
             reply_wait_s: Self::mille_huit_cents(),
             mentioned_path_grant_min: Self::mentioned_path_grant_min_default(),
             step_context_tokens: Self::step_context_tokens_default(),
+            step_context_share: Self::step_context_share_default(),
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
