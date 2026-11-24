@@ -291,7 +291,24 @@ enqueue() {
   log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
   # The warnings first, « déposé » last: the scripts read it with tail -1 (21 Nov., c7).
   french_identifiers "$id" "$full" "$parent" "$9"
+  judge_lot "$id" "$full" "$kind" "$9"
   echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"
+  return 0
+}
+
+# The lot judge (24 Nov. 2026, Lucie: a report of what breaks the repository's rules; c7: an opinion, never a refusal,
+# once per diff): tools/poste/lot_judge.py of the worktree (master's code at the last pushed train; it is not a cache
+# copy), in the background so that a deposit never waits for a model. Off unless PUSHER_JUDGE=1 (the unit's drop-in);
+# docs lots are not judged. PUSHER_JUDGE_SYNC=1 waits for it (the witness).
+judge_lot() { # <id> <head> <kind> <author>
+  [ "${PUSHER_JUDGE:-0}" = 1 ] && [ "$3" != docs ] || return 0
+  local p=$WT/tools/poste/lot_judge.py
+  [ -f "$p" ] || { log "$1" juge "pas d'avis : lot_judge.py absent du worktree"; return 0; }
+  if [ "${PUSHER_JUDGE_SYNC:-0}" = 1 ]; then
+    (cd "$WT" && PUSHER_DIR="$D" python3 "$p" "$1" "$2" "$4") > /dev/null 2>&1 || true
+  else
+    (cd "$WT" && PUSHER_DIR="$D" setsid nohup python3 "$p" "$1" "$2" "$4" > /dev/null 2>&1 < /dev/null &)
+  fi
   return 0
 }
 

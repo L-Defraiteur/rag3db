@@ -46,6 +46,7 @@ printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
 printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
 cp "$HERE/push_garde.sh" tools/poste/push_garde.sh
 cp "$HERE/merge_test_decls.py" tools/poste/merge_test_decls.py
+cp "$HERE/lot_judge.py" tools/poste/lot_judge.py
 echo 'fn main() {}' > extension/rag3weaver/src/lib.rs
 mkdir -p extension/rag3weaver/tests && echo '#[test] fn t() {}' > extension/rag3weaver/tests/e2e_code.rs && cp extension/rag3weaver/tests/e2e_code.rs extension/rag3weaver/tests/e2e_code_sync.rs
 echo 'int main() {}' > src/engine.cpp
