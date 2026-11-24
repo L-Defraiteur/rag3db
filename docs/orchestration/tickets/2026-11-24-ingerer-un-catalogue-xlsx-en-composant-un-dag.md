@@ -5,18 +5,16 @@ recherche filtrable, à partir d'un fichier xlsx (caractéristiques, prix, liens
 
 ## Le principe
 
-**Ce ticket est aussi la consigne de la quête** (Lucie, 24 novembre 2026) : c'est ce texte, tel quel, qu'on donne à l'agent comme spécification de son outil d'ingestion de catalogue, et l'agent le construit à partir de lui.
+rag3weaver ne livre ni un « importeur de catalogue » tout fait, ni le DAG qui le fait. **L'agent assemble lui-même ce
+DAG**, à partir de la consigne ci-dessous (partie 1). Ce ticket demande à rag3weaver **les briques** qui rendent cet
+assemblage possible (partie 2). Un utilisateur ou un agent adapte ensuite le DAG à son fichier, sans recompiler.
 
-rag3weaver ne livre pas un « importeur de catalogue » tout fait. Il livre de quoi **composer** l'ingestion en DAG : une
-primitive qui lit un xlsx, les nœuds qui existent déjà (appel structuré au modèle, script, boucle, ingestion, recherche),
-et un **exemple de DAG** prêt à copier. Un utilisateur ou un agent l'adapte à son fichier sans recompiler.
+## Partie 1 : la consigne donnée à l'agent
 
-## Ce qui manque : une primitive
+C'est ce texte, tel quel, qu'on donne à l'agent comme spécification de son outil d'ingestion de catalogue (Lucie,
+24 novembre 2026).
 
-`XlsxReadNode` : un fichier xlsx en onglets, en-têtes et lignes. C'est la seule pièce neuve en Rust (une crate de lecture
-de tableurs). Tout le reste est gabarit.
-
-## Un exemple de DAG : `catalog_ingest.mmd`
+### Les étapes
 
 1. **Lire** le fichier (`XlsxReadNode`).
 2. **Profiler chaque colonne** sur toutes les lignes (un nœud de script) : remplissage, valeurs distinctes, part de
@@ -28,14 +26,12 @@ de tableurs). Tout le reste est gabarit.
    modèle : quel type va au plein texte, au vecteur, aux filtres ; à partir de combien de valeurs distinctes un champ
    est une énumération.
 5. **Montrer le schéma** avant d'ingérer : l'utilisatrice ou l'agent le relit et le corrige.
-6. **Normaliser les valeurs** (script) : nombres à virgule, unités, liens.
+6. **Normaliser les valeurs**, selon le détail ci-dessous.
 7. **Ingérer** : l'entité et ses champs déclarés depuis le schéma (`EntityConfig`), puis les nœuds d'ingestion existants.
 8. **Chercher** : `search_structured` et `select_structured`, déjà livrés à tous les backends, donnent la recherche en
    langage naturel et les filtres.
 
-Le tout se livre comme un gabarit de backend `catalog`, à côté de `code`, `memory` et `notebook`.
-
-## La normalisation des valeurs, en détail
+### La normalisation des valeurs, en détail
 
 Partout la même règle : **le modèle propose, une table déclarée décide, du code applique**, et **la valeur d'origine
 est toujours gardée à côté de la valeur normalisée**. Une valeur qui ne se lit pas n'est jamais inventée : elle reste
@@ -105,12 +101,50 @@ pourquoi. C'est ce compte rendu que l'agent joint à sa preuve de mise en place.
 synonymes acceptés) et les consignes des deux appels structurés (le classement des champs, les groupes d'une
 énumération) sont des gabarits, modifiables sans recompiler ; l'application est un nœud de script.
 
-## L'agent qui sait le monter lui-même
+## Partie 2 : les briques que rag3weaver doit offrir
 
-1. **D'abord nous, par MCP** : créer le backend depuis le gabarit, donner le fichier, relire le schéma, ingérer, puis
+Ce qui existe déjà et sert tel quel : `LlmNode` à `response_schema`, `RhaiNode`, `ForEachNode`, `ConditionNode` et
+`RouteNode`, `CollectNode` et `AggregateNode`, `LireFichierNode` et `EcrireFichierNode`, `IngestEntitiesNode`,
+`search_structured` et `select_structured`. Ce qui manque, ou est à vérifier :
+
+1. **`XlsxReadNode`** : les onglets ; chaque cellule avec son type d'origine (nombre, texte, booléen, date stockée en
+   nombre de jours, formule et sa valeur calculée) ; les cellules fusionnées et leur zone ; un minimum de mise en forme
+   (gras, ligne à une seule cellule remplie) ; les lignes d'en-tête brutes. Il dit ce que contient le fichier, il
+   n'interprète rien : la lecture des sections, des en-têtes doubles et des onglets-catégories est l'affaire du DAG.
+2. **Un profil de colonnes en Rust** (`ProfileColumnsNode`) : sur toutes les lignes, le remplissage, les valeurs
+   distinctes **avec leurs effectifs**, la part de valeurs uniques, des exemples, la forme des nombres (séparateurs vus,
+   ordres de grandeur). Il parcourt tout le fichier : c'est de la performance, donc une primitive. Il sert au classement
+   des champs comme au dédoublonnage des énumérations.
+3. **Des fonctions de texte pour les scripts**, offertes à tous les gabarits : forme Unicode et retrait des accents,
+   casse, expressions régulières, découpe sur plusieurs séparateurs, distance d'édition et rapprochement de valeurs
+   voisines, lecture d'un nombre avec des séparateurs donnés, lecture d'une date avec sa précision, vérification d'un
+   lien. Aujourd'hui les scripts n'en ont presque aucune.
+4. **Une table déclarée lue par un script** : un gabarit de données (`catalog_rules.json`) chargé par son nom et donné
+   au script en entrée, modifiable sans recompiler. À vérifier : peut-être déjà possible par `LireFichierNode`.
+5. **Une pause de relecture** : le DAG s'arrête sur le schéma inféré ou sur les groupes d'une énumération, attend une
+   réponse (de l'utilisatrice ou de l'agent), avec un délai et une valeur par défaut, puis reprend avec les corrections.
+   C'est le nœud d'attente du ticket `2026-11-24-l-hote-ne-repond-plus-pendant-un-travail-lourd.md`, à livrer avant.
+6. **Un DAG qui écrit dans les déclarations de son backend** : les synonymes acceptés entrent dans la table du catalogue,
+   versionnée avec le backend, et servent à l'ingestion suivante sans modèle.
+7. **Une entité déclarée à l'exécution** : le DAG produit le schéma (champs, types, drapeaux plein texte, vecteur,
+   filtre) et le backend crée ou fait évoluer l'entité d'après lui (`EntityConfig` aujourd'hui déclaré à la main dans
+   `backend.json`).
+8. **Des champs riches** : un intervalle (minimum, maximum) filtrable par recouvrement ; une date avec sa précision ; une
+   énumération à plusieurs valeurs filtrable par appartenance ; un lien d'image gardé hors des index ; la valeur
+   d'origine stockée à côté de la valeur normalisée. À vérifier dans `select_structured`.
+9. **Une ingestion par identité** : réingérer le fichier met à jour par identifiant, et un doublon d'identifiant est
+   signalé, pas fusionné.
+10. **Créer un backend depuis un gabarit, et lancer un graphe** par un outil MCP et un outil d'agent : l'agent écrit
+    son `.mmd`, le fait valider (ports, types, erreurs lisibles), le joue à vide (`DryRunNode`), puis pour de bon.
+
+Chaque brique a son témoin, par un vrai hôte, rouge d'abord ; le témoin de bout en bout est celui de la fin.
+
+## La preuve : l'agent qui sait le monter lui-même
+
+1. **D'abord nous, par MCP**, avec les seules briques : assembler le DAG, créer le backend, donner le fichier, relire le schéma, ingérer, puis
    trois recherches de contrôle (un filtre de prix, une énumération, une phrase en langage naturel). Si cela ne tient pas
    en quelques appels, l'agent n'y arrivera pas non plus.
-2. **Puis l'agent**, par un graphe de mise en place (`setup_catalog.mmd`), avec la même preuve dans son compte rendu :
+2. **Puis l'agent**, qui reçoit la partie 1 et assemble son propre DAG avec les mêmes briques, avec la même preuve dans son compte rendu :
    le schéma retenu et les trois recherches avec leurs résultats.
 
 ## Le témoin
