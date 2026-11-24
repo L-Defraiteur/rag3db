@@ -45,6 +45,7 @@ MV
 printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
 printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
 cp "$HERE/push_garde.sh" tools/poste/push_garde.sh
+cp "$HERE/merge_test_decls.py" tools/poste/merge_test_decls.py
 echo 'fn main() {}' > extension/rag3weaver/src/lib.rs
 mkdir -p extension/rag3weaver/tests && echo '#[test] fn t() {}' > extension/rag3weaver/tests/e2e_code.rs && cp extension/rag3weaver/tests/e2e_code.rs extension/rag3weaver/tests/e2e_code_sync.rs
 echo 'int main() {}' > src/engine.cpp
@@ -1041,4 +1042,24 @@ nj=$(grep -cP '\ts2sb\tcréneau 2 jeté\t' "$D/pusher/log.tsv")
   && ok "créneau 2 : un push de la branche de B refusé se dit, avec le message de git" \
   || ko "créneau 2 : la sortie ne dit pas sa raison, ou la dit $nj fois (« ${l##*	} »)"
 P dequeue s2sa > /dev/null 2>&1; P dequeue s2sb > /dev/null 2>&1; : > "$D/outcomes"; rm -f "$D"/outcomes.d/s2*
+# 55. The cache copy alone (24 Nov. 2026, 02:08: the recopy installed and judged ~/.cache/rag3weaver-build/pusher.sh
+# before the union's driver was copied next to it; the witness went red against the copy and the queue paused). A copy
+# of the pusher with no driver beside it takes the driver of its worktree: the two declarations still land together.
+mkdir -p "$D/alone" && cp "$PUSHER" "$D/alone/pusher.sh"
+m0=$(master); seed=$(git -C "$D/author" show "$m0:extension/rag3weaver/tests/e2e_code.rs")
+h1=$(FROM=$m0 lot dcl-c extension/rag3weaver/tests/e2e_code.rs "#[path = \"e2e/delta.rs\"]
+mod delta;
+$seed"); h2=$(FROM=$m0 lot dcl-d extension/rag3weaver/tests/e2e_code.rs "#[path = \"e2e/gamma.rs\"]
+mod gamma;
+$seed")
+printf 'VERT\nVERT\nVERT\n' >> "$D/outcomes"
+A() { bash "$D/alone/pusher.sh" "$@"; }
+A enqueue dcl-c dcl-c "$h1" rust some_witness e2e_code - - author-a > /dev/null 2>&1
+A enqueue dcl-d dcl-d "$h2" rust some_witness e2e_code - - author-a > /dev/null 2>&1
+A step > /dev/null 2>&1; A step > /dev/null 2>&1
+f=$(git -C "$D/author" fetch -q origin && git -C "$D/author" show origin/master:extension/rag3weaver/tests/e2e_code.rs)
+on_master dcl-c && on_master dcl-d && printf '%s\n' "$f" | grep -q '^mod delta;' && printf '%s\n' "$f" | grep -q '^mod gamma;' \
+  && ok "une copie du pousseur sans son pilote à côté prend celui de son worktree : l'union tient" \
+  || ko "copie seule du pousseur : dcl-c $(on_master dcl-c && echo poussé || echo non), dcl-d $(on_master dcl-d && echo poussé || echo non)"
+P dequeue dcl-c > /dev/null 2>&1; P dequeue dcl-d > /dev/null 2>&1; : > "$D/outcomes"
 exit $red
