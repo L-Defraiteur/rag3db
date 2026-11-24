@@ -10,30 +10,63 @@ interface Work {
   last_text: string;
   budget: number;
   results?: { tool: string; result: string }[];
+  previous_block?: string;
 }
 
-// The facts a step's index tools gave: their lines that name a place (`path:line`), each once, in order. A file's
-// content read by another tool is no fact of the index.
-function facts(w: Work, tools: string[], max: number): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
+// The facts a step's index tools gave: their lines that name a place (`path:line`), without a file's header scope,
+// taken in turn from each result so that every file mapped gives its share, at most `per_file` per file; then the
+// facts of the block this step received, after them, so that a fact of an earlier step stays while there is room.
+function placeOf(line: string): string {
+  const m = line.match(/([\w.\/-]+\.[\w]+):\d+/);
+  return m ? m[1] : "";
+}
+
+function facts(w: Work, tools: string[], max: number, perFile: number): string[] {
+  const lists: string[][] = [];
   for (const r of w.results ?? []) {
     if (!tools.includes(r.tool)) continue;
+    const l: string[] = [];
     for (const raw of r.result.split("\n")) {
       const line = raw.replace(/^[\s\-*•]+/, "").trim();
-      if (!/[\w.\/-]+\.[\w]+:\d+/.test(line) || seen.has(line)) continue;
-      seen.add(line);
-      out.push(Array.from(line).slice(0, 240).join(""));
-      if (out.length >= max) return out;
+      if (!/[\w.\/-]+\.[\w]+:\d+/.test(line) || /`file_scope_\d+`/.test(line)) continue;
+      l.push(Array.from(line).slice(0, 240).join(""));
+    }
+    if (l.length > 0) lists.push(l);
+  }
+  const seen = new Set<string>();
+  const byFile = new Map<string, number>();
+  const out: string[] = [];
+  const take = (line: string): boolean => {
+    if (seen.has(line)) return false;
+    const f = placeOf(line);
+    if ((byFile.get(f) ?? 0) >= perFile) return false;
+    seen.add(line);
+    byFile.set(f, (byFile.get(f) ?? 0) + 1);
+    out.push(line);
+    return true;
+  };
+  for (let i = 0; out.length < max && lists.some((l) => i < l.length); i++) {
+    for (const l of lists) {
+      if (out.length >= max) break;
+      if (i < l.length) take(l[i]);
+    }
+  }
+  const prev = w.previous_block ?? "";
+  const at = prev.indexOf("Found by the code index");
+  if (at >= 0) {
+    for (const raw of prev.slice(at).split("\n").slice(1)) {
+      if (out.length >= max) break;
+      if (!raw.startsWith("- ")) continue;
+      take(raw.slice(2).trim());
     }
   }
   return out;
 }
 
-function run({ inputs, config }: { inputs: { work: Work }; config: { style: string; fact_tools?: string[]; max_facts?: number } }) {
+function run({ inputs, config }: { inputs: { work: Work }; config: { style: string; fact_tools?: string[]; max_facts?: number; max_facts_per_file?: number } }) {
   const w = inputs.work;
   const last = w.last_text.trim();
-  const found = facts(w, config.fact_tools ?? ["search_code", "usages", "callees", "impact", "outline", "grep_files"], config.max_facts ?? 40);
+  const found = facts(w, config.fact_tools ?? ["search_code", "usages", "callees", "impact", "outline", "grep_files"], config.max_facts ?? 40, config.max_facts_per_file ?? 12);
   if (w.read.length === 0 && w.wrote.length === 0 && w.command === null && last === "" && found.length === 0) {
     return { block: "" };
   }

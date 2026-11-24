@@ -2,6 +2,10 @@
 
 - 24 novembre 2026 — **Le nom d'un outil et sa cible restent toujours lisibles** sous l'animation Glitch, même quand
   la cible contient des points de suspension : seul le verbe « travaille… » se brouille.
+- 24 novembre 2026 — **Chaque fichier cartographié garde sa part des faits, et ils traversent les pas.** Le bloc
+  « Previous step » prend ses lignes « nom — chemin:ligne » à tour de rôle dans chaque résultat d'index (12 au plus par
+  fichier, `max_facts_per_file`), sans les en-têtes `file_scope`, et garde après elles celles du pas d'avant tant qu'il
+  reste de la place : un fait du premier pas est encore là au troisième.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
   manifeste déclare le nœud `PreviousStep` (`teammate.carry_over_node`) : un pas qui a cartographié le code par
   `outline` ou cherché par l'index laisse au suivant ses lignes « nom — chemin:ligne ». Un dossier déjà attaché garde

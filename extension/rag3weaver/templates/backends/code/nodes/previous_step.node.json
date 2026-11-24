@@ -76,6 +76,9 @@
                 }
               }
             }
+          },
+          "previous_block": {
+            "type": "string"
           }
         }
       },
@@ -124,6 +127,14 @@
       },
       "default": 40,
       "description": "Le nombre de lignes de faits gardées."
+    },
+    "max_facts_per_file": {
+      "schema": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "default": 12,
+      "description": "Le nombre de lignes de faits gardées pour un même fichier : chaque fichier cartographié garde sa part."
     }
   }
 }
