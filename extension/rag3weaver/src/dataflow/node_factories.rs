@@ -1749,6 +1749,8 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     for c in super::step_conditions::conditions() {
         registry.register(Box::new(super::step_conditions::ConditionFactory(c)));
     }
+    // A tool of a backend the host lends (the recall at the start of a turn).
+    registry.register(Box::new(super::call_tool_node::CallToolNodeFactory));
     // Les sections d'un Markdown, pour l'archiviste (M4).
     registry.register(Box::new(super::split_sections::SplitSectionsNodeFactory));
     registry.register(Box::new(super::token_nodes::TokenEventsFactory));
@@ -1782,7 +1784,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 75 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 76 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
