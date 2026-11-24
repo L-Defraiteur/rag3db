@@ -900,10 +900,11 @@ spec_run() { # <A's head> <line>… — in the background; its result in slot2/r
   echo "$BASE" > "$SD/base"; : > "$SD/result"
   TRAIN_LABEL=$(f_ "$1" 1); [ $# -gt 1 ] && TRAIN_LABEL="$TRAIN_LABEL+$(( $# - 1 ))"
   RB="pusher/$STAMP-$TRAIN_LABEL"
-  [ -d "$WT" ] || { log "$TRAIN_LABEL" "créneau 2 jeté" "worktree $WT absent"; printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
+  [ -d "$WT" ] || { log "$TRAIN_LABEL" "créneau 2 jeté" "worktree $WT absent"; printf '6\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   for line in "$@"; do branch=$(f_ "$line" 2); refs="$refs +refs/heads/$branch:refs/remotes/origin/$branch"; done
   # shellcheck disable=SC2086
-  gfetch -q origin $refs || { printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
+  # Every exit says why (24 Nov. 2026, c7: two environment reds of slot 2 with no reason anywhere): git's first line.
+  gfetch -q origin $refs 2> "$SD/last-git.err" || { log "$TRAIN_LABEL" "créneau 2 jeté" "fetch des branches du train refusé : $(grep -m1 . "$SD/last-git.err" | sed 's/[[:space:]]*$//')"; printf '6\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   for line in "$@"; do
     [ "$(g rev-parse "origin/$(f_ "$line" 2)")" = "$(f_ "$line" 3)" ] || { log "$TRAIN_LABEL" "créneau 2 jeté" "$(f_ "$line" 1) a bougé"; printf '4\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   done
@@ -913,9 +914,9 @@ spec_run() { # <A's head> <line>… — in the background; its result in slot2/r
   # itself red: thrown, the lots wait in the queue.
   tickets_gate; case $? in
     1) log "$TRAIN_LABEL" "créneau 2 rouge" "$(cat "$SD/last-red.txt")"; printf '1\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return ;;
-    4) log "$TRAIN_LABEL" "créneau 2 jeté" "master rouge à check_tickets"; printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return ;;
+    4) log "$TRAIN_LABEL" "créneau 2 jeté" "master rouge à check_tickets"; printf '6\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return ;;
   esac
-  g push -q origin "HEAD:refs/heads/$RB" || { printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
+  g push -q origin "HEAD:refs/heads/$RB" 2> "$SD/last-git.err" || { log "$TRAIN_LABEL" "créneau 2 jeté" "push de $RB refusé : $(grep -m1 -vE '^(To |error: failed to push)' "$SD/last-git.err" | sed -e 's/^remote: //' -e 's/[[:space:]]*$//')"; printf '6\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   log "$TRAIN_LABEL" "reposé (créneau 2)" "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE"), la tête de A"
   JNAME=-
   replay_train "$@"
@@ -934,6 +935,8 @@ spec_settle() { # after A: push B, or leave its lots in the queue
     0) ;;
     1) log "$label" "créneau 2 rouge" "ses lots restent en file pour leur propre rejeu ($(head -1 "$D/slot2/last-red.txt" 2>/dev/null || true)${jn:+ ; journaux $JR/$jn})"; return 0 ;;
     2) log "${label:-créneau2}" "créneau 2 jeté" "rouge d'environnement, rien de jugé sur ses lots : ils restent en file"; return 0 ;;
+    # 6: thrown by spec_run, which already said why on its line (24 Nov. 2026): nothing more to write.
+    6) return 0 ;;
     '') log "${label:-créneau2}" "créneau 2 jeté" "sans résultat (passe interrompue ou jamais finie), rien de jugé : ses lots restent en file"; return 0 ;;
     *) log "${label:-créneau2}" "créneau 2 jeté" "code $code, rien de jugé sur ses lots : ils restent en file"; return 0 ;;
   esac
