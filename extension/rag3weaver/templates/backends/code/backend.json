@@ -184,6 +184,6 @@
     }
   },
   "teammate": {
-    "max_output_tokens": 40000
+    "max_output_tokens": 40000, "carry_over_node": "PreviousStep"
   }
 }
