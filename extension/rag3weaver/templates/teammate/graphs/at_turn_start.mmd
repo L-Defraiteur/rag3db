@@ -1,0 +1,12 @@
+%% tool: at_turn_start
+%% description: At the first step of a turn opened by a request: what the long-term memory holds for it (recall_for_request of the declared memory), as a block for the step, or nothing.
+%% param: turn json! -- the turn's facts: request
+%% result: block.result
+graph LR
+    facts["RhaiNode(script='input', value=$turn)"]
+    args["RhaiNode(script='#{ request: input.request, prepare: `direct` }')"]
+    recall["CallTool(tool='recall_for_request')"]
+    block["RhaiNode(script='let b = input.block; if b == () { `` } else { b }')"]
+    facts -->|result:value| args
+    args -->|result:args| recall
+    recall -->|result:value| block

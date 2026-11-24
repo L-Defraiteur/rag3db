@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
+  déclare sa mémoire (`bilans.memoire`, comme le `rag3db.json` de Lucie vers `memoire-longue`), le premier pas d'un tour
+  ouvert par une demande reçoit ce qu'elle en tient (fiches et apports, ceux de toi et des autres agents), avec leur
+  source, et rien quand elle n'a rien de proche. Cela ne dépend pas de la ligne `"imports"`, qui donne à l'agent ses
+  propres outils de mémoire. Un dossier neuf (le gabarit livré) ne déclare pas de mémoire : pas de rappel. Le rappel
+  est le graphe `templates/teammate/graphs/at_turn_start.mmd` ; ta copie le change sans rebâtir.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
   manifeste déclare le nœud `PreviousStep` (`teammate.carry_over_node`) : un pas qui a cartographié le code par
   `outline` ou cherché par l'index laisse au suivant ses lignes « nom — chemin:ligne ». Un dossier déjà attaché garde

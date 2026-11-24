@@ -22,6 +22,7 @@
   "grant.mentioned": "accès en lecture à {$root} pour {$minutes} min, parce que tu l'as cité",
   "mid_turn.head": "Pendant tes appels d'outils, la boîte a reçu (lis-le maintenant : cela peut changer ce que tu fais ensuite) :",
   "mid_turn.line": "- {$kind} de {$from} : {$text}{$granted}",
+  "recall.head": "From the long-term memory, for this request (cite what you use with its source; it may be out of date):",
   "relaunch.no_step_done": "Your previous step ended without step_done. Continue until the request is done: do what is left now, with your tools; call step_done when it is done, or when you need something you cannot get yourself.",
   "relaunch.request_unanswered": "relance : ta demande attend une réponse dans la boîte ; ton step_done dit « {$done} », et rien n'y est arrivé ; écris le contenu demandé (report) ou dis pourquoi (question)",
   "relaunch.silent": "You wrote nothing to the user during this turn. What the user reads is the text of your reply, written before any tool call; step_done's `done` is never shown to them. Write to the user now, in the text of your reply, a few sentences: what you did, how to use it (the commands to run in their folder), and what is left; then call step_done.",
