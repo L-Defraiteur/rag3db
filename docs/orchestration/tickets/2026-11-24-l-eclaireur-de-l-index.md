@@ -47,6 +47,19 @@ nécessaire.
 - Plus tard, le nœud d'attente par événement (ticket du travail lourd) permettra d'écrire ce lancement et cette
   attente en graphe pur.
 
+## Le score de connaissance et le mode bloquant (Lucie, 24 novembre 2026, 12 h 50)
+
+- **Le premier appel rend aussi `knows`, un score de 0 à 1** : « l'agent semble-t-il déjà avoir, d'après le contexte
+  récent, les connaissances requises pour répondre à cette demande ? ». Il ne coûte rien de plus (même appel, un champ
+  de plus). Sous un **seuil déclaré** dans la table, les recherches partent ; au-dessus, rien (l'agent a déjà lu ce
+  qu'il faut ce tour-ci ou au précédent). Le score et la décision sont écrits dans la trace.
+- **Trois modes, déclarés dans la table** : `parallel` (le défaut : le tour part, le bloc arrive dès qu'il est prêt),
+  `blocking` (le premier appel au modèle de l'agent attend le bloc, borné par une durée, au-delà il part sans), `off`.
+- Un réglage qui combine les deux, à mesurer : bloquant quand le score est très bas (l'agent ne sait rien du sujet,
+  souvent le premier tour dans un dossier), parallèle sinon.
+- **Une réserve** (c7) : un score qu'un modèle se donne est mal calibré. Le seuil se règle sur le banc (l'invite d'étude
+  de Lucie, la demande Houdini, le rejeu de tty), pas à l'œil, et la trace garde score et décision pour le régler.
+
 ## Bornes
 
 - Le modèle des deux appels courts : le plus léger, déclaré par modèle (le juge des lots a retenu Gemini 3.1
