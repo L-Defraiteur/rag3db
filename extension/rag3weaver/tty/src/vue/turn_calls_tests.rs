@@ -73,3 +73,17 @@ fn the_hosts_cut_report_is_not_said_twice() {
     let t: Vec<String> = v.prendre_lignes().iter().map(|l| l.texte.clone()).collect();
     assert_eq!(t.iter().filter(|l| l.contains("réponse vide du modèle")).count(), 1, "{t:#?}");
 }
+
+/// **The turn's count stays when the line is full** (a screen read on 24 November 2026, 160 columns: « appel N du
+/// tour » never showed — with the header beside it, it did not fit, and the header alone took its place). The count
+/// is kept before the context and the header: the header goes first, then the context.
+#[test]
+fn the_turns_count_shows_on_a_full_line_and_the_header_gives_way() {
+    let mut v = Vue::new(160, true);
+    v.entete = "essai-tty-rejeu-pose4-0426 · agent/24-11-04h26 · conversation 24-11-04h26".into();
+    v.trame(&ev(json!({ "kind": "RunStarted" })));
+    v.trame(&ev(json!({ "kind": "ToolCallStarted", "tool": "run_command", "call_id": "c1", "arguments": "{\"command\":\"python3 -m unittest test_compte.py\"}" })));
+    let l: String = v.ligne_vivante(160, v.attente_depuis + Duration::from_secs(2)).spans.iter().map(|s| s.content.to_string()).collect();
+    assert!(l.contains("run_command python3 -m unittest test_compte.py"), "{l}");
+    assert!(l.trim_end().ends_with("appel 1 du tour") || l.contains("appel 1 du tour ·"), "the count shows: {l}");
+}
