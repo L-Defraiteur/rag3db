@@ -1104,4 +1104,17 @@ on_master bqwb && ! on_master bqwa && [ "$replayed" = 0 ] && ! grep -q "^rouge	b
   && ok "bissection : un lot retiré pendant la passe n'est ni rejoué ni rendu, le lot restant rejoué seul et poussé" \
   || ko "bissection après un retrait : bqwb $(on_master bqwb && echo poussé || echo non), bqwa rejoué seul $replayed fois, rendu $(grep -c "^rouge	bqwa	" "$D/pusher/inbox/author-q.txt" 2>/dev/null) fois ($((c1 - c0)) passes)"
 rm -f "$D/pass-hook"; P dequeue bqwb > /dev/null 2>&1; : > "$D/outcomes"; rm -f "$D"/outcomes.d/bq*
+# 58. A step that waits for slot 2 says so (24 Nov. 2026, c7: no « pris » for ten minutes after a push, read as a halt;
+# the step was waiting for B's pass). B's pass made slow: the log says « attend la passe du créneau 2 » with B's lots.
+for x in wc wd we wf; do eval "h_$x=\$(lot w2$x extension/rag3weaver/src/w2$x.rs 'fn w2$x() {}')"; done
+for x in wc wd we wf; do eval "P enqueue w2$x w2$x \"\$h_$x\" rust some_witness e2e_code - - author-c > /dev/null"; done
+cat > "$D/hook-src" <<HK
+if [ "\${PUSHER_WT_NAME:-}" = wt2 ]; then sleep 4; else ( sleep 0.3; cp "$D/hook-src" "$D/pass-hook" ) & fi
+HK
+cp "$D/hook-src" "$D/pass-hook"; echo VERT > "$D/outcomes.d/w2wc"; echo VERT > "$D/outcomes.d/w2we"
+PASS_HOOK="$D/pass-hook" PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+grep -P '\tattend la passe du créneau 2\t' "$D/pusher/log.tsv" | tail -1 | grep -q 'w2we' \
+  && ok "un pas qui attend la passe du créneau 2 le dit, avec ses lots" \
+  || ko "un pas qui attend le créneau 2 ne le dit pas (« $(grep -P '\tattend la passe' "$D/pusher/log.tsv" | tail -1 | cut -f3-) »)"
+rm -f "$D/pass-hook" "$D/hook-src"; for x in wc wd we wf; do P dequeue w2$x > /dev/null 2>&1; done; : > "$D/outcomes"; rm -f "$D"/outcomes.d/w2*
 exit $red
