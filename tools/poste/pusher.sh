@@ -852,7 +852,7 @@ PEER
 replay_and_push_a() {
   # The replay, with the bisection: part is the prefix under test.
   part=("${train[@]}")
-  local train_red="" train_label=""
+  local train_red="" train_label="" whole=${#train[@]} stayed line
   while :; do
     if [ "$reposed" = 1 ]; then
       TRAIN_LABEL=$(f_ "${part[0]}" 1); [ ${#part[@]} -gt 1 ] && TRAIN_LABEL="$TRAIN_LABEL+$(( ${#part[@]} - 1 ))"
@@ -879,6 +879,17 @@ replay_and_push_a() {
            return 0 ;;
       esac
     fi
+    # **No replay of a lot that left the queue** (24 Nov. 2026, c7: ed-lot-judge, dequeued at 04:53:33 while its train
+    # replayed, was reposed alone by the bisection at 05:05:53, 13 min on a lot nobody waited for): the departed lots
+    # leave the train; the remaining ones are replayed as they are, never halved for a red they may not hold; none left,
+    # nothing is replayed. A train so reduced never counts as landed whole (B was reposed on a head that held them).
+    stayed=(); for line in "${part[@]}"; do in_queue "$(f_ "$line" 1)" && stayed+=("$line"); done
+    if [ ${#stayed[@]} -lt ${#part[@]} ]; then
+      for line in "${part[@]}"; do in_queue "$(f_ "$line" 1)" || log "$(f_ "$line" 1)" "retiré pendant la passe" "ni rejoué ni rendu (train $TRAIN_LABEL)"; done
+      [ ${#stayed[@]} = 0 ] && return 0
+      log "$TRAIN_LABEL" "train réduit" "rejoue les ${#stayed[@]} lot(s) resté(s) en file, sans bissection"
+      part=("${stayed[@]}"); train=("${stayed[@]}"); whole=0; train_label=""; continue
+    fi
     n=${#part[@]}
     if [ "$n" = 1 ]; then
       red_family "$(f_ "${part[0]}" 1)" "$(f_ "${part[0]}" 9)" code "$(cat "$SD/last-red.txt" 2>/dev/null)"
@@ -904,7 +915,7 @@ replay_and_push_a() {
   case $rc in
     4) log "$TRAIN_LABEL" "la garde n'a pas poussé : un lot a quitté la file pendant la garde" ;;
     0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
-       [ ${#part[@]} = ${#train[@]} ] && A_FULL_PUSHED=1
+       [ ${#part[@]} = "$whole" ] && A_FULL_PUSHED=1
        # **The culprit by deduction** (24 Nov. 2026, c7: ed-lot-judge, the second of a red train of two whose first
        # landed green alone, was taken again at the same head and cost a pass): the train was red in code, its green
        # prefix is pushed, one lot is left: that lot is returned red now, never replayed alone.
