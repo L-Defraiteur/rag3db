@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 24 novembre 2026 — **Le nom d'un outil et sa cible restent toujours lisibles** sous l'animation Glitch, même quand
+  la cible contient des points de suspension : seul le verbe « travaille… » se brouille.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son
   manifeste déclare le nœud `PreviousStep` (`teammate.carry_over_node`) : un pas qui a cartographié le code par
   `outline` ou cherché par l'index laisse au suivant ses lignes « nom — chemin:ligne ». Un dossier déjà attaché garde
