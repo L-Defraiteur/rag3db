@@ -58,7 +58,11 @@ LOG=$D/log.tsv
 mkdir -p "$D/inbox"
 # The files of a step (its lots, its pull requests, its last red…) live in the slot's own folder.
 SD=${PUSHER_SD:-$D}; mkdir -p "$SD"
-printf 'docs/nouveautes.md merge=union\n' > "$D/attributes"
+# The test declaration files (24 Nov. 2026, mémoire by c7): a conflict whose two sides only declare modules
+# (`///`, `#[path = "…"]`, `mod x;`) is merged by union, sorted, by merge_test_decls.py, the copy next to this script;
+# any other conflict there stops the repose as before. A driver that is absent stops it as before too.
+printf 'docs/nouveautes.md merge=union\nextension/rag3weaver/tests/*.rs merge=test-decls\n**/teammate_tests.rs merge=test-decls\n' > "$D/attributes"
+DECLS_DRIVER="python3 $(printf %q "${PUSHER_DECLS_DRIVER:-$(dirname "$SELF")/merge_test_decls.py}") %O %A %B %P"
 [ -f "$Q" ] || printf '# id\tbranch\thead\tkind\twitness\twitness_suite\textra_suites\tparent\tauthor\tvue\n' > "$Q"
 
 log() { printf '%s\t%s\t%s\t%s\n' "$(date +%FT%T)" "$1" "$2" "${3:-}" >> "$LOG"; }   # <id> <event> [detail]
@@ -630,7 +634,7 @@ rebuild_generated() { # <id>
     if g diff --cached --quiet; then
       g -c core.editor=true cherry-pick --skip >> "$SD/last-repose.log" 2>&1 || true
     else
-      g -c core.editor=true -c core.attributesFile="$D/attributes" cherry-pick --continue >> "$SD/last-repose.log" 2>&1 || true
+      g -c core.editor=true -c core.attributesFile="$D/attributes" -c merge.test-decls.driver="$DECLS_DRIVER" cherry-pick --continue >> "$SD/last-repose.log" 2>&1 || true
     fi
     [ "$n" -lt 50 ] || return 1
   done
@@ -659,7 +663,7 @@ repose() { # <line>…
     # it by hand. Any other collision stays a conflict for the author.
     # --allow-empty keeps a commit empty from its origin (a marker); --empty=drop still drops one that became empty.
     before=$(g rev-parse HEAD)
-    if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$SD/last-repose.log" 2>&1 \
+    if ! g -c core.attributesFile="$D/attributes" -c merge.test-decls.driver="$DECLS_DRIVER" cherry-pick --allow-empty --empty=drop $commits > "$SD/last-repose.log" 2>&1 \
        && ! rebuild_generated "$id"; then
       # The files in conflict, named for the author (19 Nov., c7: « bute : » said nothing).
       g diff --name-only --diff-filter=U | paste -sd' ' > "$SD/last-conflict.txt"
