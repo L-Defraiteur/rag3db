@@ -912,27 +912,26 @@ wb=$(awk '$2 ~ /-t2tc\+1$/ && $3 == "start" {print $1}' "$D/pass_times")
 on_master t2ta && on_master t2tb && on_master t2tc && on_master t2td && [ "$wb" = wt2 ] \
   && ok "deux créneaux, trains de deux : A et B rejoués ensemble, les quatre lots poussés en un pas" \
   || ko "deux créneaux, trains de deux : $(for x in ta tb tc td; do on_master t2$x && printf 'poussé ' || printf 'PAS-poussé '; done) B dans « $wb »"
-# (b) The second lot of A red: A bisected, its green prefix (the first lot) pushed, the second left at the head of the
-# queue for the next step (the bisection's rule); B, speculative on the whole of A, thrown away and never returned.
-# Next step: the second lot replayed alone and returned red; then B replayed and pushed.
+# (b) The second lot of A red: A bisected, its green prefix (the first lot) pushed; the second, the only possible cause,
+# returned red to its author in the same step with the train's red (24 Nov. 2026, c7: ed-lot-judge, the second of a
+# red train of two whose first landed green alone, was taken again at the same head at 04:52), never replayed alone.
+# B, speculative on the whole of A, thrown away and never returned; next step: B replayed and pushed.
 for x in ua ub uc ud; do eval "h_$x=\$(lot t2$x extension/rag3weaver/src/t2$x.rs 'fn t2$x() {}')"; done
 for x in ua ub uc ud; do eval "P enqueue t2$x t2$x \"\$h_$x\" rust some_witness e2e_code - - author-c > /dev/null"; done
 # The train's own pass reads outcomes.d/t2ua; the bisection's pass (t2ua alone) reads the queue.
 echo "ROUGE e2e_code" > "$D/outcomes.d/t2ua"; echo VERT > "$D/outcomes.d/t2uc"; printf 'VERT\n' > "$D/outcomes"
+c0=$(calls "$D/pass_calls")
 PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
-tete=$(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1)
-on_master t2ua && ! on_master t2ub && ! on_master t2uc && [ "$tete" = t2ub ] && grep -q "^t2uc	" "$D/pusher/queue.tsv" \
-  && ! grep -q "^rouge	t2u[a-d]	" "$D/pusher/inbox/author-c.txt" \
-  && ok "train de deux rouge : bissecté, le premier poussé, le second en tête de file, B jeté sans être rendu" \
-  || ko "train de deux rouge : $(for x in ua ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); tête $tete ; rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" 2>/dev/null | cut -f2 | paste -sd,)"
-echo "ROUGE e2e_code" > "$D/outcomes.d/t2ub"; echo VERT > "$D/outcomes.d/t2uc"; : > "$D/outcomes"
-PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+on_master t2ua && ! on_master t2ub && ! on_master t2uc && ! grep -q "^t2ub	" "$D/pusher/queue.tsv" && grep -q "^t2uc	" "$D/pusher/queue.tsv" \
+  && grep -q "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" && ! grep -q "^rouge	t2u[acd]	" "$D/pusher/inbox/author-c.txt" \
+  && ok "train de deux rouge, le premier vert seul : le premier poussé, le second rendu rouge au même pas, B jeté sans être rendu" \
+  || ko "train de deux rouge : $(for x in ua ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); en file : $(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | paste -sd' ') ; rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" | cut -f2 | paste -sd' ')"
+grep "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" | grep -q 'seul' && ok "le rendu du second dit la déduction (le premier rejoué seul est vert)" || ko "le rendu du second ne dit pas la déduction : $(grep "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" | cut -f3- | cut -c1-120)"
 for i in 1 2 3; do echo VERT >> "$D/outcomes"; done
 on_master t2uc || PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=2 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
-grep -q "^rouge	t2ub	" "$D/pusher/inbox/author-c.txt" && ! on_master t2ub && on_master t2uc && on_master t2ud \
-  && ! grep -q "^rouge	t2u[cd]	" "$D/pusher/inbox/author-c.txt" \
-  && ok "train de deux rouge : le second rendu seul au pas suivant, B rejoué et poussé, jamais rendu" \
-  || ko "train de deux rouge, suite : $(for x in ub uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done); rendus : $(grep -o '^rouge	t2u[a-d]' "$D/pusher/inbox/author-c.txt" 2>/dev/null | cut -f2 | paste -sd,)"
+on_master t2uc && on_master t2ud && ! grep -q "^rouge	t2u[cd]	" "$D/pusher/inbox/author-c.txt" \
+  && ok "train de deux rouge, suite : B rejoué et poussé, jamais rendu" \
+  || ko "train de deux rouge, suite : $(for x in uc ud; do on_master t2$x && printf "t2$x:poussé " || printf "t2$x:non "; done)"
 : > "$D/outcomes"; rm -f "$D"/outcomes.d/t2u*
 # 51. A commit message says the fact, never a session nor an AI tool (23 Nov. 2026, c7 by Lucie's rule: 204 messages of
 # 1 272 named sessions, two named an AI tool). At the deposit: a warning until PUSHER_COMMIT_NAMES_REFUSE_FROM (the 24th),
