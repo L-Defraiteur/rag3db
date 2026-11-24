@@ -1089,4 +1089,19 @@ jl jg-2 | grep -q '^avis repris (1 constat)' && ok "juge des lots : le même dif
 jl jg-3 | grep -q '^plafond du jour atteint' && ok "juge des lots : le plafond du jour arrête l'appel, et le dit" || ko "juge des lots, plafond : « $(jl jg-3) »"
 [ -z "$(jl jg-4)" ] && ok "juge des lots : éteint sans PUSHER_JUDGE=1" || ko "juge des lots allumé par défaut : « $(jl jg-4) »"
 for x in 1 2 3 4; do P dequeue jg-$x > /dev/null 2>&1; done
+# 57. A bisection replays no lot that left the queue (24 Nov. 2026, c7: ed-lot-judge, dequeued at 04:53:33 while its
+# train of two was replaying, was reposed alone at 05:05:53 by the bisection, a second pass of 13 min on a lot nobody
+# waited for). The train red, its first lot dequeued during the pass: the remaining lot is replayed alone and pushed;
+# the departed lot is never replayed nor returned.
+for x in wa wb; do eval "h_$x=\$(lot bq$x extension/rag3weaver/src/bq$x.rs 'fn bq$x() {}')"; done
+for x in wa wb; do eval "P enqueue bq$x bq$x \"\$h_$x\" rust some_witness e2e_code - - author-q > /dev/null"; done
+echo "bash $(printf %q "$PUSHER") dequeue bqwa > /dev/null 2>&1" > "$D/pass-hook"
+echo "ROUGE e2e_code" > "$D/outcomes.d/bqwa"; printf 'VERT\n' > "$D/outcomes"
+c0=$(calls "$D/pass_calls")
+PASS_HOOK="$D/pass-hook" PUSHER_TRAIN_MAX=2 P step > /dev/null 2>&1
+c1=$(calls "$D/pass_calls"); replayed=$(tail -n +$((c0 + 1)) "$D/pass_calls" | grep -c -- '-bqwa ')
+on_master bqwb && ! on_master bqwa && [ "$replayed" = 0 ] && ! grep -q "^rouge	bqwa	" "$D/pusher/inbox/author-q.txt" 2>/dev/null \
+  && ok "bissection : un lot retiré pendant la passe n'est ni rejoué ni rendu, le lot restant rejoué seul et poussé" \
+  || ko "bissection après un retrait : bqwb $(on_master bqwb && echo poussé || echo non), bqwa rejoué seul $replayed fois, rendu $(grep -c "^rouge	bqwa	" "$D/pusher/inbox/author-q.txt" 2>/dev/null) fois ($((c1 - c0)) passes)"
+rm -f "$D/pass-hook"; P dequeue bqwb > /dev/null 2>&1; : > "$D/outcomes"; rm -f "$D"/outcomes.d/bq*
 exit $red
