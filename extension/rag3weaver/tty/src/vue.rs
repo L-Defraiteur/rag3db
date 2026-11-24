@@ -206,6 +206,8 @@ pub struct Vue {
     turn_in_flight: bool,
     /// Text of the model flowed in this turn: the host's end of step copy is then never shown (23 Nov. 2026).
     streamed_this_turn: bool,
+    /// A reopened turn's landing line, said after the turn's words (24 Nov. 2026).
+    landing_pending: Option<String>,
     /// The turn's run finished and its `ended` has not come: the host reviews it (23 Nov. 2026).
     reviewing: bool,
     /// The turn (one per request sent) and how many calls it made: a call's rank counts its turn only.
@@ -315,6 +317,7 @@ impl Vue {
             still: false,
             turn_in_flight: false,
             streamed_this_turn: false,
+            landing_pending: None,
             reviewing: false,
             turn: 0,
             calls_this_turn: 0,
@@ -752,6 +755,26 @@ impl Vue {
 
     /// Une ligne de la boîte de l'équipier.
     pub fn ligne_de_boite(&mut self, l: &Value) {
+        // **A reopened turn keeps its order** (24 Nov. 2026): the host writes `merged` before the end of step copy; a
+        // landing held for a turn not streamed is said once the turn's words are, or at its next line.
+        let copie = l["from"] == "teammate" && l["kind"] == "report";
+        if !copie {
+            self.say_landing();
+        }
+        self.mailbox_line(l);
+        if copie {
+            self.say_landing();
+        }
+    }
+
+    fn say_landing(&mut self) {
+        if let Some(t) = self.landing_pending.take() {
+            self.clore();
+            self.valider_avec_tete(Genre::Boite, "", &t);
+        }
+    }
+
+    fn mailbox_line(&mut self, l: &Value) {
         if let Some(id) = l["id"].as_str() {
             if !self.vues_de_boite.insert(id.to_string()) {
                 return;
@@ -793,6 +816,10 @@ impl Vue {
                 _ => l["text"].as_str().filter(|t| !t.trim().is_empty()).map(str::to_string),
             };
             if let Some(t) = court {
+                if t.starts_with('✓') && !self.streamed_this_turn {
+                    self.landing_pending = Some(t);
+                    return;
+                }
                 self.clore();
                 let tete = if t.starts_with('✓') { "" } else { "› " };
                 self.valider_avec_tete(Genre::Boite, tete, &t);
