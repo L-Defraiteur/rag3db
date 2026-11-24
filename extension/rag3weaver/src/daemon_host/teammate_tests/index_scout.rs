@@ -13,7 +13,7 @@ use super::*;
 use std::time::{Duration, Instant};
 
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
-#[path = "../../../../tests/common/fake_sse.rs"]
+#[path = "../../../tests/common/fake_sse.rs"]
 mod fake_sse;
 
 /// A reply of the fake server: one chunk whose content is `json`, then the end.
