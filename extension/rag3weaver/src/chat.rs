@@ -348,7 +348,7 @@ impl Llm for ObservedLlm<'_> {
         let result = self.inner.generate(turns, opts, sink);
         match &result {
             Ok((finish, usage)) => (self.events)(
-                json!({"event":"generation_end","elapsed_ms":start.elapsed().as_millis(),"finish":format!("{:?}",finish.reason),"prompt_tokens":usage.prompt_tokens,"completion_tokens":usage.completion_tokens,"cached_prompt_tokens":usage.cached_prompt_tokens,"retries":usage.retries}),
+                json!({"event":"generation_end","elapsed_ms":start.elapsed().as_millis(),"context_window":self.inner.context_len(),"finish":format!("{:?}",finish.reason),"prompt_tokens":usage.prompt_tokens,"completion_tokens":usage.completion_tokens,"cached_prompt_tokens":usage.cached_prompt_tokens,"retries":usage.retries}),
             ),
             Err(e) => (self.events)(
                 json!({"event":"generation_end","elapsed_ms":start.elapsed().as_millis(),"error":e.to_string()}),
