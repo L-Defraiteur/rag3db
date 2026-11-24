@@ -396,10 +396,8 @@ fn lancer(o: Options) -> Result<(), String> {
                 return flux::Suite::Continuer;
             }
             if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
-                if let Some(m) = task_manifest.lock().unwrap_or_else(|p| p.into_inner()).as_deref() {
-                    if v["backend"].as_str() != Some(m) {
-                        return flux::Suite::Continuer;
-                    }
+                if !frame_is_ours(&v, task_manifest.lock().unwrap_or_else(|p| p.into_inner()).as_deref()) {
+                    return flux::Suite::Continuer;
                 }
                 if v["evenement"]["kind"] == "MailboxLine" {
                     boite_au_flux.store(true, Ordering::SeqCst);
@@ -417,6 +415,43 @@ fn lancer(o: Options) -> Result<(), String> {
         return Err(e);
     }
     rendu.map(|_| ())
+}
+
+/// **Is a frame of the flux this session's** (24 Nov. 2026)? Its backend is the task's manifest.
+fn frame_is_ours(v: &Value, task_manifest: Option<&str>) -> bool {
+    task_manifest.is_none_or(|m| v["backend"].as_str() == Some(m))
+}
+
+/// **Is there nothing to follow** (24 Nov. 2026)? No request given, and the task does not exist yet.
+fn nothing_to_follow(request: Option<&str>, task_exists: bool) -> bool {
+    let _ = (request, task_exists);
+    false
+}
+
+#[cfg(test)]
+mod own_frames_tests {
+    use super::*;
+
+    /// **A conversation shows only its own frames** (a trial on 24 November 2026: a new conversation opened with no
+    /// request, in another folder, printed « [toi · consigne] ajoute aussi un README » — a line of another conversation
+    /// on the same host): before its task exists, no frame is the session's.
+    #[test]
+    fn a_new_conversation_shows_no_frame_of_another() {
+        let autre = serde_json::json!({ "backend": "/autre/.rag3weaver/m.json", "evenement": { "kind": "MailboxLine" } });
+        assert!(!frame_is_ours(&autre, None), "no task yet: nothing is ours");
+        assert!(!frame_is_ours(&autre, Some("/a/.rag3weaver/m.json")));
+        let la_notre = serde_json::json!({ "backend": "/a/.rag3weaver/m.json" });
+        assert!(frame_is_ours(&la_notre, Some("/a/.rag3weaver/m.json")));
+    }
+
+    /// **A plain session with nothing to follow says so and ends** (the same trial: `--plain < /dev/null` in a new folder
+    /// followed the flux until a timeout).
+    #[test]
+    fn a_plain_session_with_no_request_and_no_task_has_nothing_to_follow() {
+        assert!(nothing_to_follow(None, false));
+        assert!(!nothing_to_follow(None, true), "an existing task is followed");
+        assert!(!nothing_to_follow(Some("fais ça"), false), "a request opens the task");
+    }
 }
 
 /// How long an `ended` must stay the last line before the plain mode takes it for the end of its request.
