@@ -515,3 +515,85 @@ fn two_turns_in_a_row_from_the_view_are_both_taken_and_answered() {
     }
     host.journal_des_runs().vider();
 }
+
+/// A teammate that thinks before it speaks: its first call gives a thought (`on_reasoning`), then its words and
+/// `step_done`; after the tool, « Fait. ».
+fn faux_equipier_qui_pense() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-penseur", 1 << 20, |turns, opts, sink| {
+            if turns.last().is_some_and(|t| t.role == "tool") {
+                return MockLlm::new("Fait.").generate(turns, opts, sink);
+            }
+            let _ = sink.on_reasoning("Je pèse les options ");
+            let _ = sink.on_reasoning("avant de répondre.");
+            let args = json!({ "item": "", "succeeded": true, "done": "j'ai répondu", "remaining": "" }).to_string();
+            MockLlm::new("Voici ma réponse.").with_tool_calls(vec![("step_done", args.as_str())]).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **The model's thinking reaches the terminal, never its answer** (Lucie, 23 November 2026: « la réflexion pourrait
+/// défiler, comme dans une gare »; a screen read on 24 November: the model reasoned 2 215 tokens and the flux carried
+/// no `Thinking` frame — the host relayed the words alone). A real host: the step's thought goes on the flux as
+/// `Thinking {text, iteration}` on the task's backend, before its words, then a `ThinkingEnd`; no word frame and no
+/// mailbox line carries the thought.
+#[test]
+#[ignore]
+fn the_models_thinking_reaches_the_terminal_and_never_its_answer() {
+    let d = tempfile::tempdir().unwrap();
+    let manifeste = depot_inscrit(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
+            .with_racine_des_taches(d.path().join("taches"))
+            .with_chats_root(d.path().join("chats"))
+            .with_runs_root(d.path().join("runs"))
+            .with_chat_model(faux_equipier_qui_pense()),
+    );
+    let parent = heberger(&host, &manifeste);
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    {
+        let host = host.clone();
+        std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
+    }
+    let ep = Endpoint { address, token: "jeton-du-temoin".into(), user_token: None };
+    let agent = client::agent();
+    let mut trames: Vec<(u64, Value)> = Vec::new();
+    let mut lance = None;
+    let mut ouvert = || {
+        lance = Some(client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "pense", "kind": "request", "text": "Réfléchis, puis réponds." })));
+    };
+    let fin_au_plus_tard = Instant::now() + Duration::from_secs(300);
+    flux::suivre(&ep, &["agent", "tokens", "mailbox"], None, &AtomicBool::new(false), &mut ouvert, |t| {
+        if let (Some(id), Ok(v)) = (t.id, serde_json::from_str::<Value>(&t.data)) {
+            trames.push((id, v));
+        }
+        let run_des_mots = trames.iter().find(|(_, v)| v["evenement"]["kind"] == "Token").and_then(|(_, v)| v["evenement"]["run"].as_str().map(str::to_string));
+        let fini = run_des_mots.is_some_and(|r| trames.iter().any(|(_, v)| v["evenement"]["kind"] == "RunFinished" && v["evenement"]["run"].as_str() == Some(r.as_str())));
+        if fini || Instant::now() > fin_au_plus_tard { flux::Suite::Couper } else { flux::Suite::Continuer }
+    })
+    .expect("le flux s'ouvre");
+    let dernier = trames.last().map(|(id, _)| *id);
+    trames.extend(lire_jusqu_au_silence(&ep, dernier, Duration::from_millis(2000)));
+    lance.expect("la demande est partie").expect("la demande ouvre la tâche");
+    let chemin = format!("/ide/teammate?backend={}&task=pense", client::encoder(&parent));
+    let vu = client::lire(&agent, &ep, &chemin).expect("la tâche se lit");
+    let tache = vu["backend"].as_str().unwrap_or_default().to_string();
+
+    let genre = |k: &str| trames.iter().position(|(_, v)| v["evenement"]["kind"] == k);
+    let pensees: String = trames.iter().filter(|(_, v)| v["evenement"]["kind"] == "Thinking").map(|(_, v)| v["evenement"]["text"].as_str().unwrap_or_default()).collect();
+    assert_eq!(pensees, "Je pèse les options avant de répondre.", "the thought is on the flux, whole");
+    let premiere = genre("Thinking").unwrap();
+    assert_eq!(trames[premiere].1["backend"].as_str(), Some(tache.as_str()), "on the task's backend, which the terminal filters on");
+    assert!(trames[premiere].1["evenement"]["iteration"].is_u64(), "with its iteration: {}", trames[premiere].1);
+    let premier_mot = genre("Token").expect("the words are on the flux");
+    assert!(premiere < premier_mot, "the thought comes before the words");
+    assert!(genre("ThinkingEnd").is_some_and(|f| f > premiere), "a ThinkingEnd closes the thought");
+    let mots: String = trames.iter().filter(|(_, v)| v["evenement"]["kind"] == "Token").map(|(_, v)| v["evenement"]["text"].as_str().unwrap_or_default()).collect();
+    assert!(!mots.contains("pèse"), "no word frame carries the thought: {mots}");
+    let boite = vu["mailbox"].to_string();
+    assert!(!boite.contains("pèse"), "no mailbox line carries the thought: {boite}");
+    host.journal_des_runs().vider();
+}
