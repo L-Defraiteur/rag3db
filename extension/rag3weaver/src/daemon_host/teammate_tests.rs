@@ -38,6 +38,7 @@ mod gate_level;
 mod human_yes_only;
 mod in_place;
 mod in_place_writes;
+mod index_tool_descriptions;
 mod instruction_turn_facts;
 mod judge_all;
 mod land_each_turn;
