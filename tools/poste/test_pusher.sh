@@ -1015,9 +1015,10 @@ chmod +x "$D/origin.git/hooks/pre-receive"
 echo VERT > "$D/outcomes.d/s2sa"
 PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
 rm -f "$D/origin.git/hooks/pre-receive"
-l=$(grep -P '\ts2sb\tcréneau 2 jeté\t' "$D/pusher/log.tsv" | tail -1)
-printf '%s' "$l" | grep -q 'push' && printf '%s' "$l" | grep -q 'refusé par le témoin' \
+l=$(grep -P '\ts2sb\tcréneau 2 jeté\t' "$D/pusher/log.tsv" | head -1); grep -P '\ts2sb\t' "$D/pusher/log.tsv" | cut -f3,4 | sed "s/^/       /"
+nj=$(grep -cP '\ts2sb\tcréneau 2 jeté\t' "$D/pusher/log.tsv")
+[ "$nj" = 1 ] && printf '%s' "$l" | grep -q 'push' && printf '%s' "$l" | grep -q 'refusé par le témoin' \
   && ok "créneau 2 : un push de la branche de B refusé se dit, avec le message de git" \
-  || ko "créneau 2 : la sortie ne dit pas sa raison (« ${l##*	} »)"
+  || ko "créneau 2 : la sortie ne dit pas sa raison, ou la dit $nj fois (« ${l##*	} »)"
 P dequeue s2sa > /dev/null 2>&1; P dequeue s2sb > /dev/null 2>&1; : > "$D/outcomes"; rm -f "$D"/outcomes.d/s2*
 exit $red
