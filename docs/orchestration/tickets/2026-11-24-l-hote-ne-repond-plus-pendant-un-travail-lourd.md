@@ -37,6 +37,22 @@ qu'il soit (copie, indexation, ouverture, fermeture, réindexation, un outil asy
 - la fin publiée sur le flux, pour qu'un agent ou le terminal attende un événement au lieu d'interroger ;
 - un refus qui dit ce que l'hôte fait et pour combien de temps, jamais seulement « pas dispo ».
 
+**Elle existe déjà dans les graphes, il faut s'en servir** (relevé le 24 novembre 2026) :
+
+- `dataflow::background` (`DataflowRuntime::spawn`, le registre `Registry`) : un run sur un fil à lui, sous l'exécuteur
+  concurrent (où l'annulation atteint chaque nœud), sa référence rendue tout de suite, sa fin écrite une fois dans la
+  boîte de l'appelant et dite sur le bus (`RunFinished`), lié ou non à son parent (`Tie`), borné (`Limits`) ;
+- `SpawnNode` : ce lancement en fond posé comme un nœud, dans n'importe quel graphe ;
+- `%% async: true` : un graphe-outil entier qui rend une poignée tout de suite et son résultat plus tard (seul
+  `run_bg.mmd` s'en sert).
+
+Ce qui manque pour que ce soit pratique :
+
+- **un nœud qui attend la fin d'un run lancé**, par événement (le nœud `listen` sur un canal de la page 03 d'everything
+  declarative), et une jointure de plusieurs ;
+- **marquer un seul nœud asynchrone** dans un graphe (`%% async` par nœud), comme sucre sur `SpawnNode` + l'attente ;
+- **les travaux lourds de l'hôte en graphes**, lancés par ce mécanisme, plutôt qu'en Rust dans la requête.
+
 Partir de ce qui existe déjà pour l'indexation (le journal suivi par `wait`, `lancer_l_index`) plutôt que d'écrire un
 second mécanisme. Elle sert aussi au chantier « outils asynchrones et réveils » de l'agent.
 
