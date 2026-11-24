@@ -32,6 +32,7 @@ mod commit_what_was_written;
 mod conversation_memory;
 mod copy_lands;
 mod end_text;
+mod facts_across_steps;
 mod facts_when_waiting;
 mod fork;
 mod gate_level;
