@@ -30,10 +30,28 @@ modifiables directement depuis le nœud, dans un petit formulaire.
    non branché est signalé.
 5. **Une annotation `editable`** (et des bornes) sur la déclaration : `%% param: candidates int = 5 [1..20] editable`.
    Les réglages ainsi marqués forment le panneau de réglages du graphe, sans ouvrir l'éditeur.
-6. **Où va une valeur changée**, au choix : pour cette exécution seulement (un argument, rien d'écrit) ; pour ce backend,
-   dans une surcharge versionnée avec ses déclarations, le gabarit restant intact (**par défaut**) ; pour le gabarit
-   lui-même, un diff du `.mmd`. Une proposition d'un agent (l'archiviste qui propose de changer son propre réglage)
-   passe par le même chemin, à l'acceptation de l'utilisatrice.
+6. **Un DAG actif est une instance de son gabarit, qui vit dans le backend** (Lucie, 26 novembre 2026). Le gabarit est
+   le modèle ; l'instance porte :
+   - **son identité**, stable : elle survit aux relances, comme une clé d'agent ;
+   - **la référence de son gabarit, épinglée à une version** (comme une tâche lit ses déclarations au commit de son
+     ouverture) ;
+   - **ses valeurs** : les `%% param` modifiés, ceux de ses sous-graphes aussi (`decide.candidates`), et ses nœuds valeur ;
+   - **son état** : ses exécutions et leur historique, ses déclencheurs actifs (un nœud d'attente branché sur la CI), son
+     propriétaire.
+
+   Un même backend peut porter deux instances du même gabarit avec des réglages différents. **Où va une valeur
+   changée**, en trois niveaux :
+   1. **l'exécution** : des arguments pour une seule passe, rien d'écrit ; un appel ponctuel comme outil est une instance
+      éphémère, jamais persistée ;
+   2. **l'instance, par défaut** : la valeur est écrite dans le backend, versionnée, le gabarit ne bouge pas ;
+   3. **le gabarit** : un diff du `.mmd`, c'est-à-dire une nouvelle version du gabarit.
+
+   **Mise à jour d'un gabarit** : une instance épinglée suit d'elle-même la nouvelle version si ses valeurs ne touchent
+   pas ce qui a changé ; sinon elle montre le diff à accepter, comme une mise à jour de dépendance.
+
+   **Un agent qui modifie son propre workflow modifie son instance**, à l'acceptation de l'utilisatrice (l'archiviste qui
+   propose sa « fiche voisine »). Si la modification fait ses preuves, il propose de la **promouvoir en gabarit**, et les
+   autres instances peuvent la recevoir.
 7. **Deux vues dans l'éditeur** : simplifiée (les nœuds et leur rôle, ports et nœuds valeur cachés) et édition (les ports
    avec leur type, pleins s'ils sont branchés, creux s'ils sont libres ; cliquer un port allume les ports compatibles).
 
@@ -51,4 +69,4 @@ repose sur les mêmes ports typés. Maquette : écrans « L'archiviste en graphe
 
 Par un vrai hôte, rouge d'abord : un graphe dont un fil relie `Verdict` à `Fiche` est refusé au chargement avec les deux
 ports nommés ; un graphe dont une entrée `candidates int` n'est pas branchée prend la valeur écrite sur le nœud ; la même
-entrée branchée à un `ValueNode` prend la sienne ; une surcharge du backend change la valeur sans toucher au gabarit.
+entrée branchée à un `ValueNode` prend la sienne ; deux instances du même gabarit dans un backend gardent chacune leur valeur, survivent à une relance de l'hôte, et ne touchent pas au gabarit ; une nouvelle version du gabarit est suivie par l'instance dont les valeurs ne la touchent pas, et montrée en diff à l'autre.
