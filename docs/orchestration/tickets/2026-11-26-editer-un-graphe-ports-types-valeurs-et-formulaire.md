@@ -55,6 +55,31 @@ modifiables directement depuis le nœud, dans un petit formulaire.
 7. **Deux vues dans l'éditeur** : simplifiée (les nœuds et leur rôle, ports et nœuds valeur cachés) et édition (les ports
    avec leur type, pleins s'ils sont branchés, creux s'ils sont libres ; cliquer un port allume les ports compatibles).
 
+
+8. **Créer un graphe de zéro dans l'éditeur.** L'éditeur est une vue du `.mmd`, qui fait foi : enregistrer écrit le
+   `.mmd`, et un `.mmd` modifié à la main ou par un agent se rouvre tel quel (aller-retour à l'identique, testé).
+   - L'en-tête est généré : les entrées laissées libres et marquées `editable` deviennent les `%% param` (type, défaut,
+     bornes, description), les sorties exposées le `%% result`, le nom et la description viennent d'un petit formulaire.
+     Le graphe sert aussitôt d'outil à un agent et de nœud dans un autre graphe.
+   - Il est enregistré comme **nouveau gabarit dans le backend où il est créé**, versionné avec ses déclarations ; le
+     lancer crée sa première instance ; le promouvoir le copie dans la bibliothèque de gabarits de l'utilisatrice.
+   - **La position des nœuds va dans un fichier à côté**, `<nom>.layout.json` (choix de Lucie, 26 novembre), pour garder
+     les diffs du `.mmd` lisibles ; un nœud sans position (ajouté par un agent) est placé par l'éditeur.
+   - Un graphe invalide (fil entre types incompatibles, entrée obligatoire libre) s'enregistre en **brouillon**, ni
+     lancé ni instancié tant que l'éditeur dit ce qui manque.
+   - Un agent crée un graphe par le même chemin : un outil qui écrit le même `.mmd`, validé de la même façon.
+
+9. **Un réglage n'a pas besoin de défaut.** La grammaire d'aujourd'hui (`parse_param`, `src/dataflow/graph_tool.rs`)
+   en accepte trois formes, toutes avec une description obligatoire, le type pouvant être omis (déduit à la liaison) :
+   - `nom type = défaut` : facultatif, avec sa valeur ;
+   - `nom type!` (ou `nom! type`) : obligatoire, sans défaut ; un fil, l'appelant ou l'instance doit le donner ;
+   - `nom type` : facultatif sans défaut, absent s'il n'est pas donné ; le nœud qui le lit gère l'absence.
+
+   Dans l'éditeur : le widget d'un réglage obligatoire non donné est marqué « à remplir » et bloque le lancement ; celui
+   d'un facultatif sans défaut affiche « non défini ». **Un défaut à corriger** : la grammaire accepte aujourd'hui
+   `nom type! = défaut`, obligatoire et pourvu d'un défaut à la fois, ce qui ne veut rien dire ; le chargement doit le
+   refuser en le disant.
+
 ## Une limite
 
 Le widget n'est qu'un rendu de l'entrée typée : le graphe reste une déclaration, sans logique d'interface. Une valeur
