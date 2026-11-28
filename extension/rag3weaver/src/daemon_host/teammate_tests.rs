@@ -528,7 +528,12 @@ fn the_addressed_mailbox_by_the_host_routes() {
         }
         String::from_utf8_lossy(&lu).into_owned()
     };
-    let relayees: Vec<Value> = flux.lines().filter_map(|l| l.strip_prefix("data: ")).filter_map(|l| serde_json::from_str(l).ok()).collect();
+    // The host's own frame (`event: host`, its epoch) opens the stream: it relays no line.
+    let relayees: Vec<Value> = flux
+        .split("\n\n")
+        .filter(|f| !f.lines().any(|l| l == "event: host"))
+        .flat_map(|f| f.lines().filter_map(|l| l.strip_prefix("data: ")).filter_map(|l| serde_json::from_str(l).ok()).collect::<Vec<Value>>())
+        .collect();
     assert!(relayees.iter().all(|e: &Value| e["sujet"] == "mailbox" && e["evenement"]["kind"] == "MailboxLine" && e["backend"] == manifeste_de_la_tache.as_str()), "{relayees:?}");
     let relayes: Vec<&str> = relayees.iter().filter_map(|e| e["evenement"]["line"]["id"].as_str()).collect();
     for i in [qid.as_str(), fid.as_str()] {
