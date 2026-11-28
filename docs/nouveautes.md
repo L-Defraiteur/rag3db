@@ -15,6 +15,9 @@
 - 28 novembre 2026 — **Une conversation rouverte voit les modèles déclarés depuis.** `/model` et la liste des modèles
   d'une tâche lisent `models.llm` dans le manifeste vivant du dossier, à chaque appel ; le reste des déclarations de
   la tâche reste celui de son ouverture.
+- 28 novembre 2026 — **Un « oui, vas-y » voit ce qu'il accepte.** Ce que tu tapes après ton premier message part du
+  terminal comme une consigne ; un tour ouvert ainsi la voit maintenant, comme une demande, avec la dernière réponse
+  de l'agent en entier (jusqu'à 6 000 caractères au lieu de 2 000, qui coupaient une proposition en deux).
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
