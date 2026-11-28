@@ -449,6 +449,9 @@ const BASE_NODES: &[&str] = &[
     // texte reçu. Ni fichier, ni réseau, ni écriture : purs comme `RhaiNode`.
     "Route",
     "SplitSections",
+    // **Keep the findings a diff quotes** (the lot judge, 24 November 2026): it compares an excerpt to the lines of a
+    // diff it receives, and touches nothing.
+    "KeepQuoted",
     // Un Plan déclaré : il ne fait que lire.
     "PlanNode",
     // Un sous-graphe cité, appelé une fois ou par élément : ses propres types de
