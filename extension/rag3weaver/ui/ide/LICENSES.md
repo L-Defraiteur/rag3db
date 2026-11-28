@@ -16,6 +16,7 @@ Lues dans `node_modules/<paquet>/package.json` (champ `license`) le 25 octobre 2
 | esbuild | 0.28.2 | MIT | le bâti du script (outil, pas servi) |
 | tailwindcss, @tailwindcss/cli | 4.3.3 | MIT | le bâti de la feuille (outil, pas servi) |
 | typescript | 5.9.3 | Apache-2.0 | la vérification des types (outil, pas servi) |
+| @fontsource/chakra-petch, @fontsource/ibm-plex-sans, @fontsource/jetbrains-mono | 5.3.0 | OFL-1.1 | les polices de l'éditeur de graphes : six woff2 du sous-ensemble latin, écrits en `data:` dans `app.css` par `build.mjs` (lus le 28 novembre 2026) |
 
 Les composants sous `components/ui/` sont copiés depuis shadcn/ui (MIT) par sa CLI
 (`shadcn@4.22.1 add …`), comme la bibliothèque le prévoit : ils appartiennent au dépôt.

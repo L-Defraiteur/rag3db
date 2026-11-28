@@ -34,7 +34,7 @@ function GraphList({ id, state }: { id: string; state: HostState }) {
       <h1 className="text-xl font-semibold mb-1">Graphes des outils</h1>
       <p className="note text-sm text-muted-foreground mb-3">Un outil appelé pendant qu'on regarde son graphe s'y allume, nœud par nœud.</p>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
-      {tools ? <ul className="liste grid gap-0.5 text-sm">{tools.map((n) => <li key={n}><a href={`/ide/code/${id}/dag/tool/${encodeURIComponent(n)}`} className="hover:underline">{n}</a></li>)}</ul> : null}
+      {tools ? <ul className="liste grid gap-0.5 text-sm">{tools.map((n) => <li key={n}><a href={`/ide/code/${id}/dag/tool/${encodeURIComponent(n)}`} className="hover:underline">{n}</a> · <a href={`/ide/code/${id}/workflow/tool/${encodeURIComponent(n)}`} className="editer text-muted-foreground hover:underline">éditeur</a></li>)}</ul> : null}
     </>
   );
 }

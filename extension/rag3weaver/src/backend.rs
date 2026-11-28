@@ -3946,7 +3946,9 @@ impl PreparedBackend {
                 .map(|n| {
                     let mut v = json!({"name":n.name,"node_type":n.node_type,"config":n.config,"line":lignes.get(&n.name)});
                     if schemas {
-                        v["schema"] = self.nodes.schema(&n.node_type).map(|s| node_schema_json(&s)).unwrap_or(Value::Null);
+                        // Its schema under its configuration: a node whose ports follow its configuration (a script's `inputs`, a
+                        // route's `routes`) declares the ports its edges use (the workflow editor, 28 November 2026).
+                        v["schema"] = self.nodes.schema_for(&n.node_type, &n.config).map(|s| node_schema_json(&s)).unwrap_or(Value::Null);
                     }
                     v
                 })
