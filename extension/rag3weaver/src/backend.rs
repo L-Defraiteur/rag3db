@@ -8163,7 +8163,9 @@ mod tests {
             // query's filter.
             // CallersHopNode (23 November 2026): one hop along the calls around the first ranks of the search, a
             // read of the usages and of the callers' rows, nothing written.
-            47 + usize::from(cfg!(feature = "code"))
+            // KeepQuoted (24 November 2026, the lot judge): keeps the findings whose excerpt a diff it receives
+            // quotes; it compares text, reads and writes nothing.
+            48 + usize::from(cfg!(feature = "code"))
                 // SlowReadNode, in the test builds only (`backend::lecture_lente`): the slow read on the call's
                 // snapshot that the host-path witness of the interruption stops. Never in the product.
                 + usize::from(cfg!(test)),
