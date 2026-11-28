@@ -18,6 +18,8 @@
 - 28 novembre 2026 — **Un « oui, vas-y » voit ce qu'il accepte.** Ce que tu tapes après ton premier message part du
   terminal comme une consigne ; un tour ouvert ainsi la voit maintenant, comme une demande, avec la dernière réponse
   de l'agent en entier (jusqu'à 6 000 caractères au lieu de 2 000, qui coupaient une proposition en deux).
+- 28 novembre 2026 — **Quitter le terminal marche toujours.** Pendant un tour qui ne finit pas, le premier Ctrl-C
+  l'arrête, le deuxième dit comment quitter, le troisième quitte ; Ctrl-D et `/quit` quittent quel que soit l'état.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code

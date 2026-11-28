@@ -191,6 +191,8 @@ pub struct Vue {
     attente_depuis: Instant,
     /// The first Ctrl-C at rest: a second within two seconds quits.
     ctrl_c_at: Option<Instant>,
+    /// Ctrl-C pressed during a turn that has not moved since (24 Nov. 2026): the third quits.
+    ctrl_c_in_turn: u8,
     /// The model's thinking for the current call (`Thinking` events): glimpsed in the living line while it lasts,
     /// read whole by Ctrl-O (the document `thinking_doc`).
     thinking: String,
@@ -316,6 +318,7 @@ impl Vue {
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
             ctrl_c_at: None,
+            ctrl_c_in_turn: 0,
             thinking: String::new(),
             thinking_iteration: None,
             thinking_doc: None,
@@ -370,6 +373,8 @@ impl Vue {
     }
 
     fn changer(&mut self, e: Etat) {
+        // The turn moved: the Ctrl-C pressed in it count again from the first.
+        self.ctrl_c_in_turn = 0;
         if matches!(e, Etat::Fini(_)) {
             self.turn_in_flight = false;
             self.reviewing = false;
@@ -1214,7 +1219,19 @@ impl Vue {
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             // While the teammate works, Ctrl-C stops the turn, not the session (a trial of the view, 23 Nov. 2026).
-            Touche::CtrlC if self.turn_running() => Some(Action::Arreter),
+            // **Quitting always works** (24 Nov. 2026: a turn the view never saw end kept every Ctrl-C a stop): while the
+            // turn does not move, the second Ctrl-C says how to quit, and the third quits.
+            Touche::CtrlC if self.turn_running() => {
+                self.ctrl_c_in_turn = self.ctrl_c_in_turn.saturating_add(1);
+                match self.ctrl_c_in_turn {
+                    1 => Some(Action::Arreter),
+                    2 => {
+                        self.note("le tour ne s'arrête pas encore : Ctrl-C une fois de plus pour quitter (Ctrl-D aussi)");
+                        None
+                    }
+                    _ => Some(Action::Quitter),
+                }
+            }
             // At rest, a second Ctrl-C within two seconds quits; the first one says so.
             Touche::CtrlC if self.ctrl_c_at.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(2)) => Some(Action::Quitter),
             Touche::CtrlC => {
