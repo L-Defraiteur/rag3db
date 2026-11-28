@@ -1,5 +1,13 @@
 # L'éclaireur de l'index : la recherche faite pour l'agent, au début du tour
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — l'agent n'utilise pas l'index sur un sujet neuf.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (l'équipier, at_turn_start).
+- **Famille** : produit
+- **Pour** : rag3weaver archi (28 novembre, branche c7/24-11-2026-eclaireur à reprendre).
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 12 h 40. Proposition de Lucie, le même jour : « peut-être on devrait avoir un mini agent qui
 lance deux trois recherches, ensuite sur toutes les recherches un appel structuré qui met en relation la question
 de l'utilisatrice et explique à l'agent le code qu'il a trouvé ».

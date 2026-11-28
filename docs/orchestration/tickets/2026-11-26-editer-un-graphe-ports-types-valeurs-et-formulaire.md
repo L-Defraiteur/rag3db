@@ -1,5 +1,13 @@
 # Éditer un graphe : ports typés, valeurs sur les entrées, nœud valeur, formulaire d'un nœud-graphe
 
+- **État** : ouvert (26 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — l'éditeur de graphe et ses ports typés.
+- **Atteignable en service** : non (rien n'existe encore).
+- **Touche rag3weaver** : oui (moteur de graphes, IDE).
+- **Famille** : produit
+- **Pour** : everything declarative (28 novembre).
+- **Signalé par** : Lucie.
+
 Ouvert le 26 novembre 2026. Lucie, en regardant les écrans « L'archiviste en graphe » et « L'agent de code en graphe »
 de la maquette : voir les ports comme des cibles avec leurs types, une vue simplifiée sans ports et une vue d'édition
 avec, un « scalar node » où l'on entre une valeur soi-même, et, pour un graphe transformé en nœud, tous ses réglages

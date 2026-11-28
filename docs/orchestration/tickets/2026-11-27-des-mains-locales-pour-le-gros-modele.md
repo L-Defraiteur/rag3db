@@ -1,5 +1,13 @@
 # Des mains locales pour le gros modèle : DeepSeek en ligne, un petit modèle à luciepc qui édite et cherche
 
+- **État** : ouvert (27 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — le coût des tours de l'équipier.
+- **Atteignable en service** : non (rien n'existe encore).
+- **Touche rag3weaver** : oui (l'équipier, les modèles, luciepc).
+- **Famille** : produit
+- **Pour** : rag3weaver archi (28 novembre), avec embarquement et banc.
+- **Signalé par** : Lucie.
+
 Ouvert le 27 novembre 2026. Lucie : passer les démos sur DeepSeek quand les crédits Gemini s'épuiseront (sans
 investissement, ce sont les seules conditions réelles d'un produit au début) ; un petit modèle qui fait les vraies
 actions (« édite la fonction… », « cherche-moi… »), lancé par l'agent au-dessus, comme ses mains ; un Qwen de 27B ou un
