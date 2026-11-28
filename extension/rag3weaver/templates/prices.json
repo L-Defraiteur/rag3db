@@ -7,8 +7,8 @@
   "prices": {
     "google/gemini-3.1-flash-lite": [
       {"from": "2026-01-01", "input": 0.25, "cache_write": 0.25, "cache_read": 0.025, "output": 1.50, "batch": 0.5,
-       "source": "https://aistudio.google.com/docs/pricing (redirected from https://ai.google.dev/gemini-api/docs/pricing)", "read_on": "2026-11-28",
-       "note": "the model of the role small; text input, paid tier, no prompt-length tier; the Vertex page (https://cloud.google.com/vertex-ai/generative-ai/pricing) gave no table when read, and the AI Studio rows were read through a summary, not verbatim: to check on Vertex; cache storage 1.00 per million tokens per hour"}
+       "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing (redirected to https://cloud.google.com/model-garden/pricing) ; https://aistudio.google.com/docs/pricing", "read_on": "2026-11-28",
+       "note": "the model of the role small; global region, text, image and video input; no tier above 200 000 tokens; outside the global region 0.275, 0.0275 and 1.65; audio input 0.50 (0.05 cached); cache storage 1.00 per million tokens per hour"}
     ],
     "google/gemini-3.8-flash": [
       {"from": "2026-01-01", "input": 0.75, "cache_write": 0.75, "cache_read": 0.075, "output": 3.75, "batch": 0.5,
