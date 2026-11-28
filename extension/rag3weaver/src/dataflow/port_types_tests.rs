@@ -19,7 +19,6 @@ fn graph(edge: &str, target: &str) -> String {
 
 /// **A Map into a Query is refused at load, naming both ports and their types**; a Map into a port that takes any value
 /// passes.
-#[cfg(feature = "code")]
 #[test]
 fn an_edge_between_types_that_do_not_connect_is_refused_at_load() {
     let r = registry();
