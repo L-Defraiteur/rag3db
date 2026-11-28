@@ -97,6 +97,40 @@ impl Prices {
         serde_json::from_str(DEFAULT_PRICES).expect("templates/prices.json parses: its witness says so")
     }
 
+    /// **The prices in force** (28 November 2026): the shipped template, the user's `prices.json` over it — a key of
+    /// the file replaces the template's, and under `prices` a slug the file names replaces the template's tariffs for
+    /// that slug, the others kept. No file: the template alone, and nothing is written (a copy would keep yesterday's
+    /// prices). A file that cannot be read or does not check is refused, naming it: never the template in its place.
+    pub fn in_force(path: &Path) -> Result<Prices, String> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Prices::default_file()),
+            Err(e) => return Err(format!("{}: {e} — the prices cannot be read", path.display())),
+        };
+        let user: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| format!("{}: {e} — the prices cannot be read", path.display()))?;
+        let serde_json::Value::Object(user) = user else {
+            return Err(format!("{}: not an object — the prices cannot be read", path.display()));
+        };
+        let mut merged: serde_json::Value = serde_json::from_str(DEFAULT_PRICES).expect("templates/prices.json parses: its witness says so");
+        for (k, v) in user {
+            match (k.as_str(), v) {
+                ("prices", serde_json::Value::Object(slugs)) => {
+                    let into = merged["prices"].as_object_mut().expect("the template's prices are an object");
+                    for (slug, tariffs) in slugs {
+                        into.insert(slug, tariffs);
+                    }
+                }
+                (_, v) => {
+                    merged[k.as_str()] = v;
+                }
+            }
+        }
+        let p: Prices = serde_json::from_value(merged).map_err(|e| format!("{}: {e} — the prices cannot be read", path.display()))?;
+        p.check().map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok(p)
+    }
+
     /// Reads and checks `prices.json`. Every refusal names the file and what is wrong.
     pub fn load(path: &Path) -> Result<Prices, String> {
         let text = std::fs::read_to_string(path).map_err(|e| {
@@ -426,7 +460,7 @@ impl Ledger {
     /// day and by caller. `today` is the UTC day the projection counts to.
     pub fn report(&self, month: &str, today: &str) -> serde_json::Value {
         use serde_json::json;
-        let prices = match Prices::load(&self.prices_path) {
+        let prices = match Prices::in_force(&self.prices_path) {
             Ok(p) => p,
             Err(e) => return json!({ "month": month, "error": e }),
         };
@@ -484,7 +518,7 @@ impl Ledger {
             return json!({ "threshold": null, "projection_over": false, "text": format!("le plafond des dépenses ne se lit pas : {e}") });
         }
         let (spent, cap, projection) = (r["spent"].as_f64().unwrap_or(0.0), r["cap"].as_f64().unwrap_or(0.0), r["projection"].as_f64().unwrap_or(0.0));
-        let alerts: Vec<f64> = Prices::load(&self.prices_path).map(|p| p.alerts).unwrap_or_else(|_| default_alerts());
+        let alerts: Vec<f64> = Prices::in_force(&self.prices_path).map(|p| p.alerts).unwrap_or_else(|_| default_alerts());
         let passed = if cap > 0.0 && spent >= cap {
             Some(100.0)
         } else {
@@ -645,10 +679,9 @@ impl Ledger {
     /// by the report as unpriced, and said in the returned warning.
     #[allow(clippy::too_many_arguments)]
     pub fn record(&self, slug: &str, provider: &str, private: bool, tokens: Tokens, caller: &Caller, batch: bool) -> Result<Option<String>, String> {
-        self.write_default_prices();
         let day = utc_day(now_secs());
         let month = day[..7].to_string();
-        let prices = Prices::load(&self.prices_path);
+        let prices = Prices::in_force(&self.prices_path);
         let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
         let warning = match &prices {
             _ if free => None,
@@ -679,8 +712,7 @@ impl Ledger {
     #[allow(clippy::too_many_arguments)]
     fn check_locked(&self, day: &str, slug: &str, private: bool, bound: Tokens, caller: &Caller, batch: bool) -> Result<bool, String> {
         let month = &day[..7];
-        self.write_default_prices();
-        let prices = Prices::load(&self.prices_path);
+        let prices = Prices::in_force(&self.prices_path);
         // Free only by what the file says: a file that cannot be read frees nothing.
         let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
         if !free {
@@ -715,46 +747,31 @@ impl Ledger {
         if slug.trim().is_empty() {
             return Err("a price needs its model's slug".into());
         }
-        self.write_default_prices();
         let _lock = self.lock("prices")?;
-        let text = std::fs::read_to_string(&self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        // The user's file holds only what overrides the template: absent, the price starts it.
+        let text = match std::fs::read_to_string(&self.prices_path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => "{}".to_string(),
+            Err(e) => return Err(format!("{}: {e}", self.prices_path.display())),
+        };
         let mut v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
         let entry = serde_json::to_value(tariff).map_err(|e| e.to_string())?;
         let prices = v.as_object_mut().ok_or("prices.json is not an object")?.entry("prices").or_insert_with(|| serde_json::json!({}));
         let list = prices.as_object_mut().ok_or("`prices` is not an object")?.entry(slug.to_string()).or_insert_with(|| serde_json::json!([]));
         list.as_array_mut().ok_or_else(|| format!("the prices of `{slug}` are not a list"))?.push(entry);
         let new = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
-        let parsed: Prices = serde_json::from_str(&new).map_err(|e| format!("the price of `{slug}`: {e}"))?;
-        parsed.check().map_err(|e| format!("the price of `{slug}`: {e}"))?;
-        let tmp = self.prices_path.with_extension("json.new");
-        std::fs::write(&tmp, format!("{new}\n")).map_err(|e| format!("{}: {e}", tmp.display()))?;
-        std::fs::rename(&tmp, &self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
-        Ok(())
-    }
-
-    /// Writes the default `prices.json` when there is none (never over a file, even an unreadable one), and says so.
-    /// **Whole or not at all**: written beside it, then put in place by a hard link, which refuses an existing file; a
-    /// reader at the same instant sees no file or the whole one, never an empty one (two writers at the first call
-    /// made a reader find the file created and not yet written, 23 November 2026).
-    fn write_default_prices(&self) {
-        if self.prices_path.exists() {
-            return;
-        }
         if let Some(parent) = self.prices_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let tmp = self.prices_path.with_extension(format!("json.{}.{}", std::process::id(), new_id()));
-        if std::fs::write(&tmp, format!("{}\n", DEFAULT_PRICES.trim_end())).is_err() {
-            return;
+        let tmp = self.prices_path.with_extension("json.new");
+        std::fs::write(&tmp, format!("{new}\n")).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        // The prices in force with this price must check, or nothing is written.
+        if let Err(e) = Prices::in_force(&tmp) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(format!("the price of `{slug}`: {e}"));
         }
-        let placed = std::fs::hard_link(&tmp, &self.prices_path).is_ok();
-        let _ = std::fs::remove_file(&tmp);
-        if placed {
-            eprintln!(
-                "[usage] {} written: a cap of {DEFAULT_MONTHLY_CAP} {DEFAULT_CURRENCY} a month, private addresses free, the prices read on the providers' pages: a model it does not price is refused until its price is written there",
-                self.prices_path.display()
-            );
-        }
+        std::fs::rename(&tmp, &self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        Ok(())
     }
 
     /// Settles a reservation with what the provider reported (`None`: nothing, and the bound stands).

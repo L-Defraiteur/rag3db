@@ -33,9 +33,9 @@ fn a_humans_price_is_written_and_the_model_passes() {
     let written = host.set_price(&human, &json!({ "slug": s, "input": 1.0, "output": 2.0, "cache_read": 0.1 })).unwrap();
     assert_eq!(written["tariff"]["source"], json!("given by the user"), "{written:#}");
     user_ledger().reserve(&s, "vertex", false, Tokens { output: 10, ..Default::default() }, &Caller::default(), false).expect("the model passes now");
-    let prices = crate::usage_ledger::Prices::load(&user_ledger().prices_path).unwrap();
+    let prices = crate::usage_ledger::Prices::in_force(&user_ledger().prices_path).unwrap();
     assert!(prices.tariff("google/gemini-3.8-flash", "2026-11-22").is_some(), "the shipped prices are kept");
-    assert!(prices.about.is_some(), "the file's about is kept");
+    assert!(prices.about.is_some(), "the template's about is kept");
     assert_eq!(prices.prices[&s].len(), 1, "one entry, the invalid one never written");
 }
 
@@ -48,9 +48,10 @@ fn a_refusal_for_want_of_a_price_names_its_model() {
     assert_eq!(crate::usage_ledger::unpriced("spending cap reached for 2026-11"), None);
 }
 
-/// **The default prices are whole or absent, never empty**: first reservations and a price being written at once, in a
-/// ledger without a `prices.json`; every reader finds the shipped prices, and every price is written (23 November 2026: a reader found the file created and not yet
-/// written, and refused every model as if the prices could not be read).
+/// **The prices are whole, never empty**: first reservations and a price being written at once, in a ledger without a
+/// `prices.json`; every reader finds the shipped prices, and every price is written (23 November 2026: a reader found
+/// the file created and not yet written, and refused every model as if the prices could not be read; since 28
+/// November no copy is written, and the user's file is put in place by a rename).
 #[test]
 fn the_default_prices_are_written_whole_under_concurrent_first_calls() {
     for _ in 0..20 {

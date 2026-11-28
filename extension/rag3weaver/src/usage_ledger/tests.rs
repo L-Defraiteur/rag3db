@@ -109,8 +109,8 @@ fn two_writers_at_the_edge_of_the_cap_only_one_goes_through() {
 }
 
 /// **What is refused, said**: a slug without a price, a prices file that cannot be read, a tariff in another currency
-/// than the cap. Without a file, the ledger writes the default one, which frees the private addresses: a local model is
-/// free because the file says so, never by default.
+/// than the cap. Without a file, the shipped prices are in force (none is written), and they free the private
+/// addresses: a local model is free because the prices say so, never by default; a user's file can say otherwise.
 #[test]
 fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
     let (_d, l) = ledger(Some(PRICES));
@@ -121,12 +121,15 @@ fn a_slug_without_a_price_unreadable_prices_and_another_currency_are_refused() {
     assert!(e.contains("no price for `paid`"), "{e}");
     l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false)
         .expect("the shipped prices know the regime's default model");
-    let written = Prices::load(&l.prices_path).expect("the default file is written");
-    assert_eq!(written, Prices::default_file());
-    assert_eq!((written.currency.as_str(), written.monthly_cap, written.free_private_hosts), ("USD", 200.0, true));
+    // No file: the shipped prices are in force, and none is written (28 November 2026).
+    assert!(!l.prices_path.exists(), "no copy of the template written");
+    let in_force = Prices::in_force(&l.prices_path).unwrap();
+    assert_eq!(in_force, Prices::default_file());
+    assert_eq!((in_force.currency.as_str(), in_force.monthly_cap, in_force.free_private_hosts), ("USD", 200.0, true));
     let r = l.reserve("qwen", "http://192.168.1.20:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap();
-    assert!(r.line.free, "free because the written file says so");
-    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200}"#));
+    assert!(r.line.free, "free because the shipped prices say so");
+    // The user's file overrides the template: it says the private addresses are not free.
+    let (_d, l) = ledger(Some(r#"{"currency":"USD","monthly_cap":200,"free_private_hosts":false}"#));
     let e = l.reserve("qwen", "http://127.0.0.1:8080/v1", true, Tokens::default(), &Caller::default(), false).unwrap_err();
     assert!(e.contains("no price for `qwen`"), "a file that does not free the private addresses: {e}");
     let (_d, l) = ledger(Some("{ not json"));

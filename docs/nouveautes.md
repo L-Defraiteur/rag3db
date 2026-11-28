@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Une installation neuve n'affiche plus « le plafond des dépenses ne se lit pas ».** Les prix et
+  le plafond viennent du gabarit livré (`templates/prices.json`, 200 USD par mois) ; ton `~/.config/rag3weaver/prices.json`
+  ne fait que le surcharger, clé par clé et modèle par modèle : un plafond, ou le prix d'un modèle, et le reste suit les
+  prix livrés du moment. Plus aucune copie du gabarit n'est écrite à la première réservation. Un fichier illisible refuse
+  toujours les appels payants, en le nommant.
 - 28 novembre 2026 — **Le terminal relance son hôte.** Quand l'hôte local n'est pas lancé ou ne répond pas,
   `rag3weaver-tty` le démarre (`systemctl --user start` de la socket et du service), l'attend jusqu'à 30 s, puis se
   connecte ; s'il ne répond toujours pas, il le dit avec la commande pour regarder. Un hôte donné par `--address`,
