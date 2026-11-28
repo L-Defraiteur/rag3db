@@ -89,6 +89,33 @@ pub(super) struct ChatEntry {
     /// **L'empreinte de lecture** de la conversation (en mémoire : un redémarrage la
     /// perd, et le modèle relit).
     empreintes: std::sync::Arc<std::sync::Mutex<super::empreintes::Empreintes>>,
+    /// **The notes received during the turn** (28 November 2026, « un message envoyé pendant un tour ne se perd
+    /// jamais »): a message sent while a turn runs waits here; the turn's toolbox delivers them at the head of its next
+    /// tool result ([`NotesInTheTurn`]), and what is left when the turn ends starts the next turn.
+    notes: TurnNotes,
+    /// The running turn is a teammate's step: a message during it is refused, as before (the teammate has its
+    /// mailbox).
+    busy_step: bool,
+}
+
+/// **A message received during a turn**: its text and when it came.
+#[derive(Clone, Debug, serde::Serialize)]
+pub(super) struct TurnNote {
+    pub text: String,
+    pub at_ms: u64,
+}
+
+/// The notes of a chat's running turn, shared with its toolbox.
+pub(super) type TurnNotes = Arc<Mutex<Vec<TurnNote>>>;
+
+/// **Who sends a chat turn**: the host itself (a card's relaunch, a witness: refused during a turn, its caller
+/// retries), someone through `/ide/chat` (the page, the terminal, an agent: a note of the running turn), or the notes
+/// a turn left (the next turn, its message marked received during the turn).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Sender {
+    Host,
+    Person,
+    LeftNotes,
 }
 
 /// Ce qui se garde sur le disque : le manifeste (pour la relecture), la session, et le
@@ -554,7 +581,7 @@ impl DaemonHost {
         let f: ChatFile = serde_json::from_slice(&octets).map_err(|e| format!("la conversation de {ancien_id} : {e}"))?;
         self.chats.lock().unwrap_or_else(|p| p.into_inner()).insert(
             neuf_id.to_string(),
-            ChatEntry { manifest: manifeste.to_path_buf(), session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default() },
+            ChatEntry { manifest: manifeste.to_path_buf(), session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default(), notes: Default::default(), busy_step: false },
         );
         self.write_chat(neuf_id)?;
         Ok(true)
@@ -604,7 +631,7 @@ impl DaemonHost {
                         self.chats
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
-                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default() });
+                            .insert(h.id.clone(), ChatEntry { manifest: f.manifest, session: f.session, busy: None, last_call: f.last_call, empreintes: Default::default(), notes: Default::default(), busy_step: false });
                     }
                     Err(e) => {
                         lignes.push(format!("session de chat de {id} orpheline : {e}"));
@@ -868,19 +895,23 @@ impl DaemonHost {
             run: String::new(),
             human: by["kind"] == "human",
         });
-        self.chat_turn(backend_id, message)
+        self.chat_turn_from(backend_id, message, Sender::Person)
     }
 
     /// **Un tour de chat** sur le backend `backend_id`. Rend le texte, le run,
     /// qui l'a arrêté s'il l'a été, et ce qu'il a consommé.
     pub fn chat_turn(&self, backend_id: &str, message: &str) -> Result<Value, String> {
-        match self.chat_turn_with(backend_id, message, None) {
+        self.chat_turn_from(backend_id, message, Sender::Host)
+    }
+
+    fn chat_turn_from(&self, backend_id: &str, message: &str, sender: Sender) -> Result<Value, String> {
+        match self.chat_turn_of(backend_id, message, None, sender) {
             // **The net of a context overflow** (lot 3 of the session archived as it goes, 19 Nov
             // 2026): the turn that overflowed stays true in the memory and is filed with the open
             // slice; the session restarts from compose_restart; the message goes again, once, as
             // a new turn. A second overflow is a named failure.
             Err(e) if e.contains("llm context overflow") => match self.compacter(backend_id, true) {
-                Ok(_) => self.chat_turn_with(backend_id, message, None).map_err(|e2| if e2.contains("llm context overflow") { format!("context overflow after a compaction: {e2}") } else { e2 }),
+                Ok(_) => self.chat_turn_of(backend_id, message, None, sender).map_err(|e2| if e2.contains("llm context overflow") { format!("context overflow after a compaction: {e2}") } else { e2 }),
                 Err(refus) => Err(format!("{e} (the compaction that would have made room was refused: {refus})")),
             },
             r => r,
@@ -892,6 +923,32 @@ impl DaemonHost {
     /// `step_done`, `report`) et son budget enveloppent ceux du chat, `step_done`
     /// termine le tour, et le journal du run dit la demande (la fiche du juge).
     pub fn chat_turn_with(&self, backend_id: &str, message: &str, step: Option<&super::teammate::Step>) -> Result<Value, String> {
+        self.chat_turn_of(backend_id, message, step, Sender::Host)
+    }
+
+    /// **A message during a turn is a note of the turn** (28 November 2026): sent by someone (not by the host, not
+    /// during a teammate's step) while a chat turn runs, it waits in the entry's notes, the IDE's stream says it
+    /// (`NoteReceived` on `chat`), and the caller learns it was received during the turn. `None` when no such turn
+    /// runs: the message is an ordinary turn.
+    fn note_during_the_turn(&self, backend_id: &str, message: &str) -> Option<Value> {
+        let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
+        let e = chats.get_mut(backend_id)?;
+        let run = e.busy.clone().filter(|_| !e.busy_step)?;
+        let note = TurnNote { text: message.to_string(), at_ms: now_ms() };
+        e.notes.lock().unwrap_or_else(|p| p.into_inner()).push(note.clone());
+        let manifest = e.manifest.display().to_string();
+        drop(chats);
+        self.ide_flux().publier("chat", &manifest, json!({ "kind": "NoteReceived", "backend": backend_id, "turn_run": run, "text": note.text, "at_ms": note.at_ms }));
+        Some(json!({ "received_during_turn": true, "run": run, "text": note.text, "at_ms": note.at_ms }))
+    }
+
+    fn chat_turn_of(&self, backend_id: &str, message: &str, step: Option<&super::teammate::Step>, sender: Sender) -> Result<Value, String> {
+        let notes_its_turn = step.is_none() && sender != Sender::Host;
+        if notes_its_turn {
+            if let Some(v) = self.note_during_the_turn(backend_id, message) {
+                return Ok(v);
+            }
+        }
         // A chat turn past `memory.compact_at` of the window compacts first (lot 2).
         if step.is_none() {
             self.compacter_si_la_jauge_deborde(backend_id);
@@ -908,7 +965,7 @@ impl DaemonHost {
                 annule.store(true, Ordering::SeqCst);
             })
         };
-        let (mut session, _en_vol, empreintes) = {
+        let (mut session, _en_vol, empreintes, notes) = loop {
             let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
             let e = chats.entry(backend_id.to_string()).or_insert_with(|| ChatEntry {
                 manifest: hosted.manifest.clone(),
@@ -916,8 +973,18 @@ impl DaemonHost {
                 busy: None,
                 last_call: None,
                 empreintes: Default::default(),
+                notes: Default::default(),
+                busy_step: false,
             });
             if let Some(run) = &e.busy {
+                // A turn started since the first look: the message is its note (or, ended since, a turn of its own).
+                if notes_its_turn && !e.busy_step {
+                    drop(chats);
+                    match self.note_during_the_turn(backend_id, message) {
+                        Some(v) => return Ok(v),
+                        None => continue,
+                    }
+                }
                 return Err(format!("un tour est déjà en cours sur ce backend (run {run}) : attendez sa fin, ou arrêtez-le"));
             }
             // **En vol avant d'être vu** : le run que `chat_state` rend est
@@ -932,7 +999,8 @@ impl DaemonHost {
                 Err(e) => return Err(e),
             };
             e.busy = Some(run_id.clone());
-            (std::mem::take(&mut e.session), en_vol, e.empreintes.clone())
+            e.busy_step = step.is_some();
+            break (std::mem::take(&mut e.session), en_vol, e.empreintes.clone(), e.notes.clone());
         };
         // Les tours que la page a déjà (ceux que `chat_state` rend, sans le système) : la fin
         // du tour pousse ceux d'après.
@@ -971,7 +1039,10 @@ impl DaemonHost {
                         bus: b.bus_de_publication(),
                         run: run_id.clone(),
                     };
-                    let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &attente, ecrivent: &outils.ecrivent, repli: None };
+                    // **The notes received during the turn, at the head of the next tool result** (28 Nov 2026), as a
+                    // teammate's step delivers its mailbox (`Step::deliver`).
+                    let livre = NotesInTheTurn { inner: &attente, notes: notes.clone(), texts: self.prompt_texts() };
+                    let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &livre, ecrivent: &outils.ecrivent, repli: None };
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
                 })
                 .and_then(|r| r),
@@ -990,14 +1061,30 @@ impl DaemonHost {
         if resultat.is_ok() {
             self.demander_un_bilan(&hosted, &run_id);
         }
-        {
-            let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(e) = chats.get_mut(backend_id) {
-                e.session = session;
-                e.busy = None;
+        // The turn of the notes a turn left says so on its message (never sent to the model: metadata).
+        if sender == Sender::LeftNotes {
+            if let Some(t) = session.turns.iter_mut().filter(|t| t.role == "user").nth(numero_du_tour - 1) {
+                t.metadata = Some(json!({ "received_during_turn": true }));
             }
         }
-        self.write_chat(backend_id)?;
+        let left: Vec<TurnNote> = {
+            let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
+            match chats.get_mut(backend_id) {
+                Some(e) => {
+                    e.session = session;
+                    e.busy = None;
+                    e.busy_step = false;
+                    std::mem::take(&mut *e.notes.lock().unwrap_or_else(|p| p.into_inner()))
+                }
+                None => Vec::new(),
+            }
+        };
+        // **Left notes are never lost**: once this turn is put away, they start the next turn (in a thread, as a
+        // card's relaunch does, so the caller's answer is this turn's).
+        if let Err(e) = self.write_chat(backend_id) {
+            self.start_the_turn_of_left_notes(backend_id, left);
+            return Err(e);
+        }
         self.publier_l_etat_du_chat(backend_id, depuis, &run_id, &resultat);
         // The session archived as it goes: the chat's run is `chat:<backend>`, a teammate's is
         // `<task>:<parent>` (agreed with mémoire, 18 Nov 2026).
@@ -1009,7 +1096,34 @@ impl DaemonHost {
             let turns = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).map(|e| e.session.turns.clone()).unwrap_or_default();
             self.ranger_apres_le_tour(&hosted, backend_id, &run, turns);
         }
+        self.start_the_turn_of_left_notes(backend_id, left);
         resultat
+    }
+
+    /// **The notes a turn left start the next turn** (28 November 2026): their texts, in their order, as its message,
+    /// marked received during the turn. In a thread when the host knows itself (the caller's answer stays its own
+    /// turn's), here otherwise. A turn started meanwhile takes them as its notes, by the same path as any message.
+    fn start_the_turn_of_left_notes(&self, backend_id: &str, left: Vec<TurnNote>) {
+        if left.is_empty() {
+            return;
+        }
+        let message = left.iter().map(|n| n.text.as_str()).collect::<Vec<_>>().join("\n\n");
+        let said = |host: &DaemonHost, backend: &str, r: Result<Value, String>| {
+            if let Err(e) = r {
+                eprintln!("[démon] le tour des notes reçues pendant le tour n'est pas parti ({backend}) : {e}");
+                host.ide_flux().publier("chat", backend, json!({ "kind": "NotesTurnRefused", "backend": backend, "reason": e }));
+            }
+        };
+        match self.soi.get().and_then(std::sync::Weak::upgrade) {
+            Some(host) => {
+                let backend = backend_id.to_string();
+                std::thread::spawn(move || {
+                    let r = host.chat_turn_from(&backend, &message, Sender::LeftNotes);
+                    said(&*host, &backend, r);
+                });
+            }
+            None => said(self, backend_id, self.chat_turn_from(backend_id, &message, Sender::LeftNotes)),
+        }
     }
 
     /// **La fin d'un tour, poussée** (l'IDE par le flux, 9 novembre 2026) : l'état du chat
@@ -1747,6 +1861,65 @@ impl crate::agent::ToolBox for DitSonAttente<'_> {
     fn is_async(&self, tool: &str) -> bool {
         self.inner.is_async(tool)
     }
+}
+
+/// **The chat's tools, delivering the notes received during the turn** (28 November 2026): each result says first the
+/// messages received since the last one, by the loop's texts (`mid_turn.head`, `mid_turn.line`), as a teammate's step
+/// says its mailbox ([`super::teammate::Step::deliver`]); the result's `metadata.received_during_turn` keeps them for
+/// the thread. A note is taken out of the queue as it is delivered: never twice.
+pub(super) struct NotesInTheTurn<'a> {
+    pub inner: &'a (dyn crate::agent::ToolBox + Sync),
+    pub notes: TurnNotes,
+    pub texts: super::prompts::Texts,
+}
+
+impl NotesInTheTurn<'_> {
+    fn deliver(&self, mut turn: crate::llm::Turn) -> crate::llm::Turn {
+        let new: Vec<TurnNote> = std::mem::take(&mut *self.notes.lock().unwrap_or_else(|p| p.into_inner()));
+        if new.is_empty() {
+            return turn;
+        }
+        let mut head = format!("{}\n", self.texts.get("mid_turn.head", &[]));
+        for n in &new {
+            let line = self.texts.get("mid_turn.line", &[("kind", "message"), ("from", "l'utilisateur"), ("text", n.text.as_str()), ("granted", "")]);
+            head.push_str(&format!("{line}\n"));
+        }
+        turn.content = format!("{head}\n{}", turn.content);
+        let marked = json!(new);
+        match turn.metadata.as_mut() {
+            Some(Value::Object(o)) => {
+                o.insert("received_during_turn".to_string(), marked);
+            }
+            Some(other) => {
+                let before = other.take();
+                turn.metadata = Some(json!({ "result": before, "received_during_turn": marked }));
+            }
+            None => turn.metadata = Some(json!({ "received_during_turn": marked })),
+        }
+        turn
+    }
+}
+
+impl crate::agent::ToolBox for NotesInTheTurn<'_> {
+    fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
+        self.deliver(self.inner.call(call))
+    }
+    fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
+        self.deliver(self.inner.call_in(call, run))
+    }
+    fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
+        self.deliver(self.inner.call_with(call, run, inv))
+    }
+    fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
+        self.inner.tool_defs()
+    }
+    fn is_async(&self, tool: &str) -> bool {
+        self.inner.is_async(tool)
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 fn fichiers_ecrits_du_tour(turns: &[crate::llm::Turn], ecrivent: &HashSet<String>) -> Vec<String> {

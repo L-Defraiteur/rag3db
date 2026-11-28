@@ -52,7 +52,8 @@ type ToolBlock = { id: string; name: string; args: string; result?: string; ok?:
 // changent de place quand la réponse arrive ») : mots, appel, mots, appel… la
 // réponse à la fin ; le flux et la relecture rendent la même suite.
 type Part = { kind: "text"; text: string } | ({ kind: "tool" } & ToolBlock);
-type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
+// `during`: a message of the person received while a turn ran (28 November 2026), shown « reçu pendant le tour ».
+type Message = { kind: "message"; role: "user" | "assistant" | "error"; parts: Part[]; run?: string; live?: boolean; during?: boolean; propositions: TurnResult["propositions"]; task?: { tache: NonNullable<TurnResult["tache"]>; fichiers: string[] } };
 type Item = Message | { kind: "info"; text: string; cls?: string } | { kind: "price"; slug: string; resend: string };
 type TokenLog = { received: Record<string, number[]>; applied: Record<string, number[]>; missed: { sujet: string; count: number }[] };
 
@@ -84,11 +85,19 @@ function fromTurns(turns: ChatTurn[]): Item[] {
         b.metadata = t.metadata;
         if (t.ui?.length) b.ui = t.ui;
       }
+      // **The notes received during the turn** (28 November 2026): the host delivered them at the head of this result;
+      // the thread shows them here, and the answer goes on below them.
+      const notes = (t.metadata as { received_during_turn?: { text?: string }[] } | undefined)?.received_during_turn;
+      if (Array.isArray(notes) && notes.length) {
+        for (const n of notes) items.push(message("user", String(n.text ?? ""), { during: true }));
+        current = null;
+      }
       continue;
     }
     if (t.role === "user") {
       current = null;
-      items.push(message("user", t.content ?? ""));
+      const during = (t.metadata as { received_during_turn?: unknown } | undefined)?.received_during_turn === true;
+      items.push(message("user", t.content ?? "", during ? { during: true } : {}));
       continue;
     }
     if (t.role !== "assistant") continue;
@@ -468,6 +477,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // automatique du navigateur) pose la valeur par le DOM, et `send` la lit là.
   const input = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLElement>(null);
+  // The sentences this page sent during a turn (their `NoteReceived` is not shown twice), and whether the page's own
+  // turn received one (its end then rereads the whole thread, the notes in their place).
+  const notesSent = useRef(new Set<string>());
+  const notesInTheTurn = useRef(false);
   const runRef = useRef<string | null>(null);
   // **What the turn waits for, as the host says it** (`Waiting` then `Resumed`, 19 Nov. 2026): the
   // status names it, counted by a local timer — the page asks the host nothing for it.
@@ -646,6 +659,15 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         setRoleRuns((cur) => cur.map((x) => (x.run === ev.run ? { ...x, state: ev.ok === false ? "en erreur" : "fini" } : x)));
       }
       if (!backend || d.backend !== backend.manifest) return;
+      // **A message received during the turn, sent from elsewhere** (another window, the terminal): shown at once.
+      if (ev.kind === "NoteReceived" && ev.backend === id) {
+        const text = String(ev.text ?? "");
+        if (!notesSent.current.delete(text)) {
+          follow.current = true;
+          setItems((cur) => [...cur, message("user", text, { during: true })]);
+        }
+        return;
+      }
       // Un fichier du dépôt a changé : les symboles cités se redemandent (relecture d'ED) ; et
       // de nouveau à la fin de la réaction qui le réindexe — redemandés au seul changement, ils
       // liraient l'index d'avant et garderaient l'ancienne ligne cinq minutes.
@@ -823,10 +845,31 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       });
     });
 
+  /// **A message sent during a turn is never lost** (28 November 2026): it shows at once, marked « reçu pendant le
+  /// tour », and the host gives it to the running turn (at the head of its next tool result, or as the next turn).
+  const sendDuringTheTurn = async (text: string) => {
+    if (input.current) input.current.value = "";
+    notesSent.current.add(text);
+    notesInTheTurn.current = true;
+    stuck.current = true;
+    follow.current = true;
+    setItems((cur) => [...cur, message("user", text, { during: true })]);
+    try {
+      const r = await sendChat(id, text);
+      // The turn ended meanwhile: the message made a turn of its own, which the stream shows.
+      if (!r.received_during_turn) notesSent.current.delete(text);
+    } catch (e) {
+      notesSent.current.delete(text);
+      setItems((cur) => [...cur, message("error", (e as Error).message)]);
+    }
+  };
+
   const send = async () => {
     const text = input.current?.value.trim() ?? "";
-    if (!text || busy || !chat?.on) return;
+    if (!text || !chat?.on) return;
+    if (busy) return sendDuringTheTurn(text);
     if (input.current) input.current.value = "";
+    notesInTheTurn.current = false;
     envoiDeLaPage.current = true;
     epoqueDesTours.current += 1;
     setBusy(true);
@@ -852,7 +895,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       const relue = derniere && derniere.kind === "message" && derniere.role === "assistant" ? derniere.parts : null;
       if (s) setChat(s);
       follow.current = true;
-      setItems((cur) =>
+      // A turn that received notes: the thread reread whole, each note where the model read it.
+      if (s && notesInTheTurn.current) {
+        toursRef.current = s.turns;
+        setItems(fromTurns(s.turns));
+      } else setItems((cur) =>
         cur.map((i) => {
           if (i.kind !== "message" || !i.live) return i;
           let parts = relue ?? i.parts;
@@ -1045,6 +1092,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               <article key={k} className={`message ${it.role} ${it.live ? "en-cours" : ""} mb-7`} data-role={it.role} data-run={it.run}>
                 <div className={`role text-xs font-semibold mb-1.5 ${it.role === "user" ? "text-blue-400" : it.role === "error" ? "text-destructive" : "text-primary"}`}>
                   {it.role === "user" ? "Vous" : it.role === "error" ? "Erreur" : "Agent"}
+                  {it.during ? <span className="recu-pendant-le-tour ml-2 font-normal text-muted-foreground">· reçu pendant le tour</span> : null}
                 </div>
                 {it.live && !it.parts.length ? <div className="body whitespace-pre-wrap break-words" /> : null}
                 {it.parts.map((p, n) => {
@@ -1142,7 +1190,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               <Button id="stop" type="button" variant="outline" size="sm" hidden={!run} onClick={stop}>
                 <Square className="size-3.5" /> Arrêter
               </Button>
-              <Button id="send" type="submit" size="sm" disabled={busy || !chat?.on}>
+              <Button id="send" type="submit" size="sm" disabled={!chat?.on}>
                 {chat ? <>Envoyer <SendHorizontal className="size-3.5" /></> : "L'agent arrive…"}
               </Button>
             </div>
