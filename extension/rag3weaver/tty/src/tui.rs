@@ -80,9 +80,27 @@ pub(crate) struct PendingFrames {
 
 impl PendingFrames {
     /// The frames to show now, for `v` arriving with `filter`.
-    pub(crate) fn admit(&mut self, v: Value, filter: Option<&str>, main: &str, _now: std::time::Instant) -> Vec<Value> {
-        let _ = &mut self.kept;
-        if frame_is_the_tasks(&v, filter, main) { vec![v] } else { Vec::new() }
+    /// Before the task is known, a frame is kept (the oldest go past [`PENDING_FRAMES_MAX`], and any kept longer than
+    /// [`PENDING_FRAMES_AGE`]); once it is known, the kept frames that are the task's come back first, in order.
+    pub(crate) fn admit(&mut self, v: Value, filter: Option<&str>, main: &str, now: std::time::Instant) -> Vec<Value> {
+        while self.kept.front().is_some_and(|(at, _)| now.saturating_duration_since(*at) > PENDING_FRAMES_AGE) {
+            self.kept.pop_front();
+        }
+        if filter.is_none() {
+            if frame_is_the_tasks(&v, filter, main) {
+                return vec![v];
+            }
+            self.kept.push_back((now, v));
+            if self.kept.len() > PENDING_FRAMES_MAX {
+                self.kept.pop_front();
+            }
+            return Vec::new();
+        }
+        let mut out: Vec<Value> = self.kept.drain(..).map(|(_, f)| f).filter(|f| frame_is_the_tasks(f, filter, main)).collect();
+        if frame_is_the_tasks(&v, filter, main) {
+            out.push(v);
+        }
+        out
     }
 }
 
@@ -228,6 +246,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
             };
             let tx3 = tx.clone();
             let principal = tache.depot.id.clone();
+            let mut pending = PendingFrames::default();
             let r = flux::suivre_sans_fin(&ep, &["agent", "tokens", "mailbox", "declarations"], depuis, &arret, &mut ouvert, |p| {
                 let _ = tx3.send(Msg::Note(format!("flux coupé ({p}) : je reprends")));
             }, |t| {
@@ -246,13 +265,14 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                     // Une proposition de déclarations du dépôt principal passe aussi (tty-16) : c'est
                     // sur lui que les déclarations attendent un accord.
                     // **Only the task's frames** (Lucie's trial, 22 November 2026): none before it opens.
-                    if !frame_is_the_tasks(&v, filtre.lock().unwrap_or_else(|p| p.into_inner()).as_deref(), &principal) {
-                        return flux::Suite::Continuer;
+                    // **Kept until the task is known** (28 Nov. 2026): its first words come before its manifest does.
+                    let filtre_vu = filtre.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                    for v in pending.admit(v, filtre_vu.as_deref(), &principal, std::time::Instant::now()) {
+                        if v["evenement"]["kind"] == "MailboxLine" {
+                            boite_au_flux.store(true, Ordering::SeqCst);
+                        }
+                        let _ = tx.send(Msg::Trame(v));
                     }
-                    if v["evenement"]["kind"] == "MailboxLine" {
-                        boite_au_flux.store(true, Ordering::SeqCst);
-                    }
-                    let _ = tx.send(Msg::Trame(v));
                 }
                 flux::Suite::Continuer
             });
