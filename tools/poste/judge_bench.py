@@ -8,7 +8,9 @@ For each lot of tools/poste/judge_bench_verdicts.json, the judge's context as it
 rules, the lot's announced subject, its diff without generated files, the lines master added recently in its files), its
 instruction and its schema read from templates/pusher/judge.mmd at --ref; one call per draw and per model to Vertex
 (OpenAI-compatible endpoint, global), with no temperature nor reasoning imposed. Each finding is sorted by the hand
-verdicts: true, false, debatable, or to judge (a person then adds it to the verdicts). It prints, per model, the true
+verdicts: true, false, debatable, or to judge (a person then adds it to the verdicts). When the graph has KeepQuoted,
+the bench mirrors it (a finding whose excerpt is not, as it is, in an added line — a removed one for
+reverted_master_change — is dropped) and says how many true and false findings it dropped. It prints, per model, the true
 and false findings of each draw and their median. It calls a paid model: a measure, never a pass's witness.
 Credentials: GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_CLOUD_PROJECT, from the environment or from
 ~/.config/rag3weaver/rag3weaver-daemon.env; the access token is minted with openssl.
@@ -56,6 +58,21 @@ def token(sa_path):
     return json.load(urllib.request.urlopen(urllib.request.Request(sa["token_uri"], body)))["access_token"]
 
 
+def quoted(diff):
+    """The added and the removed lines of a diff, as KeepQuoted reads them."""
+    added = [l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]
+    removed = [l[1:] for l in diff.splitlines() if l.startswith("-") and not l.startswith("---")]
+    return added, removed
+
+
+def kept(finding, added, removed):
+    """A mirror of the graph's KeepQuoted (24 Nov. 2026): a finding is kept when its excerpt is, as it is, in an added
+    line of the diff, or in a removed line for reverted_master_change."""
+    e = (finding.get("excerpt") or "").strip()
+    lines = removed if finding.get("rule") == "reverted_master_change" else added
+    return bool(e) and any(e in l for l in lines)
+
+
 def context(lot, ref, rules, agents, generated):
     base = lot["base"] or git("merge-base", "origin/master", lot["tip"]).strip()
     spec = ["--", "."] + [f":!{p}" for p in generated]
@@ -67,6 +84,7 @@ def context(lot, ref, rules, agents, generated):
                  if l.startswith("+") and not l.startswith("+++")]
         if added:
             recent += f"### {f}\n" + "\n".join(added[-200:]) + "\n"
+    lot["_quoted"] = quoted(diff)
     return (f"## AGENTS.md, the rules of the repository\n\n{agents}\n\n## The rules of the judge\n\n"
             f"{json.dumps(rules, ensure_ascii=False, indent=1)}\n\n## The announced subject of the lot\n\n{subject}\n\n"
             f"## The diff of the lot\n\n{diff}\n\n## Lines master added recently in these files\n\n{recent}")
@@ -103,11 +121,12 @@ def main():
     sa, project = credentials(); tok = token(sa)
     url = f"https://aiplatform.googleapis.com/v1/projects/{project}/locations/global/endpoints/openapi/chat/completions"
     contexts = {lot["id"]: context(lot, a.ref, rules, agents, generated) for lot in verdicts}
+    keep = "KeepQuoted" in mmd
     os.makedirs(a.out, exist_ok=True)
     for model in models:
         tallies = []
         for draw in range(1, a.draws + 1):
-            t = {"true": 0, "false": 0, "debatable": 0, "to judge": 0}
+            t = {"true": 0, "false": 0, "debatable": 0, "to judge": 0, "dropped true": 0, "dropped false": 0}
             for lot in verdicts:
                 body = {"model": model, "max_tokens": 16384,
                         "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": contexts[lot["id"]]}],
@@ -119,13 +138,19 @@ def main():
                 except Exception as e:  # noqa: BLE001
                     print(f"  {lot['id']}: pas de réponse ({str(e)[:120]})"); found = []
                 for f in found:
-                    k = sort(f, lot); t[k] += 1
+                    k = sort(f, lot)
+                    if keep and not kept(f, *lot["_quoted"]):
+                        if k in ("true", "false"):
+                            t[f"dropped {k}"] += 1
+                        continue
+                    t[k] += 1
                     if k == "to judge":
                         print(f"  à juger — {model.split('/')[-1]} tirage {draw} {lot['id']} : {f.get('rule')} {f.get('file')}:{f.get('line')} « {(f.get('excerpt') or '')[:80]} »")
                 with open(os.path.join(a.out, f"{model.split('/')[-1]}-{draw}-{lot['id']}.json"), "w") as o:
                     json.dump(found, o, ensure_ascii=False, indent=1)
             tallies.append(t)
-            print(f"{model.split('/')[-1]} tirage {draw} : {t['true']} vrais, {t['false']} faux, {t['debatable']} discutables, {t['to judge']} à juger")
+            print(f"{model.split('/')[-1]} tirage {draw} : {t['true']} vrais, {t['false']} faux, {t['debatable']} discutables, {t['to judge']} à juger"
+                  + (f" ; ôtés par KeepQuoted : {t['dropped true']} vrais, {t['dropped false']} faux" if keep else ""))
         print(f"{model.split('/')[-1]} médiane : {statistics.median(x['true'] for x in tallies)} vrais, "
               f"{statistics.median(x['false'] for x in tallies)} faux — rapports dans {a.out}")
 
