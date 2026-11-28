@@ -245,7 +245,7 @@ function App() {
           (<code className="font-mono">rag3weaver-backend ide --open</code>), ou réponds dans le terminal.
         </p>
       ) : null}
-      <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
+      <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : route().view === "workflow" ? "flex-1 px-4 py-6 w-full max-w-[1600px] mx-auto" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (
           <p className="text-destructive" role="alert">
             {error}
