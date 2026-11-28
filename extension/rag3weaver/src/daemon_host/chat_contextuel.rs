@@ -608,7 +608,12 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
     // A card the host no longer knows (ED's review): a second turn asks again, then the host forgets its requests, as
     // a restart does. Nobody can decide that card any more: a window opened now must not count it.
     n.onglet(0);
-    n.attendre(PRETE, "the chat ready for a second turn");
+    // The event is the end of the turn the host relaunched on the approval (its answer, the second « J'attends ton
+    // accord. »), not the send button: it is free for a moment between the first turn's end and the relaunch.
+    n.attendre(
+        &format!("(document.body.innerText.match(/J'attends ton accord\\./g) ?? []).length >= 2 && document.querySelector('#status')?.textContent === 'fini' && {PRETE}"),
+        "the turn relaunched by the approval ended, the chat ready for a second turn",
+    );
     n.evaluer("document.querySelector('#message').value = 'relance echo'; document.querySelector('#send').click()");
     n.attendre(&format!("document.querySelectorAll('{carte}').length === 2 && document.querySelector('#status')?.textContent === 'fini'"), "a second card awaits its approval");
     a.host.oublier_les_demandes_pour_un_temoin();
