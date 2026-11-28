@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Un pas long ne relit plus ses vieux résultats d'outils.** L'agent écrit, avant chaque appel
+  d'outil, ce que le résultat d'avant lui a appris (« Appris : … Ensuite : … »). Quand les résultats d'un pas dépassent
+  20 000 jetons estimés, ceux qui sont plus vieux que les 8 000 derniers et qu'il a commentés sont remplacés d'un coup
+  par un talon qui garde son commentaire (et les `chemin:ligne` des outils d'index) ; un résultat sans commentaire reste
+  entier. La réécriture se fait par paquets, au franchissement du seuil seulement, pour garder le cache du fournisseur.
+  Chaque paquet est dit dans la boîte de la tâche (ligne `context_rewrite` de l'hôte : jetons avant et après, sorties
+  remplacées). Seuil, part gardée, `on`/`off` : `templates/teammate/graphs/before_model_call.json` ; le talon :
+  `context_rewrite.stub` de `texts.json` ; ta copie les change sans rebâtir.
 - 28 novembre 2026 — **L'index cherche pour l'agent au début d'un tour.** Dans un dossier dont l'index est prêt, une
   demande sur le code fait d'abord deux appels courts au modèle : le premier dit si l'agent semble déjà savoir ce qu'il
   faut (un score de 0 à 1) et donne trois recherches et un nom à suivre ; sous le seuil, les recherches partent sur
