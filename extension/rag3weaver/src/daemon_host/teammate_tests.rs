@@ -67,6 +67,7 @@ mod stop_stops;
 mod text_first;
 mod turn_changes;
 mod turn_failures;
+mod turn_sees_instructions;
 mod web;
 mod witness_host_data;
 mod write_findings_first;
