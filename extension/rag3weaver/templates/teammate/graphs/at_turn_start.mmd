@@ -1,12 +1,18 @@
 %% tool: at_turn_start
-%% description: At the first step of a turn opened by a request: what the long-term memory holds for it (recall_for_request of the declared memory), as a block for the step, or nothing.
-%% param: turn json! -- the turn's facts: request
+%% description: At the first step of a turn opened by a request: what the long-term memory holds for it (at_turn_start_recall.mmd), and what the code index finds for it (the scout, at_turn_start_scout.mmd), each a block for the step, or nothing. Each part runs only where the turn's facts say it can (`recall`: a memory is declared; `scout`: the folder's index is ready and the scout's mode in at_turn_start.json is not off); a part that fails is said in `errors`, and the other still gives its block.
+%% param: turn json! -- the turn's facts: request, recent (the conversation before this turn), recall, scout, threshold (the scout's knowledge threshold, from at_turn_start.json)
 %% result: block.result
+%%
+%% The result is a map: `recall` (a text), `scout` (the block's lines), `trace` (the scout's score and decision, which
+%% the host writes in the turn's trace), `errors`. A graph of the user's that gives a text is read as the recall block.
 graph LR
     facts["RhaiNode(script='input', value=$turn)"]
-    args["RhaiNode(script='#{ request: input.request, prepare: `direct` }')"]
-    recall["CallTool(tool='recall_for_request')"]
-    block["RhaiNode(script='let b = input.block; if b == () { `` } else { b }')"]
-    facts -->|result:value| args
-    args -->|result:args| recall
-    recall -->|result:value| block
+    recall["ForEachNode(graph='@graphs/at_turn_start_recall.mmd', when='recall', on_error='report')"]
+    scout["ForEachNode(graph='@graphs/at_turn_start_scout.mmd', when='scout', on_error='report')"]
+    parts["Collect(inputs='recall,scout', keep_empty=true)"]
+    block["RhaiNode(script='let r = input[0][0]; let s = input[1][0]; let out = #{ recall: ``, scout: [], trace: (), errors: [] }; if type_of(r) == `string` { out.recall = r; } else if type_of(r) == `map` && r.contains(`error`) { out.errors.push(`recall: ` + r.error); } if type_of(s) == `map` { if s.contains(`error`) { out.errors.push(`scout: ` + s.error); } else if s.contains(`trace`) { out.scout = s.block; out.trace = s.trace; } } out')"]
+    facts -->|result:elements| recall
+    facts -->|result:elements| scout
+    recall -->|list:recall| parts
+    scout -->|list:scout| parts
+    parts -->|list:value| block

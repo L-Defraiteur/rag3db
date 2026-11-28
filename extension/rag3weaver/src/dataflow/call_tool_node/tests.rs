@@ -35,3 +35,25 @@ fn call_tool_without_a_lent_caller_says_so() {
     let e = node.execute(&mut ctx).unwrap_err();
     assert!(e.contains("tool_caller"), "{e}");
 }
+
+/// **`on` names the caller**: with two callers lent, the node calls the one it names, and says the name of a caller
+/// that is not lent.
+#[test]
+fn call_tool_calls_the_caller_it_names() {
+    let (memory, code) = (Arc::new(Fake(Mutex::new(Vec::new()))), Arc::new(Fake(Mutex::new(Vec::new()))));
+    let mut services = ServiceRegistry::new();
+    services.register::<Arc<dyn ToolCaller>>(TOOL_CALLER_SERVICE, memory.clone());
+    services.register::<Arc<dyn ToolCaller>>(&tool_caller_key(Some("code")), code.clone());
+    let services = Arc::new(services);
+    let mut node = CallToolNodeFactory.create("n", &json!({ "tool": "search_code", "on": "code" })).unwrap();
+    let mut ctx = NodeContext::with_services(services.clone());
+    ctx.set_input("args", PortValue::new(json!({ "query": "bonjour" })));
+    node.execute(&mut ctx).unwrap();
+    assert_eq!(code.0.lock().unwrap().clone(), vec![("search_code".to_string(), json!({ "query": "bonjour" }))]);
+    assert!(memory.0.lock().unwrap().is_empty(), "the default caller is not called");
+    let mut node = CallToolNodeFactory.create("n", &json!({ "tool": "search_code", "on": "web" })).unwrap();
+    let mut ctx = NodeContext::with_services(services);
+    ctx.set_input("args", PortValue::new(json!({})));
+    let e = node.execute(&mut ctx).unwrap_err();
+    assert!(e.contains("tool_caller:web"), "{e}");
+}
