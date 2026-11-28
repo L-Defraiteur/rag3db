@@ -3372,6 +3372,9 @@ mod tests {
 }
 
 #[cfg(test)]
+#[path = "teammate/context_full_text_tests.rs"]
+mod context_full_text_tests;
+#[cfg(test)]
 #[path = "teammate/context_share_tests.rs"]
 mod context_share_tests;
 
