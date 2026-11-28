@@ -233,8 +233,27 @@ fn the_editors_draft_is_applied_line_by_line_and_checked() {
     assert_eq!(added["result"]["valid"], json!(true), "{added}");
     let (before, after) = (added["result"]["before"].as_str().unwrap(), added["result"]["after"].as_str().unwrap());
     assert_eq!(after.lines().count(), before.lines().count() + 1, "one line more");
-    let bad = pick(false).expect("two declared ports whose types do not connect, in archive");
-    let refused = edit(connect(&bad));
+    // Two declared ports whose types do not connect: looked for in every tool of the backend (archive's are all Map or
+    // Any; a search's carry Results and Query).
+    let (_, state) = get(&b.root, "/ide/etat");
+    let manifest = state["backends"].as_array().unwrap().iter().find(|x| x["id"] == b.id.as_str()).unwrap()["manifest"].clone();
+    let described = post(&b.root, "/ide/describe", json!({ "manifest": manifest }));
+    let tools: Vec<String> = described["result"]["tools"].as_array().or(described["tools"].as_array()).unwrap().iter().filter_map(|t| t["name"].as_str().map(str::to_string)).collect();
+    let found = tools.iter().find_map(|tool| {
+        let (_, g) = get(&b.root, &format!("/ide/graphe?backend={}&tool={tool}", b.id));
+        let nodes = g["result"]["nodes"].as_array()?.clone();
+        let edges = g["result"]["edges"].as_array()?.clone();
+        let typed = |side: &str| -> Vec<(String, String, String)> {
+            nodes.iter().flat_map(|n| n["schema"][side].as_array().cloned().unwrap_or_default().into_iter().map(move |p| (n["name"].as_str().unwrap().to_string(), p["name"].as_str().unwrap().to_string(), p["type"].as_str().unwrap().to_string()))).collect()
+        };
+        let (outs, ins) = (typed("outputs"), typed("inputs"));
+        outs.iter()
+            .flat_map(|o| ins.iter().map(move |i| (o.clone(), i.clone())))
+            .find(|(o, i)| o.0 != i.0 && !joins(o, i) && !edges.iter().any(|e| e["from_node"] == o.0.as_str() && e["from_port"] == o.1.as_str() && e["to_node"] == i.0.as_str() && e["to_port"] == i.1.as_str()))
+            .map(|pair| (tool.clone(), pair))
+    });
+    let (tool, bad) = found.unwrap_or_else(|| panic!("two declared ports whose types do not connect, in one of {tools:?}"));
+    let refused = post(&b.root, "/ide/graphe/edit", json!({ "backend": b.id, "tool": tool, "edits": connect(&bad) }));
     assert_eq!(refused["result"]["valid"], json!(false), "{refused}");
     let why = refused["result"]["error"].as_str().unwrap_or_default();
     assert!(why.contains(&format!("{}.{}", bad.0 .0, bad.0 .1)) && why.contains(&format!("{}.{}", bad.1 .0, bad.1 .1)), "the refusal names both ports: {why}");

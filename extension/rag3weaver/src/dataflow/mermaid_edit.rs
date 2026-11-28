@@ -22,14 +22,17 @@ pub enum Edit {
     Disconnect { from_node: String, from_port: String, to_node: String, to_port: String },
 }
 
-/// A value as a node's declaration writes it: a `$param` as it is, a text between apostrophes (escaped), the rest as
-/// JSON.
-fn written(v: &Value) -> String {
-    match v {
+/// A value as a node's declaration writes it: a `$param` as it is, a text between apostrophes — between quotes when it
+/// holds an apostrophe (the parser takes what lies between the two, escaping nothing) — the rest as JSON. A text that
+/// holds both cannot be written, and says so.
+fn written(v: &Value) -> Result<String, String> {
+    Ok(match v {
         Value::String(s) if s.starts_with('$') && s[1..].chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') => s.clone(),
-        Value::String(s) => format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'")),
+        Value::String(s) if !s.contains('\'') => format!("'{s}'"),
+        Value::String(s) if !s.contains('"') => format!("\"{s}\""),
+        Value::String(s) => return Err(format!("a text holding both an apostrophe and a quote cannot be written in a declaration: {s}")),
         other => other.to_string(),
-    }
+    })
 }
 
 /// The code of a line, before its `%%` comment.
@@ -67,8 +70,8 @@ fn set_in_line(line: &str, key: &str, value: Option<&Value>) -> Result<String, S
     let mut parts: Vec<String> = split_params(args).into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect();
     let at = parts.iter().position(|p| p.split_once('=').is_some_and(|(k, _)| k.trim() == key));
     match (at, value) {
-        (Some(i), Some(v)) => parts[i] = format!("{key}={}", written(v)),
-        (None, Some(v)) => parts.push(format!("{key}={}", written(v))),
+        (Some(i), Some(v)) => parts[i] = format!("{key}={}", written(v)?),
+        (None, Some(v)) => parts.push(format!("{key}={}", written(v)?)),
         (Some(i), None) => {
             parts.remove(i);
         }
