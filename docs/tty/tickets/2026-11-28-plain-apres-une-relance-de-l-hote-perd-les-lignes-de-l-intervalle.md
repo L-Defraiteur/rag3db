@@ -23,6 +23,6 @@ Sur `host_restarted`, `--plain` relit la boîte de sa tâche et écrit les ligne
 
 ## Le témoin
 
-Par le script de mesure du crate (`mesures/faux_hote.py` sait servir une époque) : un `--plain` sur une demande, le
+Par un script de mesure du crate (`mesures/faux_hote.py`, à qui il faut apprendre à servir la trame `host` et son époque) : un `--plain` sur une demande, le
 faux hôte relancé avec une autre époque au milieu du tour, une ligne de boîte écrite pendant la relance ; elle
 s'écrit une fois, et la séance finit.
