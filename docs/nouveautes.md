@@ -57,6 +57,9 @@
 - 28 novembre 2026 — **Cocher la dernière tâche et clore le plan, d'un seul appel.** Un `edit_plan` qui marque un
   item fait et clôt le plan dans le même appel fait les deux ; avant, la clôture passait d'abord, l'item ne trouvait
   plus de plan, et l'agent perdait trois appels à réparer. Un appel refusé ne clôt plus rien.
+- 28 novembre 2026 — **L'hôte dit son époque.** Chaque hôte tire un identifiant à son démarrage, le rend dans
+  `/sante` (`epoch`) et ouvre chaque abonnement à son flux par une trame `event: host` qui le porte, avec son `pid`.
+  Un client qui reprend le flux après une relance voit que les numéros sont d'une autre série et repart de zéro.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
