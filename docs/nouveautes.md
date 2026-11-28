@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Une conversation rouverte voit les modèles déclarés depuis.** `/model` et la liste des modèles
+  d'une tâche lisent `models.llm` dans le manifeste vivant du dossier, à chaque appel ; le reste des déclarations de
+  la tâche reste celui de son ouverture.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code

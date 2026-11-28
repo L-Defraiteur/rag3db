@@ -441,9 +441,14 @@ impl DaemonHost {
     /// La tâche ouverte, et les modèles que déclare son manifeste.
     fn modeles_declares(&self, parent: &str, nom: &str) -> Result<(super::taches::Tache, crate::model_source::Modeles), String> {
         let t = self.tache(parent, nom).ok_or_else(|| format!("la tâche « {nom} » de {parent} n'est pas ouverte"))?;
-        let hosted = self.hosted(&t.manifest)?;
-        let modeles = self.with_backend(&hosted, |b| b.prepared().manifest.models.clone())?;
+        let modeles = modeles_du_dossier(&t.parent_manifest)?;
         Ok((t, modeles))
+    }
+
+    /// The models a task's chat chooses from: the living ones of its folder (24 Nov. 2026), else its own copy's.
+    fn modeles_du_chat(&self, manifest: &Path, prepared: &crate::backend::PreparedBackend) -> crate::model_source::Modeles {
+        let parent = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| t.parent_manifest.clone());
+        parent.and_then(|p| modeles_du_dossier(&p).ok()).unwrap_or_else(|| prepared.manifest.models.clone())
     }
 
     /// **Le modèle de langage du chat d'un backend** : celui qu'a choisi sa tâche, s'il est une tâche
@@ -452,7 +457,7 @@ impl DaemonHost {
         let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
         match choix {
             Some(nom) => {
-                let source = prepared.manifest.models.modele_de_langage(&nom).map_err(|e| format!("le modèle choisi pour la tâche : {e} ; choisissez un modèle par /model"))?.clone();
+                let source = self.modeles_du_chat(manifest, prepared).modele_de_langage(&nom).map_err(|e| format!("le modèle choisi pour la tâche : {e} ; choisissez un modèle par /model"))?.clone();
                 (self.modele_nomme)(&source)
             }
             None => (self.chat_model)(prepared),
@@ -465,12 +470,13 @@ impl DaemonHost {
         let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
         let m = &prepared.manifest.models;
         match choix {
-            Some(nom) => m.modele_de_langage(&nom).ok().and_then(|s| s.max_output_tokens),
+            // A chosen model is one of the folder's, read living (24 Nov. 2026); without a choice, the task's own copy.
+            Some(nom) => self.modeles_du_chat(manifest, prepared).modele_de_langage(&nom).ok().and_then(|s| s.max_output_tokens),
             None => m.defaut_de_l_hote().and_then(|r| r.max_output_tokens).or_else(|| m.modeles_de_langage().first().and_then(|s| s.max_output_tokens)),
         }
     }
 
-    /// Choisit le modèle d'une tâche par son nom ; un nom inconnu se refuse en nommant la liste.
+    /// Choisit le modèle d'une tâche par son nom (parmi ceux de son dossier) ; un nom inconnu se refuse en nommant la liste.
     pub fn choisir_le_modele(&self, parent: &str, nom: &str, modele: &str) -> Result<Value, String> {
         let (t, modeles) = self.modeles_declares(parent, nom)?;
         modeles.modele_de_langage(modele)?;
@@ -1818,3 +1824,10 @@ fn tache_a_role(run: &str, v: &Value) -> Option<Value> {
 
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
 mod tests;
+
+/// **The models of a folder, read living** (Lucie, 24 November 2026): the list of the models is the user's preference,
+/// not a declaration of the task's work — read in the folder's manifest at each call, `builtin:` resolved as the host
+/// does, so a conversation reopened sees the models declared since.
+fn modeles_du_dossier(parent_manifest: &Path) -> Result<crate::model_source::Modeles, String> {
+    Ok(crate::backend::PreparedBackend::load(parent_manifest)?.manifest.models)
+}

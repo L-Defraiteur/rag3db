@@ -35,11 +35,11 @@ mod tests {
         let h = host.hosted(&manifeste).unwrap();
         host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
         let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
-        // Deux modèles déclarés dans le manifeste de la tâche, le second par défaut ; l'hôte relit un
-        // manifeste changé à sa réouverture (le principal a les siens par sa propre copie).
-        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&t.manifest).unwrap()).unwrap();
+        // Deux modèles déclarés dans le manifeste du dossier, le second par défaut : la tâche les lit vivants
+        // (24 Nov. 2026 ; ce témoin les écrivait dans la copie de la tâche, la règle d'avant).
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
         m["models"]["llm"] = modeles;
-        std::fs::write(&t.manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         let session = host.ide_session();
         assert_eq!(host.open(Some(&session), &t.manifest)["ok"], true, "la tâche se rouvre sur son manifeste changé");
 
@@ -63,8 +63,8 @@ mod tests {
 
         // **Un choix qui ne désigne plus rien** (ED) : le manifeste renomme « rapide » en « vite ». La
         // liste dit l'ancien choix, inconnu ; le chat refuse le tour en disant quoi faire.
-        let texte = std::fs::read_to_string(&t.manifest).unwrap().replace("\"rapide\"", "\"vite\"");
-        std::fs::write(&t.manifest, texte).unwrap();
+        let texte = std::fs::read_to_string(&manifeste).unwrap().replace("\"rapide\"", "\"vite\"");
+        std::fs::write(&manifeste, texte).unwrap();
         assert_eq!(host.open(Some(&session), &t.manifest)["ok"], true);
         let liste = host.modeles_de_tache(&h.id, "doc").unwrap();
         assert_eq!((liste["current"].clone(), liste["current_unknown"].clone()), (json!("rapide"), json!(true)), "{liste}");
