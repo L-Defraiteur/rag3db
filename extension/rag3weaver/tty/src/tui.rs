@@ -67,6 +67,25 @@ pub(crate) fn frame_is_the_tasks(v: &Value, filter: Option<&str>, main: &str) ->
     filter.is_some_and(|f| v["backend"].as_str() == Some(f))
 }
 
+/// How many frames are kept while the task is not known yet.
+pub(crate) const PENDING_FRAMES_MAX: usize = 2000;
+/// How long a frame is kept while the task is not known yet.
+pub(crate) const PENDING_FRAMES_AGE: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// **The frames that come before the task is known** (28 Nov. 2026).
+#[derive(Default)]
+pub(crate) struct PendingFrames {
+    kept: std::collections::VecDeque<(std::time::Instant, Value)>,
+}
+
+impl PendingFrames {
+    /// The frames to show now, for `v` arriving with `filter`.
+    pub(crate) fn admit(&mut self, v: Value, filter: Option<&str>, main: &str, _now: std::time::Instant) -> Vec<Value> {
+        let _ = &mut self.kept;
+        if frame_is_the_tasks(&v, filter, main) { vec![v] } else { Vec::new() }
+    }
+}
+
 /// **A refusal said as a sentence**, not as plumbing: without the route, the ids or the HTTP status.
 pub fn refusal_in_words(e: &str) -> String {
     let mut s = e.trim();
@@ -1353,5 +1372,42 @@ mod tests {
         assert!(groupe > texte, "le texte passe au moins une fois");
         assert!(groupe <= 35_000, "une image pour dix tokens : {groupe} o pour 1 000 tokens (mesuré 28 072)");
         assert!(pire <= 78_000, "une image par token : {pire} o pour 1 000 tokens (mesuré 62 454)");
+    }
+}
+
+#[cfg(test)]
+mod pending_frames_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn frame(backend: &str, text: &str) -> Value {
+        json!({ "backend": backend, "evenement": { "kind": "Token", "text": text } })
+    }
+
+    /// **The first words of a new conversation are kept** (a trial on 28 November 2026: « du faux modèle : … » without
+    /// « Réponse 1 » — the words emitted before the task's manifest was known were dropped). Frames that come before the
+    /// filter are kept, then given back in order once the filter is known, the task's only; the buffer stays bounded.
+    #[test]
+    fn frames_before_the_task_is_known_are_kept_then_given_back_in_order() {
+        let t0 = Instant::now();
+        let mut p = PendingFrames::default();
+        assert!(p.admit(frame("/t/m.json", "Réponse "), None, "/main.json", t0).is_empty(), "nothing shown before the task is known");
+        assert!(p.admit(frame("/autre/m.json", "ailleurs"), None, "/main.json", t0).is_empty());
+        assert!(p.admit(frame("/t/m.json", "1 "), None, "/main.json", t0).is_empty());
+        let rendues: Vec<String> = p.admit(frame("/t/m.json", "du faux"), Some("/t/m.json"), "/main.json", t0).iter().map(|v| v["evenement"]["text"].as_str().unwrap().to_string()).collect();
+        assert_eq!(rendues, vec!["Réponse ", "1 ", "du faux"], "the task's frames, whole and in order, another task's never");
+        assert_eq!(p.admit(frame("/t/m.json", " suite"), Some("/t/m.json"), "/main.json", t0).len(), 1, "then each frame passes alone");
+
+        let mut b = PendingFrames::default();
+        for i in 0..(PENDING_FRAMES_MAX + 50) {
+            b.admit(frame("/t/m.json", &i.to_string()), None, "/main.json", t0);
+        }
+        let rendues = b.admit(frame("/t/m.json", "x"), Some("/t/m.json"), "/main.json", t0);
+        assert_eq!(rendues.len(), PENDING_FRAMES_MAX + 1, "bounded in number: the oldest go");
+        assert_eq!(rendues[0]["evenement"]["text"], "50");
+        let mut a = PendingFrames::default();
+        a.admit(frame("/t/m.json", "vieille"), None, "/main.json", t0);
+        let rendues = a.admit(frame("/t/m.json", "neuve"), Some("/t/m.json"), "/main.json", t0 + PENDING_FRAMES_AGE + Duration::from_secs(1));
+        assert_eq!(rendues.len(), 1, "bounded in age: a frame kept too long goes");
     }
 }
