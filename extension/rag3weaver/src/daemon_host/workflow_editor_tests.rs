@@ -70,22 +70,27 @@ fn ports(node: &Value, side: &str) -> Vec<String> {
 #[test]
 fn every_edge_of_a_shipped_graph_joins_two_declared_ports() {
     let b = bench();
-    let (status, g) = get(&b.root, &format!("/ide/graphe?backend={}&tool=archive_slice", b.id));
-    assert_eq!(status, 200, "{g}");
-    let nodes = g["result"]["nodes"].as_array().unwrap();
-    let node = |name: &str| nodes.iter().find(|n| n["name"] == name).unwrap_or_else(|| panic!("no node {name}: {g}"));
     let mut missing = Vec::new();
-    for e in g["result"]["edges"].as_array().unwrap() {
-        let (from, fp, to, tp) = (e["from_node"].as_str().unwrap(), e["from_port"].as_str().unwrap(), e["to_node"].as_str().unwrap(), e["to_port"].as_str().unwrap());
-        if !ports(node(from), "outputs").iter().any(|p| p == fp) {
-            missing.push(format!("{from}.{fp} (out of {:?})", ports(node(from), "outputs")));
+    // `archive` routes by `Route(routes='none|create|fiche')`: its outputs are its routes, declared by its configuration.
+    for tool in ["archive_slice", "archive"] {
+        let (status, g) = get(&b.root, &format!("/ide/graphe?backend={}&tool={tool}", b.id));
+        assert_eq!(status, 200, "{g}");
+        let nodes = g["result"]["nodes"].as_array().unwrap();
+        let node = |name: &str| nodes.iter().find(|n| n["name"] == name).unwrap_or_else(|| panic!("no node {name}: {g}"));
+        for e in g["result"]["edges"].as_array().unwrap() {
+            let (from, fp, to, tp) = (e["from_node"].as_str().unwrap(), e["from_port"].as_str().unwrap(), e["to_node"].as_str().unwrap(), e["to_port"].as_str().unwrap());
+            if !ports(node(from), "outputs").iter().any(|p| p == fp) {
+                missing.push(format!("{tool}: {from}.{fp} (out of {:?})", ports(node(from), "outputs")));
+            }
+            if !ports(node(to), "inputs").iter().any(|p| p == tp) {
+                missing.push(format!("{tool}: {to}.{tp} (in of {:?})", ports(node(to), "inputs")));
+            }
         }
-        if !ports(node(to), "inputs").iter().any(|p| p == tp) {
-            missing.push(format!("{to}.{tp} (in of {:?})", ports(node(to), "inputs")));
+        if tool == "archive_slice" {
+            assert!(g["result"]["inputSchema"]["properties"].as_object().is_some_and(|p| p.contains_key("run")), "the tool's params: {g}");
         }
     }
     assert!(missing.is_empty(), "edges on ports the served schemas do not declare: {missing:#?}");
-    assert!(g["result"]["inputSchema"]["properties"].as_object().is_some_and(|p| p.contains_key("run")), "the tool's params: {g}");
     stop(b);
 }
 
