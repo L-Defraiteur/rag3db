@@ -4317,6 +4317,9 @@ mod navigateur;
 /// L'aperçu d'un composant rechargé à chaud, dans le même navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod apercu_a_chaud;
+/// Every line of « À intervenir » carries its action (28 November 2026), its witnesses in their file.
+#[cfg(all(test, unix, feature = "code"))]
+mod attention_actions_tests;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
 /// Witnesses: the IDE's routes that grant answer only a human (22 Nov 2026).
