@@ -4411,6 +4411,10 @@ mod ide_sans_atelier_tests;
 #[cfg(all(test, unix, feature = "code"))]
 mod view_search_tests;
 
+/// The workflow editor's first lot (28 November 2026): a tool's graph read in the IDE, its witnesses in their file.
+#[cfg(all(test, unix, feature = "code"))]
+mod workflow_editor_tests;
+
 /// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
 /// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
 /// décalages, `[debut, fin, sorte, debut_utf16, fin_utf16]` — les octets UTF-8
