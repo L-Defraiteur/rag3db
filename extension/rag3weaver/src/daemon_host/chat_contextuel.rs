@@ -563,6 +563,11 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
             // The host's relaunch says « commande accordée … : echo … »: only what starts as the witness typed counts.
             let tape_ici = |c: &str| c.starts_with("lance echo") || c.starts_with("relance echo");
             let tape = tape_ici(&turns[depuis].content);
+            // The turn the host relaunches on a granted approval takes its time, as under load (the red of 28 November
+            // 2026, 14 h 04): a message sent before it ended was lost, the second card never came.
+            if turns[depuis].content.contains("est accordée") {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
             if !tape || turns[depuis..].iter().any(|t| t.role == "tool") {
                 MockLlm::new("J'attends ton accord.").generate(turns, opts, sink)
             } else {
