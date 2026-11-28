@@ -4,6 +4,11 @@
   `rag3weaver-tty` le démarre (`systemctl --user start` de la socket et du service), l'attend jusqu'à 30 s, puis se
   connecte ; s'il ne répond toujours pas, il le dit avec la commande pour regarder. Un hôte donné par `--address`,
   `--daemon-json` ou `--daemon-cmd` n'est jamais relancé.
+- 28 novembre 2026 — **Un pas plein demande les noms qu'il garde avec leur emplacement.** Quand le contexte d'un
+  pas est plein, son refus demande d'écrire les noms utiles ensuite, chacun avec le `chemin:ligne` qu'un outil a
+  rendu, et aucun nom qui n'a pas été vu : les noms absents de la mesure du 24 étaient tous écrits sans emplacement.
+  Le texte est la clé `step_done.context_full` de `templates/teammate/prompts/texts.json` ; ta copie le change sans
+  rebâtir.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
@@ -21,7 +26,10 @@
 - 24 novembre 2026 — **Un pas plein écrit ce qu'il a trouvé avant de finir.** Quand le contexte d'un pas est plein et
   qu'il a lu du code, son `step_done` est refusé une fois tant qu'il n'a pas écrit, dans sa réponse, les noms, chemins
   et lignes qu'il compte utiliser ensuite ; cette note passe au pas suivant. La règle est dans
-  `templates/teammate/graphs/at_step_done.mmd` (`write_findings_first`), et ta copie peut la changer sans rebâtir.
+  `templates/teammate/graphs/at_step_done.mmd` (`write_findings_first`), et ta copie peut la changer sans rebâtir. La mesure du 24 au matin
+  (16 noms absents en médiane, puis 5) a montré que cette règle n'a pas eu à jouer : c'est une ceinture pour le modèle
+  qui se tait. Le gain vient du refus « contexte plein » lui-même, qui fait déjà écrire, et de cette note, qui passe
+  désormais entière au pas suivant.
 - 24 novembre 2026 — **Un hôte qui ne sert aucun thème n'arrête plus le terminal.** Il le dit et passe en texte
   brut ; un nom de thème inconnu reste refusé, avec la liste des thèmes de l'hôte.
 - 24 novembre 2026 — **Le backend de code livré garde par défaut les faits de l'index d'un pas à l'autre.** Son

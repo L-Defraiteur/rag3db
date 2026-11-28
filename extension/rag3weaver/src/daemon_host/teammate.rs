@@ -1364,7 +1364,8 @@ impl Step {
         Some(Turn::tool_result(
             &call.id,
             &call.name,
-            json!({ "ok": false, "error": format!("{why}: declare step_done now (succeeded or not, what is done, what remains); the next step resumes from there") }).to_string(),
+            // The text is the key `step_done.context_full` of texts.json: the user's own key takes its place.
+            json!({ "ok": false, "error": self.texts.clone().unwrap_or_else(super::prompts::Texts::shipped).get("step_done.context_full", &[("why", why.as_str())]) }).to_string(),
         ))
     }
 
