@@ -60,6 +60,23 @@ un ordonnancement.
 - D'abord à la main (« luciepc libre », « luciepc à moi ») ou par plage horaire ; plus tard, arrêt de lui-même quand la
   carte est demandée par autre chose (le verrou `poste gpu` sait qui la tient).
 
+## 6. Des abonnements à plages et à un appel à la fois (28 novembre)
+
+Lucie veut essayer [Cheapest Inference](https://cheapestinference.com/) (des plages de 8 h par jour, jetons illimités
+pendant la plage, **une seule requête en cours par clé**, plusieurs places ou abonnements cumulés sur une clé pour plus
+d'appels simultanés), avec l'API DeepSeek au crédit en repli. Leur documentation ne dit ni ce que devient une deuxième
+requête simultanée, ni un plafond d'usage, ni la fenêtre de contexte : une sonde le mesure une fois la clé saisie par
+Lucie. Deux attributs déclarés d'une entrée du catalogue des modèles, lus par l'hôte :
+- **`hours`** : les plages où le modèle sert (heure UTC) ; hors plage, l'hôte passe au modèle suivant du rôle sans
+  l'essayer ;
+- **`max_in_flight`** : le nombre d'appels simultanés par clé (1 ici) ; au-delà, **l'appel attend en file** (Lucie :
+  « si c'est vraiment que ça, on met en queue pour l'instant ») plutôt que de partir et d'être refusé ; la priorité du
+  point 4 s'applique à cette file, et le délai maximal d'attente fait basculer sur le suivant.
+
+**Le produit apporte ses clés, pas ses modèles** (« bring your own key ») : un abonnement comme celui de MiniMax (qui
+permet les outils tiers avec la clé du forfait, mais pas un service revendu) se branche par la clé de l'utilisateur dans
+son catalogue, sans que nous revendions l'accès.
+
 ## Les témoins
 
 Par un vrai hôte, rouge d'abord, avec un faux modèle pour la main : une intention d'édition sur un symbole indexé
