@@ -15,6 +15,10 @@
 - 28 novembre 2026 — **Une conversation rouverte voit les modèles déclarés depuis.** `/model` et la liste des modèles
   d'une tâche lisent `models.llm` dans le manifeste vivant du dossier, à chaque appel ; le reste des déclarations de
   la tâche reste celui de son ouverture.
+- 28 novembre 2026 — **L'agent sait, en entrant, si le dossier a son index.** Au premier pas et à chaque demande,
+  il lit si le dossier a son index de code (alors il s'en sert d'abord) et quels dossiers dedans ont le leur. Il
+  n'indexe plus de lui-même : seulement quand tu le demandes, avec `estimate` d'abord. Les textes sont les clés
+  `index.*` de `templates/teammate/prompts/texts.json`.
 - 28 novembre 2026 — **Un « oui, vas-y » voit ce qu'il accepte.** Ce que tu tapes après ton premier message part du
   terminal comme une consigne ; un tour ouvert ainsi la voit maintenant, comme une demande, avec la dernière réponse
   de l'agent en entier (jusqu'à 6 000 caractères au lieu de 2 000, qui coupaient une proposition en deux).
