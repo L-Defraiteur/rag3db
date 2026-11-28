@@ -1,6 +1,6 @@
 # Les premiers mots d'une conversation neuve sont perdus
 
-- **État** : ouvert le 28 novembre 2026 par la session tty, vu au rejeu de la relance de l'hôte sur un hôte jetable à luciepc (faux modèle local).
+- **État** : fermé le 28 novembre 2026 par la session tty (`PendingFrames` dans `tui.rs` : les trames d'avant la tâche gardées, bornées, rendues dans l'ordre). Vu au rejeu de la relance de l'hôte sur un hôte jetable à luciepc (faux modèle local).
 - **Famille** : produit
 - **Gravité** : défaut — les premiers mots de la première réponse d'une conversation neuve ne s'affichent jamais.
 - **Atteignable en service** : oui, à chaque première demande ; peu visible quand le premier mot du modèle tarde (Gemini), net avec un modèle rapide.

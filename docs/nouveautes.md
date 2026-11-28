@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Les premiers mots d'une conversation neuve s'affichent.** Ce que l'agent dit avant que le
+  terminal connaisse sa tâche est gardé, puis montré dans l'ordre dès qu'il la connaît.
 - 28 novembre 2026 — **Le terminal suit sa conversation après une relance de l'hôte.** Il reconnaît l'hôte neuf à son
   époque, reprend le flux depuis maintenant et relit la boîte de sa conversation : la réponse donnée pendant la relance,
   et la fin du tour, s'affichent.
