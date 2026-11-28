@@ -1725,7 +1725,10 @@ fn conversation_before(lines: &[Value]) -> Option<String> {
         let qui = match (from, kind) {
             ("teammate", "step_done" | "report" | "question") => "teammate",
             ("host", "ended" | "turn_changes" | "merged") => "host",
-            (f, "request") if f != "teammate" && f != "host" => "user",
+            // What the user typed after her first message comes as an `instruction` (the terminal, 23 Nov 2026): it is
+            // hers as much as a request (24 Nov 2026: « oui je suis oki pour tes modifications » reached a turn that did
+            // not see what it answered).
+            (f, "request" | "instruction") if f != "teammate" && f != "host" => "user",
             _ => continue,
         };
         if !text.trim().is_empty() {
@@ -1741,7 +1744,7 @@ fn conversation_before(lines: &[Value]) -> Option<String> {
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            let max = if debut + i + 8 >= n { 2000 } else { 200 };
+            let max = if debut + i + 8 >= n { 6000 } else { 200 };
             if t.chars().count() > max { format!("{}…", t.chars().take(max).collect::<String>()) } else { t.clone() }
         })
         .collect();
@@ -2598,7 +2601,7 @@ impl DaemonHost {
             // every supervisor request since the last `ended`; the first one is the brief, the
             // later ones are its follow-ups (a « continue » no longer replaces it).
             let ouverture = lines.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
-            let ouvertes: Vec<usize> = (ouverture..lines.len()).filter(|&n| lines[n]["kind"] == "request" && lines[n]["from"] != "teammate" && lines[n]["from"] != "host").collect();
+            let ouvertes: Vec<usize> = (ouverture..lines.len()).filter(|&n| (lines[n]["kind"] == "request" || lines[n]["kind"] == "instruction") && lines[n]["from"] != "teammate" && lines[n]["from"] != "host").collect();
             let consigne = match ouvertes.as_slice() {
                 [] => String::new(),
                 [seule] => lines[*seule]["text"].as_str().unwrap_or_default().to_string(),
