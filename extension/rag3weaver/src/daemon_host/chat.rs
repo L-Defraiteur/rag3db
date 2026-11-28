@@ -1194,19 +1194,19 @@ impl DaemonHost {
         };
         // **A step's context is rewritten by batches** (24 Nov 2026), as its table declares (`before_model_call.json`):
         // what is sent changes, the session keeps each output whole.
-        let reecrit = step.map(|s| (s, self.context_rewrite_settings())).filter(|(_, r)| r.on()).map(|(s, r)| super::context_rewrite::RewritingLlm {
+        let rewriting = step.map(|s| (s, self.context_rewrite_settings())).filter(|(_, r)| r.on()).map(|(s, r)| super::context_rewrite::RewritingLlm {
             inner: llm.as_ref(),
             rewrite: super::context_rewrite::ContextRewrite::new(r, self.prompt_texts()),
             said: Box::new(move |b: &super::context_rewrite::Batch, r: &super::context_rewrite::ContextRewriteSettings| s.say_context_rewrite(b, r)),
         });
-        let modele: &dyn crate::llm::Llm = match &reecrit {
+        let model: &dyn crate::llm::Llm = match &rewriting {
             Some(r) => r,
             None => llm.as_ref(),
         };
         let avant = session.turns.len();
         let fait = session.run_with(
             message,
-            modele,
+            model,
             boite,
             &config,
             events,
