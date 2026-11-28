@@ -60,5 +60,6 @@ fn quitting_always_works_even_during_a_turn_that_never_ends() {
     for c in "/quit".chars() {
         q.touche(Touche::Car(c));
     }
-    assert_eq!(q.touche(Touche::Entree), Some(Action::Quitter), "/quit quits during a turn");
+    // `/quit` is the command that quits (`tui::executer` ends the session on it), whatever the state.
+    assert_eq!(q.touche(Touche::Entree), Some(Action::Commande(crate::commandes::Commande::Quitter)), "/quit quits during a turn");
 }
