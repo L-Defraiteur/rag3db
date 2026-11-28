@@ -73,4 +73,32 @@ mod tests {
         let pourquoi = etat["why"].as_str().unwrap_or_default();
         assert!(pourquoi.contains("vite, fin") && pourquoi.contains("choisissez un modèle par /model"), "{pourquoi}");
     }
+
+    /// **A model declared in the folder after the task opened is the task's to choose** (Lucie, 24 November 2026:
+    /// « chiant qu'on ne puisse pas repasser sur une ancienne session alors qu'on change de modèle »): the list of the
+    /// models is the user's preference, read in the folder's living manifest at each call; the rest of the task's
+    /// declarations stays as it opened. The model added after the opening is listed, chosen, and the task's chat follows.
+    #[test]
+    fn a_model_declared_in_the_folder_after_the_task_opened_is_listed_and_taken() {
+        let d = tempfile::tempdir().unwrap();
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
+        let host = hote(d.path(), defaut()).with_modele_nomme(nomme());
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        let t = host.ouvrir_une_tache(&h.id, "midi").expect("la tâche s'ouvre");
+        // After the opening, a model is declared in the folder's manifest (the living one, not the task's copy).
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["models"]["llm"] = json!([
+            { "name": "qwen3-coder-next", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "qwen3-coder-next", "context_tokens": 1500 }
+        ]);
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let liste = host.modeles_de_tache(&h.id, "midi").expect("la liste des modèles");
+        let noms: Vec<&str> = liste["models"].as_array().unwrap().iter().filter_map(|x| x["name"].as_str()).collect();
+        assert!(noms.contains(&"qwen3-coder-next"), "the folder's model is listed for the task opened before it: {liste}");
+        let choisi = host.choisir_le_modele(&h.id, "midi", "qwen3-coder-next").expect("the folder's model is taken");
+        assert_eq!(choisi["current"], "qwen3-coder-next");
+        assert_eq!(host.chat_state(&t.id).unwrap()["context"]["max"], 1500, "the task's chat follows the folder's model");
+        let fige: Value = serde_json::from_str(&std::fs::read_to_string(&t.manifest).unwrap()).unwrap();
+        assert!(fige["models"]["llm"].to_string().find("qwen3-coder-next").is_none(), "the task's copy is not rewritten: {}", fige["models"]);
+    }
 }
