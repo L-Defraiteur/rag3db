@@ -144,3 +144,64 @@ pub fn suivre_sans_fin(ep: &Endpoint, sujets: &[&str], mut depuis: Option<u64>, 
         }
     }
 }
+
+#[cfg(test)]
+mod new_host_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader};
+
+    /// A host of a test: each connection gets `(epoch, frames)` in turn; the request headers are kept.
+    fn host(connexions: Vec<(&'static str, Vec<(u64, &'static str)>)>) -> (Endpoint, std::sync::mpsc::Receiver<String>) {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = l.local_addr().unwrap().to_string();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for ((epoch, frames), c) in connexions.into_iter().zip(l.incoming().flatten()) {
+                let mut r = BufReader::new(c.try_clone().unwrap());
+                let mut requete = String::new();
+                loop {
+                    let mut line = String::new();
+                    if r.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                    requete.push_str(&line);
+                }
+                let _ = tx.send(requete);
+                let mut c = c;
+                let mut corps = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n: ide\n\nevent: host\ndata: {{\"epoch\":\"{epoch}\",\"pid\":1}}\n\n");
+                for (id, data) in frames {
+                    corps.push_str(&format!("id: {id}\ndata: {data}\n\n"));
+                }
+                let _ = c.write_all(corps.as_bytes());
+                let _ = c.flush();
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        });
+        (Endpoint { address, token: "t".into(), user_token: None }, rx)
+    }
+
+    /// **A terminal that resumes on a new host starts over** (Lucie, 24 November 2026: after a restart of the host,
+    /// the terminal showed nothing more — its `Last-Event-ID` was past every id of the new host, which sent nothing).
+    /// The host's epoch comes first on each connection; on another epoch the terminal says the host restarted, and
+    /// reconnects without `Last-Event-ID`, so that the new host's events reach it.
+    #[test]
+    fn a_terminal_resuming_on_a_new_host_starts_over_and_says_so() {
+        let (ep, requetes) = host(vec![
+            ("A", vec![(40, r#"{"n":"avant"}"#)]),
+            ("B", vec![(3, r#"{"n":"ignore"}"#)]),
+            ("B", vec![(4, r#"{"n":"apres"}"#)]),
+        ]);
+        let arret = AtomicBool::new(false);
+        let mut vus: Vec<String> = Vec::new();
+        let _ = suivre_sans_fin(&ep, &["agent"], None, &arret, &mut || {}, |_| {}, |t| {
+            vus.push(if t.event.is_empty() || t.event == "message" { t.data.clone() } else { format!("event:{}", t.event) });
+            if t.data.contains("apres") { Suite::Couper } else { Suite::Continuer }
+        });
+        let r: Vec<String> = requetes.try_iter().collect();
+        assert!(r[1].contains("Last-Event-ID: 40"), "the first resumption asks from the last id: {:?}", r[1]);
+        assert!(r.get(2).is_some_and(|q| !q.contains("Last-Event-ID")), "on a new host, it reconnects from now, without Last-Event-ID: {r:?}");
+        assert!(vus.iter().any(|v| v == "event:host_restarted"), "it says the host restarted: {vus:?}");
+        assert!(vus.iter().any(|v| v.contains("apres")), "the new host's events reach it: {vus:?}");
+        assert!(!vus.iter().any(|v| v.contains("ignore")), "nothing is read on the connection that asked from the old id: {vus:?}");
+    }
+}
