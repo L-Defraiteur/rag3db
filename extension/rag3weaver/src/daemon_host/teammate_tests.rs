@@ -54,6 +54,8 @@ mod mid_turn_delivery;
 mod missing_command;
 mod mode_auto_v1;
 mod model_roles;
+#[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
+mod model_roles_manifest;
 mod nom_d_enfant;
 mod observed_content;
 mod output_limit;
