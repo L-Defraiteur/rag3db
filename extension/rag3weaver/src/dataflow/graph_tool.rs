@@ -1113,6 +1113,11 @@ impl GraphTool {
         }
         tool.untyped.clear();
         tool.check_spec()?;
+        // **The types of the edges, at load** (the workflow editor's second lot, 28 November 2026): an edge between two
+        // ports whose declared types do not connect is refused here, naming both ports and their types, not found at
+        // the first run. Each node is read under its configuration (`schema_for`); a port its schema does not declare
+        // (a port a node makes when it runs) is left to the run's own check.
+        check_port_types(&tool.template, registry).map_err(spec)?;
         Ok(tool)
     }
 
@@ -3355,4 +3360,27 @@ mod tests {
         let avec: Vec<&str> = ecriture.iter().copied().filter(|f| nodes.snapshot_safe(&definition(f))).collect();
         assert!(avec.is_empty(), "ces outils écrivent ou lancent un run, et liraient dans un instantané : {avec:?}");
     }
+}
+
+/// The edges of `def` whose two ports are declared with types that do not connect: refused, naming both ports and their
+/// types (`Any` connects with every type, `PortType::compatible_with`).
+pub fn check_port_types(def: &GraphDefinition, registry: &NodeRegistry) -> Result<(), String> {
+    use super::port::PortType;
+    let port = |node: &str, name: &str, output: bool| -> Option<PortType> {
+        let n = def.nodes.iter().find(|n| n.name == node)?;
+        let schema = registry.schema_for(&n.node_type, &n.config)?;
+        let ports = if output { &schema.outputs } else { &schema.inputs };
+        ports.iter().find(|p| p.name == name).map(|p| p.port_type)
+    };
+    for e in &def.edges {
+        if let (Some(from), Some(to)) = (port(&e.from_node, &e.from_port, true), port(&e.to_node, &e.to_port, false)) {
+            if !from.compatible_with(&to) {
+                return Err(format!(
+                    "the edge {}.{} ({from:?}) → {}.{} ({to:?}) joins two types that do not connect: an output gives a {from:?}, the input takes a {to:?}",
+                    e.from_node, e.from_port, e.to_node, e.to_port
+                ));
+            }
+        }
+    }
+    Ok(())
 }
