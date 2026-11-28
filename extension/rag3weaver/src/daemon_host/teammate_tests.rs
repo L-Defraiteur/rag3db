@@ -53,6 +53,7 @@ mod mentioned_path;
 mod mid_turn_delivery;
 mod missing_command;
 mod mode_auto_v1;
+mod model_roles;
 mod nom_d_enfant;
 mod observed_content;
 mod output_limit;
