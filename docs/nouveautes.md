@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Un sujet neuf commence par l'index, et un rapport écrit n'est pas redit.** L'invite de
+  l'agent lui demande de lancer `search_code` avant toute liste ou lecture quand il aborde un sujet pour la première
+  fois, et, après un rapport écrit, de n'en donner que la conclusion en quelques lignes et le chemin.
 - 28 novembre 2026 — **L'agent sait, en entrant, si le dossier a son index.** Au premier pas et à chaque demande,
   il lit si le dossier a son index de code (alors il s'en sert d'abord) et quels dossiers dedans ont le leur. Il
   n'indexe plus de lui-même : seulement quand tu le demandes, avec `estimate` d'abord. Les textes sont les clés
