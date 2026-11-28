@@ -463,6 +463,8 @@ mod imported_tools;
 mod prompts;
 /// The teammate's decisions as declared graphs: at each step_done, and after the step (23 Nov 2026).
 pub(crate) mod step_graphs;
+/// The models a template names by role (28 Nov 2026).
+mod model_roles;
 /// The start of a turn, declared (24 Nov 2026): the recall of the long-term memory.
 mod turn_start;
 /// The step's context, rewritten by batches before a model call (24 Nov 2026).
