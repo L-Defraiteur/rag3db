@@ -174,8 +174,38 @@ fn main() {
 /// `start` is called once, and `probe` is asked again every `pause` until it answers or `wait` has passed. `Ok(true)`
 /// when the host had to be started; an `Err` that says how to look when it still does not answer.
 fn ensure_host(probe: &mut dyn FnMut() -> bool, start: &mut dyn FnMut(), wait: std::time::Duration, pause: std::time::Duration) -> Result<bool, String> {
-    let _ = (start, wait, pause);
-    if probe() { Ok(false) } else { Err("l'hôte ne répond pas".into()) }
+    if probe() {
+        return Ok(false);
+    }
+    start();
+    let fin = std::time::Instant::now() + wait;
+    while std::time::Instant::now() < fin {
+        std::thread::sleep(pause);
+        if probe() {
+            return Ok(true);
+        }
+    }
+    Err(format!("l'hôte ne répond pas {} s après sa relance : systemctl --user status rag3weaver-daemon.service", wait.as_secs()))
+}
+
+/// Whether something listens at the host's address (a socket unit answers for a host it starts).
+fn answers(address: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    address
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next())
+        .is_some_and(|a| std::net::TcpStream::connect_timeout(&a, std::time::Duration::from_secs(1)).is_ok())
+}
+
+/// Starts the user's host units, the socket then the host, and says so once.
+fn start_the_local_host() {
+    eprintln!("[tty] l'hôte ne répond pas : je le relance");
+    let _ = std::process::Command::new("systemctl")
+        .args(["--user", "start", "rag3weaver-daemon.socket", "rag3weaver-daemon.service"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
 }
 
 fn lancer(o: Options) -> Result<(), String> {
@@ -185,7 +215,16 @@ fn lancer(o: Options) -> Result<(), String> {
     let ep = match (&o.daemon_json, &o.daemon_cmd) {
         (Some(p), _) => Endpoint::depuis_fichier(std::path::Path::new(p))?,
         (None, Some(c)) => Endpoint::depuis_commande(c)?,
-        (None, None) => Endpoint::par_defaut()?,
+        // **The host comes up with the terminal** (Lucie, 24 Nov. 2026): the local host, found by its daemon.json, is
+        // started when it is not there or does not answer. A host given by --address, --daemon-json or --daemon-cmd
+        // is never started.
+        (None, None) => {
+            if o.adresse.is_none() {
+                let mut sonde = || Endpoint::par_defaut().is_ok_and(|e| answers(&e.address));
+                ensure_host(&mut sonde, &mut start_the_local_host, std::time::Duration::from_secs(30), std::time::Duration::from_millis(300))?;
+            }
+            Endpoint::par_defaut()?
+        }
     };
     let ep = match &o.adresse {
         Some(a) => ep.a_l_adresse(a),

@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Le terminal relance son hôte.** Quand l'hôte local n'est pas lancé ou ne répond pas,
+  `rag3weaver-tty` le démarre (`systemctl --user start` de la socket et du service), l'attend jusqu'à 30 s, puis se
+  connecte ; s'il ne répond toujours pas, il le dit avec la commande pour regarder. Un hôte donné par `--address`,
+  `--daemon-json` ou `--daemon-cmd` n'est jamais relancé.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
