@@ -174,12 +174,17 @@ impl DaemonHost {
         .unwrap_or(false)
     }
 
-    /// **The model of the scout's two calls**: the first of the table's `models` the task's manifest declares, else
-    /// the teammate's own model.
-    fn scout_llm(&self, t: &super::taches::Tache, settings: &ScoutSettings) -> Result<Arc<dyn crate::llm::Llm>, String> {
+    /// **The model of the scout's two calls**: the table's `models`, roles or model names, resolved by
+    /// [`DaemonHost::resolve_model`]; the teammate's own model when they resolve to none. A fallback is said in the
+    /// task's mailbox (a host line `role`).
+    fn scout_llm(&self, t: &super::taches::Tache, files: &TeammateFiles, settings: &ScoutSettings) -> Result<Arc<dyn crate::llm::Llm>, String> {
         self.with_backend_id(&t.id, |b| {
             let p = b.prepared();
-            match settings.models.iter().find_map(|n| p.manifest.models.modele_de_langage(n).ok()) {
+            let resolved = self.resolve_model(&p.manifest.models, &settings.models);
+            if let Some(said) = &resolved.said {
+                let _ = files.append_with("host", "role", None, said, &json!({ "for": "scout", "wanted": settings.models }));
+            }
+            match &resolved.source {
                 Some(source) => (self.modele_nomme)(source),
                 None => self.llm_du_chat(&t.manifest, &p),
             }
@@ -200,7 +205,7 @@ impl DaemonHost {
         }
         let mut scout = settings.mode != "off" && self.code_index_ready(&t.id);
         if scout {
-            match self.scout_llm(t, &settings) {
+            match self.scout_llm(t, files, &settings) {
                 Ok(llm) => {
                     services.register::<Arc<dyn crate::llm::Llm>>(crate::dataflow::llm_nodes::LLM_SERVICE, llm);
                     services.register::<Arc<dyn ToolCaller>>(&tool_caller_key(Some(CODE_CALLER)), Arc::new(CodeCaller { host, backend: t.id.clone(), agent: t.agent_key.clone() }));

@@ -1,0 +1,7 @@
+{
+  "about": "Which model plays each role a template names: an ordered list of model names, the first one declared winning (the folder's manifest models.llm, else catalog.json). `large` empty is the teammate's own model. Your own file of this name under your configuration (templates/models/roles.json) replaces the roles it names; a role with no model declared falls back to large, said in the task's mailbox.",
+  "roles": {
+    "large": [],
+    "small": ["gemini-3.1-flash-lite"]
+  }
+}

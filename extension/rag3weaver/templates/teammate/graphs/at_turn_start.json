@@ -3,6 +3,6 @@
     "mode": "blocking",
     "knows_threshold": 0.5,
     "max_ms": 20000,
-    "models": ["gemini-3.1-flash-lite"]
+    "models": ["small"]
   }
 }
