@@ -5,6 +5,10 @@
   chat, un agent, un script, le juge des lots. Le plafond du mois atteint ou proche : « Relever le plafond », écrit dans
   ton `prices.json` sur ton oui. Un `prices.json` illisible : « Mettre ce fichier de côté », renommé à côté, jamais
   effacé, et les prix livrés reprennent. Une conversation ou un sous-agent qui attend : « Répondre ».
+- 28 novembre 2026 — **Un message envoyé pendant un tour ne se perd plus.** Dans le chat d'un dépôt, le bouton
+  d'envoi reste actif pendant que l'agent travaille : ta phrase s'affiche tout de suite dans le fil, marquée « reçu
+  pendant le tour », et l'agent la lit au prochain résultat d'outil, comme une consigne. Si le tour finit avant, elle
+  part comme message du tour suivant. Hors d'un tour, rien ne change.
 - 28 novembre 2026 — **Une installation neuve n'affiche plus « le plafond des dépenses ne se lit pas ».** Les prix et
   le plafond viennent du gabarit livré (`templates/prices.json`, 200 USD par mois) ; ton `~/.config/rag3weaver/prices.json`
   ne fait que le surcharger, clé par clé et modèle par modèle : un plafond, ou le prix d'un modèle, et le reste suit les

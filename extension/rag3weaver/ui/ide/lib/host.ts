@@ -413,6 +413,8 @@ export type TurnResult = {
   fichiers: string[];
   /// The month's spending past an alert, said once in this thread (50 %, 80 %, the cap, or a projection past it).
   spending_notice?: string | null;
+  /// Sent during a turn (28 November 2026): the message is a note of that turn (`run`), not a turn of its own.
+  received_during_turn?: boolean;
 };
 
 export async function sendChat(backend: string, message: string): Promise<TurnResult> {
