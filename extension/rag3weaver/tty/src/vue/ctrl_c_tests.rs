@@ -41,3 +41,24 @@ fn a_turn_whose_work_landed_is_not_said_unanswered() {
     let s = v.ligne_d_etat();
     assert!(!s.contains("sans répondre"), "{s}");
 }
+
+/// **Quitting always works** (Lucie, 24 November 2026: after a restart of the host, the view never saw its turn end,
+/// and « arrêt demandé » came at each Ctrl-C, five times, without quitting). During a turn, the first Ctrl-C stops it,
+/// the second says how to quit, the third within a few seconds quits; Ctrl-D and /quit quit whatever the state.
+#[test]
+fn quitting_always_works_even_during_a_turn_that_never_ends() {
+    let mut v = Vue::new(120, true);
+    v.changer(Etat::Reflechit);
+    assert_eq!(v.touche(Touche::CtrlC), Some(Action::Arreter), "the first stops the turn");
+    assert_eq!(v.touche(Touche::CtrlC), None, "the turn did not end: the second says how to quit");
+    assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "the third quits");
+    let mut d = Vue::new(120, true);
+    d.changer(Etat::Agit("run_command".into()));
+    assert_eq!(d.touche(Touche::CtrlD), Some(Action::Quitter), "Ctrl-D quits during a turn");
+    let mut q = Vue::new(120, true);
+    q.changer(Etat::Reflechit);
+    for c in "/quit".chars() {
+        q.touche(Touche::Car(c));
+    }
+    assert_eq!(q.touche(Touche::Entree), Some(Action::Quitter), "/quit quits during a turn");
+}
