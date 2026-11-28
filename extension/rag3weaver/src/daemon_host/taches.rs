@@ -796,6 +796,14 @@ impl DaemonHost {
                     // **Hors de tout dépôt** : la tâche travaille dans une copie de
                     // la racine (hors des exclus, blocs partagés quand le disque le sait), relue et
                     // fusionnée par différence de dossiers.
+                    // **No working copy** (Lucie, 24 Nov 2026: « faut arrêter ça les copies de travail maintenant, on
+                    // travaille direct dans le dossier »): a folder without git is worked in place, unless the policy
+                    // asks for a copy.
+                    _ if self.with_backend(&hote, |b| b.prepared().manifest.teammate.as_ref().map(|p| p.workspace)).ok().flatten().unwrap_or_default()
+                        != crate::backend::WorkspaceMode::Copy =>
+                    {
+                        WorkspaceDeTache { racine: racine_principale.clone(), ecrit: permis, racine_principale, code: None, copie: None }
+                    }
                     _ => {
                         let vers = dossier.join("espace");
                         copier_l_espace(&racine_principale, &vers, &exclus).map_err(|e| defaire("la copie de la racine", e))?;

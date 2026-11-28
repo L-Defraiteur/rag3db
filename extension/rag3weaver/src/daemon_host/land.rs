@@ -437,6 +437,10 @@ impl DaemonHost {
         if let Some(c) = &w.copie {
             return self.land_the_copy(w, c, files, wrote);
         }
+        // A folder without git worked in place: the work is already in the user's folder, nothing to land.
+        if w.code.is_none() && w.racine == w.racine_principale {
+            return;
+        }
         let (dossier, arbre) = (&w.racine_principale, &w.racine);
         if w.code.as_ref().is_some_and(|c| c.en_place) {
             return self.land_in_place(t, files, arbre, interrupted);
