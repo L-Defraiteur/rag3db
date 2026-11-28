@@ -41,6 +41,7 @@ mod in_place;
 mod in_place_without_git;
 mod in_place_writes;
 mod index_notice;
+mod index_scout;
 mod index_tool_descriptions;
 mod instruction_turn_facts;
 mod judge_all;
