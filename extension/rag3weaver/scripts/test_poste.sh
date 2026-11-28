@@ -32,6 +32,10 @@ export POSTE_MESURE_ATTENTE_MAX=0
 # Le budget mémoire (cas 61) : un faux meminfo large et pas de recul entre deux entrées, pour les autres cas.
 printf 'MemTotal:       100000000 kB\nMemAvailable:    90000000 kB\n' > "$ICI/meminfo"
 export POSTE_MEMINFO="$ICI/meminfo" POSTE_MEM_SPACING=0
+# La voie du pousseur (cas 62) : les autres cas jouent comme sous le service du pousseur.
+echo '0::/user.slice/user-1000.slice/user@1000.service/app.slice/rag3weaver-pusher.service' > "$ICI/cgroup-pousseur"
+echo '0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-konsole.scope' > "$ICI/cgroup-session"
+export POSTE_CGROUP_FILE="$ICI/cgroup-pousseur"
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 J="$ICI/journal"
@@ -593,4 +597,18 @@ e=$(( ${d2:-0} - ${d1:-0} )); e=${e#-}
 [ -n "$d1" ] && [ -n "$d2" ] && [ "$e" -ge 1900 ]
 cas $? "deux lourds arrivés ensemble : le second entre au moins POSTE_MEM_SPACING après le premier ($e ms)"
 rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/last-entry"
+
+# 62. La voie du pousseur est au service du pousseur (28 nov. 2026, c7 : des scripts d'essai lançaient poste cpu sous
+# POSTE_VOIE=pousseur, passaient devant la file et prenaient la place gardée ; deux lots ont attendu plus de 30 min).
+# Hors de l'unité rag3weaver-pusher.service (lue dans le cgroup du processus), la voie est ordinaire, et dite.
+: > "$J"; echo 1 > "$POSTE_LOCK_DIR/lourds-max"
+travail lourd L1 2 &
+sleep 0.3
+travail lourd L2 1 &
+sleep 0.3
+POSTE_CGROUP_FILE="$ICI/cgroup-session" POSTE_VOIE=pousseur "$POSTE" lourd bash -c "note P début; sleep 1; note P fin" > /dev/null 2> "$ICI/sortie-voie" &
+wait
+[ -n "$(instant P début)" ] && [ "$(instant P début)" -ge "$(instant L2 fin)" ] && grep -q 'voie ordinaire' "$ICI/sortie-voie"
+cas $? "POSTE_VOIE=pousseur hors du service du pousseur : voie ordinaire, derrière L2 arrivé avant, et dit"
+rm -f "$POSTE_LOCK_DIR/lourds-max"
 exit $echec
