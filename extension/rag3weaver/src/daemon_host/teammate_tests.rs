@@ -54,6 +54,7 @@ mod nom_d_enfant;
 mod observed_content;
 mod output_limit;
 mod posture_auto;
+mod prompt_index_first;
 mod prompt_roots;
 mod prompt_templates;
 mod recall_at_turn_start;
