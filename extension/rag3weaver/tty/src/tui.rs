@@ -214,6 +214,15 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
             }, |t| {
                 if t.event == "lacune" {
                     let _ = tx.send(Msg::Note("lacune : le tampon de l'hôte a perdu des événements".into()));
+                } else if t.event == "host_restarted" {
+                    // **What the restart hid is read again** (24 Nov. 2026): the conversation's mailbox, whole; the view
+                    // writes only the lines it has not seen, so the answer given meanwhile and its end show.
+                    let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
+                    if let Ok(v) = client::lire(&agent, &ep, &chemin) {
+                        for l in v["mailbox"].as_array().into_iter().flatten() {
+                            let _ = tx.send(Msg::Boite(l.clone()));
+                        }
+                    }
                 } else if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
                     // Une proposition de déclarations du dépôt principal passe aussi (tty-16) : c'est
                     // sur lui que les déclarations attendent un accord.
