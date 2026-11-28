@@ -123,7 +123,7 @@ fn the_workflow_editor_shows_a_tool_graph_with_its_typed_ports() {
     let lit = n.evaluer("[...document.querySelectorAll('#workflow [data-port][data-lit=\"true\"]')].map(e => e.dataset.port)");
     assert!(lit.as_array().unwrap().iter().all(|p| p.as_str().unwrap().contains(":in:") && !p.as_str().unwrap().starts_with("slice:")), "only inputs of other nodes light: {lit}");
 
-    let soon = n.evaluer("[...document.querySelectorAll('#workflow [data-soon]')].map(e => [e.dataset.soon, e.disabled || e.getAttribute('aria-disabled') === 'true', e.innerText.includes('bientôt')])");
+    let soon = n.evaluer("[...document.querySelectorAll('#workflow [data-soon]')].map(e => [e.dataset.soon, e.disabled || e.getAttribute('aria-disabled') === 'true', e.textContent.includes('bientôt')])");
     let soon = soon.as_array().unwrap();
     assert!(soon.len() >= 4, "the pieces still to come, in place: {soon:?}");
     assert!(soon.iter().all(|s| s[1] == json!(true) && s[2] == json!(true)), "each disabled and saying « bientôt »: {soon:?}");
