@@ -854,3 +854,7 @@ impl Llm for MeteredLlm {
 
 #[cfg(test)]
 mod tests;
+
+/// The prices read from the shipped template, the user's file over it (28 November 2026), their witnesses in their file.
+#[cfg(test)]
+mod shipped_prices_tests;
