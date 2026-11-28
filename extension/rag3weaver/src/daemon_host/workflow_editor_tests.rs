@@ -1,0 +1,127 @@
+//! The witnesses of the workflow editor's first lot (28 November 2026): a declared graph read in the IDE, its nodes
+//! with the typed ports their schemas declare. A real host, the shipped `memory` backend.
+
+use serde_json::{json, Value};
+
+/// A guarded host (token `j`) with the shipped `memory` backend opened by `describe`: its address, the backend's id.
+struct Bench {
+    _d: tempfile::TempDir,
+    root: String,
+    id: String,
+    thread: std::thread::JoinHandle<()>,
+}
+
+fn get(root: &str, path: &str) -> (u16, Value) {
+    let mut r = crate::daemon::agent_de_temoin()
+        .get(format!("{root}{path}"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .call()
+        .unwrap();
+    (r.status().as_u16(), serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap())
+}
+
+fn bench() -> Bench {
+    let d = tempfile::tempdir().unwrap();
+    let base = d.path().join("memory");
+    std::fs::create_dir_all(&base).unwrap();
+    let template = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/memory");
+    let manifest = crate::gabarits::jouable::manifeste_jouable(&template, &base).unwrap().to_string_lossy().to_string();
+    let (tasks, chats) = (d.path().join("tasks"), d.path().join("chats"));
+    let (address, thread) = super::tests::hote_garde_avec("j", |h| h.with_racine_des_taches(tasks).with_chats_root(chats));
+    let root = format!("http://{address}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{root}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("X-Rag3weaver-User", "j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifest }).to_string())
+        .unwrap();
+    let described: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(described["ok"], true, "{described}");
+    let (_, state) = get(&root, "/ide/etat");
+    let id = state["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifest.as_str()))
+        .unwrap_or_else(|| panic!("the backend is not in the state: {state}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    Bench { _d: d, root, id, thread }
+}
+
+fn stop(b: Bench) {
+    let (status, _) = super::tests::demander("POST", &format!("{}/arret", b.root), Some("j"));
+    assert_eq!(status, 200);
+    b.thread.join().unwrap();
+}
+
+/// The names of a node's ports on one side, as the served schema declares them.
+fn ports(node: &Value, side: &str) -> Vec<String> {
+    node["schema"][side].as_array().map(|a| a.iter().filter_map(|p| p["name"].as_str().map(str::to_string)).collect()).unwrap_or_default()
+}
+
+/// **Every edge of a shipped graph joins two ports its nodes declare** (the editor draws a wire from port to port):
+/// the schema `/ide/graphe` serves for a node is its schema under its configuration, so a node whose ports follow its
+/// configuration (a script's `inputs`, a route's `routes`, a collect's `inputs`) declares the ports its edges use.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn every_edge_of_a_shipped_graph_joins_two_declared_ports() {
+    let b = bench();
+    let (status, g) = get(&b.root, &format!("/ide/graphe?backend={}&tool=archive_slice", b.id));
+    assert_eq!(status, 200, "{g}");
+    let nodes = g["result"]["nodes"].as_array().unwrap();
+    let node = |name: &str| nodes.iter().find(|n| n["name"] == name).unwrap_or_else(|| panic!("no node {name}: {g}"));
+    let mut missing = Vec::new();
+    for e in g["result"]["edges"].as_array().unwrap() {
+        let (from, fp, to, tp) = (e["from_node"].as_str().unwrap(), e["from_port"].as_str().unwrap(), e["to_node"].as_str().unwrap(), e["to_port"].as_str().unwrap());
+        if !ports(node(from), "outputs").iter().any(|p| p == fp) {
+            missing.push(format!("{from}.{fp} (out of {:?})", ports(node(from), "outputs")));
+        }
+        if !ports(node(to), "inputs").iter().any(|p| p == tp) {
+            missing.push(format!("{to}.{tp} (in of {:?})", ports(node(to), "inputs")));
+        }
+    }
+    assert!(missing.is_empty(), "edges on ports the served schemas do not declare: {missing:#?}");
+    assert!(g["result"]["inputSchema"]["properties"].as_object().is_some_and(|p| p.contains_key("run")), "the tool's params: {g}");
+    stop(b);
+}
+
+/// **The workflow editor reads a tool's graph**: at `/ide/code/<id>/workflow/tool/<name>`, the graph's nodes; in the
+/// Edit view their ports as `name : type`, a wired port's dot filled; a click on a port lights the ports it could join;
+/// the Simple view hides the plumbing; what is not there yet is in place, disabled, with « bientôt ».
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn the_workflow_editor_shows_a_tool_graph_with_its_typed_ports() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("the_workflow_editor_shows_a_tool_graph_with_its_typed_ports") else {
+        return;
+    };
+    let b = bench();
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{}/ide/entrer?jeton=j", b.root), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/workflow/tool/archive_slice", b.root, b.id), "!!document.querySelector('#workflow [data-node]')");
+    let names = n.evaluer("[...document.querySelectorAll('#workflow [data-node]')].map(e => e.dataset.node).sort().join(',')");
+    assert_eq!(names, json!("core,done,render,slice"), "the Simple view shows the graph's nodes");
+    assert!(n.evaluer("document.querySelector('#workflow').innerText").as_str().unwrap_or_default().contains("archive_slice.mmd"), "the file is named");
+
+    n.cliquer("#workflow [data-view=edit]");
+    n.attendre("document.querySelectorAll('#workflow [data-port]').length > 0", "the ports in the Edit view");
+    let label = n.evaluer("document.querySelector('#workflow [data-port=\"core:in:elements\"]')?.innerText ?? ''");
+    assert!(label.as_str().unwrap_or_default().starts_with("elements : "), "a port reads name : type: {label}");
+    assert_eq!(n.evaluer("document.querySelector('#workflow [data-port=\"core:in:elements\"]').dataset.wired"), json!("true"), "a wired port");
+    n.cliquer("#workflow [data-port=\"slice:out:result\"]");
+    n.attendre("document.querySelectorAll('#workflow [data-port][data-lit=\"true\"]').length > 0", "the compatible ports lit");
+    let lit = n.evaluer("[...document.querySelectorAll('#workflow [data-port][data-lit=\"true\"]')].map(e => e.dataset.port)");
+    assert!(lit.as_array().unwrap().iter().all(|p| p.as_str().unwrap().contains(":in:") && !p.as_str().unwrap().starts_with("slice:")), "only inputs of other nodes light: {lit}");
+
+    let soon = n.evaluer("[...document.querySelectorAll('#workflow [data-soon]')].map(e => [e.dataset.soon, e.disabled || e.getAttribute('aria-disabled') === 'true', e.innerText.includes('bientôt')])");
+    let soon = soon.as_array().unwrap();
+    assert!(soon.len() >= 4, "the pieces still to come, in place: {soon:?}");
+    assert!(soon.iter().all(|s| s[1] == json!(true) && s[2] == json!(true)), "each disabled and saying « bientôt »: {soon:?}");
+    drop(n);
+    stop(b);
+}
