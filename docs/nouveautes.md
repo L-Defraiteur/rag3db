@@ -1,5 +1,15 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Le contexte d'un pas a sa politique, étape par étape** (sur le modèle de gemini-cli). Une sortie
+  d'outil de plus de 8 000 jetons estimés est écrite entière dans le dossier de la tâche (`tool-outputs/`) ; l'agent en
+  reçoit le début et la fin, la forme d'un JSON, le chemin du brut pour le relire, et un court résumé par un modèle
+  léger. Dans un paquet de réécriture, une vieille sortie qu'il n'a pas commentée devient un talon avec le résumé du
+  modèle léger. Au-delà de 65 000 jetons estimés dans un pas, ses plus grosses sorties sont résumées ; au-delà de
+  150 000, un instantané d'état (4 000 jetons au plus) remplace ses plus vieux échanges. Le modèle léger est le rôle
+  `small` de la table (voir les rôles de modèle ; sinon celui de l'agent) ; un appel qui échoue laisse
+  la sortie telle quelle et le dit. Chaque étape écrit sa ligne dans la boîte de la tâche (`context_offload`,
+  `context_rewrite`, `context_budget`), avec les jetons avant et après. Étapes, seuils, modèle et textes :
+  `templates/teammate/graphs/before_model_call.json` et `texts.json` ; ta copie les change sans rebâtir.
 - 28 novembre 2026 — **Un dossier dit lui-même quel modèle tient un rôle.** La clé `roles` du manifeste
   (`{"small": ["qwen3-coder-next"]}`) passe devant ta config et le livré pour les rôles qu'elle nomme.
 - 28 novembre 2026 — **Les gabarits nomment un rôle, ta config dit quel modèle le tient.** `small` pour les appels
