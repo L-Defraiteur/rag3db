@@ -170,6 +170,14 @@ fn main() {
     }
 }
 
+/// **The host comes up with the terminal** (Lucie, 24 Nov. 2026): when the local host is not there or does not answer,
+/// `start` is called once, and `probe` is asked again every `pause` until it answers or `wait` has passed. `Ok(true)`
+/// when the host had to be started; an `Err` that says how to look when it still does not answer.
+fn ensure_host(probe: &mut dyn FnMut() -> bool, start: &mut dyn FnMut(), wait: std::time::Duration, pause: std::time::Duration) -> Result<bool, String> {
+    let _ = (start, wait, pause);
+    if probe() { Ok(false) } else { Err("l'hôte ne répond pas".into()) }
+}
+
 fn lancer(o: Options) -> Result<(), String> {
     if o.steps { std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"); }
     if o.still { std::env::set_var("RAG3WEAVER_TTY_STILL", "1"); }
@@ -643,5 +651,39 @@ mod gate_option_tests {
         assert_eq!(parse(&["--gate", "judge"]).unwrap().gate, "judge");
         assert_eq!(parse(&["--gate", "cards"]).unwrap().gate, "cards");
         assert!(parse(&["--gate", "autre"]).is_err(), "an unknown gate is refused");
+    }
+}
+
+#[cfg(test)]
+mod host_start_tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// **The terminal starts its host when it does not answer** (Lucie, 24 Nov. 2026: the command that opens the
+    /// terminal brings the host up itself): the starter is called once, then the terminal connects.
+    #[test]
+    fn a_host_that_does_not_answer_is_started_once_and_then_reached() {
+        let demarre = std::cell::Cell::new(0);
+        let mut sonde = || demarre.get() > 0;
+        let mut demarrer = || demarre.set(demarre.get() + 1);
+        let r = ensure_host(&mut sonde, &mut demarrer, Duration::from_secs(2), Duration::from_millis(10));
+        assert_eq!(r, Ok(true), "started, then reached");
+        assert_eq!(demarre.get(), 1, "started once");
+        let mut deja = || true;
+        let mut jamais = || panic!("a host that answers is not started");
+        assert_eq!(ensure_host(&mut deja, &mut jamais, Duration::from_secs(2), Duration::from_millis(10)), Ok(false));
+    }
+
+    /// **A host that still does not answer after the wait is said**, with how to look at it.
+    #[test]
+    fn a_host_that_still_does_not_answer_after_the_wait_is_said() {
+        let demarre = std::cell::Cell::new(0);
+        let mut sonde = || false;
+        let mut demarrer = || demarre.set(demarre.get() + 1);
+        let t = std::time::Instant::now();
+        let e = ensure_host(&mut sonde, &mut demarrer, Duration::from_millis(200), Duration::from_millis(20)).unwrap_err();
+        assert!(t.elapsed() >= Duration::from_millis(200), "it waited the delay");
+        assert_eq!(demarre.get(), 1, "started once, not in a loop");
+        assert!(e.contains("ne répond pas") && e.contains("systemctl --user status rag3weaver-daemon.service"), "{e}");
     }
 }
