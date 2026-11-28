@@ -5,6 +5,11 @@
   "free_private_hosts": true,
   "about": "Prices per million tokens, in USD, region global. Each tariff names its source and the day it was read; a price changes by a new entry with its date of effect, never by rewriting one. Outside the global region, Vertex costs about 10 % more. When two sources disagree, the higher price is kept: the cap errs on the safe side.",
   "prices": {
+    "google/gemini-3.1-flash-lite": [
+      {"from": "2026-01-01", "input": 0.25, "cache_write": 0.25, "cache_read": 0.025, "output": 1.50, "batch": 0.5,
+       "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing (redirected to https://cloud.google.com/model-garden/pricing) ; https://aistudio.google.com/docs/pricing", "read_on": "2026-11-28",
+       "note": "the model of the role small; global region, text, image and video input; no tier above 200 000 tokens; outside the global region 0.275, 0.0275 and 1.65; audio input 0.50 (0.05 cached); cache storage 1.00 per million tokens per hour"}
+    ],
     "google/gemini-3.8-flash": [
       {"from": "2026-01-01", "input": 0.75, "cache_write": 0.75, "cache_read": 0.075, "output": 3.75, "batch": 0.5,
        "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/pricing", "read_on": "2026-11-21",
