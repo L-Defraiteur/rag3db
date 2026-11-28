@@ -29,6 +29,8 @@ pub enum Fin {
     Arrete,
     /// La connexion est tombée (l'hôte s'arrête, le réseau coupe).
     Tombee(String),
+    /// **Another host answers** (24 Nov. 2026): its epoch is not the one seen before; its ids are another series.
+    HoteNeuf,
 }
 
 /// Le pas de vérification de l'arrêt pendant une lecture.
@@ -41,7 +43,25 @@ const PAS: Duration = Duration::from_millis(200);
 /// `ouvert` est appelé une fois l'abonnement pris (l'en-tête 200 lu) : ce qui
 /// se publie ensuite arrivera. Un client qui lance un run sans curseur attend
 /// ce moment avant de le lancer.
-pub fn suivre(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &AtomicBool, ouvert: &mut dyn FnMut(), mut f: impl FnMut(&Trame) -> Suite) -> Result<(Option<u64>, Fin), String> {
+pub fn suivre(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &AtomicBool, ouvert: &mut dyn FnMut(), f: impl FnMut(&Trame) -> Suite) -> Result<(Option<u64>, Fin), String> {
+    suivre_l_epoque(ep, sujets, depuis, arret, ouvert, &mut None, f)
+}
+
+/// The host's first frame (`event: host`, `{epoch, pid}`, without an `id:`) is read here, never given to `f`: an
+/// epoch other than `epoque`'s ends the connection with [`Fin::HoteNeuf`].
+fn est_un_autre_hote(t: &Trame, epoque: &mut Option<String>) -> Option<bool> {
+    if t.event != "host" {
+        return None;
+    }
+    let neuve = serde_json::from_str::<serde_json::Value>(&t.data).ok().and_then(|v| v["epoch"].as_str().map(str::to_string));
+    let autre = matches!((&*epoque, &neuve), (Some(a), Some(b)) if a != b);
+    if neuve.is_some() {
+        *epoque = neuve;
+    }
+    Some(autre)
+}
+
+fn suivre_l_epoque(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &AtomicBool, ouvert: &mut dyn FnMut(), epoque: &mut Option<String>, mut f: impl FnMut(&Trame) -> Suite) -> Result<(Option<u64>, Fin), String> {
     let adresse = ep.address.to_socket_addrs().map_err(|e| format!("{} : {e}", ep.address))?.next().ok_or_else(|| format!("{} : aucune adresse", ep.address))?;
     let mut tcp = match TcpStream::connect_timeout(&adresse, Duration::from_secs(5)) {
         Ok(t) => t,
@@ -96,6 +116,11 @@ pub fn suivre(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &Atomi
             ouvert();
             let suite = entete.split_off(fin + 4);
             for t in decodeur.pousser(&suite) {
+                match est_un_autre_hote(&t, epoque) {
+                    Some(true) => return Ok((dernier, Fin::HoteNeuf)),
+                    Some(false) => continue,
+                    None => {}
+                }
                 if let Some(id) = t.id {
                     dernier = Some(id);
                 }
@@ -106,6 +131,11 @@ pub fn suivre(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &Atomi
             corps = &[];
         }
         for t in decodeur.pousser(corps) {
+            match est_un_autre_hote(&t, epoque) {
+                Some(true) => return Ok((dernier, Fin::HoteNeuf)),
+                Some(false) => continue,
+                None => {}
+            }
             if let Some(id) = t.id {
                 dernier = Some(id);
             }
@@ -121,13 +151,24 @@ pub fn suivre(ep: &Endpoint, sujets: &[&str], depuis: Option<u64>, arret: &Atomi
 /// coupe, sur l'arrêt, ou sur un refus. `tombee` est prévenu de chaque chute.
 pub fn suivre_sans_fin(ep: &Endpoint, sujets: &[&str], mut depuis: Option<u64>, arret: &AtomicBool, ouvert: &mut dyn FnMut(), mut tombee: impl FnMut(&str), mut f: impl FnMut(&Trame) -> Suite) -> Result<(Option<u64>, Fin), String> {
     let mut attente = Duration::from_millis(200);
+    let mut epoque: Option<String> = None;
     loop {
-        let (dernier, fin) = suivre(ep, sujets, depuis, arret, ouvert, &mut f)?;
+        let (dernier, fin) = suivre_l_epoque(ep, sujets, depuis, arret, ouvert, &mut epoque, &mut f)?;
         if dernier != depuis {
             attente = Duration::from_millis(200);
         }
         depuis = dernier;
         match fin {
+            // **A new host** (24 Nov. 2026): its ids are another series; resume from now, and say it to the reader,
+            // which reads again what it missed (the mailbox of its conversation).
+            Fin::HoteNeuf => {
+                depuis = None;
+                attente = Duration::from_millis(200);
+                tombee("l'hôte a redémarré : je reprends depuis maintenant");
+                if f(&Trame { id: None, event: "host_restarted".into(), data: "{}".into() }) == Suite::Couper {
+                    return Ok((depuis, Fin::Coupe));
+                }
+            }
             Fin::Tombee(pourquoi) => {
                 tombee(&pourquoi);
                 let mut dormi = Duration::ZERO;
