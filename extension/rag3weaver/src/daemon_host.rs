@@ -4602,6 +4602,7 @@ mod tests {
     // A lot's new witness goes in a file of its own, `daemon_host/tests/<lot>.rs` (c7, 21 November 2026).
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod open_command;
+    mod host_epoch;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod index_on_demand;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
