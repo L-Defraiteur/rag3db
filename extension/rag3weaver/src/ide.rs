@@ -172,6 +172,11 @@ impl Flux {
         flux
     }
 
+    /// **The host's epoch**, drawn when its stream is made: not written yet.
+    pub fn epoch(&self) -> &str {
+        ""
+    }
+
     /// **Publie un état** (l'IDE par le flux, 9 novembre 2026) : `{kind: "Etat", de, cle,
     /// etat}` sous le sujet `etat`. Celui qui change un état le pousse ; la page le garde
     /// (`onEtat` dans `lib/host.ts`) au lieu de le relire à l'hôte après un événement.
