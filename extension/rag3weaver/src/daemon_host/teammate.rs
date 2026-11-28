@@ -3430,6 +3430,9 @@ mod context_full_text_tests;
 #[cfg(test)]
 #[path = "teammate/context_share_tests.rs"]
 mod context_share_tests;
+#[cfg(test)]
+#[path = "teammate/edit_plan_in_one_call_tests.rs"]
+mod edit_plan_in_one_call_tests;
 
 #[cfg(test)]
 mod carry_over_tests {
