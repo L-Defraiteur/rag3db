@@ -1,5 +1,13 @@
 # L'agent voit les images
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — l'agent sans modèle de vision ne lit pas une image collée.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (le terminal, l'équipier).
+- **Famille** : produit
+- **Pour** : rag3weaver archi, avec tty.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 13 h 10. Lucie, le même jour, en faisant la recette de `tisserande` : « chose prio : il n'a
 pas de modèle de vision, il faut pouvoir lui copier-coller des images, et il doit aussi pouvoir lire des images depuis un
 fichier ; un modèle de vision la décrit pour lui, avec un prompt de description par défaut qu'il peut remplacer en

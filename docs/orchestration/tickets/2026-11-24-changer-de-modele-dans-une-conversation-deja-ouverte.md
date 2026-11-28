@@ -1,5 +1,13 @@
 # Changer de modèle dans une conversation déjà ouverte
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : fonction manquante — /model refusé ou sans effet sur une conversation ouverte.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (le terminal, l'hôte).
+- **Famille** : produit
+- **Pour** : tty, avec rag3weaver archi.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 14 h 45. Lucie : « chiant qu'on ne puisse pas repasser sur une ancienne session alors
 qu'on change de modèle ».
 

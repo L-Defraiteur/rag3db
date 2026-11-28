@@ -1,5 +1,13 @@
 # Les outils d'index sur un dépôt TypeScript étranger : six défauts relevés par l'agent
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : défaut de recherche — faux homonyme de describe(), aucun filtre src/ par défaut.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (outils d'index).
+- **Famille** : produit
+- **Pour** : recherche.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 12 h. Source : l'étude écrite par un agent rag3weaver dans le dépôt de Lucie `tisserande`
 (TypeScript, React, Three.js, Vitest ; 193 fichiers), `tisserande/docs/evaluation-outils-exploration.md`, commit
 a524e26 de ce dépôt. C'est le premier banc « dépôt étranger » de la vision produit.

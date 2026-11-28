@@ -1,5 +1,13 @@
 # Prévenir l'utilisatrice dès qu'une action demandée est faite
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — un serveur lancé sans que l'utilisatrice en ait le lien.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (l'équipier, le terminal).
+- **Famille** : produit
+- **Pour** : rag3weaver archi, avec tty.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 13 h. Constat de Lucie le même jour, dans `tisserande` : à « tu peux lancer le projet et me
 donner le lien pour aller dans mon navigateur ? », l'agent lance le serveur Vite en fond, puis continue (tests, lecture
 de `vite.config.ts`, plan) sans donner le lien tout de suite. Elle attend.

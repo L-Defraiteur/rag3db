@@ -1,5 +1,13 @@
 # Après une relance de l'hôte, le terminal ne voit plus rien et ne se quitte plus
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : défaut — après une relance de l'hôte, le terminal ne voit plus la conversation en cours.
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (le terminal).
+- **Famille** : produit
+- **Pour** : tty.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 13 h 50. Vu par Lucie dans `tisserande`, terminal ouvert pendant la relance de l'hôte
 (13 h 45 min 51).
 

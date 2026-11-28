@@ -1,5 +1,13 @@
 # Ingérer un catalogue xlsx en composant un DAG
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : fonction neuve — le socle de la quête des véhicules.
+- **Atteignable en service** : non (rien n'existe encore).
+- **Touche rag3weaver** : oui (docparsers, nœuds, gabarit catalog).
+- **Famille** : produit
+- **Pour** : à attribuer par l'orchestration.
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 17 h. Pour la quête des véhicules : une page de vente de véhicules d'occasion, avec une
 recherche filtrable, à partir d'un fichier xlsx (caractéristiques, prix, liens d'images), et rag3weaver en backend.
 

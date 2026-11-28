@@ -1,5 +1,13 @@
 # L'hôte ne répond plus pendant un travail lourd
 
+- **État** : ouvert (24 novembre 2026, orchestration).
+- **Gravité** : défaut — l'hôte ne répond plus pendant une écriture lourde ; et l'abstraction asynchrone (le nœud d'attente).
+- **Atteignable en service** : oui.
+- **Touche rag3weaver** : oui (l'hôte, les graphes).
+- **Famille** : produit
+- **Pour** : recherche (la cause), everything declarative (le nœud d'attente).
+- **Signalé par** : Lucie.
+
 Ouvert le 24 novembre 2026, 11 h 40.
 
 ## Le constat
