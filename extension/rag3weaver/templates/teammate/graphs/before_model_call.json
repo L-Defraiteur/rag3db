@@ -1,4 +1,23 @@
 {
+  "light_model": {
+    "models": ["small"],
+    "timeout_s": 30,
+    "max_input_chars": 120000
+  },
+  "tool_output": {
+    "mode": "on",
+    "threshold_tokens": 8000,
+    "cut_tokens": 4000,
+    "head_share": 0.2,
+    "exempt_tools": [],
+    "folder": "tool-outputs",
+    "summary": "on",
+    "summary_max_tokens": 1024,
+    "prompt_key": "context_rewrite.offload_prompt",
+    "text_key": "context_rewrite.offloaded",
+    "shape_key": "context_rewrite.offloaded_shape",
+    "summary_key": "context_rewrite.offloaded_summary"
+  },
   "context_rewrite": {
     "mode": "on",
     "threshold_tokens": 20000,
@@ -7,6 +26,25 @@
     "fact_tools": ["search_code", "usages", "callees", "impact", "outline", "grep_files"],
     "max_facts": 40,
     "stub_key": "context_rewrite.stub",
-    "facts_key": "context_rewrite.facts"
+    "facts_key": "context_rewrite.facts",
+    "uncommented": "summarize",
+    "summary_min_tokens": 500,
+    "summary_max_tokens": 1024,
+    "summary_prompt_key": "context_rewrite.summary_prompt",
+    "summary_stub_key": "context_rewrite.summary_stub"
+  },
+  "budget": {
+    "mode": "on",
+    "retained_tokens": 65000,
+    "max_tokens": 150000,
+    "target_tokens": 45000,
+    "keep_tokens": 8000,
+    "distill_min_tokens": 3000,
+    "summary_max_tokens": 1024,
+    "snapshot_tokens": 4000,
+    "summary_prompt_key": "context_rewrite.summary_prompt",
+    "summary_stub_key": "context_rewrite.summary_stub",
+    "snapshot_prompt_key": "context_rewrite.snapshot_prompt",
+    "snapshot_key": "context_rewrite.snapshot"
   }
 }

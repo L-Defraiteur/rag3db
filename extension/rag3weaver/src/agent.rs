@@ -237,34 +237,72 @@ impl ToolBox for MaskedTools<'_> {
 /// Bound what a tool may add to model context. Applies to any tool transport.
 /// Execution has already happened; preserve a readable prefix and mark omitted
 /// lines explicitly. This is a text view, not a complete structured payload.
+///
+/// **A too-large output, set aside** (24 Nov 2026): when a [`ToolOutputSpill`] is given, it sees each whole output
+/// first; the text it gives replaces the output (the raw kept elsewhere, a cut, a summary), and `max_bytes` bounds
+/// only what it leaves.
 pub struct ToolOutputLimit<'a> {
     pub inner: &'a (dyn ToolBox + Sync),
     pub max_bytes: usize,
+    pub spill: Option<&'a (dyn ToolOutputSpill + Sync)>,
+}
+impl ToolOutputLimit<'_> {
+    fn bound(&self, call: &ToolCall, mut result: Turn) -> Turn {
+        if let Some(text) = self.spill.and_then(|s| s.spill(call, &result.content)) {
+            result.content = text;
+            return result;
+        }
+        if result.content.len() > self.max_bytes {
+            result.content = truncate_tool_output(&result.content, self.max_bytes);
+        }
+        result
+    }
 }
 impl ToolBox for ToolOutputLimit<'_> {
     fn tool_defs(&self) -> Vec<ToolDef> { self.inner.tool_defs() }
     fn is_async(&self, tool: &str) -> bool { self.inner.is_async(tool) }
     fn call(&self, call: &ToolCall) -> Turn { self.call_in(call, "") }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        let mut result = self.inner.call_in(call, run);
-        if result.content.len() > self.max_bytes {
-            result.content = truncate_tool_output(&result.content, self.max_bytes);
-        }
-        result
+        self.bound(call, self.inner.call_in(call, run))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &ToolInvocation) -> Turn {
-        let mut result = self.inner.call_with(call, run, inv);
-        if result.content.len() > self.max_bytes {
-            result.content = truncate_tool_output(&result.content, self.max_bytes);
-        }
-        result
+        self.bound(call, self.inner.call_with(call, run, inv))
     }
+}
+
+/// **What a too-large tool output becomes** ([`ToolOutputLimit::spill`]): given the call and its whole output, the
+/// text the model receives instead, or `None` to leave it to the plain bound.
+pub trait ToolOutputSpill {
+    fn spill(&self, call: &ToolCall, output: &str) -> Option<String>;
 }
 
 /// Bound UTF-8 text including the marker, preferring complete lines. A single
 /// very long line is cut at a character boundary and reports omitted bytes.
 pub fn truncate_tool_output(text: &str, max_bytes: usize) -> String {
+    cut_tool_output(text, max_bytes, 1.0)
+}
+
+/// **The cut of a tool output, head and tail** (24 Nov 2026, after gemini-cli's proportional truncation): within
+/// `max_bytes` with its marker, `head_share` of the room for the head and the rest for the tail, each on whole lines
+/// when it can; the marker says the lines and bytes left out. A `head_share` of 1 keeps the head alone
+/// ([`truncate_tool_output`]).
+pub fn cut_tool_output(text: &str, max_bytes: usize, head_share: f64) -> String {
     if text.len() <= max_bytes { return text.to_owned(); }
+    if head_share < 1.0 {
+        let marker_room = 96;
+        if max_bytes > 2 * marker_room {
+            let room = max_bytes - marker_room;
+            let mut head = ((room as f64) * head_share.max(0.0)) as usize;
+            while !text.is_char_boundary(head) { head -= 1; }
+            if let Some(n) = text[..head].rfind('\n') { head = n + 1; }
+            let mut tail = text.len() - (room - head.min(room));
+            while !text.is_char_boundary(tail) { tail += 1; }
+            if let Some(n) = text[tail..].find('\n').filter(|n| tail + n + 1 < text.len()) { tail += n + 1; }
+            let tail = tail.max(head);
+            let left = &text[head..tail];
+            return format!("{}\n... {} lines, {} bytes left out (output cut: head and tail kept)\n{}", &text[..head], left.lines().count(), left.len(), &text[tail..]);
+        }
+    }
     let line_marker = format!("\n... {} more lines (output truncated)\n", text.lines().count());
     let byte_marker = format!("\n... output truncated ({} more bytes)\n", text.len());
     let reserve = line_marker.len().max(byte_marker.len());
@@ -280,6 +318,32 @@ pub fn truncate_tool_output(text: &str, max_bytes: usize) -> String {
         format!("\n... output truncated ({} more bytes)\n", text.len() - cut)
     };
     format!("{}{marker}", &text[..cut])
+}
+
+/// **The shape of a JSON value**, for a cut output (24 Nov 2026): its keys and the kinds of their values, an array as
+/// its length and the shape of its first item, within `max_chars`.
+pub fn json_shape(v: &serde_json::Value, max_chars: usize) -> String {
+    fn shape(v: &serde_json::Value, depth: usize) -> String {
+        use serde_json::Value as V;
+        match v {
+            V::Null => "null".into(),
+            V::Bool(_) => "bool".into(),
+            V::Number(_) => "number".into(),
+            V::String(s) => format!("string({})", s.chars().count()),
+            V::Array(a) if a.is_empty() => "[]".into(),
+            V::Array(a) => format!("[{} × {}]", a.len(), if depth >= 4 { "…".into() } else { shape(&a[0], depth + 1) }),
+            V::Object(o) if depth >= 4 => format!("{{{} keys}}", o.len()),
+            V::Object(o) => {
+                let mut parts: Vec<String> = o.iter().take(24).map(|(k, x)| format!("{k}: {}", shape(x, depth + 1))).collect();
+                if o.len() > 24 {
+                    parts.push(format!("… {} more keys", o.len() - 24));
+                }
+                format!("{{{}}}", parts.join(", "))
+            }
+        }
+    }
+    let s = shape(v, 0);
+    if s.chars().count() > max_chars { format!("{}…", s.chars().take(max_chars).collect::<String>()) } else { s }
 }
 
 impl<T: ToolBox + ?Sized> ToolBox for &T {
