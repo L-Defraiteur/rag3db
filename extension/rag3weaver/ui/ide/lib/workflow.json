@@ -28,7 +28,18 @@
     "Not": "règle",
     "KeepQuoted": "filtre",
     "Collect": "plomberie",
-    "ValueNode": "valeur"
+    "ValueNode": "valeur",
+    "EntityRecordNode": "écriture",
+    "EntityBatchNode": "écriture",
+    "RelationBatchNode": "écriture",
+    "CreateRefTypeNode": "genre de lien",
+    "SplitSections": "découpe",
+    "SearchSourceNode": "recherche",
+    "BM25SearchNode": "recherche",
+    "KBQuerySourceNode": "lecture",
+    "SelectRecordsNode": "lecture",
+    "InvokeToolNode": "outil",
+    "PlanNode": "plan"
   },
   "graph_nodes": [
     "GraphNode",
