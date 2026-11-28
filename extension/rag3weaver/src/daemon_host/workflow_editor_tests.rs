@@ -163,3 +163,32 @@ fn a_graph_node_opens_the_graph_it_cites() {
     assert!(refused["error"].as_str().unwrap_or_default().contains("« nowhere »"), "an unknown node, named: {refused}");
     stop(b);
 }
+
+/// **In the editor, a graph node opens its cited graph, and the crumbs lead back**: from `archive_slice`, the node `core`
+/// opens `archive_slice_core.mmd` (its nodes, `decide` among them), then `decide` opens `archive_decide.mmd`; the crumbs
+/// say the path, and the form says what the citing node passes.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn the_editor_opens_a_graph_nodes_cited_graph() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("the_editor_opens_a_graph_nodes_cited_graph") else {
+        return;
+    };
+    let b = bench();
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{}/ide/entrer?jeton=j", b.root), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/workflow/tool/archive_slice", b.root, b.id), "!!document.querySelector('#workflow [data-node=\"core\"]')");
+    n.cliquer("#workflow [data-node=\"core\"] .wf-node-head");
+    n.attendre("!!document.querySelector('#workflow [data-open-subgraph=\"core\"]')", "the link that opens core's cited graph");
+    n.cliquer("#workflow [data-open-subgraph=\"core\"]");
+    n.attendre("document.querySelector('#workflow [data-crumbs]')?.dataset.crumbs === 'core' && !!document.querySelector('#workflow [data-node=\"decide\"]')", "core's cited graph, decide among its nodes");
+    n.cliquer("#workflow [data-node=\"decide\"] .wf-node-head");
+    n.attendre("!!document.querySelector('#workflow [data-open-subgraph=\"decide\"]')", "the link that opens decide's cited graph");
+    n.cliquer("#workflow [data-open-subgraph=\"decide\"]");
+    n.attendre("document.querySelector('#workflow [data-crumbs]')?.dataset.crumbs === 'core/decide'", "the crumbs of two levels");
+    assert!(n.evaluer("document.querySelector('#workflow').innerText").as_str().unwrap_or_default().contains("archive_decide"), "the cited graph is named");
+    assert!(n.evaluer("!!document.querySelector('#workflow [data-passed=\"candidates\"]')").as_bool().unwrap_or(false), "the form says what the citing node passes");
+    drop(n);
+    stop(b);
+}
