@@ -180,7 +180,7 @@ impl DaemonHost {
     fn scout_llm(&self, t: &super::taches::Tache, files: &TeammateFiles, settings: &ScoutSettings) -> Result<Arc<dyn crate::llm::Llm>, String> {
         self.with_backend_id(&t.id, |b| {
             let p = b.prepared();
-            let resolved = self.resolve_model(&p.manifest.models, &settings.models);
+            let resolved = self.resolve_model(&p.manifest.models, &p.manifest.roles, &settings.models);
             if let Some(said) = &resolved.said {
                 let _ = files.append_with("host", "role", None, said, &json!({ "for": "scout", "wanted": settings.models }));
             }

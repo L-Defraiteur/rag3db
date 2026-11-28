@@ -3,7 +3,7 @@
 //! gives each role an ordered list of model names, the first one declared winning: the folder's manifest
 //! (`models.llm`) first, at an equal name, else `templates/models/catalog.json`, which holds whole sources. The user's
 //! own files of these names under her configuration take their place, a role or an entry at a time, read again at
-//! each use. `large` with no name is the teammate's own model; a role with no model declared falls back to `large`,
+//! each use; the folder's manifest (its key `roles`) takes the place of both for the roles it names. `large` with no name is the teammate's own model; a role with no model declared falls back to `large`,
 //! and the fallback is said. A name that is no role is looked up as a model name of the manifest, as before roles.
 
 use std::collections::BTreeMap;
@@ -76,10 +76,12 @@ impl DaemonHost {
         manifest.modele_de_langage(name).ok().cloned().or_else(|| catalog.iter().find(|c| Modeles::nom(c) == name).cloned())
     }
 
-    /// **The model for `wanted`**, roles or names, in order: the first one that resolves. A role none of whose models
-    /// is declared falls back to `large`, said.
-    pub(crate) fn resolve_model(&self, manifest: &Modeles, wanted: &[String]) -> Resolved {
-        let (roles, catalog) = (self.model_roles(), self.model_catalog());
+    /// **The model for `wanted`**, roles or names, in order: the first one that resolves. The folder's own roles
+    /// (its manifest's key `roles`) take the place of the shipped and the user's ones of the same name. A role none of
+    /// whose models is declared falls back to `large`, said.
+    pub(crate) fn resolve_model(&self, manifest: &Modeles, folder_roles: &BTreeMap<String, Vec<String>>, wanted: &[String]) -> Resolved {
+        let (mut roles, catalog) = (self.model_roles(), self.model_catalog());
+        roles.extend(folder_roles.iter().map(|(k, v)| (k.clone(), v.clone())));
         let large = |said: Option<String>| Resolved {
             source: roles.get("large").into_iter().flatten().find_map(|n| Self::declared(manifest, &catalog, n)),
             said,
