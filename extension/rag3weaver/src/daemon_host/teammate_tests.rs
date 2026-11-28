@@ -65,6 +65,7 @@ mod reopen;
 mod reply_channel;
 mod reply_first;
 mod run_du_pas;
+mod scout_model_in_table;
 mod silent_turn;
 mod silent_turn_channel;
 mod step_rules_declared;
