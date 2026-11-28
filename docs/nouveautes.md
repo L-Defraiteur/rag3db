@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Dans l'éditeur de graphes, un nœud-graphe s'ouvre.** Un nœud qui cite un graphe (`GraphNode`,
+  `ForEachNode`) a un lien « Ouvrir <fichier>.mmd et ses réglages » : le graphe cité se lit comme celui d'un outil, ses
+  ports, ses `%% param`, et, sous chaque réglage, la valeur que le nœud parent lui donne. On descend autant de niveaux
+  qu'il y en a ; le fil en haut ramène à chacun.
 - 28 novembre 2026 — **Une installation neuve n'affiche plus « le plafond des dépenses ne se lit pas ».** Les prix et
   le plafond viennent du gabarit livré (`templates/prices.json`, 200 USD par mois) ; ton `~/.config/rag3weaver/prices.json`
   ne fait que le surcharger, clé par clé et modèle par modèle : un plafond, ou le prix d'un modèle, et le reste suit les

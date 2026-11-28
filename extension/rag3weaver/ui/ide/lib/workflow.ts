@@ -16,6 +16,9 @@ export type WfGraph = {
   edges: WfEdge[];
   inputSchema?: { properties?: Record<string, { type?: string; default?: unknown; description?: string }>; required?: string[] };
   result?: { node: string; port: string };
+  /// A cited graph (`kind: "subgraph"`): the path of graph nodes that leads to it, and what the citing node passes.
+  path?: string[];
+  passed?: Record<string, unknown>;
 };
 
 export type Side = "in" | "out";
