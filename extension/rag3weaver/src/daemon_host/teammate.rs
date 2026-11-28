@@ -1122,7 +1122,9 @@ impl Step {
     fn edit_plan(&self, args: &Value) -> Result<Value, String> {
         let mut plans = self.files.read_plans();
         let mut questions: Vec<(String, String)> = Vec::new();
-        let mut closed_now: Option<u32> = None;
+        // The plan this call closes, kept aside: an `item` or a `remove` of the same call still applies to it, and it is
+        // filed only once the whole call holds (24 Nov 2026: `{close, item}` was refused after the close was filed).
+        let mut closing: Option<Plan> = None;
 
         if args["continue"].as_bool() == Some(true) {
             plans.active().ok_or("continue : il n'y a pas de plan actif")?;
@@ -1151,10 +1153,7 @@ impl Step {
             if let Some(cs) = c["concepts"].as_array() {
                 p.concepts = cs.iter().filter_map(|c| c.as_str().map(str::to_string)).collect();
             }
-            self.files.keep_closed(&p)?;
-            closed_now = Some(p.number);
-            self.closed.lock().unwrap_or_else(|q| q.into_inner()).push(p);
-            self.decide("close");
+            closing = Some(p);
         }
         if let Some(n) = args["resume"].as_u64() {
             if plans.active().is_some() {
@@ -1174,7 +1173,10 @@ impl Step {
             plans.plans.push(neuf);
         }
         if let Some(changes) = args.get("item").filter(|i| i.is_object()) {
-            let p = plans.active_mut().ok_or("item : il n'y a pas de plan actif ; pose-le d'abord (plan) ou reprends-en un (resume)")?;
+            let p = match plans.active_mut() {
+                Some(p) => p,
+                None => closing.as_mut().ok_or("item : il n'y a pas de plan actif ; pose-le d'abord (plan) ou reprends-en un (resume)")?,
+            };
             let id = changes["id"].as_str().ok_or("item.id manque")?;
             let i = match p.items.iter_mut().position(|i| i.id == id) {
                 Some(k) => &mut p.items[k],
@@ -1203,8 +1205,17 @@ impl Step {
             }
         }
         if let Some(id) = args["remove"].as_str() {
-            let p = plans.active_mut().ok_or("remove : il n'y a pas de plan actif")?;
+            let p = match plans.active_mut() {
+                Some(p) => p,
+                None => closing.as_mut().ok_or("remove : il n'y a pas de plan actif")?,
+            };
             p.items.retain(|i| i.id != id);
+        }
+        let closed_now = closing.as_ref().map(|p| p.number);
+        if let Some(p) = closing {
+            self.files.keep_closed(&p)?;
+            self.closed.lock().unwrap_or_else(|q| q.into_inner()).push(p);
+            self.decide("close");
         }
         self.files.write_plans(&plans)?;
         // **Les bloquants d'abord** : chaque question neuve part dans la boîte.
