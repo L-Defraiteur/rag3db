@@ -16,7 +16,11 @@ fn the_first_step_says_the_folders_index_and_the_indexes_inside_it() {
     let outils = depot.join("outils");
     std::fs::create_dir_all(&outils).unwrap();
     std::fs::write(outils.join("lib.rs"), "pub fn outil() {}\n").unwrap();
-    let roots = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    // Registered where the host reads its folders (`hote`'s roots), from the shipped templates.
+    let roots = crate::code_tree::Roots { config: d.path().join("code-roots/config"), data: d.path().join("code-roots/data") };
+    let gabarit = roots.config.join("code-lourd/templates");
+    std::fs::create_dir_all(gabarit.parent().unwrap()).unwrap();
+    crate::code_tree::copy(&std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarit, false).unwrap();
     crate::code_tree::add_files(&roots, &outils, "code-lourd", Some("code-outils")).unwrap();
     let premiers = Arc::new(Mutex::new(Vec::<String>::new()));
     let model: ChatModel = {
