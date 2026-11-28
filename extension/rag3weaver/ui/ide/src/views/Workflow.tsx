@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FilePlus2, Plus, Save, GitCompareArrows, Network, SlidersHorizontal, ShieldCheck, Wand2 } from "lucide-react";
 import { displayName, type HostState } from "@/lib/host";
 import {
-  W, HEAD, ROW, MAX_SETTINGS, colorOf, compatible, declaration, detailOf, isPlumbing, kindOf, layout, portKey, portY, rowsOf, settingsOf, settingsRow, subGraphOf, wired,
+  W, HEAD, ROW, MAX_SETTINGS, colorOf, compatible, declaration, detailOf, isPlumbing, kindOf, layout, portKey, portY, rowsOf, settingsOf, settingsRow, subGraphOf, valueText, wired,
   type PortRef, type WfGraph, type WfNode,
 } from "@/lib/workflow";
 
@@ -29,6 +29,9 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
   const backend = state.backends.find((b) => b.id === id);
   const [genre, ...more] = rest.split("/");
   const name = more.join("/");
+  // A graph node's cited graph: `?node=core/decide`, a path of graph nodes from the tool's graph down.
+  const node = new URLSearchParams(location.search).get("node") ?? "";
+  const here = (path: string) => `/ide/code/${id}/workflow/${genre}/${encodeURIComponent(name)}${path ? `?node=${encodeURIComponent(path)}` : ""}`;
   const [g, setG] = useState<WfGraph | null>(null);
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +42,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
   useEffect(() => {
     if (!backend || !genre || !name) return;
     const q = new URLSearchParams({ backend: id, [genre === "reaction" ? "reaction" : "tool"]: name });
+    if (node) q.set("node", node);
     fetch(`/ide/graphe?${q}`)
       .then((r) => r.json())
       .then((r) => {
@@ -54,7 +58,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
         setDescription(tools.find((t) => t.name === name)?.description ?? "");
       })
       .catch(() => {});
-  }, [backend?.manifest, genre, name]);
+  }, [backend?.manifest, genre, name, node]);
 
   const nodes = useMemo(() => (g ? (edit ? g.nodes : g.nodes.filter((n) => !isPlumbing(n))) : []), [g, edit]);
   if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
@@ -79,8 +83,16 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
     <div id="workflow" className="workflow" data-graph={`${g.kind}:${g.name}`}>
       <header className="wf-header">
         <div className="wf-titles">
-          <span className="wf-kicker">Workflows · {displayName(backend)} · {g.kind === "reaction" ? "réaction" : "outil"}</span>
-          <h1 className="wf-title">{name}</h1>
+          <span className="wf-kicker">Workflows · {displayName(backend)} · {g.kind === "reaction" ? "réaction" : g.kind === "subgraph" ? "graphe cité" : "outil"}</span>
+          <h1 className="wf-title">{g.kind === "subgraph" ? file.replace(/\.mmd$/, "") : name}</h1>
+          {g.path?.length ? (
+            <nav className="wf-crumbs" aria-label="D'où vient ce graphe" data-crumbs={g.path.join("/")}>
+              <a href={here("")}>{name}</a>
+              {g.path.map((step, i) => (
+                <span key={i}> › {i === g.path!.length - 1 ? <b>{step}</b> : <a href={here(g.path!.slice(0, i + 1).join("/"))}>{step}</a>}</span>
+              ))}
+            </nav>
+          ) : null}
           {description ? <p className="wf-about" title={description}>{description}</p> : null}
         </div>
         <div className="wf-actions">
@@ -187,7 +199,9 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
               ) : null}
               <code className="wf-decl">{declaration(sel)}{sel.line ? `   (ligne ${sel.line})` : ""}</code>
               {subGraphOf(sel) ? (
-                <Soon id="open-subgraph" icon={<Network size={14} />} label={`Ouvrir ${subGraphOf(sel)!.split("/").pop()}`} what="Ouvrir le graphe que ce nœud cite, et ses réglages." />
+                <a className="wf-open" data-open-subgraph={sel.name} href={here([...(g.path ?? []), sel.name].join("/"))}>
+                  <Network size={14} /> Ouvrir {subGraphOf(sel)!.split("/").pop()} et ses réglages
+                </a>
               ) : null}
               <Soon id="edit-values" icon={<SlidersHorizontal size={14} />} label="Modifier les valeurs sur le graphe" what="Un widget sur chaque entrée libre, et le nœud valeur." />
             </>
@@ -198,6 +212,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
               <label key={k} className="wf-field" title={p.description ?? ""}>
                 <span>{k}{g.inputSchema?.required?.includes(k) ? " *" : ""} <em>{p.type ?? ""}</em></span>
                 <input readOnly disabled value={p.default === undefined ? "" : typeof p.default === "string" ? p.default : JSON.stringify(p.default)} />
+                {g.passed && k in g.passed ? <small className="wf-passed" data-passed={k}>donné par le nœud : {valueText(g.passed[k])}</small> : null}
               </label>
             ))}
           </div>

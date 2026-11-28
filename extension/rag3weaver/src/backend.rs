@@ -3988,6 +3988,53 @@ impl PreparedBackend {
         }
     }
 
+    /// **The graph a graph node cites** (the workflow editor's second lot, 28 November 2026): `path` names graph nodes
+    /// from the tool's or the reaction's graph down (`core/decide`: the node `decide` of the graph `core` cites). Served
+    /// as a tool's graph — each node with its schema under its configuration and its line in the cited text, the edges,
+    /// the cited graph's `%% param` as `inputSchema`, its result — plus `passed`, what the citing node gives it. The graph
+    /// is the one the tool resolved at its loading (`{cite, mermaid, sous}`), never read again from the disk.
+    pub fn graph_json_cited(&self, target: &GraphTarget, path: &[&str]) -> Result<Value, String> {
+        let template = match target {
+            GraphTarget::Tool(name) => self.tools.get(name).ok_or_else(|| format!("{GRAPH_PAS_D_OUTIL} « {name} » dans ce backend"))?.template().clone(),
+            GraphTarget::Reaction(name) => self.reactions.get(name).ok_or_else(|| format!("graph : pas de réaction « {name} » dans ce backend"))?.template().clone(),
+            GraphTarget::Component(_) => return Err("graph : un composant ne cite pas de graphe".into()),
+        };
+        let mut nodes = template.nodes;
+        let mut found: Option<(String, crate::dataflow::graph_tool::GraphTool, Value)> = None;
+        for step in path {
+            let n = nodes.iter().find(|n| n.name == *step).ok_or_else(|| format!("graph : pas de nœud « {step} » dans ce graphe"))?;
+            if !n.config.get("graph").is_some_and(Value::is_object) {
+                return Err(format!("graph : le nœud « {step} » ({}) ne cite pas de graphe", n.node_type));
+            }
+            let (cite, tool) = crate::dataflow::foreach_node::materialiser(&n.config, &self.nodes, step)?;
+            let passed = n.config.clone();
+            nodes = tool.template().nodes.clone();
+            found = Some((cite, tool, passed));
+        }
+        let (cite, tool, mut passed) = found.ok_or("graph : `node` nomme au moins un nœud-graphe")?;
+        let text = passed["graph"]["mermaid"].as_str().unwrap_or_default().to_string();
+        if let Value::Object(o) = &mut passed {
+            o.remove("graph");
+        }
+        let lines = crate::dataflow::clic::lignes_des_noeuds(&text);
+        let drawn: Vec<Value> = tool
+            .template()
+            .nodes
+            .iter()
+            .map(|n| {
+                json!({"name": n.name, "node_type": n.node_type, "config": n.config, "line": lines.get(&n.name),
+                       "schema": self.nodes.schema_for(&n.node_type, &n.config).map(|s| node_schema_json(&s))})
+            })
+            .collect();
+        Ok(json!({
+            "kind": "subgraph", "name": cite, "source": cite.trim_start_matches('@'), "path": path,
+            "nodes": drawn, "edges": tool.template().edges,
+            "inputSchema": tool.tool_def().parameters,
+            "result": {"node": tool.result().0, "port": tool.result().1},
+            "passed": passed,
+        }))
+    }
+
     fn search_description(&self) -> Value {
         let nodes: Vec<Value> = SEARCH_NODES.iter().filter_map(|name| self.nodes.schema(name)).map(|s| node_schema_json(&s)).collect();
         let examples: Vec<Value> = self.tools.iter().filter(|(_, t)| t.template().nodes.iter().all(|n| SEARCH_NODES.contains(&n.node_type.as_str()))).map(|(name,t)| json!({"name":name,"mermaid":t.to_mermaid(),"bindings":self.manifest.tools[name].bindings,"metadata":self.manifest.tools[name].metadata})).collect();

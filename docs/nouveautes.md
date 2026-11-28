@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Dans l'éditeur de graphes, un nœud-graphe s'ouvre.** Un nœud qui cite un graphe (`GraphNode`,
+  `ForEachNode`) a un lien « Ouvrir <fichier>.mmd et ses réglages » : le graphe cité se lit comme celui d'un outil, ses
+  ports, ses `%% param`, et, sous chaque réglage, la valeur que le nœud parent lui donne. On descend autant de niveaux
+  qu'il y en a ; le fil en haut ramène à chacun.
 - 28 novembre 2026 — **Chaque ligne de « À intervenir » porte son action.** Un modèle refusé faute de prix y attend
   avec sa carte de prix (« je le cherche » sur sa page officielle, puis ton oui), quel que soit l'appel qui a buté — le
   chat, un agent, un script, le juge des lots. Le plafond du mois atteint ou proche : « Relever le plafond », écrit dans

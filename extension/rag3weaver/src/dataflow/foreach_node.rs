@@ -211,7 +211,7 @@ fn script_qui_lit(config: &Value, element: &str) -> Option<String> {
 }
 
 /// Le graphe cité d'une configuration résolue, rematérialisé et lié.
-fn materialiser(config: &Value, registre: &NodeRegistry, qui: &str) -> Result<(String, GraphTool), String> {
+pub(crate) fn materialiser(config: &Value, registre: &NodeRegistry, qui: &str) -> Result<(String, GraphTool), String> {
     let arbre = match config.get("graph") {
         Some(Value::Object(o)) => o,
         Some(Value::String(c)) => return Err(format!("{qui} : le graphe « {c} » n'a pas été lu au chargement — ce nœud se déclare dans un outil du manifeste")),
