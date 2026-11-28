@@ -41,6 +41,8 @@ fn sans_git(d: &Path, model: ChatModel) -> (Arc<DaemonHost>, String, PathBuf) {
     m["workspace"]["root"] = json!(racine.to_string_lossy());
     m["workspace"]["read_only"] = json!(true);
     m["workspace"]["task_writes"] = json!(true);
+    // The copy is asked for: a folder without git is worked in place otherwise (24 Nov 2026).
+    m["teammate"]["workspace"] = json!("copy");
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     let gate = d.join("gate");
     std::fs::create_dir_all(&gate).unwrap();

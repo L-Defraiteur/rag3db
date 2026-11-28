@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Plus de copie de travail : un dossier sans git se travaille en place.** L'agent écrit
+  directement dans ton dossier, sans en copier le contenu sous la tâche (le 24, une tâche en a copié 106 Go), et rien
+  n'est à fusionner après le pas. Une copie reste possible si `teammate.workspace` vaut `copy` dans le manifeste.
 - 28 novembre 2026 — **Un sujet neuf commence par l'index, et un rapport écrit n'est pas redit.** L'invite de
   l'agent lui demande de lancer `search_code` avant toute liste ou lecture quand il aborde un sujet pour la première
   fois, et, après un rapport écrit, de n'en donner que la conclusion en quelques lignes et le chemin.
