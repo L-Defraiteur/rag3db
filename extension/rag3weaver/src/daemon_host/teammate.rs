@@ -1809,14 +1809,15 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, requ
 }
 
 impl DaemonHost {
-    /// **What the agent is told of the indexes** at the folder's entry: whether the folder has its index, and which
-    /// folders under it have theirs. Indexing is the user's to ask (Lucie, 24 Nov 2026).
+    /// **What the agent is told of the indexes** at the folder's entry: whether the folder has its index (read in its
+    /// own manifest, `own`), and which folders under it have theirs (the host's registered folders). Indexing is the
+    /// user's to ask (Lucie, 24 Nov 2026).
     #[cfg(feature = "code")]
-    fn index_notice(&self, dossier: &Path, t: &super::prompts::Texts) -> Option<String> {
-        let roots = self.racines_de_code().ok()?;
+    fn index_notice(&self, dossier: &Path, own: &Path, t: &super::prompts::Texts) -> Option<String> {
         let dossier = dossier.canonicalize().unwrap_or_else(|_| dossier.to_path_buf());
-        let (mut propre, mut dedans) = (None, Vec::new());
-        for m in roots.registered_manifests() {
+        let (mut propre, mut dedans) = (Some(!super::worktrees::attached_without_index(own)), Vec::new());
+        let registered = self.racines_de_code().map(|r| r.registered_manifests()).unwrap_or_default();
+        for m in registered {
             let Some(v) = std::fs::read_to_string(&m).ok().and_then(|x| serde_json::from_str::<Value>(&x).ok()) else { continue };
             let Some(racine) = v["workspace"]["root"].as_str().map(PathBuf::from) else { continue };
             let indexe = !super::worktrees::attached_without_index(&m);
@@ -1838,7 +1839,7 @@ impl DaemonHost {
     }
 
     #[cfg(not(feature = "code"))]
-    fn index_notice(&self, _dossier: &Path, _t: &super::prompts::Texts) -> Option<String> {
+    fn index_notice(&self, _dossier: &Path, _own: &Path, _t: &super::prompts::Texts) -> Option<String> {
         None
     }
 }
@@ -2668,7 +2669,12 @@ impl DaemonHost {
             // demande, ou qu'il les liste s'il y en a déjà, qu'il soit notifié à l'entrée dans le dossier »).
             let demande_neuve = news.iter().any(|l| (l["kind"] == "request" || l["kind"] == "instruction") && l["from"] != "teammate" && l["from"] != "host");
             if number == 1 || demande_neuve {
-                if let Some(n) = t.workspace.as_ref().and_then(|w| self.index_notice(&w.racine_principale, &textes)) {
+                // The user's folder: the task's main root, else the root its folder's manifest declares.
+                let folder = t.workspace.as_ref().map(|w| w.racine_principale.clone()).or_else(|| {
+                    let v: Value = serde_json::from_slice(&std::fs::read(&t.parent_manifest).ok()?).ok()?;
+                    v["workspace"]["root"].as_str().map(PathBuf::from)
+                });
+                if let Some(n) = folder.and_then(|f| self.index_notice(&f, &t.parent_manifest, &textes)) {
                     message.push_str(&format!("\n{n}\n"));
                 }
             }
