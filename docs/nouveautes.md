@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Un dossier dit lui-même quel modèle tient un rôle.** La clé `roles` du manifeste
+  (`{"small": ["qwen3-coder-next"]}`) passe devant ta config et le livré pour les rôles qu'elle nomme.
 - 28 novembre 2026 — **Les gabarits nomment un rôle, ta config dit quel modèle le tient.** `small` pour les appels
   courts (l'éclaireur de l'index aujourd'hui), `large` pour l'équipier. `templates/models/roles.json` donne à chaque
   rôle une liste de noms, le premier déclaré gagnant : celui de ton manifeste à nom égal, sinon celui de
