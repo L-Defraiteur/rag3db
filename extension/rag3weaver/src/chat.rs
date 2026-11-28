@@ -193,7 +193,7 @@ pub struct ChatSession {
 /// Ce qu'un tour publié prend en plus d'un tour d'atelier
 /// ([`ChatSession::run_with`]) ; tout absent : un bus privé, un id généré.
 #[derive(Default)]
-pub struct ChatRunOptions {
+pub struct ChatRunOptions<'a> {
     pub bus: Option<crate::events::EventBus>,
     pub run_id: Option<String>,
     pub meter: Option<Arc<crate::meter::Meter>>,
@@ -203,6 +203,9 @@ pub struct ChatRunOptions {
     /// Le budget des reculs du modèle pour ce tour ; absent :
     /// [`crate::llm::BUDGET_DES_RECULS_DU_CHAT`].
     pub retry_budget: Option<std::time::Duration>,
+    /// **What a too-large tool output becomes** ([`crate::agent::ToolOutputSpill`]); absent, the plain bound
+    /// (`max_tool_output_bytes`).
+    pub tool_output_spill: Option<&'a (dyn crate::agent::ToolOutputSpill + Sync)>,
 }
 
 impl ChatSession {
@@ -237,7 +240,7 @@ impl ChatSession {
         config: &ChatConfig,
         events: EventHandler,
         cancelled: Arc<AtomicBool>,
-        options: ChatRunOptions,
+        options: ChatRunOptions<'_>,
     ) -> Result<AgentRun, String> {
         if message.trim().is_empty() || message.len() > 128 * 1024 {
             return Err("message must contain 1..131072 bytes".into());
@@ -253,6 +256,7 @@ impl ChatSession {
         let bounded = ToolOutputLimit {
             inner: &completion,
             max_bytes: config.max_tool_output_bytes,
+            spill: options.tool_output_spill,
         };
         let observed = ObservedTools {
             inner: &bounded,
@@ -622,6 +626,7 @@ mod tests {
         let tools = ToolOutputLimit {
             inner: &Large,
             max_bytes: 1024,
+            spill: None,
         };
         let result = tools.call(&ToolCall::new("stable-id", "read", "{}"));
         assert_eq!(result.tool_call_id.as_deref(), Some("stable-id"));
@@ -637,5 +642,22 @@ mod tests {
         assert!(bounded.len() <= 1024);
         assert!(bounded.contains("more bytes"));
         assert_eq!(crate::agent::truncate_tool_output("small", 1024), "small");
+    }
+
+    /// The cut keeps a share of the room for the head and the rest for the tail, on whole lines, and says what it
+    /// left out.
+    #[test]
+    fn a_cut_keeps_the_head_and_the_tail_on_whole_lines() {
+        let text: String = (1..=1000).map(|i| format!("line-{i:04}\n")).collect();
+        let cut = crate::agent::cut_tool_output(&text, 1100, 0.2);
+        assert!(cut.len() <= 1100, "{}", cut.len());
+        assert!(cut.starts_with("line-0001\n") && cut.ends_with("line-1000\n"), "{cut}");
+        assert!(!cut.contains("line-0500"), "the middle is left out");
+        let head = cut.lines().take_while(|l| l.starts_with("line-")).count();
+        let tail = cut.lines().rev().take_while(|l| l.starts_with("line-")).count();
+        assert!(head > 0 && tail > 2 * head, "a fifth for the head: {head} and {tail}");
+        assert!(cut.contains(&format!("{} lines", 1000 - head - tail)) && cut.contains("head and tail kept"), "{cut}");
+        assert_eq!(crate::agent::cut_tool_output("small", 1100, 0.2), "small");
+        assert_eq!(crate::agent::cut_tool_output(&text, 1100, 1.0), crate::agent::truncate_tool_output(&text, 1100));
     }
 }

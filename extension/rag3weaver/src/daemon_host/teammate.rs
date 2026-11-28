@@ -1055,14 +1055,14 @@ impl Step {
         }
     }
 
-    /// **A batch of the context's rewrite, said by the host** in the mailbox (`kind: context_rewrite`): the estimated
-    /// tokens before and after, and how many outputs it replaced.
-    pub(crate) fn say_context_rewrite(&self, batch: &super::context_rewrite::Batch, settings: &super::context_rewrite::ContextRewriteSettings) {
-        let (text, mut fields) = batch.line(settings);
+    /// **What a stage of the context policy did, said by the host** in the mailbox (`context_offload`,
+    /// `context_rewrite`, `context_budget`): the estimated tokens before and after, and what it replaced.
+    pub(crate) fn say_context(&self, said: &super::context_rewrite::Said) {
+        let mut fields = said.fields.clone();
         fields["step"] = json!(self.number);
-        match self.files.append_with("host", "context_rewrite", None, &text, &fields) {
+        match self.files.append_with("host", said.kind, None, &said.text, &fields) {
             Ok(line) => publish(self.bus.as_ref(), &self.task, &line),
-            Err(e) => eprintln!("[équipier] la ligne context_rewrite ne s'écrit pas : {e}"),
+            Err(e) => eprintln!("[équipier] la ligne {} ne s'écrit pas : {e}", said.kind),
         }
     }
 

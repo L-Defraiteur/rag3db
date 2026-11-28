@@ -1192,12 +1192,20 @@ impl DaemonHost {
             Some(p) => p,
             None => &masque,
         };
-        // **A step's context is rewritten by batches** (24 Nov 2026), as its table declares (`before_model_call.json`):
-        // what is sent changes, the session keeps each output whole.
-        let rewriting = step.map(|s| (s, self.context_rewrite_settings())).filter(|(_, r)| r.on()).map(|(s, r)| super::context_rewrite::RewritingLlm {
+        // **A step's context policy** (24 Nov 2026), as its table declares (`before_model_call.json`): a too-large tool
+        // output set aside at its arrival, then what is sent rewritten by batches; the session keeps each output as
+        // the tools gave it.
+        let policy = step.map(|_| self.context_policy());
+        let light = policy.as_ref().filter(|p| p.needs_light()).map(|p| self.light_model(&tour.prepared, &p.light_model, llm.clone()));
+        let offload = step.zip(policy.as_ref()).and_then(|(s, p)| {
+            let t = p.tool_output_on()?.clone();
+            let dir = s.files.dir.join(&t.folder).join(super::context_rewrite::run_folder(run_id));
+            Some(super::context_rewrite::ToolOutputOffload::new(t, self.prompt_texts(), dir, light.clone(), Box::new(move |d: &super::context_rewrite::Said| s.say_context(d))))
+        });
+        let rewriting = step.zip(policy.clone()).filter(|(_, p)| p.rewrites()).map(|(s, p)| super::context_rewrite::RewritingLlm {
             inner: llm.as_ref(),
-            rewrite: super::context_rewrite::ContextRewrite::new(r, self.prompt_texts()),
-            said: Box::new(move |b: &super::context_rewrite::Batch, r: &super::context_rewrite::ContextRewriteSettings| s.say_context_rewrite(b, r)),
+            rewrite: super::context_rewrite::ContextRewrite::new(p, self.prompt_texts(), light.clone()),
+            said: Box::new(move |d: &super::context_rewrite::Said| s.say_context(d)),
         });
         let model: &dyn crate::llm::Llm = match &rewriting {
             Some(r) => r,
@@ -1220,6 +1228,7 @@ impl DaemonHost {
                 // Un pas d'équipier rend vite la main à sa boucle, qui attend le
                 // fournisseur en le disant dans la boîte.
                 retry_budget: Some(if step.is_some() { crate::llm::BUDGET_DES_RECULS_DE_L_EQUIPIER } else { crate::llm::BUDGET_DES_RECULS_DU_CHAT }),
+                tool_output_spill: offload.as_ref().map(|o| o as &(dyn crate::agent::ToolOutputSpill + Sync)),
             },
         );
         let consomme: Vec<Value> = self
