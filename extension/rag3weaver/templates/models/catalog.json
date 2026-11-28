@@ -1,0 +1,6 @@
+{
+  "about": "Whole model sources a role may name, by name. The folder's manifest wins at an equal name; your own file of this name under your configuration (templates/models/catalog.json) adds or replaces entries by name.",
+  "models": [
+    { "name": "gemini-3.1-flash-lite", "provider": "compatible", "protocol": "vertex", "model": "google/gemini-3.1-flash-lite" }
+  ]
+}

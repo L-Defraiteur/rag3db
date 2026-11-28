@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Les gabarits nomment un rôle, ta config dit quel modèle le tient.** `small` pour les appels
+  courts (l'éclaireur de l'index aujourd'hui), `large` pour l'équipier. `templates/models/roles.json` donne à chaque
+  rôle une liste de noms, le premier déclaré gagnant : celui de ton manifeste à nom égal, sinon celui de
+  `templates/models/catalog.json` (livré : `gemini-3.1-flash-lite` pour `small`). Tes fichiers du même nom sous ta
+  config les remplacent sans rebâtir. Un rôle sans modèle déclaré passe à `large`, et la boîte de la tâche le dit.
 - 28 novembre 2026 — **Un pas long ne relit plus ses vieux résultats d'outils.** L'agent écrit, avant chaque appel
   d'outil, ce que le résultat d'avant lui a appris (« Appris : … Ensuite : … »). Quand les résultats d'un pas dépassent
   20 000 jetons estimés, ceux qui sont plus vieux que les 8 000 derniers et qu'il a commentés sont remplacés d'un coup
