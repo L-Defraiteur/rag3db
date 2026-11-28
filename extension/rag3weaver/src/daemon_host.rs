@@ -3444,6 +3444,8 @@ impl DaemonHost {
                 json!({
                     "service": SERVICE,
                     "pid": std::process::id(),
+                    // A new epoch at each start: a client resuming the stream sees the host was restarted.
+                    "epoch": self.ide_flux().epoch(),
                     "build": crate::daemon_lifecycle::build_id(),
                     "fils_du_moteur": fils_du_moteur(),
                     "gabarits": self.templates_health(),

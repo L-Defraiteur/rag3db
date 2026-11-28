@@ -150,6 +150,14 @@ impl Abonne {
     }
 }
 
+/// **An epoch new at each start**: the clock in nanoseconds and the system's randomness, in hex.
+fn draw_epoch() -> String {
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or_default();
+    let mut octets = [0u8; 8];
+    let _ = getrandom::fill(&mut octets);
+    format!("{nanos:x}-{}", octets.iter().map(|o| format!("{o:02x}")).collect::<String>())
+}
+
 /// **Le flux de l'IDE** : le bus des backends, numéroté, rejouable.
 pub struct Flux {
     prochain: AtomicU64,
@@ -157,12 +165,15 @@ pub struct Flux {
     abonnes: Mutex<Vec<Abonne>>,
     /// Told of each event published, by subject and backend (the host's state keeps what no event changed).
     ecouteur: std::sync::OnceLock<Box<dyn Fn(&str, &str) + Send + Sync>>,
+    /// **The host's epoch** (24 Nov 2026): drawn once, new at each start, so that a client resuming by `Last-Event-ID`
+    /// sees that the numbers belong to another series.
+    epoch: String,
 }
 
 impl Flux {
     /// Un flux vide, et son battement (un fil qui s'arrête avec lui).
     pub fn new() -> Arc<Self> {
-        let flux = Arc::new(Self { prochain: AtomicU64::new(1), tampon: Mutex::new(VecDeque::new()), abonnes: Mutex::new(Vec::new()), ecouteur: std::sync::OnceLock::new() });
+        let flux = Arc::new(Self { prochain: AtomicU64::new(1), tampon: Mutex::new(VecDeque::new()), abonnes: Mutex::new(Vec::new()), ecouteur: std::sync::OnceLock::new(), epoch: draw_epoch() });
         let faible: Weak<Self> = Arc::downgrade(&flux);
         let _ = std::thread::Builder::new().name("ide-battement".into()).spawn(move || loop {
             std::thread::sleep(BATTEMENT);
@@ -172,9 +183,9 @@ impl Flux {
         flux
     }
 
-    /// **The host's epoch**, drawn when its stream is made: not written yet.
+    /// **The host's epoch**, drawn when its stream is made.
     pub fn epoch(&self) -> &str {
-        ""
+        &self.epoch
     }
 
     /// **Publie un état** (l'IDE par le flux, 9 novembre 2026) : `{kind: "Etat", de, cle,
@@ -241,10 +252,12 @@ impl Flux {
         let (envoi, recu) = std::sync::mpsc::sync_channel::<Arc<str>>(EN_ATTENTE_PAR_FENETRE);
         let vivant = Arc::new(AtomicBool::new(true));
         let du_fil = vivant.clone();
+        let host_frame = format!("event: host\ndata: {}\n\n", json!({ "epoch": self.epoch, "pid": std::process::id() }));
         let lance = std::thread::Builder::new().name("ide-fenetre".into()).spawn(move || {
             let entete = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
                 Connection: keep-alive\r\n\r\n: ide\n\n";
-            if ecrivain.write_all(entete).and_then(|_| ecrivain.flush()).is_err() {
+            // The host's frame first, without an `id:`: the series of the events is not shifted.
+            if ecrivain.write_all(entete).and_then(|_| ecrivain.write_all(host_frame.as_bytes())).and_then(|_| ecrivain.flush()).is_err() {
                 du_fil.store(false, Ordering::SeqCst);
                 return;
             }
