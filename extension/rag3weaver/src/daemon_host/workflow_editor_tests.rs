@@ -130,3 +130,36 @@ fn the_workflow_editor_shows_a_tool_graph_with_its_typed_ports() {
     drop(n);
     stop(b);
 }
+
+/// **A graph node opens the graph it cites** (the editor's second lot, 28 November 2026): `/ide/graphe` with
+/// `node=<a path of graph nodes>` serves the cited graph as a tool's — its nodes with their schemas under their
+/// configuration, its edges on declared ports, its `%% param` as `inputSchema`, and the values the citing node passes;
+/// through two levels (`archive_slice` → `core` → `decide`). A node that is not a graph node, or that does not exist, is
+/// refused by its name.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_graph_node_opens_the_graph_it_cites() {
+    let b = bench();
+    let (status, g) = get(&b.root, &format!("/ide/graphe?backend={}&tool=archive_slice&node=core/decide", b.id));
+    assert_eq!(status, 200, "{g}");
+    let r = &g["result"];
+    assert_eq!(r["kind"], json!("subgraph"), "{g}");
+    assert!(r["name"].as_str().unwrap_or_default().ends_with("archive_decide.mmd"), "the cited graph: {g}");
+    assert_eq!(r["path"], json!(["core", "decide"]), "{g}");
+    let nodes = r["nodes"].as_array().unwrap();
+    assert!(!nodes.is_empty() && nodes.iter().all(|n| n["schema"].is_object() && n["line"].is_u64()), "{g}");
+    let node = |name: &str| nodes.iter().find(|n| n["name"] == name).unwrap_or_else(|| panic!("no node {name}: {g}"));
+    for e in r["edges"].as_array().unwrap() {
+        let (from, fp, to, tp) = (e["from_node"].as_str().unwrap(), e["from_port"].as_str().unwrap(), e["to_node"].as_str().unwrap(), e["to_port"].as_str().unwrap());
+        assert!(ports(node(from), "outputs").iter().any(|p| p == fp) && ports(node(to), "inputs").iter().any(|p| p == tp), "{from}.{fp} → {to}.{tp}");
+    }
+    let params = r["inputSchema"]["properties"].as_object().unwrap();
+    assert!(params.contains_key("candidates") && params.contains_key("instruction"), "its %% param: {g}");
+    assert_eq!(r["passed"]["candidates"], json!("$candidates"), "what the citing node passes: {g}");
+
+    let (_, refused) = get(&b.root, &format!("/ide/graphe?backend={}&tool=archive_slice&node=slice", b.id));
+    assert!(refused["error"].as_str().unwrap_or_default().contains("« slice »"), "not a graph node, named: {refused}");
+    let (_, refused) = get(&b.root, &format!("/ide/graphe?backend={}&tool=archive_slice&node=core/nowhere", b.id));
+    assert!(refused["error"].as_str().unwrap_or_default().contains("« nowhere »"), "an unknown node, named: {refused}");
+    stop(b);
+}
