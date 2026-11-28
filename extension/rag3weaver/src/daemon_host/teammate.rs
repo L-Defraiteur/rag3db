@@ -1808,6 +1808,41 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, requ
     m
 }
 
+impl DaemonHost {
+    /// **What the agent is told of the indexes** at the folder's entry: whether the folder has its index, and which
+    /// folders under it have theirs. Indexing is the user's to ask (Lucie, 24 Nov 2026).
+    #[cfg(feature = "code")]
+    fn index_notice(&self, dossier: &Path, t: &super::prompts::Texts) -> Option<String> {
+        let roots = self.racines_de_code().ok()?;
+        let dossier = dossier.canonicalize().unwrap_or_else(|_| dossier.to_path_buf());
+        let (mut propre, mut dedans) = (None, Vec::new());
+        for m in roots.registered_manifests() {
+            let Some(v) = std::fs::read_to_string(&m).ok().and_then(|x| serde_json::from_str::<Value>(&x).ok()) else { continue };
+            let Some(racine) = v["workspace"]["root"].as_str().map(PathBuf::from) else { continue };
+            let indexe = !super::worktrees::attached_without_index(&m);
+            if racine == dossier {
+                propre = Some(indexe);
+            } else if indexe && racine.starts_with(&dossier) {
+                dedans.push(format!("{} ({})", v["name"].as_str().unwrap_or("?"), racine.display()));
+            }
+        }
+        let nom = dossier.display().to_string();
+        let mut s = t.get(if propre == Some(true) { "index.self_ready" } else { "index.self_none" }, &[("folder", &nom)]);
+        if !dedans.is_empty() {
+            dedans.sort();
+            dedans.dedup();
+            s.push('\n');
+            s.push_str(&t.get("index.inside", &[("list", &dedans.join(", "))]));
+        }
+        Some(s)
+    }
+
+    #[cfg(not(feature = "code"))]
+    fn index_notice(&self, _dossier: &Path, _t: &super::prompts::Texts) -> Option<String> {
+        None
+    }
+}
+
 /// Ce que la boucle rend de son travail.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Outcome {
@@ -2629,6 +2664,14 @@ impl DaemonHost {
             // The loop's texts, read at each step: an edit of the user's texts.json is in the next step (23 Nov 2026).
             let textes = self.prompt_texts();
             let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits, &textes);
+            // **The indexes, said at the folder's entry and at each request** (Lucie, 24 Nov 2026: « juste un index à la
+            // demande, ou qu'il les liste s'il y en a déjà, qu'il soit notifié à l'entrée dans le dossier »).
+            let demande_neuve = news.iter().any(|l| (l["kind"] == "request" || l["kind"] == "instruction") && l["from"] != "teammate" && l["from"] != "host");
+            if number == 1 || demande_neuve {
+                if let Some(n) = t.workspace.as_ref().and_then(|w| self.index_notice(&w.racine_principale, &textes)) {
+                    message.push_str(&format!("\n{n}\n"));
+                }
+            }
             // **The start of a turn asks its graph** (`at_turn_start.mmd`, 24 Nov 2026): what the long-term memory holds for
             // the request that opens it, as a block, or nothing.
             if let Some(request) = news.iter().rev().find(|l| matches!(l["kind"].as_str(), Some("request" | "instruction")) && l["from"] != "teammate" && l["from"] != "host").and_then(|l| l["text"].as_str()) {
