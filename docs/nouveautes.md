@@ -12,6 +12,9 @@
 - 28 novembre 2026 — **La réflexion du modèle arrive jusqu'au terminal.** Les résumés de pensée que donne le
   fournisseur (Gemini sur Vertex) passent sur le flux à côté des mots, jamais dedans : le terminal les fait défiler
   près de l'animation et Ctrl-O les relit ; ils n'entrent ni dans la réponse ni dans la boîte.
+- 28 novembre 2026 — **Une conversation rouverte voit les modèles déclarés depuis.** `/model` et la liste des modèles
+  d'une tâche lisent `models.llm` dans le manifeste vivant du dossier, à chaque appel ; le reste des déclarations de
+  la tâche reste celui de son ouverture.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
