@@ -13,10 +13,10 @@ use std::time::{Duration, Instant};
 
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
 #[path = "../../../tests/common/fake_sse.rs"]
-mod fake_sse;
+pub(super) mod fake_sse;
 
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
-fn knows_it() -> fake_sse::Reply {
+pub(super) fn knows_it() -> fake_sse::Reply {
     let content = json!({ "choices": [{ "index": 0, "delta": { "role": "assistant", "content": json!({ "knows": 0.95, "queries": [], "usages": "" }).to_string() }, "finish_reason": null }] });
     let stop = json!({ "choices": [{ "index": 0, "delta": {}, "finish_reason": "stop" }] });
     fake_sse::Reply::Sse { frames: vec![content.to_string(), stop.to_string()] }
@@ -25,12 +25,15 @@ fn knows_it() -> fake_sse::Reply {
 /// One thanks in an indexed folder whose manifest declares `llm`, the user's roles and catalog being `roles` and
 /// `catalog`; the mailbox of the task.
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
-fn a_thanks(llm: Value, roles: Value, catalog: Value) -> Vec<Value> {
+pub(super) fn a_thanks(llm: Value, roles: Value, catalog: Value, manifest_roles: Value) -> Vec<Value> {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let mut c: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
     c["embeddings"] = json!({ "model": "faux-embarqueur", "dimensions": 8 });
     c["models"] = json!({ "llm": llm });
+    if !manifest_roles.is_null() {
+        c["roles"] = manifest_roles;
+    }
     std::fs::write(&manifeste, serde_json::to_string_pretty(&c).unwrap()).unwrap();
     let declarations = manifeste.ancestors().find(|p| p.join(".git").exists()).unwrap().to_path_buf();
     for args in [&["add", "-A"][..], &["commit", "-q", "-m", "les modèles"]] {
@@ -74,7 +77,7 @@ fn a_thanks(llm: Value, roles: Value, catalog: Value) -> Vec<Value> {
 }
 
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
-fn equipier() -> Value {
+pub(super) fn equipier() -> Value {
     json!({ "name": "equipier", "access": "compatible", "provider": "openai", "model": "faux-equipier", "address": "http://127.0.0.1:9/v1", "default": true })
 }
 
@@ -86,6 +89,7 @@ fn the_scout_calls_the_model_the_users_configuration_gives_its_role() {
         json!([equipier()]),
         json!({ "small": ["x"] }),
         json!([{ "name": "x", "access": "compatible", "provider": "openai", "model": "faux-x", "address": x.url }]),
+        Value::Null,
     );
     let calls: Vec<String> = x.request.try_iter().collect();
     assert_eq!(calls.len(), 1, "the role small is played by x, from the user's catalog: {calls:#?}");
@@ -100,6 +104,7 @@ fn the_manifests_model_wins_at_an_equal_name() {
         json!([equipier(), { "name": "x", "access": "compatible", "provider": "openai", "model": "faux-x-a-elle", "address": own.url }]),
         json!({ "small": ["x"] }),
         json!([{ "name": "x", "access": "compatible", "provider": "openai", "model": "faux-x", "address": catalog.url }]),
+        Value::Null,
     );
     assert_eq!(own.request.try_iter().count(), 1, "the manifest's own x is called");
     assert_eq!(catalog.request.try_iter().count(), 0, "not the catalog's");
@@ -108,7 +113,7 @@ fn the_manifests_model_wins_at_an_equal_name() {
 #[cfg(all(feature = "code", feature = "rag3db-native", feature = "openai-llm", target_os = "linux"))]
 #[test]
 fn a_role_with_no_model_falls_back_to_large_and_says_so() {
-    let b = a_thanks(json!([equipier()]), json!({ "small": ["absent"] }), json!([]));
+    let b = a_thanks(json!([equipier()]), json!({ "small": ["absent"] }), json!([]), Value::Null);
     let said = b.iter().find(|l| l["from"] == "host" && l["kind"] == "role").unwrap_or_else(|| panic!("the fallback is said: {b:#?}"));
     let text = said["text"].as_str().unwrap_or_default();
     assert!(text.contains("small") && text.contains("large"), "{said}");

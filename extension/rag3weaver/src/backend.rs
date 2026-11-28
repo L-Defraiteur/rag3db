@@ -532,6 +532,10 @@ pub struct BackendManifest {
     /// (`crate::model_source::ModelSource`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: crate::model_source::Modeles,
+    /// **Which model plays each role, for this folder** (28 Nov 2026): a role and its ordered model names, in the place
+    /// of the shipped and the user's roles of that name (`templates/models/roles.json`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub roles: BTreeMap<String, Vec<String>>,
     /// **Les activations nommées** (décision de c7, 14 novembre 2026 : « une
     /// abstraction, pas trois configs qui divergent ») : un fournisseur déclaré
     /// une fois, que chaque déclaration de `models` cite par son nom
