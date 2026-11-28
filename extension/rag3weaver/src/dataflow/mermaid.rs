@@ -219,7 +219,7 @@ fn parse_config_params(
 }
 
 /// Split params by comma, but not inside quotes.
-fn split_params(input: &str) -> Vec<&str> {
+pub(crate) fn split_params(input: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut in_quote = false;

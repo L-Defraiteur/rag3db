@@ -4,7 +4,20 @@
 import table from "./workflow.json";
 
 export type PortDecl = { name: string; type: string; required?: boolean };
-export type ParamDecl = { name: string; type: string; required?: boolean; default?: unknown; description?: string };
+export type ParamDecl = { name: string; type: string; required?: boolean; default?: unknown; description?: string; choices?: string | null };
+
+/// An edit of the editor's draft (`POST /ide/graphe/edit`): the host applies it to the `.mmd` line by line.
+export type Edit =
+  | { op: "set"; node: string; key: string; value: unknown }
+  | { op: "unset"; node: string; key: string }
+  | { op: "connect" | "disconnect"; from_node: string; from_port: string; to_node: string; to_port: string };
+
+/// The draft applied: the text before and after, whether it loads (and why not), the graph it draws.
+export type Draft = { before: string; after: string; valid: boolean; error?: string | null; nodes: WfNode[]; edges: WfEdge[] };
+
+/// The values a setting takes from a closed list (`a | b | c`), or null.
+export const choicesOf = (p: ParamDecl): string[] | null =>
+  p.choices && !p.choices.startsWith("@") ? p.choices.split("|").map((s) => s.trim()).filter(Boolean) : null;
 export type NodeSchema = { type: string; description?: string; inputs: PortDecl[]; outputs: PortDecl[]; parameters?: ParamDecl[] };
 export type WfNode = { name: string; node_type: string; config?: Record<string, unknown>; line?: number | null; schema?: NodeSchema | null };
 export type WfEdge = { from_node: string; from_port: string; to_node: string; to_port: string };

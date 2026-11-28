@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FilePlus2, Plus, Save, GitCompareArrows, Network, SlidersHorizontal, ShieldCheck, Wand2 } from "lucide-react";
 import { displayName, type HostState } from "@/lib/host";
+import { lineDiff } from "@/lib/diff";
 import {
   W, HEAD, ROW, MAX_SETTINGS, colorOf, compatible, declaration, detailOf, isPlumbing, kindOf, layout, portKey, portY, rowsOf, settingsOf, settingsRow, subGraphOf, valueText, wired,
-  type PortRef, type WfGraph, type WfNode,
+  choicesOf, type Draft, type Edit, type ParamDecl, type PortRef, type WfGraph, type WfNode,
 } from "@/lib/workflow";
 
 // **The workflow editor, its first lot** (28 November 2026, Lucie: « la bonne présentation de rag3weaver dans l'IDE,
@@ -38,6 +39,10 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
   const [edit, setEdit] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [probe, setProbe] = useState<PortRef | null>(null);
+  // The draft (the third lot, 28 November 2026): edits the host applies to the `.mmd` line by line, nothing written.
+  const [edits, setEdits] = useState<Edit[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!backend || !genre || !name) return;
@@ -60,24 +65,53 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
       .catch(() => {});
   }, [backend?.manifest, genre, name, node]);
 
-  const nodes = useMemo(() => (g ? (edit ? g.nodes : g.nodes.filter((n) => !isPlumbing(n))) : []), [g, edit]);
+  useEffect(() => {
+    if (!edits.length) {
+      setDraft(null);
+      setDraftError(null);
+      return;
+    }
+    fetch("/ide/graphe/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend: id, [genre === "reaction" ? "reaction" : "tool"]: name, edits }) })
+      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(r.error ?? "modification refusée");
+        setDraft(r.result as Draft);
+        setDraftError(null);
+      })
+      .catch((e: Error) => setDraftError(e.message));
+  }, [edits]);
+  const view: WfGraph | null = g && draft && draft.nodes.length ? { ...g, nodes: draft.nodes, edges: draft.edges } : g;
+  const nodes = useMemo(() => (view ? (edit ? view.nodes : view.nodes.filter((n) => !isPlumbing(n))) : []), [view, edit]);
   if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   if (!genre || !name) return <p className="note text-muted-foreground">Choisis un graphe depuis la liste des outils (<a className="underline" href={`/ide/code/${id}/dag`}>graphes</a>).</p>;
   if (error) return <p className="text-destructive" role="alert">{error}</p>;
   if (!g) return <p className="note text-muted-foreground">Chargement du graphe…</p>;
 
-  const edges = g.edges;
+  const edges = view!.edges;
+  const all = view!.nodes;
+  // A cited graph is read here; its edits come with the instance (the ticket of 26 November).
+  const editable = !node;
+  const push = (e: Edit) => setEdits((es) => [...es.filter((x) => !(e.op === "set" && x.op === "set" && x.node === e.node && x.key === e.key)), e]);
   const L = layout(nodes, edges, edit);
   const file = (g.source ?? `${name}.mmd`).split("/").pop()!;
-  const sel = g.nodes.find((n) => n.name === selected) ?? null;
-  const hidden = g.nodes.length - nodes.length;
+  const sel = all.find((n) => n.name === selected) ?? null;
+  const hidden = all.length - nodes.length;
   const lit = (p: PortRef) => !!probe && compatible(probe, p);
-  const pick = (p: PortRef) => setProbe((q) => (q && portKey(q) === portKey(p) ? null : p));
+  // A port is a target (the ticket of 26 November): an output, then a lit input, makes an edge (or the other way).
+  const pick = (p: PortRef) => {
+    if (probe && editable && lit(p)) {
+      const [o, i] = probe.side === "out" ? [probe, p] : [p, probe];
+      push({ op: "connect", from_node: o.node, from_port: o.name, to_node: i.node, to_port: i.name });
+      setProbe(null);
+      return;
+    }
+    setProbe((q) => (q && portKey(q) === portKey(p) ? null : p));
+  };
   const probeText = probe
     ? `${probe.name} : ${probe.type} — ${probe.side === "out" ? "peut aller vers" : "peut venir de"} les ports allumés. Clique-le encore pour l'éteindre.`
     : edit
       ? "Clique un port : les ports qui peuvent s'y brancher s'allument."
-      : `${g.nodes.length} nœuds${hidden ? `, dont ${hidden} de plomberie cachés` : ""}. L'édition montre les ports et leurs types.`;
+      : `${all.length} nœuds${hidden ? `, dont ${hidden} de plomberie cachés` : ""}. L'édition montre les ports et leurs types.`;
 
   return (
     <div id="workflow" className="workflow" data-graph={`${g.kind}:${g.name}`}>
@@ -97,7 +131,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
         </div>
         <div className="wf-actions">
           <span className="wf-file" title={g.source ?? ""}>{file}</span>
-          <Soon id="save" icon={<Save size={14} />} label="Enregistrer" what="Les changements faits ici s'écriront dans le .mmd et son layout.json." />
+          <Soon id="save" icon={<Save size={14} />} label="Enregistrer" what="Les changements du brouillon s'écriront dans l'instance du gabarit, ou en nouvelle version du .mmd." />
           <Soon id="new-graph" icon={<FilePlus2 size={14} />} label="Nouveau graphe" what="Créer un graphe de zéro, qui écrit son .mmd." />
         </div>
       </header>
@@ -116,7 +150,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
           <svg className="wf-wires" width={L.width} height={L.height} aria-hidden="true">
             {L.edges.map((e, k) => {
               const a = L.pos.get(e.from_node)!, z = L.pos.get(e.to_node)!;
-              const na = g.nodes.find((n) => n.name === e.from_node)!, nz = g.nodes.find((n) => n.name === e.to_node)!;
+              const na = all.find((n) => n.name === e.from_node)!, nz = all.find((n) => n.name === e.to_node)!;
               const x1 = a.x + W, x2 = z.x;
               const y1 = edit ? portY(na, edges, a, "out", e.from_port) : a.y + a.h / 2;
               const y2 = edit ? portY(nz, edges, z, "in", e.to_port) : z.y + z.h / 2;
@@ -203,7 +237,30 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
                   <Network size={14} /> Ouvrir {subGraphOf(sel)!.split("/").pop()} et ses réglages
                 </a>
               ) : null}
-              <Soon id="edit-values" icon={<SlidersHorizontal size={14} />} label="Modifier les valeurs sur le graphe" what="Un widget sur chaque entrée libre, et le nœud valeur." />
+              {editable ? (
+                <>
+                  <h3>Réglages du nœud</h3>
+                  <div className="wf-form" data-node-widgets={sel.name}>
+                    {(sel.schema?.parameters ?? []).map((p) => (
+                      <Widget key={`${sel.name}.${p.name}`} p={p} value={(sel.config ?? {})[p.name]} onSet={(value) => push({ op: "set", node: sel.name, key: p.name, value })} />
+                    ))}
+                  </div>
+                  <h3>Ses fils</h3>
+                  <ul className="wf-edges" data-node-edges={sel.name}>
+                    {edges
+                      .filter((e) => e.from_node === sel.name || e.to_node === sel.name)
+                      .map((e) => (
+                        <li key={`${e.from_node}.${e.from_port}>${e.to_node}.${e.to_port}`}>
+                          <code>{e.from_node}.{e.from_port} → {e.to_node}.{e.to_port}</code>
+                          <button type="button" data-action="disconnect" aria-label={`Débrancher ${e.from_node}.${e.from_port} → ${e.to_node}.${e.to_port}`}
+                            onClick={() => push({ op: "disconnect", ...e })}>×</button>
+                        </li>
+                      ))}
+                  </ul>
+                </>
+              ) : (
+                <Soon id="edit-cited" icon={<SlidersHorizontal size={14} />} label="Modifier ce graphe cité" what="Ses valeurs vivront dans l'instance du gabarit, dans le backend." />
+              )}
             </>
           ) : null}
           <h3>Réglages · {file}</h3>
@@ -221,9 +278,23 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
 
         <section className="wf-panel" aria-labelledby="wf-diff-title">
           <h2 id="wf-diff-title"><GitCompareArrows size={15} /> La modification · {file}</h2>
-          <p className="wf-muted">Aucune modification : ce graphe se lit tel que le fichier le déclare.</p>
-          <Soon id="diff" icon={<GitCompareArrows size={14} />} label="Voir le diff du .mmd" what="Chaque changement fait ici, ligne à ligne, avant de l'écrire." />
-          <Soon id="types-checked" icon={<ShieldCheck size={14} />} label="Types vérifiés au chargement" what="Le moteur refusera une arête entre deux types qui ne se branchent pas, en la nommant." />
+          {draftError ? <p className="wf-refused" role="alert">{draftError}</p> : null}
+          {draft ? (
+            <>
+              <p className={draft.valid ? "wf-muted" : "wf-refused"} data-draft-valid={String(draft.valid)} role={draft.valid ? undefined : "alert"}>
+                <ShieldCheck size={13} /> {draft.valid ? "Le graphe modifié se charge : types et fils vérifiés." : `Il ne se chargerait pas : ${draft.error}`}
+              </p>
+              <pre className="wf-diff" data-diff>
+                {(() => {
+                  const d = lineDiff(draft.before, draft.after);
+                  return typeof d === "string" ? d : d.map((l, i) => <span key={i} className={l.kind === "plus" ? "wf-plus" : "wf-minus"}>{l.kind === "plus" ? "+ " : "- "}{l.text}{"\n"}</span>);
+                })()}
+              </pre>
+              <button type="button" className="wf-reset" data-action="reset" onClick={() => setEdits([])}>Annuler les changements</button>
+            </>
+          ) : (
+            <p className="wf-muted">Aucune modification : ce graphe se lit tel que le fichier le déclare. Branche un port sur un autre, ou change un réglage du nœud.</p>
+          )}
         </section>
 
         <section className="wf-panel" aria-labelledby="wf-graph-title">
@@ -234,5 +305,58 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
         </section>
       </div>
     </div>
+  );
+}
+
+/// **A setting's widget, by its declared type** (the ticket of 26 November): a toggle for a boolean, a number field for
+/// a number, a list for a closed list, a small editor for JSON, a field for a text. A `$param` reads « ← param » until a
+/// value is written over it.
+function Widget({ p, value, onSet }: { p: ParamDecl; value: unknown; onSet: (v: unknown) => void }) {
+  const ref = typeof value === "string" && value.startsWith("$") ? value.slice(1) : null;
+  const shown = value === undefined ? p.default : value;
+  const choices = choicesOf(p);
+  const text = shown === undefined || shown === null ? "" : typeof shown === "string" ? shown : JSON.stringify(shown);
+  let control: ReactNode;
+  if (p.type === "Bool") {
+    control = <input type="checkbox" checked={shown === true} onChange={(e) => onSet(e.target.checked)} data-widget="bool" />;
+  } else if (choices) {
+    control = (
+      <select value={ref ? "" : text} onChange={(e) => e.target.value && onSet(e.target.value)} data-widget="choice">
+        {ref || !text ? <option value="">{ref ? `← ${ref}` : "non défini"}</option> : null}
+        {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+    );
+  } else if (p.type === "Int" || p.type === "Float") {
+    control = (
+      <input type="number" step={p.type === "Int" ? 1 : "any"} defaultValue={ref ? "" : text} placeholder={ref ? `← ${ref}` : "non défini"} data-widget="number"
+        onBlur={(e) => e.target.value !== "" && Number(e.target.value) !== shown && onSet(Number(e.target.value))} />
+    );
+  } else if (p.type === "Json") {
+    control = (
+      <textarea rows={2} defaultValue={ref ? "" : text} placeholder={ref ? `← ${ref}` : "non défini"} data-widget="json"
+        onBlur={(e) => {
+          try {
+            const v = JSON.parse(e.target.value);
+            if (JSON.stringify(v) !== text) onSet(v);
+          } catch {
+            /* left as typed until it parses */
+          }
+        }} />
+    );
+  } else {
+    control = (
+      <input type="text" defaultValue={ref ? "" : text} placeholder={ref ? `← ${ref}` : "non défini"} data-widget="text"
+        onBlur={(e) => e.target.value !== text && e.target.value !== "" && onSet(e.target.value)} />
+    );
+  }
+  return (
+    <label className="wf-field" title={p.description ?? ""} data-setting={p.name}>
+      <span>
+        {p.name}
+        {p.required ? " *" : ""} <em>{p.type}</em>
+        {ref ? <small className="wf-passed"> ← {ref}</small> : null}
+      </span>
+      {control}
+    </label>
   );
 }

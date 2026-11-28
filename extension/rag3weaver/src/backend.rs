@@ -4035,6 +4035,46 @@ impl PreparedBackend {
         }))
     }
 
+    /// **The editor's draft, applied** (the workflow editor's third lot, 28 November 2026): `edits` applied to the text
+    /// of the tool's or the reaction's `.mmd` line by line ([`crate::dataflow::mermaid_edit`]), then the text checked as
+    /// a load checks it (`bind`, the edges' types included). Nothing is written: the text before and after, whether it
+    /// loads (and why not), and the graph it draws — its nodes with their schemas, its edges.
+    pub fn graph_edit(&self, target: &GraphTarget, edits: &[crate::dataflow::mermaid_edit::Edit]) -> Result<Value, String> {
+        use crate::lecteur::Lecteur;
+        let (kind, name, source) = match target {
+            GraphTarget::Tool(n) => ("tool", n, &self.manifest.tools.get(n).ok_or_else(|| format!("{GRAPH_PAS_D_OUTIL} « {n} » dans ce backend"))?.graph),
+            GraphTarget::Reaction(n) => ("reaction", n, &self.manifest.reactions.get(n).ok_or_else(|| format!("graph : pas de réaction « {n} » dans ce backend"))?.graph),
+            GraphTarget::Component(_) => return Err("graph : un composant ne s'édite pas ici".into()),
+        };
+        let before = crate::lecteur::Disque.lire_texte(&self.path(source)).map_err(|e| format!("{} : {e}", source.display()))?;
+        let after = crate::dataflow::mermaid_edit::apply(&before, edits)?;
+        let parsed = crate::dataflow::graph_tool::GraphTool::from_mermaid(&after).map_err(|e| e.to_string());
+        let bound = parsed.as_ref().map_err(Clone::clone).and_then(|t| t.bind(&self.nodes).map_err(|e| e.to_string()));
+        let error = bound.as_ref().err().cloned();
+        let drawn = bound.as_ref().ok().or(parsed.as_ref().ok());
+        let lines = crate::dataflow::clic::lignes_des_noeuds(&after);
+        let nodes: Vec<Value> = drawn
+            .map(|t| {
+                t.template()
+                    .nodes
+                    .iter()
+                    .map(|n| {
+                        json!({"name": n.name, "node_type": n.node_type, "config": n.config, "line": lines.get(&n.name),
+                               "schema": self.nodes.schema_for(&n.node_type, &n.config).map(|s| node_schema_json(&s))})
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(json!({
+            "kind": kind, "name": name, "source": source,
+            "before": before, "after": after,
+            "valid": error.is_none(), "error": error,
+            "nodes": nodes, "edges": drawn.map(|t| json!(t.template().edges)).unwrap_or(json!([])),
+            "inputSchema": bound.as_ref().ok().map(|t| t.tool_def().parameters),
+            "result": drawn.map(|t| json!({"node": t.result().0, "port": t.result().1})),
+        }))
+    }
+
     fn search_description(&self) -> Value {
         let nodes: Vec<Value> = SEARCH_NODES.iter().filter_map(|name| self.nodes.schema(name)).map(|s| node_schema_json(&s)).collect();
         let examples: Vec<Value> = self.tools.iter().filter(|(_, t)| t.template().nodes.iter().all(|n| SEARCH_NODES.contains(&n.node_type.as_str()))).map(|(name,t)| json!({"name":name,"mermaid":t.to_mermaid(),"bindings":self.manifest.tools[name].bindings,"metadata":self.manifest.tools[name].metadata})).collect();

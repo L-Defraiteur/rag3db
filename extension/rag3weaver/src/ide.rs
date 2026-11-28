@@ -1041,6 +1041,27 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        ("POST", "/ide/graphe/edit") => {
+            // **The editor's draft, applied** (`{backend, tool | reaction, edits}`, 28 November 2026): the `.mmd` edited
+            // line by line and checked as a load checks it; nothing is written.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("unreadable body: {e}") }),
+                Ok(c) => {
+                    let edits: Result<Vec<crate::dataflow::mermaid_edit::Edit>, String> =
+                        serde_json::from_value(c["edits"].clone()).map_err(|e| format!("edits: {e}"));
+                    match (c["backend"].as_str(), crate::backend::GraphTarget::from_args(&c), edits) {
+                        (None, _, _) => json!({ "ok": false, "error": "graphe/edit : il faut backend" }),
+                        (_, Err(e), _) | (_, _, Err(e)) => json!({ "ok": false, "error": e }),
+                        (Some(id), Ok(cible), Ok(edits)) => match host.with_backend_id(id, |b| b.prepared().graph_edit(&cible, &edits)).and_then(|r| r) {
+                            Ok(r) => json!({ "ok": true, "result": r }),
+                            Err(e) => json!({ "ok": false, "error": e }),
+                        },
+                    }
+                }
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/prices/lookup") => {
             // **A price looked up** (`{slug}`): a proposal with its sources, never written; the page asks the yes.
             let mut corps = Vec::new();

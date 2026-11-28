@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 28 novembre 2026 — **L'éditeur de graphes modifie un brouillon.** En vue Édition, une sortie puis une entrée allumée
+  font un fil ; chaque fil a son « × » dans le panneau du nœud ; chaque réglage du nœud a son widget selon son type
+  (bascule, nombre, liste, texte, JSON). Le panneau « La modification » montre le diff du `.mmd` — seules les lignes
+  touchées changent — et dit si le graphe modifié se charge, types compris, ou pourquoi non. Rien n'est écrit :
+  « Annuler les changements » le vide ; enregistrer viendra avec l'instance du gabarit.
 - 28 novembre 2026 — **Dans l'éditeur de graphes, un nœud-graphe s'ouvre.** Un nœud qui cite un graphe (`GraphNode`,
   `ForEachNode`) a un lien « Ouvrir <fichier>.mmd et ses réglages » : le graphe cité se lit comme celui d'un outil, ses
   ports, ses `%% param`, et, sous chaque réglage, la valeur que le nœud parent lui donne. On descend autant de niveaux

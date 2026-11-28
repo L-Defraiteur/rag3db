@@ -58,6 +58,8 @@ pub mod clic;
 /// Le graphe de clic transpilé en TSX, puis compilé (marche 3, niveau 2, lot 2).
 pub mod clic_tsx;
 pub mod mermaid;
+// The editor's edits applied to a `.mmd` line by line (28 November 2026).
+pub mod mermaid_edit;
 pub mod node_factories;
 pub mod node_registry;
 pub mod search_nodes;

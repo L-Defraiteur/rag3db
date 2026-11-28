@@ -192,3 +192,98 @@ fn the_editor_opens_a_graph_nodes_cited_graph() {
     drop(n);
     stop(b);
 }
+
+fn post(root: &str, path: &str, body: Value) -> Value {
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{root}{path}"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(body.to_string())
+        .unwrap();
+    serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+}
+
+/// **The editor's draft is applied to the `.mmd` line by line and checked as a load checks it** (the third lot): no
+/// edit gives the same text, loadable; an edge between compatible ports adds one line and loads; an edge between two
+/// declared types that do not connect is refused by the check, naming both ports; nothing is written to the disk.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_editors_draft_is_applied_line_by_line_and_checked() {
+    let b = bench();
+    let edit = |edits: Value| post(&b.root, "/ide/graphe/edit", json!({ "backend": b.id, "tool": "archive", "edits": edits }));
+    let same = edit(json!([]));
+    assert_eq!(same["ok"], json!(true), "{same}");
+    let r = &same["result"];
+    assert_eq!(r["before"], r["after"], "no edit, the same text");
+    assert_eq!(r["valid"], json!(true), "{same}");
+
+    // A pair of ports the served schemas declare: one that connects (same type or Any), one that does not.
+    let nodes = r["nodes"].as_array().unwrap().clone();
+    let typed = |side: &str| -> Vec<(String, String, String)> {
+        nodes.iter().flat_map(|n| n["schema"][side].as_array().cloned().unwrap_or_default().into_iter().map(move |p| (n["name"].as_str().unwrap().to_string(), p["name"].as_str().unwrap().to_string(), p["type"].as_str().unwrap().to_string()))).collect()
+    };
+    let (outs, ins) = (typed("outputs"), typed("inputs"));
+    let joins = |o: &(String, String, String), i: &(String, String, String)| o.2 == i.2 || o.2 == "Any" || i.2 == "Any";
+    let wired = |o: &(String, String, String), i: &(String, String, String)| r["edges"].as_array().unwrap().iter().any(|e| e["from_node"] == o.0.as_str() && e["from_port"] == o.1.as_str() && e["to_node"] == i.0.as_str() && e["to_port"] == i.1.as_str());
+    let pick = |ok: bool| outs.iter().flat_map(|o| ins.iter().map(move |i| (o, i))).find(|(o, i)| o.0 != i.0 && joins(o, i) == ok && !wired(o, i)).map(|(o, i)| (o.clone(), i.clone()));
+    let connect = |(o, i): &((String, String, String), (String, String, String))| json!([{ "op": "connect", "from_node": o.0, "from_port": o.1, "to_node": i.0, "to_port": i.1 }]);
+
+    let good = pick(true).expect("two ports that connect");
+    let added = edit(connect(&good));
+    assert_eq!(added["result"]["valid"], json!(true), "{added}");
+    let (before, after) = (added["result"]["before"].as_str().unwrap(), added["result"]["after"].as_str().unwrap());
+    assert_eq!(after.lines().count(), before.lines().count() + 1, "one line more");
+    let bad = pick(false).expect("two declared ports whose types do not connect, in archive");
+    let refused = edit(connect(&bad));
+    assert_eq!(refused["result"]["valid"], json!(false), "{refused}");
+    let why = refused["result"]["error"].as_str().unwrap_or_default();
+    assert!(why.contains(&format!("{}.{}", bad.0 .0, bad.0 .1)) && why.contains(&format!("{}.{}", bad.1 .0, bad.1 .1)), "the refusal names both ports: {why}");
+
+    let file = std::path::Path::new(b._d.path()).join("memory");
+    let on_disk: Vec<String> = walkdir_mmd(&file);
+    assert!(on_disk.iter().all(|t| !t.contains(&format!("{} -->|{}:{}| {}", good.0 .0, good.0 .1, good.1 .1, good.1 .0))), "nothing written");
+    stop(b);
+}
+
+fn walkdir_mmd(dir: &std::path::Path) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walkdir_mmd(&p));
+            } else if p.extension().is_some_and(|x| x == "mmd") {
+                out.push(std::fs::read_to_string(&p).unwrap_or_default());
+            }
+        }
+    }
+    out
+}
+
+/// **A port is a target, and the draft says its diff** (the third lot): in the Edit view, an output then a lit input
+/// make an edge; the panel « La modification » shows the `.mmd`'s new line and that the graph loads; « Annuler les
+/// changements » empties the draft. Nothing is written.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn a_port_is_a_target_and_the_draft_shows_its_diff() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("a_port_is_a_target_and_the_draft_shows_its_diff") else {
+        return;
+    };
+    let b = bench();
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{}/ide/entrer?jeton=j", b.root), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/workflow/tool/archive_slice", b.root, b.id), "!!document.querySelector('#workflow [data-node=\"render\"]')");
+    n.cliquer("#workflow [data-view=edit]");
+    n.attendre("!!document.querySelector('#workflow [data-port=\"render:out:result\"]')", "render's output");
+    n.cliquer("#workflow [data-port=\"render:out:result\"]");
+    n.attendre("document.querySelector('#workflow [data-port=\"done:in:value\"]')?.dataset.lit === 'true'", "done's input lit");
+    n.cliquer("#workflow [data-port=\"done:in:value\"]");
+    n.attendre("(document.querySelector('#workflow [data-diff]')?.innerText ?? '').includes('render -->|result:value| done')", "the new edge in the diff");
+    assert_eq!(n.evaluer("document.querySelector('#workflow [data-draft-valid]')?.dataset.draftValid"), json!("true"), "the edited graph loads");
+    n.cliquer("#workflow [data-action=reset]");
+    n.attendre("!document.querySelector('#workflow [data-diff]')", "the draft emptied");
+    drop(n);
+    stop(b);
+}
