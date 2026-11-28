@@ -38,6 +38,13 @@ impl Texts {
         Self(serde_json::from_str(SHIPPED_TEXTS).expect("templates/teammate/prompts/texts.json parses"))
     }
 
+    /// The same texts with one key in its place, as a user's `texts.json` would put it.
+    #[cfg(test)]
+    pub(crate) fn with(mut self, key: &str, text: &str) -> Self {
+        self.0.insert(key.to_string(), text.to_string());
+        self
+    }
+
     /// The key's text, its variables filled; the key itself when no text has it (said by its name, never empty).
     pub(crate) fn get(&self, key: &str, vars: &[(&str, &str)]) -> String {
         fill(self.0.get(key).map(String::as_str).unwrap_or(key), vars)
