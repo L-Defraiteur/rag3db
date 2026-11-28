@@ -215,35 +215,35 @@ pub fn install_command(ligne: &str) -> bool {
 
 /// Whether the user asked to install (banc's `INSTALL_WORD` and `SHORT_YES`, word for word): the last human
 /// turn holds an install word, or it is a short yes to the agent's turn just before, which holds one.
-pub fn install_asked(entree: &Value) -> bool {
+pub fn install_asked(input: &Value) -> bool {
     static INSTALL_WORD: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     static SHORT_YES: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    let mot = INSTALL_WORD.get_or_init(|| regex::Regex::new(r"(?i)\b(?:install\w*|ajout\w*\s.*\b(?:dépendance|paquet|package|crate)s?|add\b|mets?\s+à\s+jour|mettre\s+à\s+jour|update)").expect("INSTALL_WORD"));
-    let oui = SHORT_YES.get_or_init(|| regex::Regex::new(r"(?i)^\s*(?:oui|yes|ok|vas[- ]y|d'accord|go)\b").expect("SHORT_YES"));
-    let tours: Vec<&Value> = entree["turns"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
-    let Some(i) = tours.iter().rposition(|t| t["by"]["kind"] == "human") else { return false };
-    let dernier = tours[i]["text"].as_str().unwrap_or_default();
-    if mot.is_match(dernier) {
+    let word = INSTALL_WORD.get_or_init(|| regex::Regex::new(r"(?i)\b(?:install\w*|ajout\w*\s.*\b(?:dépendance|paquet|package|crate)s?|add\b|mets?\s+à\s+jour|mettre\s+à\s+jour|update)").expect("INSTALL_WORD"));
+    let yes = SHORT_YES.get_or_init(|| regex::Regex::new(r"(?i)^\s*(?:oui|yes|ok|vas[- ]y|d'accord|go)\b").expect("SHORT_YES"));
+    let turns: Vec<&Value> = input["turns"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+    let Some(i) = turns.iter().rposition(|t| t["by"]["kind"] == "human") else { return false };
+    let last = turns[i]["text"].as_str().unwrap_or_default();
+    if word.is_match(last) {
         return true;
     }
-    oui.is_match(dernier) && i > 0 && tours[i - 1]["by"]["kind"] == "agent" && mot.is_match(tours[i - 1]["text"].as_str().unwrap_or_default())
+    yes.is_match(last) && i > 0 && turns[i - 1]["by"]["kind"] == "agent" && word.is_match(turns[i - 1]["text"].as_str().unwrap_or_default())
 }
 
 /// **The judge's input** (banc's page 09): the last turns of the user and of the agent, each with the
 /// `by` the host signed, oldest first; never a tool output. `user_turns`: the human ones only.
-pub fn judge_input(files: &TeammateFiles, ligne: &str, class: &str) -> Value {
+pub fn judge_input(files: &TeammateFiles, line: &str, class: &str) -> Value {
     let mut turns = Vec::new();
     for l in files.mailbox() {
-        let humain = l["by"]["kind"] == "human" && matches!(l["kind"].as_str(), Some("request" | "answer" | "message" | "instruction"));
+        let human = l["by"]["kind"] == "human" && matches!(l["kind"].as_str(), Some("request" | "answer" | "message" | "instruction"));
         let agent = l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("question" | "report" | "approval"));
-        if humain || agent {
-            turns.push(json!({ "at": l["at"], "by": { "kind": if humain { "human" } else { "agent" } }, "text": l["text"] }));
+        if human || agent {
+            turns.push(json!({ "at": l["at"], "by": { "kind": if human { "human" } else { "agent" } }, "text": l["text"] }));
         }
     }
-    let debut = turns.len().saturating_sub(6);
+    let start = turns.len().saturating_sub(6);
     let turns: Vec<Value> = turns[debut..].to_vec();
     let user_turns: Vec<Value> = turns.iter().filter(|t| t["by"]["kind"] == "human").cloned().collect();
-    json!({ "action": { "tool": "run_command", "command": ligne }, "class": class, "turns": turns, "user_turns": user_turns })
+    json!({ "action": { "tool": "run_command", "command": line }, "class": class, "turns": turns, "user_turns": user_turns })
 }
 
 /// **The served judge** (banc's page 09): `POST <address>/v1/chat/completions`, P3 as the system
@@ -390,8 +390,8 @@ impl DaemonHost {
                 // **Said in the mailbox** (c7, 22 Nov 2026: a pass by the judge left no trace): the command, its class,
                 // and the user's words it rests on.
                 let citation = verdict["quote"].as_str().map(str::to_string).or_else(|| last_human_turn(&files).and_then(|t| t["text"].as_str().map(str::to_string))).unwrap_or_default();
-                let texte = format!("commande accordée par le juge : {ligne} ({class}), sur ta phrase « {citation} »");
-                let _ = files.append_with("host", "command_granted", None, &texte, &json!({ "command": ligne, "class": class, "by": "judge", "quote": citation }));
+                let text = format!("commande accordée par le juge : {ligne} ({class}), sur ta phrase « {citation} »");
+                let _ = files.append_with("host", "command_granted", None, &text, &json!({ "command": ligne, "class": class, "by": "judge", "quote": citation }));
             }
             issue
         }))
@@ -453,17 +453,17 @@ impl DaemonHost {
                 return carte(args);
             }
             let tour = last_human_turn(&files).unwrap_or(Value::Null);
-            let preuve = super::root_grants::Proof {
+            let proof = super::root_grants::Proof {
                 quote: verdict["quote"].as_str().or(tour["text"].as_str()).unwrap_or_default().to_string(),
                 at: tour["at"].as_u64(),
                 turn: tour["id"].as_str().map(str::to_string),
             };
-            let citation = preuve.quote.clone();
-            match h.grant_root(&agent, &root, preuve, "judge", &mode) {
+            let citation = proof.quote.clone();
+            match h.grant_root(&agent, &root, proof, "judge", &mode) {
                 Ok(_) => {
                     // Said in the mailbox: unlike a line's grant, a root lasts, and the user sees what it rests on.
-                    let texte = format!("racine accordée par le juge : {} ({mode}), sur ta phrase « {citation} »", root.display());
-                    let _ = files.append_with("host", "root_granted", None, &texte, &json!({ "root": root, "mode": mode, "by": "judge", "quote": citation }));
+                    let text = format!("racine accordée par le juge : {} ({mode}), sur ta phrase « {citation} »", root.display());
+                    let _ = files.append_with("host", "root_granted", None, &text, &json!({ "root": root, "mode": mode, "by": "judge", "quote": citation }));
                     OpenRootOutcome::Granted
                 }
                 Err(_) => carte(args),
