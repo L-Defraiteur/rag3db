@@ -15,6 +15,7 @@ import { Tree } from "@/views/Tree";
 import { Symbol } from "@/views/Symbol";
 import { GraphView } from "@/views/Graph";
 import { Dag } from "@/views/Dag";
+import { Workflow } from "@/views/Workflow";
 import { Reactions } from "@/views/Reactions";
 import { Propositions } from "@/views/Propositions";
 import { applyTheme, effectiveTheme, storedTheme, themesLivres, type Theme } from "@/lib/theme";
@@ -275,6 +276,7 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "symbole" && r.id) return <Symbol id={r.id} name={r.rest ?? ""} state={state} />;
   if (r.view === "graphe" && r.id) return <GraphView id={r.id} name={r.rest ?? ""} state={state} />;
   if (r.view === "dag" && r.id) return <Dag id={r.id} rest={r.rest ?? ""} state={state} />;
+  if (r.view === "workflow" && r.id) return <Workflow id={r.id} rest={r.rest ?? ""} state={state} />;
   if (r.view === "reactions" && r.id) return <Reactions id={r.id} state={state} />;
   if (r.view === "propositions" && r.id) return <Propositions id={r.id} rest={r.rest ?? ""} state={state} />;
   if (r.view === "poste") return <Poste />;

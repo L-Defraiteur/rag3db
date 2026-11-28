@@ -664,7 +664,7 @@ pub const SEARCH_VIEW_TOOL: &str = "search_code";
 
 /// **Les vues portées sur la page nouvelle** (page 08) : `/ide/code/<id>/<vue>…`
 /// pour ces vues est servi par le bundle ; les autres, par l'ancienne page.
-const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "recherches", "taches", "bilans", "arbre", "symbole", "graphe", "dag", "reactions", "propositions"];
+const VUES_PORTEES: &[&str] = &["chat", "fichier", "recherche", "recherches", "taches", "bilans", "arbre", "symbole", "graphe", "dag", "reactions", "propositions", "workflow"];
 
 fn vue_portee(path: &str) -> bool {
     let Some(reste) = path.strip_prefix("/ide/code/") else { return false };
