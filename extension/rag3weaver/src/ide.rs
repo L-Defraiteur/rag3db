@@ -252,7 +252,8 @@ impl Flux {
         let (envoi, recu) = std::sync::mpsc::sync_channel::<Arc<str>>(EN_ATTENTE_PAR_FENETRE);
         let vivant = Arc::new(AtomicBool::new(true));
         let du_fil = vivant.clone();
-        let host_frame = format!("event: host\ndata: {}\n\n", json!({ "epoch": self.epoch, "pid": std::process::id() }));
+        // The host's frame goes to the stream's clients over HTTP (`/ide/flux`), not to the host's own subscribers.
+        let host_frame = if navigateur { format!("event: host\ndata: {}\n\n", json!({ "epoch": self.epoch, "pid": std::process::id() })) } else { String::new() };
         let lance = std::thread::Builder::new().name("ide-fenetre".into()).spawn(move || {
             let entete = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
                 Connection: keep-alive\r\n\r\n: ide\n\n";
