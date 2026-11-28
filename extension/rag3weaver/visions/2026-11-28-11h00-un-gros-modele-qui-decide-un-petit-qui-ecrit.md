@@ -56,6 +56,52 @@ reconstructible par l'index, seule l'interprétation reste au modèle.
 Trois mémoires, chacune avec son cycle de vie : celle du code (l'index, reconstructible), celle des modifications (les
 cheminements), celle des décisions (le contexte du gros, compacté par tour).
 
+## Tout en graphe, en briques minimales
+
+Lucie, 28 novembre : « il faut que ce soit un graphe, encore une fois, que tout soit des briques minimales qu'on sache
+réajuster, réordonner si ça ne nous plaît pas ». Rien de ce plan n'est un bloc de code fermé : chaque point est un nœud
+ou une table déclarée, et la boucle est un gabarit qu'on modifie dans l'éditeur sans recompiler.
+
+**Les briques** (✓ existe, ○ à faire) :
+
+| Brique | Rôle |
+|---|---|
+| ✓ `LlmNode` à `response_schema` | le petit qui propose ; le gros qui juge ; le petit qui écrit le cheminement |
+| ✓ `SnapshotSessionNode` / `SnapshotUndoNode` | poser l'instantané avant d'appliquer ; annuler un diff refusé |
+| ✓ `RunCommandNode` | les tests du fichier touché |
+| ✓ `Route`, `ConditionNode`, `ForEachNode` | aiguiller sur un verdict, une classe, un nombre d'échecs |
+| ○ `ApplyProposalNode` | appliquer un diff à titre provisoire, rendre sa révision avant et après |
+| ○ `ClassifyChangeNode` | dire, par le parseur, ce que le diff touche : corps, signature, export, module, dépendance |
+| ○ table `supervision.json` | classe de changement → validé seul, revue, décision, rendu ; surchargeable par tâche |
+| ○ `ListenNode` | attendre un verdict (le nœud d'attente) |
+| ○ `KnowledgeNode` | lire et mettre à jour le registre de connaissance d'un agent |
+| ○ `DeltaNode` | pour un scope et un agent : entier, résumé, diff ou rien |
+| ○ `AppendContextNode` | ajouter à la fin du journal du gros, jamais au milieu |
+| ○ `CompactTurnNode` | reconstruire par l'index la dernière version des scopes touchés, recommencer le journal |
+| ○ `ScopeSummaryNode` | le résumé d'un scope, mis en cache par révision |
+| ○ `TaskTrailNode` | assembler un cheminement : les faits par l'hôte, l'interprétation par le petit |
+| ○ graphes-outils `expand_task`, `read_scope`, `get_task_diff`, `compare_scope` | rouvrir ce qui a été compacté |
+
+**Le graphe par défaut** (`small_hand_turn.mmd`), une proposition à réordonner :
+
+```mermaid
+graph LR
+    task["la tâche du gros"] --> hand["LlmNode petit : proposer un diff"]
+    hand --> snap["SnapshotSessionNode"] --> apply["ApplyProposalNode"] --> tests["RunCommandNode : tests"]
+    tests --> classify["ClassifyChangeNode"] --> policy{"supervision.json"}
+    policy -->|validé seul| accept["accepté"]
+    policy -->|revue · décision| delta["DeltaNode"] --> append["AppendContextNode"] --> judge["LlmNode gros : verdict"]
+    judge -->|oui| accept
+    judge -->|non, motif| undo["SnapshotUndoNode"] --> fails{"deux échecs ?"}
+    fails -->|non| hand
+    fails -->|oui| escalate["rendu au gros, avec lectures, tentatives et motifs"]
+    accept --> knowledge["KnowledgeNode"]
+    knowledge -->|fin du tour| trail["TaskTrailNode"] --> compact["CompactTurnNode"]
+```
+
+Changer la politique, c'est éditer la table ; tester avant ou après la classification, c'est déplacer un fil ; ajouter
+un relecteur, c'est un nœud de plus devant le juge. Chaque brique a son témoin, par un vrai hôte, rouge d'abord.
+
 ## L'ordre, chaque étape mesurée
 
 0. **Mesurer le gros modèle seul** sur le banc : coût par tâche, taux de cache, qualité. Sans cette base, on ne saura
@@ -67,7 +113,7 @@ cheminements), celle des décisions (le contexte du gros, compacté par tour).
 4. **Les règles de surveillance** posées par le gros à la préparation d'une tâche ; la reprise de la main dans les deux
    sens.
 
-Chaque étape est un graphe déclaré, visible et modifiable dans l'éditeur comme les autres.
+Chaque étape ajoute des briques du tableau ci-dessus et les branche dans le graphe par défaut.
 
 ## Ce qui dira que ça marche
 
