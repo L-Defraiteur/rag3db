@@ -43,12 +43,18 @@ pub(crate) struct StepGraph {
     table: BTreeMap<String, Action>,
 }
 
-/// The node types every declared graph may use: the builtins, built once.
+/// The node types every declared graph may use: the builtins, and `ForEachNode` over a graph it cites (24 November
+/// 2026, the scout of the index: a part of `at_turn_start.mmd` runs where a fact says so, `when`, and its failure is
+/// reported, `on_error='report'`), built once.
 pub(crate) fn node_registry() -> &'static NodeRegistry {
-    static REGISTRY: OnceLock<NodeRegistry> = OnceLock::new();
+    static REGISTRY: OnceLock<Arc<NodeRegistry>> = OnceLock::new();
     REGISTRY.get_or_init(|| {
         let mut r = NodeRegistry::new();
         crate::dataflow::node_factories::register_builtins(&mut r);
+        let cited = crate::dataflow::foreach_node::RegistreDesSousGraphes::default();
+        r.register(Box::new(crate::dataflow::foreach_node::ForEachNodeFactory { registre: cited.clone() }));
+        let r = Arc::new(r);
+        cited.poser(&r);
         r
     })
 }

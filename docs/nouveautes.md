@@ -1,5 +1,15 @@
 # Nouveautés
 
+- 28 novembre 2026 — **L'index cherche pour l'agent au début d'un tour.** Dans un dossier dont l'index est prêt, une
+  demande sur le code fait d'abord deux appels courts au modèle : le premier dit si l'agent semble déjà savoir ce qu'il
+  faut (un score de 0 à 1) et donne trois recherches et un nom à suivre ; sous le seuil, les recherches partent sur
+  l'index (`search_code`, `usages`), et le second appel les met en regard de la demande. Le premier pas reçoit « What the
+  code index found for this request » : comment le projet s'organise pour elle, et ses lignes `chemin:ligne`, chacune
+  vérifiée dans les résultats. Un « bonjour » ne lance rien. Le premier pas attend ce bloc au plus `max_ms`, puis part
+  sans lui ; un appel qui échoue ne bloque rien. Le score et la décision sont dans la boîte de la tâche (ligne `scout`
+  de l'hôte). Le seuil, le mode (`blocking` ou `off`), la durée et le modèle des deux appels (le premier de la liste que ton manifeste déclare, sinon celui de l'agent) se règlent dans
+  `templates/teammate/graphs/at_turn_start.json` ; les graphes `at_turn_start*.mmd` et ta copie les changent sans
+  rebâtir.
 - 28 novembre 2026 — **Plus de copie de travail : un dossier sans git se travaille en place.** L'agent écrit
   directement dans ton dossier, sans en copier le contenu sous la tâche (le 24, une tâche en a copié 106 Go), et rien
   n'est à fusionner après le pas. Une copie reste possible si `teammate.workspace` vaut `copy` dans le manifeste.

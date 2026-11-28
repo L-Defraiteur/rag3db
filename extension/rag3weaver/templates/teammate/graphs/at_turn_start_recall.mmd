@@ -1,0 +1,10 @@
+%% tool: at_turn_start_recall
+%% description: What the long-term memory holds for the turn's request (recall_for_request of the declared memory, the caller the host lends), as a text, empty when it holds nothing.
+%% param: element json! -- the turn's facts: request
+%% result: block.result
+graph LR
+    args["RhaiNode(script='#{ request: input.request, prepare: `direct` }', value=$element)"]
+    recall["CallTool(tool='recall_for_request')"]
+    block["RhaiNode(script='let b = input.block; if b == () { `` } else { b }')"]
+    args -->|result:args| recall
+    recall -->|result:value| block

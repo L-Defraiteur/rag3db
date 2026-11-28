@@ -605,6 +605,18 @@ weight and age with pinned runs. Since then:
   "report"` or `"approval"`): without that report, or without the supervisor's
   approval, the task says it is done without the expected deliverable and waits
   for the mailbox.
+- **The index searches for it at a turn's start.** In a folder whose index is
+  ready, a request about the code first gets two short structured calls: one
+  scores how far the agent already knows what the request needs (0 to 1) and
+  gives three searches and a name to follow; under the declared threshold they
+  run on the index (`search_code`, `usages`) and the second call relates them
+  to the request. The first step receives how the project is organised for it
+  and its most useful `path:line` lines, each one checked against the search
+  results; a greeting runs nothing. The score and the decision are a `scout`
+  line of the mailbox. It is declared in `templates/teammate/graphs/`
+  (`at_turn_start*.mmd`, and `at_turn_start.json` for the mode, `blocking` or
+  `off`, the threshold, the wait bound and the models of the two calls); the
+  user's copy of any of these files takes its place without a rebuild.
 - **Without its backend, it still reads and edits** the task's files, and says
   so; it stops after three failed steps in a row.
 - **A task without git.** A task on a folder that no repository tracks opens
