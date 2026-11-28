@@ -125,6 +125,7 @@ fn a_note_left_at_the_end_of_a_turn_starts_the_next_one() {
         })
     };
     let host = Arc::new(hote(d.path(), model));
+    host.se_connaitre();
     let h = host.hosted(&manifest).unwrap();
     host.with_backend(&h, |_| ()).expect("the repository opens");
     let id = h.id.clone();
@@ -137,8 +138,17 @@ fn a_note_left_at_the_end_of_a_turn_starts_the_next_one() {
     let first = first.join().unwrap().expect("the first turn");
     let second = second.unwrap_or_else(|refusal| panic!("a message sent during a turn is accepted, not refused: {refusal}"));
     assert_eq!(second["received_during_turn"], json!(true), "{second}");
-    let state = host.chat_state(&id).unwrap();
-    let turns = state["turns"].as_array().cloned().unwrap_or_default();
+    // The next turn starts by itself once the first ends: wait for its end (two user turns, no turn running).
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let turns = loop {
+        let state = host.chat_state(&id).unwrap();
+        let turns = state["turns"].as_array().cloned().unwrap_or_default();
+        let users = turns.iter().filter(|t| t["role"] == "user").count();
+        if (users >= 2 && host.run_du_chat_en_cours(&id).is_none()) || std::time::Instant::now() > until {
+            break turns;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
     let users: Vec<&Value> = turns.iter().filter(|t| t["role"] == "user").collect();
     assert_eq!(users.len(), 2, "the note started the next turn: {turns:?} (first: {first})");
     assert_eq!(users[1]["content"], json!(NOTE), "{turns:?}");
@@ -149,4 +159,53 @@ fn a_note_left_at_the_end_of_a_turn_starts_the_next_one() {
         !turns.iter().any(|t| t["role"] == "tool" && t["content"].as_str().unwrap_or_default().contains(NOTE)),
         "never twice: {turns:?}"
     );
+}
+
+/// **In the IDE, the send button stays on during a turn** (28 November 2026): while the fake model sleeps in its
+/// first call, the page sends a second sentence; it shows at once in the thread marked « reçu pendant le tour », the
+/// host takes it as a note of the turn, and the model quotes it at the end.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn the_page_sends_during_a_turn_and_the_model_reads_it() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binary) = navigateur_ou_saut("the_page_sends_during_a_turn_and_the_model_reads_it") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (_repository, manifest) = depot_inscrit(d.path(), true);
+    let sleeping = Arc::new(AtomicBool::new(false));
+    let host = Arc::new(hote(d.path(), slow_reader(sleeping.clone(), std::time::Duration::from_secs(4))));
+    host.se_connaitre();
+    let h = host.hosted(&manifest).unwrap();
+    host.with_backend(&h, |_| ()).expect("the repository opens");
+    let id = h.id.clone();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(listener, None).unwrap();
+    let served = host.clone();
+    let thread = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 4).serve(served, Some("j".to_string())));
+    let mut n = Navigateur::lancer(&binary);
+    n.aller(&format!("{base}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{base}/ide/code/{id}/chat"), "document.querySelector('#send') && !document.querySelector('#send').disabled");
+    n.evaluer("document.querySelector('#message').value = 'Lis le README du dépôt.'; document.querySelector('#send').click()");
+    wait_for(&sleeping, "the first turn's model call");
+    assert!(host.run_du_chat_en_cours(&id).is_some(), "a turn runs while the model sleeps");
+    let disabled = n.evaluer("document.querySelector('#send').disabled");
+    assert_eq!(disabled, json!(false), "the send button stays on during a turn");
+    n.evaluer(&format!("document.querySelector('#message').value = '{NOTE}'; document.querySelector('#send').click()"));
+    let shown = format!(
+        "[...document.querySelectorAll('article.message.user')].some((a) => a.innerText.includes('{NOTE}') && a.innerText.includes('reçu pendant le tour'))"
+    );
+    n.attendre(&shown, "the second sentence in the thread, marked received during the turn");
+    n.attendre(
+        &format!("[...document.querySelectorAll('article.message.assistant')].some((a) => !a.classList.contains('en-cours') && a.innerText.includes('en route') && a.innerText.includes('{NOTE}'))"),
+        "the model quotes the sentence at the end of the turn",
+    );
+    // The end of the turn rereads the thread: the sentence is still there, marked.
+    n.attendre(&shown, "the sentence, marked, after the end of the turn");
+    drop(n);
+    let (status, _) = crate::daemon_host::tests::demander("POST", &format!("{base}/arret"), Some("j"));
+    assert_eq!(status, 200);
+    thread.join().unwrap();
 }
