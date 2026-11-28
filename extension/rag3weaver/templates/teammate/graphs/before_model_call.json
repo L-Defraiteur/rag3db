@@ -1,0 +1,12 @@
+{
+  "context_rewrite": {
+    "mode": "on",
+    "threshold_tokens": 20000,
+    "keep_tokens": 8000,
+    "comment_chars": 1200,
+    "fact_tools": ["search_code", "usages", "callees", "impact", "outline", "grep_files"],
+    "max_facts": 40,
+    "stub_key": "context_rewrite.stub",
+    "facts_key": "context_rewrite.facts"
+  }
+}

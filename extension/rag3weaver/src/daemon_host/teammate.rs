@@ -1055,6 +1055,17 @@ impl Step {
         }
     }
 
+    /// **A batch of the context's rewrite, said by the host** in the mailbox (`kind: context_rewrite`): the estimated
+    /// tokens before and after, and how many outputs it replaced.
+    pub(crate) fn say_context_rewrite(&self, batch: &super::context_rewrite::Batch, settings: &super::context_rewrite::ContextRewriteSettings) {
+        let (text, mut fields) = batch.line(settings);
+        fields["step"] = json!(self.number);
+        match self.files.append_with("host", "context_rewrite", None, &text, &fields) {
+            Ok(line) => publish(self.bus.as_ref(), &self.task, &line),
+            Err(e) => eprintln!("[équipier] la ligne context_rewrite ne s'écrit pas : {e}"),
+        }
+    }
+
     /// The `Previous step` block of the next frontier: what this step read, wrote and ran, and
     /// its last text, within `budget` characters.
     pub fn carry_over(&self, last_text: &str, budget: usize) -> String {

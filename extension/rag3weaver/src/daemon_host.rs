@@ -465,6 +465,8 @@ mod prompts;
 pub(crate) mod step_graphs;
 /// The start of a turn, declared (24 Nov 2026): the recall of the long-term memory.
 mod turn_start;
+/// The step's context, rewritten by batches before a model call (24 Nov 2026).
+mod context_rewrite;
 
 /// The roots granted to the agents (RootGrants), kept by the host.
 pub mod root_grants;

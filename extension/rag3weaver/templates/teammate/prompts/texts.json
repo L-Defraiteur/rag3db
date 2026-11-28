@@ -1,4 +1,6 @@
 {
+  "context_rewrite.facts": "Les lieux que ce résultat donnait, gardés tels quels :\n{$facts}",
+  "context_rewrite.stub": "[`{$tool}` {$target} — retiré du contexte. Ce que tu en as noté : « {$comment} ». Relis-le par `{$tool}` s'il te faut le détail.]",
   "frontier.active_plan": "Ton plan actif (n° {$n}) :",
   "frontier.answer_or_act": "Réponds ou agis : une demande de texte se répond par le texte lui-même, dans le texte de ta réponse, pas par une phrase sur lui. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.",
   "frontier.fact": "- {$issue}{$item} : {$done}{$left}",
