@@ -865,6 +865,12 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 (_, Err(e)) => (400, json!({ "ok": false, "error": e })),
                 (Some(id), Ok(cible)) => match host
                     .with_backend_id(&id, |b| match param("proposition").and_then(|v| v.parse::<u64>().ok()) {
+                        // The graph a graph node cites (`node=core/decide`: a path of graph nodes), 28 November 2026.
+                        None if param("node").is_some_and(|n| !n.is_empty()) => {
+                            let node = param("node").unwrap_or_default();
+                            let path: Vec<&str> = node.split('/').filter(|s| !s.is_empty()).collect();
+                            b.prepared().graph_json_cited(&cible, &path)
+                        }
                         None => b.prepared().graph_json(&cible),
                         // Le graphe tel qu'une proposition le propose : le chargement
                         // sur son recouvrement.
