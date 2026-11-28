@@ -491,6 +491,8 @@ fn banc_sans_git(retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHos
     m["workspace"]["root"] = json!(racine.to_string_lossy());
     m["workspace"]["read_only"] = json!(true);
     m["workspace"]["task_writes"] = json!(true);
+    // La copie est demandée : sans elle, un dossier sans git se travaille en place (24 nov. 2026).
+    m["teammate"]["workspace"] = json!("copy");
     retouche(&mut m);
     std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
     assert!(git(&config, &["rev-parse", "--show-toplevel"]).is_err() && git(&racine, &["rev-parse", "--show-toplevel"]).is_err(), "le banc : aucun dépôt git");
