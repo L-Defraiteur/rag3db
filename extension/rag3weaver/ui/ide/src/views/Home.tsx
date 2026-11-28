@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { displayName, fetchState, type Backend, type HostState } from "@/lib/host";
 import { SearchBox } from "@/components/SearchBox";
-import { Agents } from "@/views/Agents";
+import { Agents, NeedsAttention } from "@/views/Agents";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -21,6 +21,7 @@ export function Home({ state }: { state: HostState }) {
     return (
       <>
       <OpenFolder />
+      <NeedsAttention state={state} hideWhenEmpty />
       <div className="accueil-vide text-muted-foreground space-y-2 mt-4">
         <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Avancé : la plomberie du poste (hôtes, dépôts, vues ouvertes)</a></p>
         <p>L'hôte ne sert encore aucun dépôt.</p>
