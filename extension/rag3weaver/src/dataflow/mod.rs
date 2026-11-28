@@ -34,7 +34,8 @@ mod top_k_before_render_tests;
 mod jetons_tests;
 #[cfg(test)]
 mod annulation_tests;
-#[cfg(test)]
+// Its witness reads CallersHopNode, a node of the feature `code`.
+#[cfg(all(test, feature = "code"))]
 mod port_types_tests;
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
 mod copie_liens_tests;
