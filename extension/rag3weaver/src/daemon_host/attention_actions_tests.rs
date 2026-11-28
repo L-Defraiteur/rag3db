@@ -78,3 +78,22 @@ fn the_cap_and_a_file_set_aside_are_the_users_gestures_only() {
     assert!(!l.prices_path.exists() && std::fs::read_to_string(&aside).unwrap() == "{ not json", "renamed, never deleted: {}", aside.display());
     l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false).expect("the shipped prices take over");
 }
+
+/// **The judge's model passes at the template's price, and a model priced nowhere waits with its card** (ca, 28
+/// November 2026: the pusher's judge was refused flash-lite, Lucie's file existing without it): a file that prices
+/// gemini-3.8-flash only lets a call to gemini-3.1-flash-lite through at the shipped price; a model absent from both is
+/// refused and waits for its price.
+#[test]
+fn flash_lite_passes_at_the_template_price_and_a_model_priced_nowhere_waits() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(
+        d.path().join("prices.json"),
+        r#"{"prices": {"google/gemini-3.8-flash": [{"from": "2026-01-01", "input": 0.3, "output": 2.5}]}}"#,
+    )
+    .unwrap();
+    let l = crate::usage_ledger::Ledger::new(d.path().join("usage"), d.path().join("prices.json"));
+    l.reserve("google/gemini-3.1-flash-lite", "vertex", false, Tokens::default(), &Caller::default(), false).expect("flash-lite at the template's price");
+    let s = slug("priced-nowhere");
+    l.reserve(&s, "vertex", false, Tokens::default(), &Caller::default(), false).unwrap_err();
+    assert_eq!(l.waiting_prices(), vec![s], "the model priced nowhere waits; flash-lite does not");
+}
