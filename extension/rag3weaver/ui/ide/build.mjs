@@ -53,6 +53,21 @@ await build({
 // La feuille : le CLI de tailwind lit src/app.css (le thème shadcn, @import "tailwindcss")
 // et balaie src/ et components/ pour les classes employées.
 execFileSync(join(here, "node_modules/.bin/tailwindcss"), ["-i", join(here, "src/app.css"), "-o", join(out, "app.css"), "--minify", "--cwd", here], { stdio: "inherit" });
+// **The editor's fonts, in the sheet** (28 November 2026): the woff2 of @fontsource (OFL-1.1, pinned), latin subset,
+// written as data: URIs after tailwind's output — the host serves them with the sheet, no font is fetched elsewhere.
+// The list is the faces the workflow editor uses; the order is fixed, so the build stays deterministic.
+const faces = [
+  ["Chakra Petch", "chakra-petch", 600], ["Chakra Petch", "chakra-petch", 700],
+  ["IBM Plex Sans", "ibm-plex-sans", 400], ["IBM Plex Sans", "ibm-plex-sans", 600],
+  ["JetBrains Mono", "jetbrains-mono", 400], ["JetBrains Mono", "jetbrains-mono", 700],
+];
+const fontCss = faces
+  .map(([family, pkgName, weight]) => {
+    const woff2 = readFileSync(join(here, `node_modules/@fontsource/${pkgName}/files/${pkgName}-latin-${weight}-normal.woff2`)).toString("base64");
+    return `@font-face{font-family:"${family}";font-style:normal;font-weight:${weight};font-display:swap;src:url(data:font/woff2;base64,${woff2}) format("woff2")}`;
+  })
+  .join("");
+writeFileSync(join(out, "app.css"), readFileSync(join(out, "app.css"), "utf8") + fontCss);
 
 const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
 const manifest = {

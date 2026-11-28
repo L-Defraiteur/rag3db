@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 28 novembre 2026 — **L'éditeur de graphes s'ouvre dans l'IDE, en lecture.** Depuis la liste des graphes d'un dépôt
+  (lien « éditeur »), un outil se lit comme les maquettes le dessinent : la vue Simplifié, qui cache la plomberie, et la
+  vue Édition, où chaque nœud montre ses ports `nom : type` (pastille pleine : branché ; creuse : libre) et la valeur de
+  ses entrées libres ; un clic sur un port allume ceux qui peuvent s'y brancher. Sous le graphe : le nœud choisi, sa
+  déclaration et le formulaire des réglages du fichier. Ce qui n'est pas encore là (enregistrer, modifier les valeurs,
+  ouvrir un nœud-graphe, le diff, la vérification des types) reste à sa place, grisé, avec « bientôt ». Les ports d'un
+  `Route` et des règles sont maintenant ceux que leur configuration déclare.
 - 24 novembre 2026 — **Le compteur « appel N du tour » se voit pendant chaque outil**, même dans une fenêtre où l'en-tête
   du dépôt ne tient pas à côté : l'en-tête cède la place, puis le contexte.
 - 24 novembre 2026 — **Un tour commence par ce que la mémoire longue sait de sa demande.** Quand le backend de code
