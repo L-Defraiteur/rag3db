@@ -131,47 +131,9 @@ export function Agents({ state }: { state: HostState }) {
   if (unrooted.length) roots.push({ key: "ide", name: "lancés depuis l'IDE", kind: "ide", active: true, children: unrooted });
 
   // What waits for an intervention: a task or a conversation that waits for an answer (a question, an accord).
-  // Every line carries its action (Lucie, 28 November 2026): the gesture that settles it, never a sentence alone.
-  const answer = (href: string) => (
-    <a href={href} data-action="answer" className="inline-flex items-center rounded border px-2 py-0.5 text-xs hover:bg-accent">Répondre</a>
-  );
-  const alert = state.spending?.alert;
-  const waiting: { key: string; text: string; action: ReactNode }[] = [
-    // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it; or prices that do not read.
-    ...(alert ? [{ key: "spending", text: alert.text, action: alert.text.includes("ne se lit pas") ? <SetAsideAction /> : <CapAction /> }] : []),
-    // A model refused for want of a price: its price card (the price looked up on its page, then the user's yes).
-    ...(state.spending?.unpriced ?? []).map((s) => ({
-      key: `price:${s}`,
-      text: `le modèle ${s} n'a pas de prix : ses appels sont refusés`,
-      action: <PriceCard slug={s} onWritten={() => location.reload()} />,
-    })),
-    ...(state.tasks ?? [])
-      .filter((t) => t.awaits_answer)
-      .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, action: answer(`/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}`) })),
-    ...(state.chat_sessions ?? [])
-      .filter((c) => c.awaits_answer)
-      .map((c) => ({ key: `c:${c.id}`, text: `la conversation ${c.name || c.id} attend une réponse`, action: answer(`/ide/code/${c.id}/chat`) })),
-  ];
-
   return (
     <>
-      <section id="needs-attention" className="mt-4">
-        <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
-          <CircleAlert className="size-4" /> À intervenir
-        </h2>
-        {waiting.length ? (
-          <ul className="text-sm space-y-1">
-            {waiting.map((w) => (
-              <li key={w.key} data-waiting={w.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span>{w.text}</span>
-                {w.action}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">Rien n'attend une intervention.</p>
-        )}
-      </section>
+      <NeedsAttention state={state} />
       <section id="agents-tree" className="mt-6">
         <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
           <Bot className="size-4" /> Agents
@@ -259,5 +221,53 @@ function SubAgentNode({ sub }: { sub: SubAgent }) {
       {running ? <Badge>travaille</Badge> : null}
       {doing ? <span className="text-xs">en cours : {doing}</span> : null}
     </li>
+  );
+}
+
+/// **What waits for an intervention** (« À intervenir »): the spending past an alert, a model without a price, a
+/// conversation or a sub-agent that waits for an answer; every line carries its action (28 November 2026). Shown on the
+/// welcome of the repositories, and on the empty welcome as soon as something waits (`whenEmpty`: hidden with nothing).
+export function NeedsAttention({ state, hideWhenEmpty = false }: { state: HostState; hideWhenEmpty?: boolean }) {
+  // Every line carries its action (Lucie, 28 November 2026): the gesture that settles it, never a sentence alone.
+  const answer = (href: string) => (
+    <a href={href} data-action="answer" className="inline-flex items-center rounded border px-2 py-0.5 text-xs hover:bg-accent">Répondre</a>
+  );
+  const alert = state.spending?.alert;
+  const waiting: { key: string; text: string; action: ReactNode }[] = [
+    // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it; or prices that do not read.
+    ...(alert ? [{ key: "spending", text: alert.text, action: alert.text.includes("ne se lit pas") ? <SetAsideAction /> : <CapAction /> }] : []),
+    // A model refused for want of a price: its price card (the price looked up on its page, then the user's yes).
+    ...(state.spending?.unpriced ?? []).map((s) => ({
+      key: `price:${s}`,
+      text: `le modèle ${s} n'a pas de prix : ses appels sont refusés`,
+      action: <PriceCard slug={s} onWritten={() => location.reload()} />,
+    })),
+    ...(state.tasks ?? [])
+      .filter((t) => t.awaits_answer)
+      .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, action: answer(`/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}`) })),
+    ...(state.chat_sessions ?? [])
+      .filter((c) => c.awaits_answer)
+      .map((c) => ({ key: `c:${c.id}`, text: `la conversation ${c.name || c.id} attend une réponse`, action: answer(`/ide/code/${c.id}/chat`) })),
+  ];
+
+  if (hideWhenEmpty && !waiting.length) return null;
+  return (
+    <section id="needs-attention" className="mt-4">
+        <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
+          <CircleAlert className="size-4" /> À intervenir
+        </h2>
+        {waiting.length ? (
+          <ul className="text-sm space-y-1">
+            {waiting.map((w) => (
+              <li key={w.key} data-waiting={w.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>{w.text}</span>
+                {w.action}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">Rien n'attend une intervention.</p>
+        )}
+      </section>
   );
 }
