@@ -241,7 +241,7 @@ pub fn judge_input(files: &TeammateFiles, line: &str, class: &str) -> Value {
         }
     }
     let start = turns.len().saturating_sub(6);
-    let turns: Vec<Value> = turns[debut..].to_vec();
+    let turns: Vec<Value> = turns[start..].to_vec();
     let user_turns: Vec<Value> = turns.iter().filter(|t| t["by"]["kind"] == "human").cloned().collect();
     json!({ "action": { "tool": "run_command", "command": line }, "class": class, "turns": turns, "user_turns": user_turns })
 }
