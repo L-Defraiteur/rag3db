@@ -1,9 +1,18 @@
 {
   "about": "The workflow editor's declared table (28 November 2026): which nodes the Simple view hides as plumbing, the kind a node type reads as, the colour of a port type. Data, not code: a node type the table does not name reads as its own type, in the default colour.",
   "plumbing": [
-    { "node_type": "Collect" },
-    { "node_type": "RhaiNode", "config": { "script": "input" } },
-    { "node_type": "ValueNode" }
+    {
+      "node_type": "Collect"
+    },
+    {
+      "node_type": "RhaiNode",
+      "config": {
+        "script": "input"
+      }
+    },
+    {
+      "node_type": "ValueNode"
+    }
   ],
   "kinds": {
     "LlmNode": "modèle",
@@ -21,7 +30,10 @@
     "Collect": "plomberie",
     "ValueNode": "valeur"
   },
-  "graph_nodes": ["GraphNode", "ForEachNode"],
+  "graph_nodes": [
+    "GraphNode",
+    "ForEachNode"
+  ],
   "type_colors": {
     "Text": "#ab9dd3",
     "Map": "#ab9dd3",
@@ -44,5 +56,26 @@
     "Empty": "#6f6a8f"
   },
   "default_color": "#ab9dd3",
-  "compatible_with_all": ["Any"]
+  "compatible_with_all": [
+    "Any"
+  ],
+  "structural_keys": [
+    "script",
+    "script_id",
+    "inputs",
+    "graph",
+    "value",
+    "on_error",
+    "report_results",
+    "carry"
+  ],
+  "detail_keys": [
+    "script_id",
+    "script",
+    "instruction",
+    "key",
+    "routes",
+    "inputs",
+    "rules"
+  ]
 }

@@ -37,8 +37,19 @@ export const isGraphNode = (n: WfNode): boolean => (table.graph_nodes as string[
 
 /// The sub-graph a graph node cites (`graph='@graphs/x.mmd'`), or null.
 export function subGraphOf(n: WfNode): string | null {
-  const g = (n.config ?? {}).graph;
-  return isGraphNode(n) && typeof g === "string" ? g.replace(/^@/, "") : null;
+  const g = (n.config ?? {}).graph as unknown;
+  // Bound, the route serves the cited graph as `{cite, mermaid}`; unbound, as its text `@graphs/x.mmd`.
+  const cite = typeof g === "string" ? g : g && typeof g === "object" ? (g as { cite?: unknown }).cite : null;
+  return isGraphNode(n) && typeof cite === "string" ? cite.replace(/^@/, "") : null;
+}
+
+/// The node's own settings: the keys of its configuration that are values (a `$param` it takes, or a literal), not
+/// its structure (the script, the cited graph, the list of fields). Shown under its ports, as the mock-ups' widgets.
+export function settingsOf(n: WfNode): { key: string; text: string }[] {
+  const skip = table.structural_keys as string[];
+  return Object.entries(n.config ?? {})
+    .filter(([k, v]) => !skip.includes(k) && !(n.schema?.inputs ?? []).some((p) => p.name === k) && (typeof v !== "object" || v === null))
+    .map(([k, v]) => ({ key: k, text: valueText(v) }));
 }
 
 /// Two ports can be joined: an output to an input of another node, of the same type, or one of them takes any.
@@ -71,7 +82,10 @@ export function valueText(v: unknown): string {
 
 /// The line of the `.mmd` a node is declared by, rebuilt from what the route serves.
 export function declaration(n: WfNode): string {
-  const args = Object.entries(n.config ?? {}).map(([k, v]) => `${k}=${typeof v === "string" ? (v.startsWith("$") ? v : `'${v}'`) : JSON.stringify(v)}`);
+  const sub = subGraphOf(n);
+  const args = Object.entries(n.config ?? {}).map(([k, v]) =>
+    k === "graph" && sub ? `graph='@${sub}'` : `${k}=${typeof v === "string" ? (v.startsWith("$") ? v : `'${v}'`) : JSON.stringify(v)}`,
+  );
   return `${n.name}["${n.node_type}(${args.join(", ")})"]`;
 }
 
@@ -80,14 +94,14 @@ export function detailOf(n: WfNode): string {
   const c = n.config ?? {};
   const sub = subGraphOf(n);
   if (sub) return sub.split("/").pop() ?? sub;
-  for (const k of ["script_id", "script", "instruction", "key", "routes", "inputs"]) {
+  for (const k of table.detail_keys as string[]) {
     const v = c[k];
     if (typeof v === "string" && v) return v.length > 34 ? v.slice(0, 33) + "…" : v;
   }
   return "";
 }
 
-export const HEAD = 46, ROW = 18, W = 190, SIMPLE_H = 72, GAP_X = 70, GAP_Y = 26, M = 20;
+export const HEAD = 46, ROW = 18, W = 200, SIMPLE_H = 86, GAP_X = 70, GAP_Y = 26, M = 20;
 
 /// The rows a node takes in the Edit view: one per port, and one more under a free input that has a value.
 export function rowsOf(n: WfNode, edges: WfEdge[]): { port: PortRef; row: number; value?: string }[] {
@@ -101,11 +115,20 @@ export function rowsOf(n: WfNode, edges: WfEdge[]): { port: PortRef; row: number
   return rows;
 }
 
-export function heightOf(n: WfNode, edges: WfEdge[], edit: boolean): number {
-  if (!edit) return SIMPLE_H;
+/// The rows the ports take, then the first row of the settings.
+export function settingsRow(n: WfNode, edges: WfEdge[]): number {
   const rows = rowsOf(n, edges);
   const last = rows[rows.length - 1];
-  return HEAD + ((last ? last.row + (last.value === undefined ? 1 : 2) : 0) * ROW) + 10;
+  return last ? last.row + (last.value === undefined ? 1 : 2) : 0;
+}
+
+export const MAX_SETTINGS = 6;
+
+export function heightOf(n: WfNode, edges: WfEdge[], edit: boolean): number {
+  if (!edit) return SIMPLE_H;
+  const settings = settingsOf(n).length;
+  const shown = Math.min(settings, MAX_SETTINGS) + (settings > MAX_SETTINGS ? 1 : 0);
+  return HEAD + (settingsRow(n, edges) + shown) * ROW + (shown ? 8 : 0) + 10;
 }
 
 /// The layers: a node's layer is the longest chain of edges that reaches it (bounded by the number of nodes, so a
