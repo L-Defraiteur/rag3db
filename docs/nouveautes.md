@@ -5,6 +5,9 @@
   ne fait que le surcharger, clé par clé et modèle par modèle : un plafond, ou le prix d'un modèle, et le reste suit les
   prix livrés du moment. Plus aucune copie du gabarit n'est écrite à la première réservation. Un fichier illisible refuse
   toujours les appels payants, en le nommant.
+- 28 novembre 2026 — **Le prix de `gemini-3.1-flash-lite`** est dans `templates/prices.json` (0,25 $ en entrée,
+  0,025 $ en lecture de cache, 1,50 $ en sortie par million de jetons, région globale), lu sur la page Vertex : un appel à
+  ce modèle se compte au plafond du mois.
 - 28 novembre 2026 — **Le terminal relance son hôte.** Quand l'hôte local n'est pas lancé ou ne répond pas,
   `rag3weaver-tty` le démarre (`systemctl --user start` de la socket et du service), l'attend jusqu'à 30 s, puis se
   connecte ; s'il ne répond toujours pas, il le dit avec la commande pour regarder. Un hôte donné par `--address`,
