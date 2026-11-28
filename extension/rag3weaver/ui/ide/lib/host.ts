@@ -60,7 +60,7 @@ export type ChatSession = {
 export type SessionTask = { id: string; session: string; parent_task?: string | null; name: string; state?: RunState | null; awaits_answer?: boolean; spaces: Space[] };
 export type HostState = {
   /// The page is entered as the user (her title): her « yes » count. False: the host's token alone.
-  human?: boolean; backends: Backend[]; spending?: { alert: { text: string; threshold: number | null; projection_over: boolean } | null; line: string }; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
+  human?: boolean; backends: Backend[]; spending?: { alert: { text: string; threshold: number | null; projection_over: boolean } | null; line: string; unpriced?: string[] }; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
 
 /// **The machine at a glance** (`GET /poste` of the host, by `/ide/poste/etat`).
 export type Poste = {
@@ -435,6 +435,18 @@ export async function lookupPrice(slug: string): Promise<PriceProposal> {
 /// **Writes a model's price** on the user's yes (the host reads the user's title, never the body).
 export async function setPrice(slug: string, price: PriceProposal): Promise<void> {
   const r = await (await fetch("/ide/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, ...price }) })).json();
+  if (!r.ok) throw new Error(r.error);
+}
+
+/// The monthly cap, on the user's yes (« À intervenir »).
+export async function setCap(monthly_cap: number): Promise<void> {
+  const r = await (await fetch("/ide/prices/cap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ monthly_cap }) })).json();
+  if (!r.ok) throw new Error(r.error);
+}
+
+/// An unreadable prices.json set aside (renamed, never deleted), on the user's yes.
+export async function setAsidePrices(): Promise<void> {
+  const r = await (await fetch("/ide/prices/set-aside", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
   if (!r.ok) throw new Error(r.error);
 }
 

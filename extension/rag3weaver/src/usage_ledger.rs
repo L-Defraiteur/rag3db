@@ -717,12 +717,14 @@ impl Ledger {
         let free = prices.as_ref().is_ok_and(|p| private && p.free_private_hosts);
         if !free {
             let prices = prices.map_err(|e| format!("spending cap: {e}; a paid call is refused while the prices cannot be read"))?;
-            let tariff = prices.tariff(slug, day).ok_or_else(|| {
-                format!(
+            let Some(tariff) = prices.tariff(slug, day) else {
+                // Kept for « À intervenir », which offers the model's price card (28 November 2026).
+                self.note_refused_for_want_of_price(slug);
+                return Err(format!(
                     "spending cap: no price for `{slug}` on {day} in {}: a paid call without a price is refused, never counted at zero",
                     self.prices_path.display()
-                )
-            })?;
+                ));
+            };
             let spent = self.spent(&prices, month);
             let at_most = bound.cost(tariff, batch);
             if spent.total + at_most > prices.monthly_cap && !caller.human {
@@ -772,6 +774,80 @@ impl Ledger {
         }
         std::fs::rename(&tmp, &self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
         Ok(())
+    }
+
+    /// **The monthly cap, on the user's yes** (« À intervenir », 28 November 2026): written as the one key
+    /// `monthly_cap` of the user's file, the rest of the file kept; the prices in force with it must check.
+    pub fn set_cap(&self, cap: f64) -> Result<(), String> {
+        if !cap.is_finite() || cap < 0.0 {
+            return Err(format!("a monthly cap is an amount, not {cap}"));
+        }
+        let _lock = self.lock("prices")?;
+        let text = match std::fs::read_to_string(&self.prices_path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => "{}".to_string(),
+            Err(e) => return Err(format!("{}: {e}", self.prices_path.display())),
+        };
+        let mut v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        v.as_object_mut().ok_or("prices.json is not an object")?.insert("monthly_cap".into(), serde_json::json!(cap));
+        if let Some(parent) = self.prices_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let tmp = self.prices_path.with_extension("json.new");
+        std::fs::write(&tmp, format!("{}\n", serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?)).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        if let Err(e) = Prices::in_force(&tmp) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+        std::fs::rename(&tmp, &self.prices_path).map_err(|e| format!("{}: {e}", self.prices_path.display()))
+    }
+
+    /// **An unreadable `prices.json` set aside, on the user's yes**: renamed `prices.json.illisible-<day>-<time>` beside
+    /// it, never deleted; the shipped prices are then in force. A file that reads is left where it is.
+    pub fn set_aside_prices(&self) -> Result<PathBuf, String> {
+        let _lock = self.lock("prices")?;
+        if !self.prices_path.exists() {
+            return Err(format!("{}: no file to set aside", self.prices_path.display()));
+        }
+        if Prices::in_force(&self.prices_path).is_ok() {
+            return Err(format!("{}: the file reads; it is left where it is", self.prices_path.display()));
+        }
+        let stamp = crate::host_log::now_iso().replace([':', '.'], "-");
+        let aside = self.prices_path.with_extension(format!("json.illisible-{stamp}"));
+        std::fs::rename(&self.prices_path, &aside).map_err(|e| format!("{}: {e}", self.prices_path.display()))?;
+        Ok(aside)
+    }
+
+    /// The file of the models refused for want of a price: one slug a line, appended at each refusal, from whatever
+    /// process made the call (the host, a script of the bench, the pusher's judge).
+    fn refused_path(&self) -> PathBuf {
+        self.dir.join("refused-unpriced.txt")
+    }
+
+    fn note_refused_for_want_of_price(&self, slug: &str) {
+        use std::io::Write;
+        let _ = std::fs::create_dir_all(&self.dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(self.refused_path()) {
+            // One write of a short line in O_APPEND: two processes never mix their lines.
+            let _ = f.write_all(format!("{}\n", slug.replace('\n', " ")).as_bytes());
+        }
+    }
+
+    /// **The models that wait for a price** (« À intervenir »): refused for want of a price, and still without one in
+    /// the prices in force today; each once, in the order of their first refusal.
+    pub fn waiting_prices(&self) -> Vec<String> {
+        let Ok(text) = std::fs::read_to_string(self.refused_path()) else {
+            return Vec::new();
+        };
+        let today = utc_day(now_secs());
+        let prices = Prices::in_force(&self.prices_path).ok();
+        let mut seen = std::collections::BTreeSet::new();
+        text.lines()
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && seen.insert(s.to_string()))
+            .filter(|s| prices.as_ref().is_none_or(|p| p.tariff(s, &today).is_none()))
+            .map(str::to_string)
+            .collect()
     }
 
     /// Settles a reservation with what the provider reported (`None`: nothing, and the bound stands).

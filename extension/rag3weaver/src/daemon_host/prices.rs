@@ -12,6 +12,28 @@ impl DaemonHost {
     /// million tokens, in the file's currency) when `by` is a human's; refused otherwise, and nothing is written. `from`
     /// is today (UTC) when absent: the price holds from now on, the past keeps its own. `source` says where the price was
     /// read, or « given by the user ».
+    /// **The monthly cap, on the user's yes** (`POST /ide/prices/cap {monthly_cap}`): written by the host only when the
+    /// call carries the user's title.
+    pub fn set_cap(&self, by: &Value, body: &Value) -> Result<Value, String> {
+        if by["kind"] != "human" {
+            return Err("the spending cap is set on the user's yes only: this call does not carry the user's title".into());
+        }
+        let cap = body["monthly_cap"].as_f64().ok_or("`monthly_cap` is an amount, a number")?;
+        let ledger = crate::usage_ledger::user_ledger();
+        ledger.set_cap(cap)?;
+        Ok(json!({ "monthly_cap": cap, "prices": ledger.prices_path }))
+    }
+
+    /// **An unreadable `prices.json` set aside, on the user's yes** (`POST /ide/prices/set-aside`): renamed beside
+    /// itself, never deleted; the shipped prices are then in force.
+    pub fn set_aside_prices(&self, by: &Value) -> Result<Value, String> {
+        if by["kind"] != "human" {
+            return Err("the prices file is set aside on the user's yes only: this call does not carry the user's title".into());
+        }
+        let aside = crate::usage_ledger::user_ledger().set_aside_prices()?;
+        Ok(json!({ "set_aside": aside }))
+    }
+
     pub fn set_price(&self, by: &Value, body: &Value) -> Result<Value, String> {
         if by["kind"] != "human" {
             return Err("a price is written on the user's yes only: this call does not carry the user's title".into());

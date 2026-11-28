@@ -1018,6 +1018,23 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             };
             let _ = request.respond(json_(200, &v));
         }
+        ("POST", "/ide/prices/cap") | ("POST", "/ide/prices/set-aside") => {
+            // **The cap, or an unreadable prices file set aside, on the user's yes** (« À intervenir », 28 November
+            // 2026): the host acts only when the call carries the user's title, as for a price.
+            let utilisateur = entete(&request, "X-Rag3weaver-User").map(str::to_string);
+            let client = if utilisateur.is_some() { "tty" } else { "ide" };
+            let by = host.by_of(cookie(&request, COOKIE_USER).as_deref(), utilisateur.as_deref(), client);
+            let aside = request.url().split('?').next() == Some("/ide/prices/set-aside");
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(if corps.is_empty() { b"{}" } else { &corps }).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("unreadable body: {e}") }),
+                Ok(c) => match if aside { host.set_aside_prices(&by) } else { host.set_cap(&by, &c) } {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
         ("POST", "/ide/prices/lookup") => {
             // **A price looked up** (`{slug}`): a proposal with its sources, never written; the page asks the yes.
             let mut corps = Vec::new();

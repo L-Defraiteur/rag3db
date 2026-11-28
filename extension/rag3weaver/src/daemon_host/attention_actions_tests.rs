@@ -55,3 +55,26 @@ fn the_attention_list_offers_the_price_card_of_a_refused_model() {
     assert_eq!(status, 200);
     thread.join().unwrap();
 }
+
+/// **The cap and an unreadable file set aside are the user's gestures only**: without her title the host refuses both;
+/// the cap is written as the one key `monthly_cap` of her file, the template's prices kept; a file that reads is never
+/// set aside; an unreadable one is renamed beside itself, never deleted, and the shipped prices take over.
+#[test]
+fn the_cap_and_a_file_set_aside_are_the_users_gestures_only() {
+    let host = super::DaemonHost::new();
+    let agent = json!({ "kind": "agent", "client": "mcp" });
+    assert!(host.set_cap(&agent, &json!({ "monthly_cap": 500 })).unwrap_err().contains("user's yes"));
+    assert!(host.set_aside_prices(&agent).unwrap_err().contains("user's yes"));
+
+    let d = tempfile::tempdir().unwrap();
+    let l = crate::usage_ledger::Ledger::new(d.path().join("usage"), d.path().join("prices.json"));
+    l.set_cap(500.0).unwrap();
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(&l.prices_path).unwrap()).unwrap();
+    assert_eq!(file, json!({ "monthly_cap": 500.0 }), "only the cap is written");
+    assert_eq!(l.report("2026-11", "2026-11-28")["cap"], json!(500.0));
+    assert!(l.set_aside_prices().unwrap_err().contains("reads"), "a file that reads stays");
+    std::fs::write(&l.prices_path, "{ not json").unwrap();
+    let aside = l.set_aside_prices().unwrap();
+    assert!(!l.prices_path.exists() && std::fs::read_to_string(&aside).unwrap() == "{ not json", "renamed, never deleted: {}", aside.display());
+    l.reserve("google/gemini-3.8-flash", "vertex", false, Tokens::default(), &Caller::default(), false).expect("the shipped prices take over");
+}

@@ -1,7 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Bot, ChevronDown, ChevronRight, CircleAlert, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { displayName, fetchPoste, type HostState, type Poste } from "@/lib/host";
+import { displayName, fetchPoste, setAsidePrices, setCap, type HostState, type Poste } from "@/lib/host";
+import { Button } from "@/components/ui/button";
+import { PriceCard } from "@/components/PriceCard";
+
+/// **The cap of the month, raised on the user's yes** (« À intervenir », 28 November 2026): a field and its button.
+function CapAction() {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  if (!open) return <Button size="sm" variant="outline" data-action="cap" onClick={() => setOpen(true)}>Relever le plafond</Button>;
+  const n = Number(value.replace(",", "."));
+  return (
+    <span className="inline-flex items-center gap-2" data-action="cap">
+      <input className="w-24 rounded border bg-background px-2 py-0.5 text-sm" inputMode="decimal" placeholder="USD / mois" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Nouveau plafond du mois" />
+      <Button size="sm" disabled={!value.trim() || !Number.isFinite(n) || n < 0} onClick={() => setCap(n).then(() => location.reload(), (e: Error) => setError(e.message))}>Écrire</Button>
+      {error ? <span className="text-destructive text-xs" role="alert">{error}</span> : null}
+    </span>
+  );
+}
+
+/// **An unreadable prices.json set aside** (renamed beside itself, never deleted): the shipped prices take over.
+function SetAsideAction() {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button size="sm" variant="outline" data-action="set-aside" onClick={() => setAsidePrices().then(() => location.reload(), (e: Error) => setError(e.message))}>
+        Mettre ce fichier de côté (les prix livrés reprennent)
+      </Button>
+      {error ? <span className="text-destructive text-xs" role="alert">{error}</span> : null}
+    </span>
+  );
+}
 
 // **The welcome is the tree of the agents** (Lucie, 21 November 2026: « la liste des agents racines, quelles tâches a
 // chacun, plans en cours, à coup de dépliage de hiérarchie » ; « ce qui attend une intervention » first). Read from the
@@ -100,15 +131,26 @@ export function Agents({ state }: { state: HostState }) {
   if (unrooted.length) roots.push({ key: "ide", name: "lancés depuis l'IDE", kind: "ide", active: true, children: unrooted });
 
   // What waits for an intervention: a task or a conversation that waits for an answer (a question, an accord).
-  const waiting = [
-    // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it.
-    ...(state.spending?.alert ? [{ key: "spending", text: state.spending.alert.text, link: undefined as string | undefined }] : []),
+  // Every line carries its action (Lucie, 28 November 2026): the gesture that settles it, never a sentence alone.
+  const answer = (href: string) => (
+    <a href={href} data-action="answer" className="inline-flex items-center rounded border px-2 py-0.5 text-xs hover:bg-accent">Répondre</a>
+  );
+  const alert = state.spending?.alert;
+  const waiting: { key: string; text: string; action: ReactNode }[] = [
+    // The spending of the month past an alert (50 %, 80 %, the cap) or on course to pass it; or prices that do not read.
+    ...(alert ? [{ key: "spending", text: alert.text, action: alert.text.includes("ne se lit pas") ? <SetAsideAction /> : <CapAction /> }] : []),
+    // A model refused for want of a price: its price card (the price looked up on its page, then the user's yes).
+    ...(state.spending?.unpriced ?? []).map((s) => ({
+      key: `price:${s}`,
+      text: `le modèle ${s} n'a pas de prix : ses appels sont refusés`,
+      action: <PriceCard slug={s} onWritten={() => location.reload()} />,
+    })),
     ...(state.tasks ?? [])
       .filter((t) => t.awaits_answer)
-      .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, link: `/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}` })),
+      .map((t) => ({ key: `t:${t.id}`, text: `le sous-agent ${t.name} attend une réponse`, action: answer(`/ide/code/${t.session}/taches/${encodeURIComponent(t.name)}`) })),
     ...(state.chat_sessions ?? [])
       .filter((c) => c.awaits_answer)
-      .map((c) => ({ key: `c:${c.id}`, text: `la conversation ${c.name || c.id} attend une réponse`, link: `/ide/code/${c.id}/chat` })),
+      .map((c) => ({ key: `c:${c.id}`, text: `la conversation ${c.name || c.id} attend une réponse`, action: answer(`/ide/code/${c.id}/chat`) })),
   ];
 
   return (
@@ -120,8 +162,9 @@ export function Agents({ state }: { state: HostState }) {
         {waiting.length ? (
           <ul className="text-sm space-y-1">
             {waiting.map((w) => (
-              <li key={w.key} data-waiting={w.key}>
-                {w.link ? <a href={w.link} className="hover:underline">{w.text}</a> : <span>{w.text}</span>}
+              <li key={w.key} data-waiting={w.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>{w.text}</span>
+                {w.action}
               </li>
             ))}
           </ul>
