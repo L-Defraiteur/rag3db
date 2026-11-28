@@ -35,3 +35,13 @@ Aucun rouge reproduit en quatre passages.
 
 Lire, dans la passe rouge, si la seconde carte manquait ou si `#status` n'était pas encore « fini » ; et si l'attente
 du témoin porte sur l'événement (la carte posée) ou sur une durée de calme qu'une machine chargée peut dépasser.
+
+## Une deuxième occurrence, le 28 novembre 2026
+
+Au pousseur, à 14 h 04, sur la tête e25c35348e (le lot `index-notice` reposé sur master f7d91a6228) : 77 témoins
+navigateur verts, celui-là rouge, au même endroit et avec le même message (`navigateur.rs:441`, « a second card awaits
+its approval … jamais vraie en 20 s »). Journaux : `~/.cache/rag3weaver-build/pusher-20261128-134839-618-index-notice/
+navigateur.log` à luciepc. Le lot ne touche ni les cartes ni la vue : il ajoute une notice au message de frontière d'un
+pas d'équipier, que ce témoin, joué par le chat de l'IDE, ne traverse pas. La passe complète du même lot, à 13 h 47 et
+sur la même tête de branche, avait vu les 78 témoins navigateur verts. Deux occurrences en cinq jours : le délai de
+20 s ou l'ordre d'arrivée de la seconde carte reste à départager.
