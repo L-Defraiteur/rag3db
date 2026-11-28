@@ -805,6 +805,14 @@ case "$mode" in
     # POSTE_LOURD_ATTENTE_MAX (secondes, pour `push --lourd`) : au-delà, code 75, rien de pris.
     # Un cpu, ou un gpu --cpu, prend une place de cœurs ; un gpu prend aussi son billet dans la file des gpu. Un gpu sous
     # un ancêtre cpu n'a que son admission mémoire, sous le verrou des gpu (gpu.lock), sans la porte ni le partagé.
+    # **The pusher's lane is the pusher's** (28 Nov. 2026, c7: test scripts under POSTE_VOIE=pousseur went ahead of the
+    # queue and took the place kept for the pusher; two lots waited over 30 min). The lane holds only for a process of
+    # the unit rag3weaver-pusher.service, read in its own cgroup (POSTE_CGROUP_FILE: another file, for the witness);
+    # anyone else gets the ordinary lane, and is told.
+    if [ "${POSTE_VOIE:-}" = pousseur ] && ! grep -q 'rag3weaver-pusher\.service' "${POSTE_CGROUP_FILE:-/proc/self/cgroup}" 2>/dev/null; then
+      echo "poste: POSTE_VOIE=pousseur hors du service du pousseur : voie ordinaire" >&2
+      POSTE_VOIE=""
+    fi
     prend_cpu=1; { [ "$mode" = gpu ] && [ "$GPU_CPU" = 0 ]; } && prend_cpu=0; [ -n "$GPU_NESTED" ] && prend_cpu=0
     mkdir -p "$T" "$TG"; billet=/dev/null; gpu_ticket=/dev/null
     if [ "$prend_cpu" = 1 ]; then
