@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 28 novembre 2026 — **Chaque ligne de « À intervenir » porte son action.** Un modèle refusé faute de prix y attend
+  avec sa carte de prix (« je le cherche » sur sa page officielle, puis ton oui), quel que soit l'appel qui a buté — le
+  chat, un agent, un script, le juge des lots. Le plafond du mois atteint ou proche : « Relever le plafond », écrit dans
+  ton `prices.json` sur ton oui. Un `prices.json` illisible : « Mettre ce fichier de côté », renommé à côté, jamais
+  effacé, et les prix livrés reprennent. Une conversation ou un sous-agent qui attend : « Répondre ».
 - 28 novembre 2026 — **Une installation neuve n'affiche plus « le plafond des dépenses ne se lit pas ».** Les prix et
   le plafond viennent du gabarit livré (`templates/prices.json`, 200 USD par mois) ; ton `~/.config/rag3weaver/prices.json`
   ne fait que le surcharger, clé par clé et modèle par modèle : un plafond, ou le prix d'un modèle, et le reste suit les
