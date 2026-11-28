@@ -4361,6 +4361,9 @@ mod chat_project_first;
 /// The page follows a request for code to its task (22 November 2026), its witness in its file.
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_moves_to_task_tests;
+/// A message sent during a turn enters the turn (28 November 2026), its witnesses in their file.
+#[cfg(all(test, unix, feature = "code"))]
+mod chat_note_mid_turn_tests;
 /// The task page shows what the agent does (24 November 2026), its witness in its file.
 #[cfg(all(test, unix, feature = "code"))]
 mod task_activity_tests;
