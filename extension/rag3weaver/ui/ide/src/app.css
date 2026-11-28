@@ -239,7 +239,7 @@ html.theme-fichier .hljs-section, html.theme-fichier .hl-module { color: var(--t
 .wf-titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 70ch; }
 .wf-kicker { font-family: var(--wf-mono-font); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--wf-soft); }
 .wf-title { margin: 0; font-family: var(--wf-title-font); font-size: 28px; font-weight: 700; text-wrap: balance; }
-.wf-about { margin: 0; color: var(--wf-muted); font-size: 14px; line-height: 1.5; }
+.wf-about { margin: 0; color: var(--wf-muted); font-size: 14px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .wf-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wf-file { font-family: var(--wf-mono-font); font-size: 12.5px; color: var(--wf-green); border: 1px solid var(--wf-border); border-radius: 6px; padding: 4px 9px; background: var(--wf-surface); }
 .wf-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -281,3 +281,7 @@ html.theme-fichier .hljs-section, html.theme-fichier .hl-module { color: var(--t
 .wf-soon-badge { font-family: var(--wf-mono-font); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wf-gold); border: 1px solid var(--wf-gold); border-radius: 999px; padding: 0 6px; }
 .wf-soon-what { flex-basis: 100%; font-size: 11.5px; color: var(--wf-muted); opacity: 0.85; }
 .wf-actions .wf-soon-what, .wf-bar .wf-soon-what { display: none; }
+.wf-settings { position: absolute; left: 10px; right: 10px; display: flex; flex-direction: column; border-top: 1px dashed var(--wf-border); padding-top: 4px; }
+.wf-setting { height: 18px; line-height: 18px; font-family: var(--wf-mono-font); font-size: 10.5px; color: var(--wf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-setting b { font-weight: 500; color: var(--wf-soft); }
+.wf-more { font-style: italic; }

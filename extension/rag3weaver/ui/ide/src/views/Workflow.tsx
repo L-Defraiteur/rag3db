@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FilePlus2, Plus, Save, GitCompareArrows, Network, SlidersHorizontal, ShieldCheck, Wand2 } from "lucide-react";
 import { displayName, type HostState } from "@/lib/host";
 import {
-  W, HEAD, ROW, colorOf, compatible, declaration, detailOf, isPlumbing, kindOf, layout, portKey, portY, rowsOf, subGraphOf, wired,
+  W, HEAD, ROW, MAX_SETTINGS, colorOf, compatible, declaration, detailOf, isPlumbing, kindOf, layout, portKey, portY, rowsOf, settingsOf, settingsRow, subGraphOf, wired,
   type PortRef, type WfGraph, type WfNode,
 } from "@/lib/workflow";
 
@@ -81,7 +81,7 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
         <div className="wf-titles">
           <span className="wf-kicker">Workflows · {displayName(backend)} · {g.kind === "reaction" ? "réaction" : "outil"}</span>
           <h1 className="wf-title">{name}</h1>
-          {description ? <p className="wf-about">{description}</p> : null}
+          {description ? <p className="wf-about" title={description}>{description}</p> : null}
         </div>
         <div className="wf-actions">
           <span className="wf-file" title={g.source ?? ""}>{file}</span>
@@ -146,6 +146,20 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
                       );
                     })
                   : null}
+                {edit
+                  ? (() => {
+                      const s = settingsOf(n);
+                      const top = HEAD + settingsRow(n, edges) * ROW + 6;
+                      return (
+                        <div className="wf-settings" data-settings={n.name} style={{ top }}>
+                          {s.slice(0, MAX_SETTINGS).map(({ key, text }) => (
+                            <span key={key} className="wf-setting" title={`${key} : ${text}`}><b>{key}</b> {text.startsWith("← ") ? text : `= ${text}`}</span>
+                          ))}
+                          {s.length > MAX_SETTINGS ? <span className="wf-setting wf-more">+{s.length - MAX_SETTINGS} réglages, dans le panneau du nœud</span> : null}
+                        </div>
+                      );
+                    })()
+                  : null}
               </div>
             );
           })}
@@ -164,6 +178,13 @@ export function Workflow({ id, rest, state }: { id: string; rest: string; state:
                 <dt>Sorties</dt>
                 <dd>{(sel.schema?.outputs ?? []).map((p) => `${p.name} : ${p.type}`).join(", ") || "aucune"}</dd>
               </dl>
+              {settingsOf(sel).length ? (
+                <dl className="wf-ports-list" data-node-settings={sel.name}>
+                  {settingsOf(sel).map(({ key, text }) => (
+                    <div key={key} className="contents"><dt>{key}</dt><dd>{text}</dd></div>
+                  ))}
+                </dl>
+              ) : null}
               <code className="wf-decl">{declaration(sel)}{sel.line ? `   (ligne ${sel.line})` : ""}</code>
               {subGraphOf(sel) ? (
                 <Soon id="open-subgraph" icon={<Network size={14} />} label={`Ouvrir ${subGraphOf(sel)!.split("/").pop()}`} what="Ouvrir le graphe que ce nœud cite, et ses réglages." />
